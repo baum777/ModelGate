@@ -1,0 +1,21 @@
+{
+  "name": "modelgate",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev --workspace server",
+    "dev:web": "npm run dev --workspace web",
+    "build:server": "npm run build --workspace server",
+    "build:web": "npm run build --workspace web",
+    "build": "npm run build:server && npm run build:web",
+    "typecheck:server": "npm run typecheck --workspace server",
+    "typecheck:web": "npm run typecheck --workspace web",
+    "typecheck": "npm run typecheck:server && npm run typecheck:web",
+    "test:server": "npm run test --workspace server",
+    "dev": "npm run dev:server"
+  }
+}
