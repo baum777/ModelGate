@@ -1,15 +1,22 @@
 # ModelGate
 
-Local OpenRouter proxy plus chat UI.
+ModelGate is a backend-first OpenRouter proxy with a thin React client.
 
-The backend contract and SSE framing used by the UI branch are documented in [`server/README.md`](server/README.md).
+The backend is the authority layer for:
 
-## Structure
+- provider access
+- env validation
+- `/chat` request/response contract
+- SSE framing and error shaping
 
-- `server/` - Fastify proxy for health, models, and chat streaming
-- `web/` - Vite + React chat client
+The frontend is a consumer only. It should not own provider logic, prompting policy, or transport semantics.
 
-## Setup
+## Repo Layout
+
+- `server/` - Fastify backend for `/health`, `/models`, and `/chat`
+- `web/` - Vite + React client that consumes the backend contract
+
+## Getting Started
 
 1. Install dependencies:
 
@@ -17,24 +24,80 @@ The backend contract and SSE framing used by the UI branch are documented in [`s
 npm install
 ```
 
-2. Copy `server/.env.example` to `server/.env` and set `OPENROUTER_API_KEY`.
+2. Configure the backend env:
 
-3. Copy `web/.env.example` to `web/.env` if you want to override the backend URL.
+```bash
+cp server/.env.example server/.env
+```
 
-## Run
+Set `OPENROUTER_API_KEY` in `server/.env`.
+
+3. Optionally configure the client env:
+
+```bash
+cp web/.env.example web/.env
+```
+
+Use this only if you need to override the backend base URL.
+
+## Run Locally
+
+Start the backend:
 
 ```bash
 npm run dev:server
 ```
 
-In another terminal:
+Start the client in a second terminal:
 
 ```bash
 npm run dev:web
 ```
 
-## Verify
+## Backend Contract
 
-- `GET http://127.0.0.1:8787/health`
-- `GET http://127.0.0.1:8787/models`
-- `POST http://127.0.0.1:8787/chat`
+Use [`server/README.md`](server/README.md) as the authoritative contract reference for:
+
+- required env vars
+- `GET /health`
+- `GET /models`
+- `POST /chat`
+- non-stream response shape
+- SSE event model
+- known limitations
+
+## Verification
+
+Backend checks:
+
+```bash
+npm run typecheck:server
+npm run test:server
+```
+
+Full workspace checks:
+
+```bash
+npm run typecheck
+npm run build
+```
+
+## Current Scope
+
+Implemented:
+
+- local backend proxy
+- strict chat input validation
+- sanitized backend error responses
+- SSE streaming with backend-owned event framing
+- small backend test slice
+
+Not in scope for this branch:
+
+- auth
+- persistence
+- conversation history
+- uploads
+- tools / MCP
+- RAG
+- multi-provider orchestration
