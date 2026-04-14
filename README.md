@@ -16,7 +16,7 @@ The frontend is a consumer only. It should not own provider logic, prompting pol
 ## Repo Layout
 
 - `server/` - Fastify backend for `/health`, `/models`, and `/chat`
-- `web/` - Vite + React client that consumes the backend contract
+- `web/` - Vite + React client with OpenRouter chat and Matrix Workspace tabs
 
 ## Getting Started
 
@@ -41,6 +41,7 @@ cp web/.env.example web/.env
 ```
 
 Use this only if you need to override the backend base URL.
+Set `VITE_MATRIX_API_BASE_URL` if the Matrix Workspace backend runs on a separate origin.
 
 ## Run Locally
 
