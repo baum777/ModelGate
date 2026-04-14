@@ -2,11 +2,13 @@ import type { FastifyInstance } from "fastify";
 import { ChatRequestSchema, type ChatErrorResponse } from "../lib/chat-contract.js";
 import type { AppEnv } from "../lib/env.js";
 import { buildCorsHeaders, writeSseEvent } from "../lib/http.js";
+import type { ModelRegistry } from "../lib/model-policy.js";
 import { type OpenRouterClient, OpenRouterError } from "../lib/openrouter.js";
 
 type ChatRouteDependencies = {
   env: AppEnv;
   openRouter: OpenRouterClient;
+  modelRegistry: ModelRegistry;
 };
 
 function buildInvalidRequestResponse(): ChatErrorResponse {
@@ -25,6 +27,16 @@ function buildUpstreamErrorResponse(): ChatErrorResponse {
     error: {
       code: "upstream_error",
       message: "Chat provider request failed"
+    }
+  };
+}
+
+function buildInternalErrorResponse(): ChatErrorResponse {
+  return {
+    ok: false,
+    error: {
+      code: "internal_error",
+      message: "Chat backend model policy unavailable"
     }
   };
 }
@@ -54,6 +66,19 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
     }
 
     const body = parsed.data;
+    const resolution = deps.modelRegistry.resolveModel(body.model);
+
+    if (!resolution.ok) {
+      if (resolution.reason === "unsupported_model") {
+        return reply.status(400).send(buildInvalidRequestResponse());
+      }
+
+      request.log.error({
+        reason: resolution.reason
+      }, "model policy resolution failed");
+
+      return reply.status(500).send(buildInternalErrorResponse());
+    }
 
     if (body.stream) {
       const origin = request.headers.origin;
@@ -77,7 +102,7 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
 
       writeSseEvent(reply.raw, "start", {
         ok: true,
-        model: body.model ?? deps.env.OPENROUTER_MODEL
+        model: resolution.selection.publicModelId
       });
 
       const onClose = () => {
@@ -87,7 +112,7 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
       request.raw.on("close", onClose);
 
       try {
-        const result = await deps.openRouter.relayChatCompletionStream(body, {
+        const result = await deps.openRouter.relayChatCompletionStream(body, resolution.selection, {
           signal: abortController.signal,
           onToken: (delta) => {
             writeSseEvent(reply.raw, "token", { delta });
@@ -121,7 +146,7 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
     }
 
     try {
-      const result = await deps.openRouter.createChatCompletion(body);
+      const result = await deps.openRouter.createChatCompletion(body, resolution.selection);
 
       return reply.status(200).send({
         ok: true,

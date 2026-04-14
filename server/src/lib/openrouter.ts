@@ -1,5 +1,6 @@
 import type { AppEnv } from "./env.js";
 import type { ChatRequest } from "./chat-contract.js";
+import type { ResolvedModelSelection } from "./model-policy.js";
 import type { NormalizedChatResponse } from "./types.js";
 
 const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -15,9 +16,14 @@ export class OpenRouterError extends Error {
 }
 
 export type OpenRouterClient = {
-  createChatCompletion(request: ChatRequest, signal?: AbortSignal): Promise<NormalizedChatResponse>;
+  createChatCompletion(
+    request: ChatRequest,
+    selection: ResolvedModelSelection,
+    signal?: AbortSignal
+  ): Promise<NormalizedChatResponse>;
   relayChatCompletionStream(
     request: ChatRequest,
+    selection: ResolvedModelSelection,
     options: {
       signal?: AbortSignal;
       onToken: (delta: string) => void;
@@ -37,25 +43,24 @@ function buildMessages(env: AppEnv, request: ChatRequest) {
   ];
 }
 
-function buildRequestBody(env: AppEnv, request: ChatRequest, stream: boolean) {
+function buildRequestBody(env: AppEnv, request: ChatRequest, stream: boolean, providerModel: string) {
   return {
-    model: request.model ?? env.OPENROUTER_MODEL,
+    model: providerModel,
     messages: buildMessages(env, request),
     temperature: request.temperature ?? 0.7,
     stream
   };
 }
 
-function extractAssistantText(payload: unknown, fallbackModel: string): NormalizedChatResponse {
+function extractAssistantText(payload: unknown, publicModelId: string): NormalizedChatResponse {
   if (typeof payload !== "object" || payload === null) {
     return {
-      model: fallbackModel,
+      model: publicModelId,
       text: ""
     };
   }
 
   const response = payload as {
-    model?: unknown;
     choices?: Array<{
       message?: {
         content?: unknown;
@@ -63,24 +68,19 @@ function extractAssistantText(payload: unknown, fallbackModel: string): Normaliz
     }>;
   };
 
-  const model = typeof response.model === "string" && response.model.length > 0
-    ? response.model
-    : fallbackModel;
-
   const text = typeof response.choices?.[0]?.message?.content === "string"
     ? response.choices[0].message.content
     : "";
 
-  return { model, text };
+  return { model: publicModelId, text };
 }
 
-function extractDelta(payload: unknown): { model?: string; delta: string; finished: boolean } {
+function extractDelta(payload: unknown): { delta: string; finished: boolean } {
   if (typeof payload !== "object" || payload === null) {
     return { delta: "", finished: false };
   }
 
   const response = payload as {
-    model?: unknown;
     choices?: Array<{
       delta?: {
         content?: unknown;
@@ -93,13 +93,9 @@ function extractDelta(payload: unknown): { model?: string; delta: string; finish
     ? response.choices[0].delta.content
     : "";
 
-  const model = typeof response.model === "string" && response.model.length > 0
-    ? response.model
-    : undefined;
-
   const finished = response.choices?.[0]?.finish_reason !== undefined && response.choices[0].finish_reason !== null;
 
-  return { model, delta, finished };
+  return { delta, finished };
 }
 
 async function consumeResponseBody(response: Response) {
@@ -193,66 +189,110 @@ export function createOpenRouterClient(options: OpenRouterClientOptions): OpenRo
   const fetchImpl = options.fetchImpl ?? fetch;
 
   return {
-    async createChatCompletion(request, signal) {
-      const response = await fetchImpl(OPENROUTER_CHAT_URL, {
-        method: "POST",
-        headers: getUpstreamHeaders(options.env),
-        body: JSON.stringify(buildRequestBody(options.env, request, false)),
-        signal
-      });
+    async createChatCompletion(request, selection, signal) {
+      let lastError: OpenRouterError | undefined;
 
-      if (!response.ok) {
-        await consumeResponseBody(response);
-        throw createOpenRouterError("OpenRouter request failed", response.status);
+      for (const providerModel of selection.providerTargets) {
+        try {
+          const response = await fetchImpl(OPENROUTER_CHAT_URL, {
+            method: "POST",
+            headers: getUpstreamHeaders(options.env),
+            body: JSON.stringify(buildRequestBody(options.env, request, false, providerModel)),
+            signal
+          });
+
+          if (!response.ok) {
+            await consumeResponseBody(response);
+            lastError = createOpenRouterError("OpenRouter request failed", response.status);
+            continue;
+          }
+
+          const payload = await response.json() as unknown;
+          return extractAssistantText(payload, selection.publicModelId);
+        } catch (error) {
+          if (error instanceof OpenRouterError) {
+            lastError = error;
+            continue;
+          }
+
+          if (error instanceof TypeError || error instanceof SyntaxError) {
+            lastError = createOpenRouterError("OpenRouter request failed", 502);
+            continue;
+          }
+
+          throw error;
+        }
       }
 
-      const payload = await response.json() as unknown;
-      return extractAssistantText(payload, request.model ?? options.env.OPENROUTER_MODEL);
+      throw lastError ?? createOpenRouterError("OpenRouter request failed", 502);
     },
 
-    async relayChatCompletionStream(request, streamOptions) {
-      const response = await fetchImpl(OPENROUTER_CHAT_URL, {
-        method: "POST",
-        headers: getUpstreamHeaders(options.env),
-        body: JSON.stringify(buildRequestBody(options.env, request, true)),
-        signal: streamOptions.signal
-      });
+    async relayChatCompletionStream(request, selection, streamOptions) {
+      let lastError: OpenRouterError | undefined;
 
-      if (!response.ok) {
-        await consumeResponseBody(response);
-        throw createOpenRouterError("OpenRouter request failed", response.status);
+      for (const providerModel of selection.providerTargets) {
+        let emittedToken = false;
+
+        try {
+          const response = await fetchImpl(OPENROUTER_CHAT_URL, {
+            method: "POST",
+            headers: getUpstreamHeaders(options.env),
+            body: JSON.stringify(buildRequestBody(options.env, request, true, providerModel)),
+            signal: streamOptions.signal
+          });
+
+          if (!response.ok) {
+            await consumeResponseBody(response);
+            lastError = createOpenRouterError("OpenRouter request failed", response.status);
+            continue;
+          }
+
+          if (!response.body) {
+            lastError = createOpenRouterError("OpenRouter response did not include a stream body", 502);
+            continue;
+          }
+
+          let text = "";
+
+          for await (const data of readSseData(response.body)) {
+            if (data === "[DONE]") {
+              break;
+            }
+
+            const payload = await parseSsePayload(data);
+            const delta = extractDelta(payload);
+
+            if (delta.delta) {
+              emittedToken = true;
+              text += delta.delta;
+              streamOptions.onToken(delta.delta);
+            }
+
+            if (delta.finished) {
+              break;
+            }
+          }
+
+          return { model: selection.publicModelId, text };
+        } catch (error) {
+          if (error instanceof OpenRouterError) {
+            lastError = error;
+
+            if (!emittedToken) {
+              continue;
+            }
+          }
+
+          if (error instanceof TypeError && !emittedToken) {
+            lastError = createOpenRouterError("OpenRouter request failed", 502);
+            continue;
+          }
+
+          throw error;
+        }
       }
 
-      if (!response.body) {
-        throw createOpenRouterError("OpenRouter response did not include a stream body", 502);
-      }
-
-      let model = request.model ?? options.env.OPENROUTER_MODEL;
-      let text = "";
-
-      for await (const data of readSseData(response.body)) {
-        if (data === "[DONE]") {
-          break;
-        }
-
-        const payload = await parseSsePayload(data);
-        const delta = extractDelta(payload);
-
-        if (delta.model) {
-          model = delta.model;
-        }
-
-        if (delta.delta) {
-          text += delta.delta;
-          streamOptions.onToken(delta.delta);
-        }
-
-        if (delta.finished) {
-          break;
-        }
-      }
-
-      return { model, text };
+      throw lastError ?? createOpenRouterError("OpenRouter request failed", 502);
     }
   };
 }

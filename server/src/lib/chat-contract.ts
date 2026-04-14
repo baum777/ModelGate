@@ -16,6 +16,7 @@ export type ChatRequest = z.infer<typeof ChatRequestSchema>;
 
 export type ChatSuccessResponse = {
   ok: true;
+  // Public backend alias, not the provider execution target.
   model: string;
   text: string;
 };
@@ -32,6 +33,7 @@ export type ChatErrorResponse = {
 
 export type ChatStreamStartEvent = {
   ok: true;
+  // Public backend alias, not the provider execution target.
   model: string;
 };
 
@@ -39,3 +41,13 @@ export type ChatStreamTokenEvent = {
   delta: string;
 };
 
+export type ChatStreamDoneEvent = {
+  ok: true;
+  // Public backend alias, not the provider execution target.
+  model: string;
+  text: string;
+};
+
+export type ChatStreamErrorEvent = ChatErrorResponse;
+
+export type ChatStreamTerminalEvent = ChatStreamDoneEvent | ChatStreamErrorEvent;

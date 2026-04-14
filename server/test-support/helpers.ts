@@ -16,14 +16,14 @@ export function createTestEnv(overrides: Partial<AppEnv> = {}): AppEnv {
 
 export function createMockOpenRouterClient(overrides: Partial<OpenRouterClient> = {}): OpenRouterClient {
   return {
-    createChatCompletion: overrides.createChatCompletion ?? (async () => ({
-      model: "openrouter/auto",
+    createChatCompletion: overrides.createChatCompletion ?? (async (_request, selection) => ({
+      model: selection.publicModelId,
       text: "stub"
     })),
-    relayChatCompletionStream: overrides.relayChatCompletionStream ?? (async (_request, options) => {
+    relayChatCompletionStream: overrides.relayChatCompletionStream ?? (async (_request, selection, options) => {
       options.onToken("stub");
       return {
-        model: "openrouter/auto",
+        model: selection.publicModelId,
         text: "stub"
       };
     })

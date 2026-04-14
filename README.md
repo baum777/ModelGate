@@ -8,6 +8,8 @@ The backend is the authority layer for:
 - env validation
 - `/chat` request/response contract
 - SSE framing and error shaping
+- `/models` exposure of only intentionally supported consumer-selectable models
+- stable public model aliases with hidden provider-target substitution
 
 The frontend is a consumer only. It should not own provider logic, prompting policy, or transport semantics.
 
@@ -90,6 +92,7 @@ Implemented:
 - strict chat input validation
 - sanitized backend error responses
 - SSE streaming with backend-owned event framing
+- stable public model aliasing with backend-owned provider fallback
 - small backend test slice
 
 Not in scope for this branch:

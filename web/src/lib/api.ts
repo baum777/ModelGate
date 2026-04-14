@@ -23,14 +23,26 @@ async function readErrorMessage(response: Response) {
 
   if (contentType.includes("application/json")) {
     try {
-      const payload = await response.json() as { message?: unknown; error?: unknown };
+      const payload = await response.json() as {
+        message?: unknown;
+        error?: unknown;
+      };
+      const error = payload.error;
 
       if (typeof payload.message === "string" && payload.message.length > 0) {
         return payload.message;
       }
 
-      if (typeof payload.error === "string" && payload.error.length > 0) {
-        return payload.error;
+      if (typeof error === "string" && error.length > 0) {
+        return error;
+      }
+
+      if (error && typeof error === "object") {
+        const errorMessage = (error as { message?: unknown }).message;
+
+        if (typeof errorMessage === "string" && errorMessage.length > 0) {
+          return errorMessage;
+        }
       }
     } catch {
       return response.statusText || "Request failed";
@@ -153,7 +165,7 @@ export async function streamChatCompletion(
   }
 
   for await (const event of readSseEvents(response.body)) {
-    if (event.event === "delta") {
+    if (event.event === "token" || event.event === "delta") {
       const payload = JSON.parse(event.data) as { delta?: unknown };
 
       if (typeof payload.delta === "string" && payload.delta.length > 0) {
