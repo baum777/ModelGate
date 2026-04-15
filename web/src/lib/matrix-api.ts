@@ -1,11 +1,7 @@
-const runtimeEnv = typeof import.meta !== "undefined" && "env" in import.meta
-  ? (import.meta.env as { VITE_MATRIX_API_BASE_URL?: string; VITE_API_BASE_URL?: string; PROD?: boolean } | undefined)
-  : undefined;
-
 export const MATRIX_API_BASE_URL = (
-  runtimeEnv?.VITE_MATRIX_API_BASE_URL
-  ?? runtimeEnv?.VITE_API_BASE_URL
-  ?? (runtimeEnv?.PROD ? "" : "http://127.0.0.1:8787")
+  import.meta.env.VITE_MATRIX_API_BASE_URL
+  ?? import.meta.env.VITE_API_BASE_URL
+  ?? (import.meta.env.PROD ? "" : "http://127.0.0.1:8787")
 ).replace(/\/+$/, "");
 
 function resolveMatrixApiUrl(path: string) {
