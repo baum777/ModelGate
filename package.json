@@ -16,6 +16,8 @@
     "typecheck:web": "npm run typecheck --workspace web",
     "typecheck": "npm run typecheck:server && npm run typecheck:web",
     "test:server": "npm run test --workspace server",
+    "test:web": "node --test --import tsx web/test/chat-workflow.test.ts web/test/matrix-gates.test.ts",
+    "test": "npm run test:server && npm run test:web",
     "dev": "npm run dev:server"
   }
 }

@@ -1,0 +1,50 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: SOVEREIGN CONSOLE
+      - heading "Thin consumer overlay for ModelGate" [level=1] [ref=e7]
+      - paragraph [ref=e8]: The backend owns provider calls, routing, Matrix writes, and stream framing. The browser only renders, consumes, and submits intent.
+    - generic [ref=e9]:
+      - generic [ref=e11]: Backend pending
+      - generic [ref=e12]:
+        - generic [ref=e13]: "Active tab: chat"
+        - generic [ref=e14]: "Public model alias: unresolved"
+        - generic [ref=e15]: "Backend context: loading"
+  - tablist "Primary console tabs" [ref=e16]:
+    - tab "Chat" [selected] [ref=e17] [cursor=pointer]
+    - tab "Matrix Workspace" [ref=e18] [cursor=pointer]
+    - button "Show logs" [ref=e19] [cursor=pointer]
+  - generic [ref=e20]:
+    - generic [ref=e22]:
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - paragraph [ref=e25]: Backend pending
+          - heading "Chat" [level=1] [ref=e26]
+          - paragraph [ref=e27]: SSE streaming with one mutable assistant draft, backend-owned alias selection, and visible malformed-stream handling.
+        - complementary [ref=e28]:
+          - text: Public model alias
+          - combobox "Public model alias" [disabled] [ref=e29]:
+            - option "No public aliases available" [selected]
+          - paragraph [ref=e30]: Backend status pending.
+      - generic [ref=e31]:
+        - generic [ref=e32]:
+          - generic [ref=e33]:
+            - text: Connection
+            - strong [ref=e34]: Idle
+            - generic [ref=e35]: "Auto-scroll: on"
+          - generic [ref=e36]:
+            - button "Jump to latest" [ref=e37] [cursor=pointer]
+            - button "Stop" [disabled] [ref=e38]
+        - paragraph [ref=e40]: No messages yet. Submit intent to start a stream.
+        - generic [ref=e41]:
+          - textbox "Ask the backend-managed model something..." [ref=e42]
+          - generic [ref=e43]:
+            - paragraph [ref=e44]: The browser only submits intent. The backend owns provider calls, framing, and final truth.
+            - button "Send" [disabled] [ref=e45]
+    - complementary [ref=e46]:
+      - generic [ref=e47]:
+        - generic [ref=e48]:
+          - text: System context
+          - strong [ref=e49]: Bounded telemetry
+        - button "Clear" [ref=e50] [cursor=pointer]
+      - paragraph [ref=e52]: No local events captured yet.

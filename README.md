@@ -2,6 +2,12 @@
 
 ModelGate is a backend-first OpenRouter proxy with a thin React client.
 
+The current console overlay is the Sovereign Console / Stitch v1 surface:
+
+- `Chat` consumes backend-owned SSE streams and only renders a public model alias
+- `Matrix Workspace` is treated as an external contract surface for Explore, Analyze, and Review
+- the browser owns UI state only; provider calls, Matrix truth, and execution truth stay backend-owned
+
 The backend is the authority layer for:
 
 - provider access
@@ -16,7 +22,7 @@ The frontend is a consumer only. It should not own provider logic, prompting pol
 ## Repo Layout
 
 - `server/` - Fastify backend for `/health`, `/models`, and `/chat`
-- `web/` - Vite + React client with OpenRouter chat and Matrix Workspace tabs
+- `web/` - Vite + React client with Sovereign Console tabs and Matrix Workspace overlays
 
 ## Getting Started
 
@@ -94,7 +100,10 @@ Implemented:
 - sanitized backend error responses
 - SSE streaming with backend-owned event framing
 - stable public model aliasing with backend-owned provider fallback
-- small backend test slice
+- thin console shell with backend health, model alias, and restored-session signaling
+- reducer-driven chat draft handling with malformed-stream visibility
+- Matrix contract overlay with Explore / Analyze / Review mode switching
+- small deterministic test slice for chat and Matrix gating helpers
 
 Not in scope for this branch:
 
@@ -105,3 +114,7 @@ Not in scope for this branch:
 - tools / MCP
 - RAG
 - multi-provider orchestration
+
+Current gap:
+
+- the Matrix backend contract is still external to this repo and must remain fail-closed when it is unavailable or malformed

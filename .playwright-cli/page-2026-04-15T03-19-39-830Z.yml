@@ -1,0 +1,119 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: SOVEREIGN CONSOLE
+      - heading "Thin consumer overlay for ModelGate" [level=1] [ref=e7]
+      - paragraph [ref=e8]: The backend owns provider calls, routing, Matrix writes, and stream framing. The browser only renders, consumes, and submits intent.
+    - generic [ref=e9]:
+      - generic [ref=e11]: Backend error
+      - generic [ref=e12]:
+        - generic [ref=e13]: "Active tab: matrix"
+        - generic [ref=e14]: "Public model alias: unresolved"
+        - generic [ref=e15]: "Backend context: Failed to fetch"
+  - tablist "Primary console tabs" [ref=e16]:
+    - tab "Chat" [ref=e17] [cursor=pointer]
+    - tab "Matrix Workspace" [active] [selected] [ref=e18] [cursor=pointer]
+    - button "Show logs" [ref=e19] [cursor=pointer]
+  - generic [ref=e20]:
+    - generic [ref=e59]:
+      - generic [ref=e60]:
+        - generic [ref=e61]:
+          - paragraph [ref=e62]: Matrix backend error
+          - heading "Matrix Workspace" [level=1] [ref=e63]
+          - paragraph [ref=e64]: Backend-owned Explore, Analyze, Review, Execute, and Verify flow with approval-gated execution and bounded v1 action candidates.
+          - generic [ref=e65]:
+            - button "Explore" [ref=e66] [cursor=pointer]
+            - button "Analyze" [ref=e67] [cursor=pointer]
+            - button "Review" [ref=e68] [cursor=pointer]
+          - generic [ref=e69]:
+            - generic [ref=e70]: Explore
+            - generic [ref=e71]: Analyze
+            - generic [ref=e72]: Review
+            - generic [ref=e73]: Execute
+            - generic [ref=e74]: Verify
+        - complementary [ref=e75]:
+          - strong [ref=e76]: No scope resolved yet
+          - generic [ref=e77]:
+            - generic [ref=e78]: "User: unresolved"
+            - generic [ref=e79]: "Homeserver: unresolved"
+            - generic [ref=e80]: "Origin: http://127.0.0.1:3000"
+            - generic [ref=e81]: "Scope: none"
+            - generic [ref=e82]: "Rooms: 0"
+            - generic [ref=e83]: "Candidates: 0"
+      - generic [ref=e84]:
+        - paragraph [ref=e85]: "Matrix bootstrap error. Origin: http://127.0.0.1:3000"
+        - paragraph [ref=e86]: "Matrix whoami could not reach http://127.0.0.1:3000/api/matrix/whoami: Failed to fetch"
+        - paragraph [ref=e87]: "Matrix joined rooms could not reach http://127.0.0.1:3000/api/matrix/joined-rooms: Failed to fetch"
+      - generic [ref=e88]:
+        - generic [ref=e89]:
+          - generic [ref=e91]:
+            - generic [ref=e92]: Explore
+            - strong [ref=e93]: Identity, rooms, scope, and provenance
+          - generic [ref=e94]:
+            - generic [ref=e95]:
+              - paragraph [ref=e96]: Who am I
+              - paragraph [ref=e97]: Load backend identity to begin
+              - paragraph [ref=e98]: "Device: n/a · Homeserver: n/a"
+            - paragraph [ref=e99]: "Matrix whoami could not reach http://127.0.0.1:3000/api/matrix/whoami: Failed to fetch"
+            - generic [ref=e100]:
+              - paragraph [ref=e101]: Joined rooms
+              - paragraph [ref=e103]: No joined rooms loaded yet.
+              - paragraph [ref=e104]: "Matrix joined rooms could not reach http://127.0.0.1:3000/api/matrix/joined-rooms: Failed to fetch"
+            - generic [ref=e105]:
+              - paragraph [ref=e106]: Selected scope inputs
+              - generic [ref=e107]:
+                - textbox "Add a space ID" [ref=e108]
+                - button "Add space" [ref=e109] [cursor=pointer]
+              - generic [ref=e111]: No scope inputs selected yet.
+              - generic [ref=e112]:
+                - button "Proceed to Analyze" [disabled] [ref=e113]
+                - generic [ref=e114]: Backend resolves the scope and generates the current snapshot.
+            - generic [ref=e115]:
+              - paragraph [ref=e116]: Current scope summary
+              - paragraph [ref=e117]: Resolve a scope to begin analysis.
+            - generic [ref=e118]:
+              - paragraph [ref=e119]: Hierarchy preview
+              - paragraph [ref=e120]: Add or preview a space ID to inspect hierarchy.
+        - generic [ref=e121]:
+          - generic [ref=e122]:
+            - generic [ref=e124]:
+              - generic [ref=e125]: Analyze
+              - strong [ref=e126]: Grounded review of the selected scope
+            - textbox "Describe what should be reviewed in the resolved scope." [disabled] [ref=e127]: Review the selected scope and identify bounded workspace actions.
+            - generic [ref=e128]:
+              - button "Run analysis" [disabled] [ref=e129]
+              - generic [ref=e130]: Analysis remains backend-owned and scope-bound.
+            - paragraph [ref=e131]: Run analysis to produce grounded references and bounded candidates.
+          - generic [ref=e132]:
+            - generic [ref=e134]:
+              - generic [ref=e135]: Review
+              - strong [ref=e136]: Plan card and approval gate
+            - paragraph [ref=e137]: Promote a candidate to create a bounded review plan.
+          - generic [ref=e138]:
+            - generic [ref=e140]:
+              - generic [ref=e141]: Verify
+              - strong [ref=e142]: Execution result, provenance, and refresh
+            - paragraph [ref=e143]: Execution results will appear here after approval-gated execution.
+            - generic [ref=e144]:
+              - button "Refresh scope summary" [disabled] [ref=e145]
+              - button "Refresh provenance" [disabled] [ref=e146]
+            - paragraph [ref=e147]: Load provenance from the Explore or Verify stage.
+    - complementary [ref=e46]:
+      - generic [ref=e47]:
+        - generic [ref=e48]:
+          - text: System context
+          - strong [ref=e49]: Bounded telemetry
+        - button "Clear" [ref=e50] [cursor=pointer]
+      - generic [ref=e51]:
+        - article [ref=e53]:
+          - strong [ref=e54]: Backend health failed
+          - paragraph [ref=e55]: Failed to fetch
+        - article [ref=e56]:
+          - strong [ref=e57]: Model list failed
+          - paragraph [ref=e58]: Failed to fetch
+        - article [ref=e148]:
+          - strong [ref=e149]: Switched tab
+          - paragraph [ref=e150]: Matrix Workspace activated.
+        - article [ref=e151]:
+          - strong [ref=e152]: Matrix state restored
+          - paragraph [ref=e153]: Local Matrix selection and mode were restored from the browser.
