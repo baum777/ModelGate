@@ -22,6 +22,7 @@ test("env parsing fails closed when the OpenRouter key is missing", () => {
       env: {
         ...process.env,
         OPENROUTER_API_KEY: "",
+        OPENROUTER_BASE_URL: "https://openrouter.ai/api/v1",
         PORT: "8787",
         HOST: "127.0.0.1",
         OPENROUTER_MODEL: "openrouter/auto",

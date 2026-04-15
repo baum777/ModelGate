@@ -9,6 +9,7 @@ export const EnvSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(8787),
   HOST: z.string().trim().min(1).default("127.0.0.1"),
   OPENROUTER_API_KEY: z.string().trim().min(1, "OPENROUTER_API_KEY is required"),
+  OPENROUTER_BASE_URL: z.string().trim().default("https://openrouter.ai/api/v1"),
   OPENROUTER_MODEL: z.string().trim().min(1).default("openrouter/auto"),
   OPENROUTER_MODELS: z.string().trim().default(""),
   APP_NAME: z.string().trim().min(1).default("local-openrouter-chat"),
@@ -27,6 +28,7 @@ export type AppEnv = {
   PORT: number;
   HOST: string;
   OPENROUTER_API_KEY: string;
+  OPENROUTER_BASE_URL: string;
   OPENROUTER_MODEL: string;
   OPENROUTER_MODELS: string[];
   APP_NAME: string;

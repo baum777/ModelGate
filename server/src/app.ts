@@ -1,15 +1,22 @@
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import type { AppEnv } from "./lib/env.js";
+import { createDisabledMatrixConfig, type MatrixConfig } from "./lib/matrix-env.js";
 import { buildCorsHeaders } from "./lib/http.js";
 import { buildModelRegistry, type ModelRegistry } from "./lib/model-policy.js";
+import { createMatrixClient, type MatrixClient } from "./lib/matrix-client.js";
+import { createMatrixScopeStore, type MatrixScopeStore } from "./lib/matrix-scope-store.js";
 import type { OpenRouterClient } from "./lib/openrouter.js";
 import { chatRoutes } from "./routes/chat.js";
+import { matrixRoutes } from "./routes/matrix.js";
 import { healthRoutes } from "./routes/health.js";
 import { modelRoutes } from "./routes/models.js";
 
 export type AppDependencies = {
   env: AppEnv;
   openRouter: OpenRouterClient;
+  matrixConfig?: MatrixConfig;
+  matrixClient?: MatrixClient;
+  matrixStore?: MatrixScopeStore;
   modelRegistry?: ModelRegistry;
   logger?: boolean;
 };
@@ -31,6 +38,9 @@ function registerCors(app: ReturnType<typeof Fastify>, env: AppEnv) {
 
 export function createApp(deps: AppDependencies) {
   const modelRegistry = deps.modelRegistry ?? buildModelRegistry(deps.env);
+  const matrixConfig = deps.matrixConfig ?? createDisabledMatrixConfig();
+  const matrixClient = deps.matrixClient ?? createMatrixClient({ config: matrixConfig });
+  const matrixStore = deps.matrixStore ?? createMatrixScopeStore();
   const app = Fastify({
     logger: deps.logger ?? true,
     bodyLimit: 1_048_576
@@ -40,6 +50,11 @@ export function createApp(deps: AppDependencies) {
 
   healthRoutes(app, deps.env, modelRegistry);
   modelRoutes(app, modelRegistry);
+  matrixRoutes(app, {
+    config: matrixConfig,
+    client: matrixClient,
+    store: matrixStore
+  });
   chatRoutes(app, {
     env: deps.env,
     openRouter: deps.openRouter,

@@ -3,8 +3,6 @@ import type { ChatRequest } from "./chat-contract.js";
 import type { ResolvedModelSelection } from "./model-policy.js";
 import type { NormalizedChatResponse } from "./types.js";
 
-const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
-
 export class OpenRouterError extends Error {
   public readonly status: number;
 
@@ -177,6 +175,14 @@ function createOpenRouterError(message: string, status: number) {
   return new OpenRouterError(message, status);
 }
 
+function buildOpenRouterChatUrl(env: AppEnv) {
+  const baseUrl = env.OPENROUTER_BASE_URL.endsWith("/")
+    ? env.OPENROUTER_BASE_URL
+    : `${env.OPENROUTER_BASE_URL}/`;
+
+  return new URL("chat/completions", baseUrl).toString();
+}
+
 async function parseSsePayload(data: string) {
   try {
     return JSON.parse(data) as unknown;
@@ -187,6 +193,7 @@ async function parseSsePayload(data: string) {
 
 export function createOpenRouterClient(options: OpenRouterClientOptions): OpenRouterClient {
   const fetchImpl = options.fetchImpl ?? fetch;
+  const chatUrl = buildOpenRouterChatUrl(options.env);
 
   return {
     async createChatCompletion(request, selection, signal) {
@@ -194,7 +201,7 @@ export function createOpenRouterClient(options: OpenRouterClientOptions): OpenRo
 
       for (const providerModel of selection.providerTargets) {
         try {
-          const response = await fetchImpl(OPENROUTER_CHAT_URL, {
+          const response = await fetchImpl(chatUrl, {
             method: "POST",
             headers: getUpstreamHeaders(options.env),
             body: JSON.stringify(buildRequestBody(options.env, request, false, providerModel)),
@@ -234,7 +241,7 @@ export function createOpenRouterClient(options: OpenRouterClientOptions): OpenRo
         let emittedToken = false;
 
         try {
-          const response = await fetchImpl(OPENROUTER_CHAT_URL, {
+          const response = await fetchImpl(chatUrl, {
             method: "POST",
             headers: getUpstreamHeaders(options.env),
             body: JSON.stringify(buildRequestBody(options.env, request, true, providerModel)),

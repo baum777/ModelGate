@@ -2,6 +2,11 @@ node_modules/
 dist/
 coverage/
 .env
+.env.local
+.env.router
+.local-ai/
+router.local.yml
+llm-router.local.yml
 .DS_Store
 *.log
 server/node_modules/

@@ -1,0 +1,77 @@
+mode: rules_first
+requireFreeModels: true
+maxFallbacks: 2
+defaultModel: openrouter/free
+fallbackModel: openai/gpt-oss-120b:free
+rules:
+  - taskType: coding
+    model: qwen/qwen3-coder:free
+    keywords:
+      - code
+      - coding
+      - implement
+      - bug
+      - fix
+      - refactor
+      - test
+      - typecheck
+      - build
+      - patch
+  - taskType: repo_review
+    model: mistralai/devstral-2512:free
+    keywords:
+      - review
+      - pull request
+      - pr
+      - diff
+      - audit
+      - regression
+      - comments
+      - feedback
+  - taskType: architecture
+    model: qwen/qwen3-next-80b-a3b-instruct:free
+    keywords:
+      - architecture
+      - plan
+      - migration
+      - design
+      - boundary
+      - contract
+      - rollout
+  - taskType: deep_reasoning
+    model: deepseek/deepseek-r1-0528:free
+    keywords:
+      - why
+      - reason
+      - analysis
+      - tradeoff
+      - diagnose
+      - investigate
+      - root cause
+      - deep
+  - taskType: long_context
+    model: nvidia/nemotron-3-super-120b-a12b:free
+    keywords:
+      - long context
+      - summarize
+      - summary
+      - multiple files
+      - across files
+      - history
+      - thread
+  - taskType: ui_review
+    model: google/gemma-4-26b-a4b-it:free
+    keywords:
+      - ui
+      - ux
+      - frontend
+      - layout
+      - design
+      - component
+      - screen
+      - styling
+      - visual
+      - stitch
+  - taskType: daily
+    model: openai/gpt-oss-120b:free
+    keywords: []

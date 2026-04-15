@@ -5,7 +5,7 @@ const runtimeEnv = typeof import.meta !== "undefined" && "env" in import.meta
 export const MATRIX_API_BASE_URL = (
   runtimeEnv?.VITE_MATRIX_API_BASE_URL
   ?? runtimeEnv?.VITE_API_BASE_URL
-  ?? "http://127.0.0.1:3000"
+  ?? "http://127.0.0.1:8787"
 ).replace(/\/+$/, "");
 
 export const MATRIX_ACTION_TYPES = [

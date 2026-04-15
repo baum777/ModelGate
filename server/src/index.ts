@@ -1,11 +1,13 @@
 import { createApp } from "./app.js";
 import { env } from "./lib/env.js";
+import { createMatrixConfig } from "./lib/matrix-env.js";
 import { createOpenRouterClient } from "./lib/openrouter.js";
 
 async function main() {
   const app = createApp({
     env,
     openRouter: createOpenRouterClient({ env }),
+    matrixConfig: createMatrixConfig(process.env),
     logger: true
   });
 

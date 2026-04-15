@@ -1,0 +1,61 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { createMatrixConfig } from "../src/lib/matrix-env.js";
+
+test("matrix config defaults to disabled", () => {
+  const config = createMatrixConfig({});
+
+  assert.equal(config.enabled, false);
+  assert.equal(config.required, false);
+  assert.equal(config.ready, false);
+  assert.equal(config.baseUrl, null);
+  assert.equal(config.accessToken, null);
+  assert.equal(config.expectedUserId, null);
+  assert.equal(config.issues.length, 0);
+});
+
+test("matrix config fails closed when required but disabled", () => {
+  assert.throws(
+    () => createMatrixConfig({
+      MATRIX_ENABLED: "false",
+      MATRIX_REQUIRED: "true"
+    }),
+    /Matrix backend is required but not configured/
+  );
+});
+
+test("matrix config becomes ready when enabled with a valid origin and token", () => {
+  const config = createMatrixConfig({
+    MATRIX_ENABLED: "true",
+    MATRIX_REQUIRED: "false",
+    MATRIX_BASE_URL: "https://matrix.example",
+    MATRIX_ACCESS_TOKEN: "token",
+    MATRIX_EXPECTED_USER_ID: "@user:matrix.example",
+    MATRIX_REQUEST_TIMEOUT_MS: "4000"
+  });
+
+  assert.equal(config.enabled, true);
+  assert.equal(config.required, false);
+  assert.equal(config.ready, true);
+  assert.equal(config.baseUrl, "https://matrix.example");
+  assert.equal(config.accessToken, "token");
+  assert.equal(config.expectedUserId, "@user:matrix.example");
+  assert.equal(config.requestTimeoutMs, 4000);
+  assert.deepEqual(config.issues, []);
+});
+
+test("matrix config rejects malformed expected user ids when set", () => {
+  const config = createMatrixConfig({
+    MATRIX_ENABLED: "true",
+    MATRIX_REQUIRED: "false",
+    MATRIX_BASE_URL: "https://matrix.example",
+    MATRIX_ACCESS_TOKEN: "token",
+    MATRIX_EXPECTED_USER_ID: "not-a-matrix-user",
+    MATRIX_REQUEST_TIMEOUT_MS: "4000"
+  });
+
+  assert.equal(config.enabled, true);
+  assert.equal(config.ready, false);
+  assert.equal(config.expectedUserId, null);
+  assert.match(config.issues.join("; "), /MATRIX_EXPECTED_USER_ID must be a Matrix user ID/);
+});
