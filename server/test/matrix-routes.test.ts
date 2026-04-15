@@ -60,6 +60,12 @@ test("matrix routes fail closed when the expected user id does not match whoami"
       resolveScope: async () => {
         resolveScopeCalls += 1;
         throw new Error("resolveScope should not be called when identity mismatches");
+      },
+      readRoomTopic: async () => {
+        throw new Error("readRoomTopic should not be called when identity mismatches");
+      },
+      updateRoomTopic: async () => {
+        throw new Error("updateRoomTopic should not be called when identity mismatches");
       }
     },
     logger: false

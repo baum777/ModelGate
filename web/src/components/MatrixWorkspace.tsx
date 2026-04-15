@@ -3,6 +3,7 @@ import {
   MATRIX_API_BASE_URL,
   analyzeScope,
   executePlan,
+  executeRoomTopicUpdate,
   fetchJoinedRooms,
   fetchMatrixWhoAmI,
   fetchPlan,
@@ -10,6 +11,8 @@ import {
   fetchRoomHierarchy,
   fetchScopeSummary,
   promoteCandidate,
+  prepareRoomTopicUpdate,
+  fetchRoomTopicUpdatePlan,
   resolveScope,
   MatrixRequestError,
   type MatrixActionCandidate,
@@ -17,10 +20,14 @@ import {
   type MatrixJoinedRoom,
   type MatrixPlan,
   type MatrixProvenance,
+  type MatrixRoomTopicExecutionResult,
+  type MatrixRoomTopicPlan,
+  type MatrixRoomTopicVerificationResult,
   type MatrixScope,
   type MatrixScopeSummary,
   type MatrixSpaceHierarchy,
   type MatrixWhoAmI,
+  verifyRoomTopicUpdate,
 } from "../lib/matrix-api.js";
 
 type MatrixMode = "explore" | "analyze" | "review";
@@ -55,6 +62,8 @@ const formatDate = (value: string) => {
 };
 const text = (value: string | null | undefined) =>
   value && value.trim() ? value : "n/a";
+const legacyContractOnlyNotice =
+  "Contract-only surface. Backend-owned room topic updates are wired below.";
 
 function modeLabel(mode: MatrixMode) {
   switch (mode) {
@@ -169,6 +178,33 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   const [provenance, setProvenance] = useState<MatrixProvenance | null>(null);
   const [provenanceError, setProvenanceError] = useState<string | null>(null);
   const [provenanceLoading, setProvenanceLoading] = useState(false);
+  const [topicRoomId, setTopicRoomId] = useState(
+    persisted?.selectedRoomIds?.[0] ?? "",
+  );
+  const [topicText, setTopicText] = useState("");
+  const [topicPlan, setTopicPlan] = useState<MatrixRoomTopicPlan | null>(null);
+  const [topicApprovalPending, setTopicApprovalPending] = useState(false);
+  const [topicExecution, setTopicExecution] =
+    useState<MatrixRoomTopicExecutionResult | null>(null);
+  const [topicVerification, setTopicVerification] =
+    useState<MatrixRoomTopicVerificationResult | null>(null);
+  const [topicPrepareLoading, setTopicPrepareLoading] = useState(false);
+  const [topicPrepareError, setTopicPrepareError] = useState<string | null>(
+    null,
+  );
+  const [topicExecuteLoading, setTopicExecuteLoading] = useState(false);
+  const [topicExecuteError, setTopicExecuteError] = useState<string | null>(
+    null,
+  );
+  const [topicVerifyLoading, setTopicVerifyLoading] = useState(false);
+  const [topicVerifyError, setTopicVerifyError] = useState<string | null>(
+    null,
+  );
+  const [topicPlanRefreshLoading, setTopicPlanRefreshLoading] =
+    useState(false);
+  const [topicPlanRefreshError, setTopicPlanRefreshError] = useState<
+    string | null
+  >(null);
   const summaryLoading = scopeSummaryStatus === "loading";
   const selectedSpaces = useMemo(
     () => selectedSpaceIds.filter((value) => value.trim().length > 0),
@@ -274,6 +310,20 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     setProvenance(null);
     setProvenanceError(null);
     setProvenanceRoomId("");
+  }
+  function resetTopicWorkflowState() {
+    setTopicPlan(null);
+    setTopicApprovalPending(false);
+    setTopicExecution(null);
+    setTopicVerification(null);
+    setTopicPrepareError(null);
+    setTopicExecuteError(null);
+    setTopicVerifyError(null);
+    setTopicPrepareLoading(false);
+    setTopicExecuteLoading(false);
+    setTopicVerifyLoading(false);
+    setTopicPlanRefreshLoading(false);
+    setTopicPlanRefreshError(null);
   }
   async function loadSummary(scopeId: string, preferredRoomId?: string) {
     setScopeSummaryStatus("loading");
@@ -447,14 +497,145 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       setExecutionLoading(false);
     }
   }
+  async function verifyTopicUpdate(planId: string) {
+    setTopicVerifyLoading(true);
+    setTopicVerifyError(null);
+    try {
+      setTopicVerification(await verifyRoomTopicUpdate(planId));
+    } catch (error) {
+      setTopicVerifyError(
+        describeMatrixError("Matrix room topic verify", error),
+      );
+    } finally {
+      setTopicVerifyLoading(false);
+    }
+  }
+
+  async function prepareTopicUpdate() {
+    const roomId = topicRoomId.trim();
+    const topic = topicText.trim();
+
+    if (!roomId) {
+      setTopicPrepareError("Enter a Matrix room ID.");
+      return;
+    }
+
+    if (!topic) {
+      setTopicPrepareError("Enter a proposed room topic.");
+      return;
+    }
+
+    resetTopicWorkflowState();
+    setTopicPrepareLoading(true);
+    setTopicPrepareError(null);
+    setTopicExecuteError(null);
+    setTopicVerifyError(null);
+
+    try {
+      const plan = await prepareRoomTopicUpdate({
+        type: "update_room_topic",
+        roomId,
+        topic,
+      });
+      setTopicPlan(plan);
+      setTopicApprovalPending(false);
+    } catch (error) {
+      setTopicPlan(null);
+      setTopicPrepareError(
+        describeMatrixError("Matrix room topic prepare", error),
+      );
+    } finally {
+      setTopicPrepareLoading(false);
+    }
+  }
+
+  async function refreshTopicUpdatePlan() {
+    if (!topicPlan) {
+      setTopicPlanRefreshError(
+        "Prepare a topic update before refreshing the plan.",
+      );
+      return;
+    }
+
+    setTopicPlanRefreshLoading(true);
+    setTopicPlanRefreshError(null);
+    setTopicExecuteError(null);
+    setTopicVerifyError(null);
+
+    try {
+      const refreshed = await fetchRoomTopicUpdatePlan(topicPlan.planId);
+      setTopicPlan(refreshed);
+      setTopicApprovalPending(false);
+    } catch (error) {
+      setTopicPlan(null);
+      setTopicApprovalPending(false);
+      setTopicExecution(null);
+      setTopicVerification(null);
+      setTopicPlanRefreshError(
+        describeMatrixError("Matrix room topic refresh", error),
+      );
+    } finally {
+      setTopicPlanRefreshLoading(false);
+    }
+  }
+
+  async function executeTopicUpdate() {
+    if (!topicPlan) {
+      setTopicExecuteError("Prepare a topic update before execution.");
+      return;
+    }
+
+    if (topicPlan.status !== "pending_review") {
+      setTopicExecuteError("Refresh the plan before execution.");
+      return;
+    }
+
+    if (topicPlanRefreshLoading) {
+      setTopicExecuteError(
+        "Wait for the plan refresh to finish before execution.",
+      );
+      return;
+    }
+
+    if (!topicApprovalPending) {
+      setTopicExecuteError(
+        "Explicit approval is required before execution.",
+      );
+      return;
+    }
+
+    setTopicExecuteLoading(true);
+    setTopicExecuteError(null);
+    setTopicVerifyError(null);
+    setTopicVerification(null);
+
+    try {
+      const execution = await executeRoomTopicUpdate({
+        planId: topicPlan.planId,
+        approval: true,
+      });
+      setTopicExecution(execution);
+      setTopicApprovalPending(false);
+      setTopicPlan((current) =>
+        current ? { ...current, status: "executed" } : current,
+      );
+      await verifyTopicUpdate(topicPlan.planId);
+    } catch (error) {
+      setTopicExecuteError(
+        describeMatrixError("Matrix room topic execute", error),
+      );
+    } finally {
+      setTopicExecuteLoading(false);
+    }
+  }
   return (
-    <section className="workspace-panel matrix-workspace">
+    <section className="workspace-panel matrix-workspace" data-testid="matrix-workspace">
       {" "}
       <section className="hero matrix-hero">
         {" "}
         <div>
           {" "}
-          <p className={`status-pill status-${status}`}>
+          <p className={`status-pill status-${status}`} data-testid="matrix-status">
             {status === "ready"
               ? "Matrix backend ready"
               : status === "partial"
@@ -470,7 +651,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             with approval-gated execution and bounded v1 action candidates.{" "}
           </p>{" "}
           {props.restoredSession ? (
-            <div className="restored-banner">
+            <div className="restored-banner" data-testid="matrix-restored-banner">
               RESTORED_SESSION: local Matrix selection is visible, but backend
               freshness is not assumed.
             </div>
@@ -584,6 +765,249 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       ) : null}{" "}
       <section className="matrix-grid">
         {" "}
+        <section
+          className="workspace-card"
+          hidden={mode === "analyze"}
+          data-testid="matrix-topic-update-panel"
+        >
+          {" "}
+          <header className="card-header">
+            <div>
+              <span>Room topic update</span>
+              <strong>
+                Review, approve, execute, and verify a backend-owned topic change
+              </strong>
+            </div>
+          </header>{" "}
+          <div className="info-block">
+            <p className="info-label">Target room</p>
+            <div className="input-row">
+              <input
+                type="text"
+                value={topicRoomId}
+                onChange={(event) => setTopicRoomId(event.target.value)}
+                placeholder="!room:matrix.org"
+                aria-label="Room ID"
+                data-testid="matrix-topic-room-id"
+              />
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setTopicRoomId(selectedRoomIds[0] ?? "")}
+                disabled={!selectedRoomIds[0]}
+              >
+                Use selected room
+              </button>
+            </div>
+          </div>{" "}
+          <div className="info-block">
+            <p className="info-label">Proposed topic</p>
+            <textarea
+              className="matrix-textarea"
+              rows={3}
+              value={topicText}
+              onChange={(event) => setTopicText(event.target.value)}
+              placeholder="Propose a new Matrix room topic."
+              aria-label="Proposed topic"
+              data-testid="matrix-topic-text"
+            />
+          </div>{" "}
+          <div className="action-row">
+            <button
+              type="button"
+              onClick={() => {
+                void prepareTopicUpdate();
+              }}
+              disabled={topicPrepareLoading}
+            >
+              {topicPrepareLoading ? "Preparing…" : "Prepare topic update"}
+            </button>
+            <span className="muted-copy">
+              The browser only sends a room ID, proposed topic text, and approval intent.
+            </span>
+          </div>{" "}
+          {topicPrepareError ? (
+            <p className="error-banner" data-testid="matrix-topic-prepare-error">
+              {topicPrepareError}
+            </p>
+          ) : null}{" "}
+          {topicPlanRefreshError ? (
+            <p
+              className="error-banner"
+              data-testid="matrix-topic-refresh-error"
+            >
+              {topicPlanRefreshError}
+            </p>
+          ) : null}{" "}
+          {topicPlan ? (
+            <div className="plan-card" data-testid="matrix-topic-plan">
+              <div className="plan-card-header">
+                <div>
+                  <strong>Topic update plan</strong>
+                  <span>{topicPlan.status}</span>
+                </div>
+                <div className="plan-badges">
+                  <span
+                    className={`workflow-chip ${topicPlan.status === "pending_review" ? "workflow-chip-active" : "workflow-chip-complete"}`}
+                  >
+                    {topicPlan.status === "pending_review"
+                      ? "Review pending"
+                      : "Plan refreshed"}
+                  </span>
+                </div>
+              </div>
+              <div className="detail-grid">
+                <div>
+                  <span>Room ID</span>
+                  <strong>{topicPlan.roomId}</strong>
+                </div>
+                <div>
+                  <span>Status</span>
+                  <strong>{topicPlan.status}</strong>
+                </div>
+                <div>
+                  <span>Expires at</span>
+                  <strong>{formatDate(topicPlan.expiresAt)}</strong>
+                </div>
+                <div>
+                  <span>Field</span>
+                  <strong>{topicPlan.diff.field}</strong>
+                </div>
+                <div>
+                  <span>Requires approval</span>
+                  <strong>{String(topicPlan.requiresApproval)}</strong>
+                </div>
+              </div>
+              <div className="delta-grid">
+                <div>
+                  <p className="info-label">Before topic</p>
+                  <pre>{text(topicPlan.diff.before)}</pre>
+                </div>
+                <div>
+                  <p className="info-label">After topic</p>
+                  <pre>{text(topicPlan.diff.after)}</pre>
+                </div>
+              </div>
+              <label className="approval-check">
+                <input
+                  type="checkbox"
+                  checked={topicApprovalPending}
+                  onChange={(event) =>
+                    setTopicApprovalPending(event.target.checked)
+                  }
+                  disabled={
+                    topicExecuteLoading ||
+                    topicVerifyLoading ||
+                    topicPlanRefreshLoading ||
+                    topicPlan.status !== "pending_review"
+                  }
+                />
+                <span>I approve backend execution of this topic update.</span>
+              </label>
+              <div className="action-row">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void executeTopicUpdate();
+                  }}
+                  disabled={
+                    !topicApprovalPending ||
+                    topicExecuteLoading ||
+                    topicVerifyLoading ||
+                    topicPlanRefreshLoading ||
+                    topicPlan.status !== "pending_review"
+                  }
+                  data-testid="matrix-topic-execute"
+                >
+                  {topicExecuteLoading ? "Executing…" : "Approve and execute"}
+                </button>
+                <span className="muted-copy">
+                  Verification runs from backend readback after execution.
+                </span>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => {
+                    void refreshTopicUpdatePlan();
+                  }}
+                  disabled={topicPlanRefreshLoading}
+                  data-testid="matrix-topic-refresh"
+                >
+                  {topicPlanRefreshLoading ? "Refreshing…" : "Refresh plan"}
+                </button>
+              </div>
+              {topicExecution ? (
+                <div
+                  className="verification-card"
+                  data-testid="matrix-topic-execution"
+                >
+                  <div className="detail-grid">
+                    <div>
+                      <span>Transaction ID</span>
+                      <strong>{topicExecution.transactionId}</strong>
+                    </div>
+                    <div>
+                      <span>Executed at</span>
+                      <strong>{formatDate(topicExecution.executedAt)}</strong>
+                    </div>
+                    <div>
+                      <span>Status</span>
+                      <strong>{topicExecution.status}</strong>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              {topicVerifyLoading ? (
+                <p className="muted-copy">Verifying backend readback…</p>
+              ) : null}
+              {topicVerification ? (
+                <div
+                  className="verification-card"
+                  data-testid="matrix-topic-verification"
+                >
+                  <div className="detail-grid">
+                    <div>
+                      <span>Status</span>
+                      <strong>{topicVerification.status}</strong>
+                    </div>
+                    <div>
+                      <span>Expected</span>
+                      <strong>{text(topicVerification.expected)}</strong>
+                    </div>
+                    <div>
+                      <span>Actual</span>
+                      <strong>{text(topicVerification.actual)}</strong>
+                    </div>
+                    <div>
+                      <span>Checked at</span>
+                      <strong>{formatDate(topicVerification.checkedAt)}</strong>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              {topicExecuteError ? (
+                <p
+                  className="error-banner"
+                  data-testid="matrix-topic-execute-error"
+                >
+                  {topicExecuteError}
+                </p>
+              ) : null}
+              {topicVerifyError ? (
+                <p
+                  className="error-banner"
+                  data-testid="matrix-topic-verify-error"
+                >
+                  {topicVerifyError}
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <p className="empty-state">
+              Enter a room ID and proposed topic, then prepare a backend-owned review plan.
+            </p>
+          )}{" "}
+        </section>{" "}
         <section className="workspace-card" hidden={mode !== "explore"}>
           {" "}
           <header className="card-header">
@@ -605,12 +1029,12 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               </p>
             </div>{" "}
             {identityError ? (
-              <p className="error-banner">{identityError}</p>
+              <p className="error-banner" data-testid="matrix-identity-error">{identityError}</p>
             ) : null}{" "}
             <div className="info-block">
               {" "}
               <p className="info-label">Joined rooms</p>{" "}
-              <div className="room-picker">
+              <div className="room-picker" data-testid="matrix-rooms">
                 {" "}
                 {joinedRooms.length === 0 ? (
                   <p className="empty-state">No joined rooms loaded yet.</p>
@@ -629,6 +1053,13 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                               : [...current, room.roomId],
                           )
                         }
+                        onMouseUp={() => {
+                          if (!active) {
+                            setTopicRoomId((current) =>
+                              current.trim().length > 0 ? current : room.roomId,
+                            );
+                          }
+                        }}
                       >
                         {" "}
                         <span className="room-picker-title">
@@ -643,7 +1074,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 )}{" "}
               </div>{" "}
               {roomsError ? (
-                <p className="error-banner">{roomsError}</p>
+                <p className="error-banner" data-testid="matrix-rooms-error">{roomsError}</p>
               ) : null}{" "}
             </div>{" "}
             <div className="info-block">
@@ -851,13 +1282,16 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 <strong>Grounded review of the selected scope</strong>
               </div>
             </header>{" "}
+            <div className="alert-banner" data-testid="matrix-analyze-contract-only">
+              <p>{legacyContractOnlyNotice}</p>
+            </div>{" "}
             <textarea
               className="matrix-textarea"
               rows={5}
               value={analysisPrompt}
               onChange={(event) => setAnalysisPrompt(event.target.value)}
               placeholder="Describe what should be reviewed in the resolved scope."
-              disabled={!currentScope || analysisLoading}
+              disabled
             />{" "}
             <div className="action-row">
               <button
@@ -865,12 +1299,12 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 onClick={() => {
                   void runAnalysis();
                 }}
-                disabled={!currentScope || analysisLoading}
+                disabled
               >
-                {analysisLoading ? "Analyzing…" : "Run analysis"}
+                Analyze (contract-only)
               </button>
               <span className="muted-copy">
-                Analysis remains backend-owned and scope-bound.
+                Analysis remains backend-owned and is not wired for browser execution in this slice.
               </span>
             </div>{" "}
             {analysisError ? (
@@ -973,6 +1407,9 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 <strong>Plan card and approval gate</strong>
               </div>
             </header>{" "}
+            <div className="alert-banner" data-testid="matrix-review-contract-only">
+              <p>{legacyContractOnlyNotice}</p>
+            </div>{" "}
             {promotedPlan ? (
               <div className="plan-card">
                 {" "}
@@ -1103,16 +1540,9 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                       onChange={(event) =>
                         setApprovalPending(event.target.checked)
                       }
-                      disabled={
-                        promotedPlan.stale ||
-                        stalePlanDetected ||
-                        executionLoading ||
-                        Boolean(executionResult) ||
-                        Boolean(planRefreshError) ||
-                        planRefreshLoading
-                      }
+                      disabled
                     />{" "}
-                    <span>I approve backend execution of this plan.</span>{" "}
+                    <span>I approve backend execution of this plan (contract-only).</span>{" "}
                   </label>{" "}
                   <div className="action-row">
                     {" "}
@@ -1121,20 +1551,10 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                       onClick={() => {
                         void execute();
                       }}
-                      disabled={
-                        !approvalPending ||
-                        promotedPlan.stale ||
-                        stalePlanDetected ||
-                        executionLoading ||
-                        Boolean(executionResult) ||
-                        Boolean(planRefreshError) ||
-                        planRefreshLoading
-                      }
+                      disabled
                     >
                       {" "}
-                      {executionLoading
-                        ? "Executing…"
-                        : "Approve and execute"}{" "}
+                      Approve and execute (contract-only){" "}
                     </button>{" "}
                     <button
                       type="button"
@@ -1142,24 +1562,25 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                       onClick={() => {
                         void refreshCanonicalPlan(promotedPlan.planId);
                       }}
-                      disabled={!promotedPlan || planRefreshLoading}
+                      disabled
                     >
                       {" "}
-                      {planRefreshLoading ? "Refreshing…" : "Refresh plan"}{" "}
+                      Refresh plan (contract-only){" "}
                     </button>{" "}
                     <button
                       type="button"
                       className="ghost-button"
                       onClick={dismissReview}
+                      disabled
                     >
-                      Dismiss
+                      Dismiss (contract-only)
                     </button>{" "}
                   </div>{" "}
                 </div>{" "}
               </div>
             ) : (
               <p className="empty-state">
-                Promote a candidate to create a bounded review plan.
+                Promote a candidate to create a bounded review plan. The legacy review controls remain contract-only.
               </p>
             )}{" "}
             {stalePlanDetected ? (

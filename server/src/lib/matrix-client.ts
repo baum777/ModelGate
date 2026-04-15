@@ -12,6 +12,8 @@ export class MatrixClientError extends Error {
     | "matrix_not_configured"
     | "matrix_unauthorized"
     | "matrix_forbidden"
+    | "matrix_room_not_found"
+    | "matrix_write_forbidden"
     | "matrix_unavailable"
     | "matrix_timeout"
     | "matrix_malformed_response"
@@ -50,6 +52,8 @@ export type MatrixClient = {
   whoami(): Promise<MatrixWhoAmIResponse>;
   joinedRooms(): Promise<MatrixJoinedRoom[]>;
   resolveScope(body: MatrixScopeResolveRequest): Promise<MatrixScopeSnapshot>;
+  readRoomTopic(roomId: string): Promise<string | null>;
+  updateRoomTopic(roomId: string, topic: string): Promise<{ transactionId: string }>;
 };
 
 type MatrixClientOptions = {
@@ -100,13 +104,17 @@ function requestFailureMessage(status: number) {
   return "Matrix request failed";
 }
 
-function requestFailureCode(status: number, notFoundCode: MatrixClientError["code"]): MatrixClientError["code"] {
+function requestFailureCode(
+  status: number,
+  notFoundCode: MatrixClientError["code"],
+  forbiddenCode: MatrixClientError["code"] = "matrix_forbidden"
+): MatrixClientError["code"] {
   if (status === 401) {
     return "matrix_unauthorized";
   }
 
   if (status === 403) {
-    return "matrix_forbidden";
+    return forbiddenCode;
   }
 
   if (status === 404) {
@@ -139,7 +147,10 @@ async function requestJson<T>(
   init: RequestInit | undefined,
   validate: (payload: unknown) => T,
   fetchImpl: typeof fetch,
-  notFoundCode: MatrixClientError["code"] = "matrix_unavailable"
+  failureCodes: {
+    notFoundCode?: MatrixClientError["code"];
+    forbiddenCode?: MatrixClientError["code"];
+  } = {}
 ): Promise<T> {
   if (!config.ready || !config.baseUrl || !config.accessToken) {
     throw createMatrixClientError({
@@ -202,7 +213,11 @@ async function requestJson<T>(
     const bodyText = await readErrorStatus(response);
     void bodyText;
     throw createMatrixClientError({
-      code: requestFailureCode(response.status, notFoundCode),
+      code: requestFailureCode(
+        response.status,
+        failureCodes.notFoundCode ?? "matrix_unavailable",
+        failureCodes.forbiddenCode ?? "matrix_forbidden"
+      ),
       status: response.status === 401
         ? 401
         : response.status === 403
@@ -242,7 +257,11 @@ async function requestOptionalJson<T>(
   path: string,
   init: RequestInit | undefined,
   validate: (payload: unknown) => T,
-  fetchImpl: typeof fetch
+  fetchImpl: typeof fetch,
+  failureCodes: {
+    notFoundCode?: MatrixClientError["code"];
+    forbiddenCode?: MatrixClientError["code"];
+  } = {}
 ): Promise<T | null> {
   if (!config.ready || !config.baseUrl || !config.accessToken) {
     throw createMatrixClientError({
@@ -307,7 +326,11 @@ async function requestOptionalJson<T>(
 
   if (!response.ok) {
     throw createMatrixClientError({
-      code: requestFailureCode(response.status, "matrix_unavailable"),
+      code: requestFailureCode(
+        response.status,
+        failureCodes.notFoundCode ?? "matrix_unavailable",
+        failureCodes.forbiddenCode ?? "matrix_forbidden"
+      ),
       status: response.status === 401
         ? 401
         : response.status === 403
@@ -371,6 +394,23 @@ function requireStringField(payload: Record<string, unknown>, field: string, ope
   return value;
 }
 
+function requireStringFieldAllowEmpty(payload: Record<string, unknown>, field: string, operation: string, path: string, label: string) {
+  const value = payload[field];
+
+  if (typeof value !== "string") {
+    throw createMatrixClientError({
+      code: "matrix_malformed_response",
+      status: 502,
+      operation,
+      path,
+      baseUrl: "unavailable",
+      message: `Matrix ${label} field ${field} must be a string`
+    });
+  }
+
+  return value;
+}
+
 function requireArrayField(payload: Record<string, unknown>, field: string, operation: string, path: string, label: string) {
   const value = payload[field];
 
@@ -408,6 +448,91 @@ function normalizeRoomType(value: unknown) {
   }
 
   return "room";
+}
+
+async function readMatrixRoomExists(config: MatrixConfig, fetchImpl: typeof fetch, roomId: string) {
+  const roomPath = encodeURIComponent(roomId);
+  const createPath = `/_matrix/client/v3/rooms/${roomPath}/state/m.room.create`;
+
+  const createResponse = await requestOptionalJson(
+    config,
+    "Matrix room create",
+    createPath,
+    undefined,
+    (payload) => requireRecord(payload, "Matrix room create", createPath, "room create event"),
+    fetchImpl,
+    {
+      notFoundCode: "matrix_room_not_found",
+      forbiddenCode: "matrix_write_forbidden"
+    }
+  );
+
+  return createResponse !== null;
+}
+
+async function readMatrixRoomTopic(config: MatrixConfig, fetchImpl: typeof fetch, roomId: string) {
+  const roomExists = await readMatrixRoomExists(config, fetchImpl, roomId);
+
+  if (!roomExists) {
+    throw createMatrixClientError({
+      code: "matrix_room_not_found",
+      status: 404,
+      operation: "Matrix room topic",
+      path: `/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/state/m.room.topic`,
+      baseUrl: normalizeBaseUrl(config.baseUrl ?? ""),
+      message: "Matrix room was not found"
+    });
+  }
+
+  const roomPath = encodeURIComponent(roomId);
+  const topicPath = `/_matrix/client/v3/rooms/${roomPath}/state/m.room.topic`;
+  const topic = await requestOptionalJson(
+    config,
+    "Matrix room topic",
+    topicPath,
+    undefined,
+    (payload) => {
+      const record = requireRecord(payload, "Matrix room topic", topicPath, "room topic event");
+      return requireStringFieldAllowEmpty(record, "topic", "Matrix room topic", topicPath, "room topic event");
+    },
+    fetchImpl,
+    {
+      notFoundCode: "matrix_room_not_found",
+      forbiddenCode: "matrix_write_forbidden"
+    }
+  );
+
+  return topic;
+}
+
+async function updateMatrixRoomTopic(config: MatrixConfig, fetchImpl: typeof fetch, roomId: string, topic: string) {
+  const roomPath = encodeURIComponent(roomId);
+  const topicPath = `/_matrix/client/v3/rooms/${roomPath}/state/m.room.topic`;
+
+  return requestJson(
+    config,
+    "Matrix room topic update",
+    topicPath,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        topic
+      })
+    },
+    (payload) => {
+      const record = requireRecord(payload, "Matrix room topic update", topicPath, "topic update response");
+      const transactionId = requireStringField(record, "event_id", "Matrix room topic update", topicPath, "topic update response");
+
+      return {
+        transactionId
+      };
+    },
+    fetchImpl,
+    {
+      notFoundCode: "matrix_room_not_found",
+      forbiddenCode: "matrix_write_forbidden"
+    }
+  );
 }
 
 async function fetchRoomDescriptor(
@@ -469,7 +594,9 @@ async function fetchRoomDescriptor(
         return Object.keys(joined).length;
       },
       fetchImpl,
-      "matrix_scope_not_found"
+      {
+        notFoundCode: "matrix_scope_not_found"
+      }
     );
   }
 
@@ -632,6 +759,14 @@ export function createMatrixClient(options: MatrixClientOptions): MatrixClient {
         expiresAtMs: createdAtMs + options.config.requestTimeoutMs * 3,
         rooms: selectedRooms
       };
+    },
+
+    async readRoomTopic(roomId) {
+      return readMatrixRoomTopic(options.config, fetchImpl, roomId);
+    },
+
+    async updateRoomTopic(roomId, topic) {
+      return updateMatrixRoomTopic(options.config, fetchImpl, roomId, topic);
     }
   };
 }

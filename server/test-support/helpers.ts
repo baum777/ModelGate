@@ -80,6 +80,10 @@ export function createMockMatrixClient(overrides: Partial<MatrixClient> = {}): M
           lastEventSummary: "Room metadata snapshot with 1 joined members"
         }
       ]
+    })),
+    readRoomTopic: overrides.readRoomTopic ?? (async () => "Room topic"),
+    updateRoomTopic: overrides.updateRoomTopic ?? (async () => ({
+      transactionId: "txn_test"
     }))
   };
 }

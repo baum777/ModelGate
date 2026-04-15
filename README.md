@@ -5,8 +5,8 @@ ModelGate is a backend-first OpenRouter proxy with a thin React client.
 The current console overlay is the Sovereign Console / Stitch v1 surface:
 
 - `Chat` consumes backend-owned SSE streams and only renders a public model alias
-- `Matrix Workspace` now has locally wired read-only backend routes for Explore (`whoami`, `joined-rooms`, `scope resolve`, `scope summary`)
-- the remaining Matrix analysis/write/verification surfaces stay backend-owned and fail-closed
+- `Matrix Workspace` now has locally wired read-only backend routes for Explore (`whoami`, `joined-rooms`, `scope resolve`, `scope summary`) plus a backend-owned, approval-gated room topic plan/execute/verify slice
+- the remaining Matrix analysis/provenance/hierarchy surfaces stay backend-owned and fail-closed
 - the browser owns UI state only; provider calls, Matrix truth, and execution truth stay backend-owned
 
 The backend is the authority layer for:
@@ -29,15 +29,18 @@ Locally verified:
 - `POST /chat`
 - SSE lifecycle: `start -> token* -> done|error`
 - Matrix read-only backend routes against a local mock Matrix origin
+- Matrix approval-gated room topic update flow:
+  - `POST /api/matrix/actions/promote`
+  - `GET /api/matrix/actions/:planId`
+  - `POST /api/matrix/actions/:planId/execute`
+  - `GET /api/matrix/actions/:planId/verify`
 - Matrix malformed-200 fail-closed behavior in the frontend adapter
 
 Contract-only / external-backend:
 
 - Matrix Analyze
 - Matrix Review
-- Matrix Execute
-- Matrix Verify
-- Matrix write / approval / provenance / hierarchy endpoints that are not locally wired yet
+- Matrix provenance / hierarchy endpoints that are not locally wired yet
 
 Locally wired but read-only:
 
@@ -49,7 +52,6 @@ Locally wired but read-only:
 Deferred:
 
 - live Matrix E2E verification against a real Matrix origin
-- Matrix writes and approval-gated execution
 - Undo
 - cross-device sync
 - bulk review queue
@@ -63,7 +65,7 @@ Live smoke note:
 
 ## Repo Layout
 
-- `server/` - Fastify backend for `/health`, `/models`, `/chat`, and read-only `/api/matrix/*` routes
+- `server/` - Fastify backend for `/health`, `/models`, `/chat`, read-only `/api/matrix/*` routes, and the approval-gated Matrix topic plan flow
 - `web/` - Vite + React client with Sovereign Console tabs and Matrix Workspace overlays
 
 ## Getting Started
@@ -77,10 +79,10 @@ npm install
 2. Configure the backend env:
 
 ```bash
-cp server/.env.example server/.env
+cp server/.env.example .env
 ```
 
-Set `OPENROUTER_API_KEY` in `server/.env`.
+Set `OPENROUTER_API_KEY` in `.env`.
 
 3. Optionally configure the client env:
 
@@ -134,6 +136,10 @@ npm run typecheck
 npm run build
 ```
 
+Vercel deployment notes:
+
+- [`docs/vercel-deployment.md`](docs/vercel-deployment.md)
+
 ## Current Scope
 
 Implemented:
@@ -143,10 +149,12 @@ Implemented:
 - sanitized backend error responses
 - SSE streaming with backend-owned event framing
 - stable public model aliasing with backend-owned provider fallback
+- rules-first LLM router with private append-only local evidence logs under `.local-ai/`
 - thin console shell with backend health, model alias, and restored-session signaling
 - reducer-driven chat draft handling with malformed-stream visibility
 - locally wired Matrix read-only routes with fail-closed snapshot storage
-- Matrix contract overlay for the remaining Analyze / Review / Execute / Verify surfaces
+- backend-owned Matrix topic update plan / execute / verify flow with in-memory TTL plans
+- Matrix contract overlay for the remaining Analyze / Review / provenance / hierarchy surfaces
 - small deterministic test slice for chat and Matrix gating helpers
 
 Not in scope for this branch:
@@ -161,4 +169,4 @@ Not in scope for this branch:
 
 Current gap:
 
-- Matrix write / execute / verify surfaces are still external to this repo and must remain fail-closed when unavailable or malformed
+- Matrix Analyze / Review / provenance / hierarchy surfaces are still external to this repo and must remain fail-closed when unavailable or malformed

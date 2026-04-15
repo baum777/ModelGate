@@ -1,9 +1,11 @@
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import type { AppEnv } from "./lib/env.js";
+import { loadLlmRouterPolicy, type LlmRouterPolicy } from "./lib/llm-router.js";
 import { createDisabledMatrixConfig, type MatrixConfig } from "./lib/matrix-env.js";
 import { buildCorsHeaders } from "./lib/http.js";
 import { buildModelRegistry, type ModelRegistry } from "./lib/model-policy.js";
 import { createMatrixClient, type MatrixClient } from "./lib/matrix-client.js";
+import { createMatrixActionStore, type MatrixActionStore } from "./lib/matrix-action-store.js";
 import { createMatrixScopeStore, type MatrixScopeStore } from "./lib/matrix-scope-store.js";
 import type { OpenRouterClient } from "./lib/openrouter.js";
 import { chatRoutes } from "./routes/chat.js";
@@ -17,7 +19,9 @@ export type AppDependencies = {
   matrixConfig?: MatrixConfig;
   matrixClient?: MatrixClient;
   matrixStore?: MatrixScopeStore;
+  matrixActionStore?: MatrixActionStore;
   modelRegistry?: ModelRegistry;
+  llmRouterPolicy?: LlmRouterPolicy;
   logger?: boolean;
 };
 
@@ -38,9 +42,13 @@ function registerCors(app: ReturnType<typeof Fastify>, env: AppEnv) {
 
 export function createApp(deps: AppDependencies) {
   const modelRegistry = deps.modelRegistry ?? buildModelRegistry(deps.env);
+  const llmRouterPolicy = deps.llmRouterPolicy ?? loadLlmRouterPolicy({
+    LLM_ROUTER_ENABLED: "false"
+  });
   const matrixConfig = deps.matrixConfig ?? createDisabledMatrixConfig();
   const matrixClient = deps.matrixClient ?? createMatrixClient({ config: matrixConfig });
   const matrixStore = deps.matrixStore ?? createMatrixScopeStore();
+  const matrixActionStore = deps.matrixActionStore ?? createMatrixActionStore();
   const app = Fastify({
     logger: deps.logger ?? true,
     bodyLimit: 1_048_576
@@ -53,12 +61,14 @@ export function createApp(deps: AppDependencies) {
   matrixRoutes(app, {
     config: matrixConfig,
     client: matrixClient,
-    store: matrixStore
+    store: matrixStore,
+    actionStore: matrixActionStore
   });
   chatRoutes(app, {
     env: deps.env,
     openRouter: deps.openRouter,
-    modelRegistry
+    modelRegistry,
+    llmRouterPolicy
   });
 
   return app;

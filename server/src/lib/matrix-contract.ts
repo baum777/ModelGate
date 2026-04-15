@@ -5,10 +5,17 @@ export type MatrixErrorCode =
   | "invalid_request"
   | "matrix_unauthorized"
   | "matrix_forbidden"
+  | "matrix_room_not_found"
+  | "matrix_write_forbidden"
   | "matrix_unavailable"
   | "matrix_timeout"
   | "matrix_malformed_response"
   | "matrix_scope_not_found"
+  | "matrix_plan_not_found"
+  | "matrix_plan_expired"
+  | "matrix_plan_already_executed"
+  | "matrix_stale_plan"
+  | "matrix_verification_failed"
   | "matrix_internal_error";
 
 export type MatrixErrorResponse = {
@@ -90,10 +97,17 @@ const MATRIX_ERROR_MESSAGES: Record<MatrixErrorCode, string> = {
   invalid_request: "Invalid Matrix request",
   matrix_unauthorized: "Matrix credentials were rejected",
   matrix_forbidden: "Matrix backend denied access",
+  matrix_room_not_found: "Matrix room was not found",
+  matrix_write_forbidden: "Matrix backend denied write access",
   matrix_unavailable: "Matrix backend is unavailable",
   matrix_timeout: "Matrix backend request timed out",
   matrix_malformed_response: "Matrix backend returned an invalid response",
   matrix_scope_not_found: "Matrix scope was not found",
+  matrix_plan_not_found: "Matrix plan was not found",
+  matrix_plan_expired: "Matrix plan expired",
+  matrix_plan_already_executed: "Matrix plan was already executed",
+  matrix_stale_plan: "Matrix plan is stale and must be refreshed",
+  matrix_verification_failed: "Matrix verification failed",
   matrix_internal_error: "Matrix backend failed"
 };
 
@@ -102,10 +116,17 @@ const MATRIX_ERROR_STATUS: Record<MatrixErrorCode, number> = {
   invalid_request: 400,
   matrix_unauthorized: 401,
   matrix_forbidden: 403,
+  matrix_room_not_found: 404,
+  matrix_write_forbidden: 403,
   matrix_unavailable: 503,
   matrix_timeout: 504,
   matrix_malformed_response: 502,
   matrix_scope_not_found: 404,
+  matrix_plan_not_found: 404,
+  matrix_plan_expired: 410,
+  matrix_plan_already_executed: 409,
+  matrix_stale_plan: 409,
+  matrix_verification_failed: 500,
   matrix_internal_error: 500
 };
 
@@ -122,4 +143,3 @@ export function buildMatrixErrorResponse(code: MatrixErrorCode, message?: string
 export function matrixErrorStatus(code: MatrixErrorCode) {
   return MATRIX_ERROR_STATUS[code];
 }
-

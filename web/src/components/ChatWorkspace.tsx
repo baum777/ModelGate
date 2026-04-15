@@ -205,7 +205,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const draft = chatState.currentAssistantDraft;
 
   return (
-    <section className="workspace-panel chat-workspace">
+    <section className="workspace-panel chat-workspace" data-testid="chat-workspace">
       <section className="workspace-hero chat-hero">
         <div>
           <p className={`status-pill status-${props.backendHealthy === false ? "error" : props.backendHealthy === true ? "ready" : "partial"}`}>
@@ -248,7 +248,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
         <header className="chat-runtime-bar">
           <div className="runtime-stack">
             <span className="runtime-label">Connection</span>
-            <strong>{statusLabel(chatState.connectionState)}</strong>
+            <strong data-testid="chat-connection-state">{statusLabel(chatState.connectionState)}</strong>
             <span className="runtime-note">Auto-scroll: {chatState.autoScrollEnabled ? "on" : "off"}</span>
           </div>
 
@@ -296,7 +296,9 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
         ) : null}
 
         <form className="composer" onSubmit={handleSubmit}>
-            <textarea
+          <textarea
+              data-testid="chat-composer"
+              aria-label="Chat composer"
               value={composerValue}
               onChange={(event) => setComposerValue(event.target.value)}
               onKeyDown={(event) => {
@@ -314,7 +316,11 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             <p className="hint">
               The browser only submits intent. The backend owns provider calls, framing, and final truth.
             </p>
-            <button type="submit" disabled={chatState.connectionState === "submitting" || chatState.connectionState === "streaming" || composerValue.trim().length === 0}>
+            <button
+              type="submit"
+              data-testid="chat-send"
+              disabled={chatState.connectionState === "submitting" || chatState.connectionState === "streaming" || composerValue.trim().length === 0}
+            >
               {chatState.connectionState === "submitting" || chatState.connectionState === "streaming" ? "Streaming…" : "Send"}
             </button>
           </div>

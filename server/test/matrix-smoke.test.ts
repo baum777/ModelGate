@@ -1,0 +1,398 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  formatMatrixSmokeResult,
+  runMatrixSmoke
+} from "../../scripts/matrix-smoke.mjs";
+
+function createJsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "Content-Type": "application/json"
+    }
+  });
+}
+
+test("matrix smoke skips cleanly when required env vars are missing", async () => {
+  let fetchCalls = 0;
+
+  const result = await runMatrixSmoke({
+    env: {},
+    loadRootEnvFile: false,
+    fetchImpl: async () => {
+      fetchCalls += 1;
+      throw new Error("fetch should not be called for a skip");
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.status, "skipped");
+  assert.deepEqual(result.missing, [
+    "MATRIX_ENABLED=true",
+    "MATRIX_BASE_URL",
+    "MATRIX_ACCESS_TOKEN",
+    "MATRIX_SMOKE_ROOM_ID"
+  ]);
+  assert.equal(fetchCalls, 0);
+});
+
+test("matrix smoke calls the backend routes in order and redacts token values", async () => {
+  const secretToken = "sk-test-secret-token";
+  const requests: Array<{
+    method: string;
+    path: string;
+    authorization: string | null;
+    body: unknown;
+  }> = [];
+  const expectedRoomId = "!smoke:matrix.example";
+  const expectedPreviousTopic = "Previous dedicated topic";
+  let temporaryTopic: string | null = null;
+  let promoteCount = 0;
+
+  const result = await runMatrixSmoke({
+    env: {
+      MATRIX_ENABLED: "true",
+      MATRIX_BASE_URL: "https://matrix.example",
+      MATRIX_ACCESS_TOKEN: secretToken,
+      MATRIX_SMOKE_ROOM_ID: expectedRoomId,
+      MATRIX_SMOKE_TOPIC_PREFIX: "ModelGate smoke",
+      HOST: "127.0.0.1",
+      PORT: "8787"
+    },
+    loadRootEnvFile: false,
+    now: () => new Date("2026-04-15T10:11:12.000Z"),
+    randomSuffix: () => "abc123",
+    fetchImpl: async (input, init) => {
+      const requestUrl = typeof input === "string" ? new URL(input) : new URL(input.url);
+      const headers = new Headers(init?.headers);
+      const method = String(init?.method ?? "GET");
+      const body = typeof init?.body === "string" ? JSON.parse(init.body) : null;
+
+      requests.push({
+        method,
+        path: requestUrl.pathname,
+        authorization: headers.get("authorization"),
+        body
+      });
+
+      if (requestUrl.pathname === "/api/matrix/actions/promote" && method === "POST") {
+        promoteCount += 1;
+        temporaryTopic = typeof body?.topic === "string" ? body.topic : null;
+
+        if (promoteCount === 1) {
+          return createJsonResponse({
+            ok: true,
+            plan: {
+              planId: "plan-forward",
+              type: "update_room_topic",
+              roomId: expectedRoomId,
+              status: "pending_review",
+              createdAt: "2026-04-15T10:11:12.000Z",
+              expiresAt: "2026-04-15T10:21:12.000Z",
+              diff: {
+                field: "topic",
+                before: expectedPreviousTopic,
+                after: temporaryTopic
+              },
+              requiresApproval: true
+            }
+          });
+        }
+
+        return createJsonResponse({
+          ok: true,
+          plan: {
+            planId: "plan-restore",
+            type: "update_room_topic",
+            roomId: expectedRoomId,
+            status: "pending_review",
+            createdAt: "2026-04-15T10:11:13.000Z",
+            expiresAt: "2026-04-15T10:21:13.000Z",
+            diff: {
+              field: "topic",
+              before: temporaryTopic,
+              after: expectedPreviousTopic
+            },
+            requiresApproval: true
+          }
+        });
+      }
+
+      if (requestUrl.pathname === "/api/matrix/actions/plan-forward" && method === "GET") {
+        return createJsonResponse({
+          ok: true,
+          plan: {
+            planId: "plan-forward",
+            type: "update_room_topic",
+            roomId: expectedRoomId,
+            status: "pending_review",
+            createdAt: "2026-04-15T10:11:12.000Z",
+            expiresAt: "2026-04-15T10:21:12.000Z",
+            diff: {
+              field: "topic",
+              before: expectedPreviousTopic,
+              after: temporaryTopic
+            },
+            requiresApproval: true
+          }
+        });
+      }
+
+      if (requestUrl.pathname === "/api/matrix/actions/plan-forward/execute" && method === "POST") {
+        return createJsonResponse({
+          ok: true,
+          result: {
+            planId: "plan-forward",
+            status: "executed",
+            executedAt: "2026-04-15T10:11:12.000Z",
+            transactionId: "txn-forward"
+          }
+        });
+      }
+
+      if (requestUrl.pathname === "/api/matrix/actions/plan-forward/verify" && method === "GET") {
+        return createJsonResponse({
+          ok: true,
+          verification: {
+            planId: "plan-forward",
+            status: "verified",
+            checkedAt: "2026-04-15T10:11:12.000Z",
+            expected: temporaryTopic,
+            actual: temporaryTopic
+          }
+        });
+      }
+
+      if (requestUrl.pathname === "/api/matrix/actions/plan-restore" && method === "GET") {
+        return createJsonResponse({
+          ok: true,
+          plan: {
+            planId: "plan-restore",
+            type: "update_room_topic",
+            roomId: expectedRoomId,
+            status: "pending_review",
+            createdAt: "2026-04-15T10:11:13.000Z",
+            expiresAt: "2026-04-15T10:21:13.000Z",
+            diff: {
+              field: "topic",
+              before: temporaryTopic,
+              after: expectedPreviousTopic
+            },
+            requiresApproval: true
+          }
+        });
+      }
+
+      if (requestUrl.pathname === "/api/matrix/actions/plan-restore/execute" && method === "POST") {
+        return createJsonResponse({
+          ok: true,
+          result: {
+            planId: "plan-restore",
+            status: "executed",
+            executedAt: "2026-04-15T10:11:13.000Z",
+            transactionId: "txn-restore"
+          }
+        });
+      }
+
+      if (requestUrl.pathname === "/api/matrix/actions/plan-restore/verify" && method === "GET") {
+        return createJsonResponse({
+          ok: true,
+          verification: {
+            planId: "plan-restore",
+            status: "verified",
+            checkedAt: "2026-04-15T10:11:13.000Z",
+            expected: expectedPreviousTopic,
+            actual: expectedPreviousTopic
+          }
+        });
+      }
+
+      throw new Error(`Unexpected request ${method} ${requestUrl.pathname}`);
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.status, "passed");
+  assert.equal(result.roomId, expectedRoomId);
+  assert.equal(result.temporaryTopic, "ModelGate smoke 2026-04-15T10-11-12-000Z abc123");
+  assert.equal(result.restorationTopic, expectedPreviousTopic);
+  assert.equal(result.forward.verification.status, "verified");
+  assert.equal(result.cleanup.verification.status, "verified");
+  assert.deepEqual(
+    requests.map((request) => `${request.method} ${request.path}`),
+    [
+      "POST /api/matrix/actions/promote",
+      "GET /api/matrix/actions/plan-forward",
+      "POST /api/matrix/actions/plan-forward/execute",
+      "GET /api/matrix/actions/plan-forward/verify",
+      "POST /api/matrix/actions/promote",
+      "GET /api/matrix/actions/plan-restore",
+      "POST /api/matrix/actions/plan-restore/execute",
+      "GET /api/matrix/actions/plan-restore/verify"
+    ]
+  );
+  assert.ok(requests.every((request) => request.authorization === null));
+  assert.doesNotMatch(formatMatrixSmokeResult(result), new RegExp(secretToken));
+});
+
+test("matrix smoke surfaces cleanup failure with room and topic details", async () => {
+  const result = await runMatrixSmoke({
+    env: {
+      MATRIX_ENABLED: "true",
+      MATRIX_BASE_URL: "https://matrix.example",
+      MATRIX_ACCESS_TOKEN: "sk-cleanup-secret",
+      MATRIX_SMOKE_ROOM_ID: "!cleanup:matrix.example",
+      MATRIX_SMOKE_TOPIC_PREFIX: "Cleanup smoke",
+      HOST: "127.0.0.1",
+      PORT: "8787"
+    },
+    loadRootEnvFile: false,
+    now: () => new Date("2026-04-15T11:11:12.000Z"),
+    randomSuffix: () => "deadbeef",
+    fetchImpl: async (input, init) => {
+      const requestUrl = typeof input === "string" ? new URL(input) : new URL(input.url);
+      const method = String(init?.method ?? "GET");
+      const body = typeof init?.body === "string" ? JSON.parse(init.body) : null;
+
+      if (requestUrl.pathname === "/api/matrix/actions/promote" && method === "POST" && body?.topic?.startsWith("Cleanup smoke")) {
+        return createJsonResponse({
+          ok: true,
+          plan: {
+            planId: "plan-forward",
+            type: "update_room_topic",
+            roomId: "!cleanup:matrix.example",
+            status: "pending_review",
+            createdAt: "2026-04-15T11:11:12.000Z",
+            expiresAt: "2026-04-15T11:21:12.000Z",
+            diff: {
+              field: "topic",
+              before: "Original cleanup topic",
+              after: body.topic
+            },
+            requiresApproval: true
+          }
+        });
+      }
+
+      if (requestUrl.pathname === "/api/matrix/actions/plan-forward" && method === "GET") {
+        return createJsonResponse({
+          ok: true,
+          plan: {
+            planId: "plan-forward",
+            type: "update_room_topic",
+            roomId: "!cleanup:matrix.example",
+            status: "pending_review",
+            createdAt: "2026-04-15T11:11:12.000Z",
+            expiresAt: "2026-04-15T11:21:12.000Z",
+            diff: {
+              field: "topic",
+              before: "Original cleanup topic",
+              after: body?.topic ?? "Cleanup smoke 2026-04-15T11-11-12-000Z deadbeef"
+            },
+            requiresApproval: true
+          }
+        });
+      }
+
+      if (requestUrl.pathname === "/api/matrix/actions/plan-forward/execute" && method === "POST") {
+        return createJsonResponse({
+          ok: true,
+          result: {
+            planId: "plan-forward",
+            status: "executed",
+            executedAt: "2026-04-15T11:11:12.000Z",
+            transactionId: "txn-forward"
+          }
+        });
+      }
+
+      if (requestUrl.pathname === "/api/matrix/actions/plan-forward/verify" && method === "GET") {
+        return createJsonResponse({
+          ok: true,
+          verification: {
+            planId: "plan-forward",
+            status: "verified",
+            checkedAt: "2026-04-15T11:11:12.000Z",
+            expected: "Cleanup smoke 2026-04-15T11-11-12-000Z deadbeef",
+            actual: "Cleanup smoke 2026-04-15T11-11-12-000Z deadbeef"
+          }
+        });
+      }
+
+      if (requestUrl.pathname === "/api/matrix/actions/promote" && method === "POST" && body?.topic === "Original cleanup topic") {
+        return createJsonResponse({
+          ok: true,
+          plan: {
+            planId: "plan-restore",
+            type: "update_room_topic",
+            roomId: "!cleanup:matrix.example",
+            status: "pending_review",
+            createdAt: "2026-04-15T11:11:13.000Z",
+            expiresAt: "2026-04-15T11:21:13.000Z",
+            diff: {
+              field: "topic",
+              before: "Cleanup smoke 2026-04-15T11-11-12-000Z deadbeef",
+              after: "Original cleanup topic"
+            },
+            requiresApproval: true
+          }
+        });
+      }
+
+      if (requestUrl.pathname === "/api/matrix/actions/plan-restore" && method === "GET") {
+        return createJsonResponse({
+          ok: true,
+          plan: {
+            planId: "plan-restore",
+            type: "update_room_topic",
+            roomId: "!cleanup:matrix.example",
+            status: "pending_review",
+            createdAt: "2026-04-15T11:11:13.000Z",
+            expiresAt: "2026-04-15T11:21:13.000Z",
+            diff: {
+              field: "topic",
+              before: "Cleanup smoke 2026-04-15T11-11-12-000Z deadbeef",
+              after: "Original cleanup topic"
+            },
+            requiresApproval: true
+          }
+        });
+      }
+
+      if (requestUrl.pathname === "/api/matrix/actions/plan-restore/execute" && method === "POST") {
+        return createJsonResponse({
+          ok: false,
+          error: {
+            code: "matrix_stale_plan",
+            message: "Matrix plan is stale and must be refreshed"
+          }
+        }, 409);
+      }
+
+      if (requestUrl.pathname === "/api/matrix/actions/plan-restore/verify" && method === "GET") {
+        return createJsonResponse({
+          ok: true,
+          verification: {
+            planId: "plan-restore",
+            status: "mismatch",
+            checkedAt: "2026-04-15T11:11:13.000Z",
+            expected: "Original cleanup topic",
+            actual: "Cleanup smoke 2026-04-15T11-11-12-000Z deadbeef"
+          }
+        });
+      }
+
+      throw new Error(`Unexpected request ${method} ${requestUrl.pathname}`);
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, "failed");
+  assert.equal(result.phase, "cleanup");
+  assert.equal(result.roomId, "!cleanup:matrix.example");
+  assert.equal(result.cleanup.restoreTopic, "Original cleanup topic");
+  assert.equal(result.cleanup.temporaryTopic, "Cleanup smoke 2026-04-15T11-11-12-000Z deadbeef");
+  assert.equal(result.error.code, "matrix_stale_plan");
+});

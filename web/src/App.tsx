@@ -164,7 +164,7 @@ export default function App() {
   const backendStatusLabel = backendHealthy === null ? "Backend pending" : backendHealthy ? "Backend healthy" : "Backend error";
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-testid="app-shell">
       <header className="global-header">
         <div className="brand-block">
           <p className="app-kicker">SOVEREIGN CONSOLE</p>
@@ -200,6 +200,7 @@ export default function App() {
           }}
           role="tab"
           aria-selected={mode === "chat"}
+          data-testid="tab-chat"
         >
           Chat
         </button>
@@ -212,6 +213,7 @@ export default function App() {
           }}
           role="tab"
           aria-selected={mode === "matrix"}
+          data-testid="tab-matrix"
         >
           Matrix Workspace
         </button>

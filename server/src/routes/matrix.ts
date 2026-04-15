@@ -1,4 +1,11 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply } from "fastify";
+import {
+  MatrixActionExecuteRequestSchema,
+  MatrixActionPlanIdSchema,
+  MatrixUpdateRoomTopicRequestSchema,
+  type MatrixActionPlan
+} from "../lib/matrix-action-contract.js";
 import {
   MatrixScopeResolveRequestSchema,
   type MatrixWhoAmIResponse,
@@ -8,6 +15,7 @@ import {
 } from "../lib/matrix-contract.js";
 import { MatrixClientError, type MatrixClient } from "../lib/matrix-client.js";
 import type { MatrixConfig } from "../lib/matrix-env.js";
+import { createMatrixActionStore, type MatrixActionStore } from "../lib/matrix-action-store.js";
 import {
   buildMatrixScopeSummaryItems,
   createMatrixScopeStore,
@@ -19,6 +27,7 @@ type MatrixRouteDependencies = {
   config: MatrixConfig;
   client: MatrixClient;
   store?: MatrixScopeStore;
+  actionStore?: MatrixActionStore;
 };
 
 function sendMatrixError(reply: FastifyReply, code: MatrixErrorCode, message?: string) {
@@ -42,6 +51,37 @@ function handleMatrixError(reply: FastifyReply, error: unknown) {
   return sendMatrixError(reply, "matrix_internal_error");
 }
 
+function readActionPlanOrError(reply: FastifyReply, actionStore: MatrixActionStore, planId: string) {
+  const lookup = actionStore.readPlan(planId);
+
+  if (lookup.state === "missing") {
+    return { error: sendMatrixError(reply, "matrix_plan_not_found") as never };
+  }
+
+  if (lookup.state === "expired") {
+    return { error: sendMatrixError(reply, "matrix_plan_expired") as never };
+  }
+
+  return { plan: lookup.plan };
+}
+
+function serializeActionPlan(plan: MatrixActionPlan): MatrixActionPlan {
+  return {
+    planId: plan.planId,
+    type: plan.type,
+    roomId: plan.roomId,
+    status: plan.status,
+    createdAt: plan.createdAt,
+    expiresAt: plan.expiresAt,
+    diff: {
+      field: plan.diff.field,
+      before: plan.diff.before,
+      after: plan.diff.after
+    },
+    requiresApproval: true
+  };
+}
+
 function assertExpectedMatrixUser(
   config: MatrixConfig,
   identity: MatrixWhoAmIResponse,
@@ -62,6 +102,7 @@ function assertExpectedMatrixUser(
 
 export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies) {
   const store = deps.store ?? createMatrixScopeStore();
+  const actionStore = deps.actionStore ?? createMatrixActionStore();
 
   app.get("/api/matrix/whoami", async (_request, reply) => {
     if (!deps.config.ready) {
@@ -174,5 +215,207 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
       generatedAt: new Date().toISOString(),
       items: buildMatrixScopeSummaryItems(snapshot)
     });
+  });
+
+  app.post("/api/matrix/actions/promote", async (request, reply) => {
+    if (!deps.config.ready) {
+      return sendMatrixError(reply, "matrix_not_configured");
+    }
+
+    const parsed = MatrixUpdateRoomTopicRequestSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return sendMatrixError(reply, "invalid_request");
+    }
+
+    try {
+      const before = await deps.client.readRoomTopic(parsed.data.roomId);
+      const plan = actionStore.createPlan({
+        planId: `plan_${randomUUID()}`,
+        type: "update_room_topic",
+        roomId: parsed.data.roomId,
+        status: "pending_review",
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + actionStore.ttlMs).toISOString(),
+        diff: {
+          field: "topic",
+          before,
+          after: parsed.data.topic
+        },
+        requiresApproval: true
+      });
+
+      return reply.status(200).send({
+        ok: true,
+        plan: serializeActionPlan(plan)
+      });
+    } catch (error) {
+      return handleMatrixError(reply, error);
+    }
+  });
+
+  app.get("/api/matrix/actions/:planId", async (request, reply) => {
+    if (!deps.config.ready) {
+      return sendMatrixError(reply, "matrix_not_configured");
+    }
+
+    const parsed = MatrixActionPlanIdSchema.safeParse(
+      typeof request.params === "object" && request.params !== null
+        ? (request.params as { planId?: unknown }).planId
+        : undefined
+    );
+
+    if (!parsed.success) {
+      return sendMatrixError(reply, "invalid_request");
+    }
+
+    const lookup = readActionPlanOrError(reply, actionStore, parsed.data);
+
+    if ("error" in lookup) {
+      return lookup.error;
+    }
+
+    return reply.status(200).send({
+      ok: true,
+      plan: serializeActionPlan(lookup.plan)
+    });
+  });
+
+  app.post("/api/matrix/actions/:planId/execute", async (request, reply) => {
+    if (!deps.config.ready) {
+      return sendMatrixError(reply, "matrix_not_configured");
+    }
+
+    const planIdResult = MatrixActionPlanIdSchema.safeParse(
+      typeof request.params === "object" && request.params !== null
+        ? (request.params as { planId?: unknown }).planId
+        : undefined
+    );
+    const bodyResult = MatrixActionExecuteRequestSchema.safeParse(request.body);
+
+    if (!planIdResult.success || !bodyResult.success) {
+      return sendMatrixError(reply, "invalid_request");
+    }
+
+    const lookup = actionStore.readPlan(planIdResult.data);
+
+    if (lookup.state === "missing") {
+      return sendMatrixError(reply, "matrix_plan_not_found");
+    }
+
+    if (lookup.state === "expired") {
+      return sendMatrixError(reply, "matrix_plan_expired");
+    }
+
+    const plan = lookup.plan;
+
+    if (plan.status === "executed" || plan.execution) {
+      return sendMatrixError(reply, "matrix_plan_already_executed");
+    }
+
+    try {
+      const currentTopic = await deps.client.readRoomTopic(plan.roomId);
+
+      if (currentTopic !== plan.diff.before) {
+        return sendMatrixError(reply, "matrix_stale_plan");
+      }
+
+      const executedAt = new Date().toISOString();
+      const transaction = await deps.client.updateRoomTopic(plan.roomId, plan.diff.after);
+
+      actionStore.updatePlan(plan.planId, (current) => ({
+        ...current,
+        status: "executed",
+        execution: {
+          planId: current.planId,
+          status: "executed",
+          executedAt,
+          transactionId: transaction.transactionId
+        }
+      }));
+
+      return reply.status(200).send({
+        ok: true,
+        result: {
+          planId: plan.planId,
+          status: "executed",
+          executedAt,
+          transactionId: transaction.transactionId
+        }
+      });
+    } catch (error) {
+      return handleMatrixError(reply, error);
+    }
+  });
+
+  app.get("/api/matrix/actions/:planId/verify", async (request, reply) => {
+    if (!deps.config.ready) {
+      return sendMatrixError(reply, "matrix_not_configured");
+    }
+
+    const parsed = MatrixActionPlanIdSchema.safeParse(
+      typeof request.params === "object" && request.params !== null
+        ? (request.params as { planId?: unknown }).planId
+        : undefined
+    );
+
+    if (!parsed.success) {
+      return sendMatrixError(reply, "invalid_request");
+    }
+
+    const lookup = actionStore.readPlan(parsed.data);
+
+    if (lookup.state === "missing") {
+      return sendMatrixError(reply, "matrix_plan_not_found");
+    }
+
+    if (lookup.state === "expired") {
+      return sendMatrixError(reply, "matrix_plan_expired");
+    }
+
+    const plan = lookup.plan;
+
+    if (plan.status === "executed" && !plan.execution) {
+      return sendMatrixError(reply, "matrix_verification_failed");
+    }
+
+    try {
+      const actual = await deps.client.readRoomTopic(plan.roomId);
+      const checkedAt = new Date().toISOString();
+
+      let status: "verified" | "mismatch" | "pending" | "failed" = "pending";
+
+      if (plan.status === "executed") {
+        status = actual === null
+          ? "failed"
+          : actual === plan.diff.after
+            ? "verified"
+            : "mismatch";
+      }
+
+      actionStore.updatePlan(plan.planId, (current) => ({
+        ...current,
+        verification: {
+          planId: current.planId,
+          status,
+          checkedAt,
+          expected: current.diff.after,
+          actual
+        }
+      }));
+
+      return reply.status(200).send({
+        ok: true,
+        verification: {
+          planId: plan.planId,
+          status,
+          checkedAt,
+          expected: plan.diff.after,
+          actual
+        }
+      });
+    } catch (error) {
+      return handleMatrixError(reply, error);
+    }
   });
 }

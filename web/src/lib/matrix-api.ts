@@ -1,12 +1,16 @@
 const runtimeEnv = typeof import.meta !== "undefined" && "env" in import.meta
-  ? (import.meta.env as { VITE_MATRIX_API_BASE_URL?: string; VITE_API_BASE_URL?: string } | undefined)
+  ? (import.meta.env as { VITE_MATRIX_API_BASE_URL?: string; VITE_API_BASE_URL?: string; PROD?: boolean } | undefined)
   : undefined;
 
 export const MATRIX_API_BASE_URL = (
   runtimeEnv?.VITE_MATRIX_API_BASE_URL
   ?? runtimeEnv?.VITE_API_BASE_URL
-  ?? "http://127.0.0.1:8787"
+  ?? (runtimeEnv?.PROD ? "" : "http://127.0.0.1:8787")
 ).replace(/\/+$/, "");
+
+function resolveMatrixApiUrl(path: string) {
+  return MATRIX_API_BASE_URL ? `${MATRIX_API_BASE_URL}${path}` : path;
+}
 
 export const MATRIX_ACTION_TYPES = [
   "set_room_name",
@@ -193,6 +197,36 @@ export type MatrixExecuteResult = {
   result: MatrixExecutionResult;
 };
 
+export type MatrixRoomTopicPlan = {
+  planId: string;
+  type: "update_room_topic";
+  roomId: string;
+  status: "pending_review" | "executed";
+  createdAt: string;
+  expiresAt: string;
+  diff: {
+    field: "topic";
+    before: string | null;
+    after: string;
+  };
+  requiresApproval: true;
+};
+
+export type MatrixRoomTopicExecutionResult = {
+  planId: string;
+  status: "executed";
+  executedAt: string;
+  transactionId: string;
+};
+
+export type MatrixRoomTopicVerificationResult = {
+  planId: string;
+  status: "verified" | "mismatch" | "pending" | "failed";
+  checkedAt: string;
+  expected: string;
+  actual: string | null;
+};
+
 type MatrixValidator<T> = (payload: unknown, operation: string, path: string) => T;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -239,6 +273,26 @@ function requireNullableStringField(obj: Record<string, unknown>, field: string,
   const value = requireField(obj, field, operation, path);
 
   if (value !== null && (typeof value !== "string" || value.trim().length === 0)) {
+    failMatrixParse(operation, path, `Matrix payload field ${field} must be a string or null`);
+  }
+
+  return value as string | null;
+}
+
+function requireStringFieldAllowEmpty(obj: Record<string, unknown>, field: string, operation: string, path: string) {
+  const value = requireField(obj, field, operation, path);
+
+  if (typeof value !== "string") {
+    failMatrixParse(operation, path, `Matrix payload field ${field} must be a string`);
+  }
+
+  return value;
+}
+
+function requireNullableStringFieldAllowEmpty(obj: Record<string, unknown>, field: string, operation: string, path: string) {
+  const value = requireField(obj, field, operation, path);
+
+  if (value !== null && typeof value !== "string") {
     failMatrixParse(operation, path, `Matrix payload field ${field} must be a string or null`);
   }
 
@@ -601,6 +655,78 @@ function validateExecutionResponse(payload: unknown, operation: string, path: st
   };
 }
 
+function validateRoomTopicPlanResponse(payload: unknown, operation: string, path: string): MatrixRoomTopicPlan {
+  const response = requireRecord(payload, operation, path, "room topic plan response");
+  requireBooleanField(response, "ok", operation, path, true);
+  const plan = requireRecord(requireField(response, "plan", operation, path), operation, path, "room topic plan");
+  const planId = requireStringField(plan, "planId", operation, path);
+  const type = requireStringField(plan, "type", operation, path);
+  const roomId = requireStringField(plan, "roomId", operation, path);
+  const status = requireOneOfField(plan, "status", ["pending_review", "executed"], operation, path);
+  const createdAt = requireStringField(plan, "createdAt", operation, path);
+  const expiresAt = requireStringField(plan, "expiresAt", operation, path);
+  const diff = requireRecord(requireField(plan, "diff", operation, path), operation, path, "room topic diff");
+  const field = requireStringField(diff, "field", operation, path);
+  const before = requireNullableStringFieldAllowEmpty(diff, "before", operation, path);
+  const after = requireStringFieldAllowEmpty(diff, "after", operation, path);
+  requireBooleanField(plan, "requiresApproval", operation, path, true);
+
+  if (type !== "update_room_topic" || field !== "topic") {
+    failMatrixParse(operation, path, "Matrix room topic plan fields are invalid");
+  }
+
+  return {
+    planId,
+    type: "update_room_topic",
+    roomId,
+    status,
+    createdAt,
+    expiresAt,
+    diff: {
+      field: "topic",
+      before,
+      after
+    },
+    requiresApproval: true
+  };
+}
+
+function validateRoomTopicExecutionResponse(payload: unknown, operation: string, path: string): MatrixRoomTopicExecutionResult {
+  const response = requireRecord(payload, operation, path, "room topic execution response");
+  requireBooleanField(response, "ok", operation, path, true);
+  const result = requireRecord(requireField(response, "result", operation, path), operation, path, "room topic execution result");
+  const planId = requireStringField(result, "planId", operation, path);
+  const status = requireOneOfField(result, "status", ["executed"], operation, path);
+  const executedAt = requireStringField(result, "executedAt", operation, path);
+  const transactionId = requireStringField(result, "transactionId", operation, path);
+
+  return {
+    planId,
+    status,
+    executedAt,
+    transactionId
+  };
+}
+
+function validateRoomTopicVerificationResponse(payload: unknown, operation: string, path: string): MatrixRoomTopicVerificationResult {
+  const response = requireRecord(payload, operation, path, "room topic verification response");
+  requireBooleanField(response, "ok", operation, path, true);
+  const verification = requireRecord(requireField(response, "verification", operation, path), operation, path, "room topic verification");
+  const planId = requireStringField(verification, "planId", operation, path);
+  const status = requireOneOfField(verification, "status", ["verified", "mismatch", "pending", "failed"], operation, path);
+  const checkedAt = requireStringField(verification, "checkedAt", operation, path);
+  const expected = requireStringFieldAllowEmpty(verification, "expected", operation, path);
+  const actual = requireNullableStringFieldAllowEmpty(verification, "actual", operation, path);
+
+  return {
+    planId,
+    status,
+    checkedAt,
+    expected,
+    actual
+  };
+}
+
 function extractErrorMessage(payload: unknown): string {
   if (!payload || typeof payload !== "object") {
     return "Request failed";
@@ -694,7 +820,7 @@ async function requestJson<T>(operation: string, path: string, init: RequestInit
   let response: Response;
 
   try {
-    response = await fetch(`${MATRIX_API_BASE_URL}${path}`, {
+    response = await fetch(resolveMatrixApiUrl(path), {
       ...init,
       headers
     });
@@ -818,4 +944,48 @@ export async function executePlan(body: { planId: string; approval: true }) {
     method: "POST",
     body: JSON.stringify(body)
   }, validateExecutionResponse);
+}
+
+export async function prepareRoomTopicUpdate(body: { type: "update_room_topic"; roomId: string; topic: string }) {
+  const payload = await requestJson<{ ok: true; plan: MatrixRoomTopicPlan }>("Matrix room topic promote", "/api/matrix/actions/promote", {
+    method: "POST",
+    body: JSON.stringify(body)
+  }, (response, operation, path) => {
+    const record = requireRecord(response, operation, path, "room topic promote response");
+    requireBooleanField(record, "ok", operation, path, true);
+    const plan = requireRecord(requireField(record, "plan", operation, path), operation, path, "room topic plan");
+
+    return {
+      ok: true as const,
+      plan: validateRoomTopicPlanResponse({ ok: true, plan }, operation, `${path}#plan`)
+    };
+  });
+
+  return payload.plan;
+}
+
+export async function fetchRoomTopicUpdatePlan(planId: string) {
+  const payload = await requestJson<{ ok: true; plan: MatrixRoomTopicPlan }>("Matrix room topic plan fetch", `/api/matrix/actions/${encodeURIComponent(planId)}`, {}, (response, operation, path) => {
+    const record = requireRecord(response, operation, path, "room topic plan fetch response");
+    requireBooleanField(record, "ok", operation, path, true);
+    const plan = requireRecord(requireField(record, "plan", operation, path), operation, path, "room topic plan");
+
+    return {
+      ok: true as const,
+      plan: validateRoomTopicPlanResponse({ ok: true, plan }, operation, `${path}#plan`)
+    };
+  });
+
+  return payload.plan;
+}
+
+export async function executeRoomTopicUpdate(body: { planId: string; approval: true }) {
+  return requestJson<MatrixRoomTopicExecutionResult>("Matrix room topic execute", `/api/matrix/actions/${encodeURIComponent(body.planId)}/execute`, {
+    method: "POST",
+    body: JSON.stringify({ approval: body.approval })
+  }, validateRoomTopicExecutionResponse);
+}
+
+export async function verifyRoomTopicUpdate(planId: string) {
+  return requestJson<MatrixRoomTopicVerificationResult>("Matrix room topic verify", `/api/matrix/actions/${encodeURIComponent(planId)}/verify`, {}, validateRoomTopicVerificationResponse);
 }

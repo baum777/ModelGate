@@ -40,8 +40,8 @@ Optional environment variables:
 - `LLM_PROMPT_CLASSIFIER_PATH` - optional override for classification rules
 - `LLM_MODEL_MAP_PATH` - optional override for task-to-model mapping
 - `LLM_FALLBACK_POLICY_PATH` - optional override for default/fallback policy values
-- `LLM_ROUTER_LOG_ENABLED` - surfaced for later append-only local evidence logging
-- `LLM_ROUTER_LOG_PATH` - repository-local router decision log path
+- `LLM_ROUTER_LOG_ENABLED` - enables private append-only local router evidence logging under `.local-ai/`; logging failures are warning-only and do not block chat
+- `LLM_ROUTER_LOG_PATH` - repository-local router decision log path, defaults to `.local-ai/logs/ROUTER_DECISIONS.log.md`
 - `LLM_MODEL_RUN_LOG_PATH` - repository-local model run log path
 - `LLM_PROMPT_EVIDENCE_LOG_PATH` - repository-local prompt evidence log path
 - `MATRIX_ENABLED` - defaults to `false`; enables the server-owned Matrix read-only routes when `true`
@@ -50,6 +50,8 @@ Optional environment variables:
 - `MATRIX_ACCESS_TOKEN` - server-side Matrix access token
 - `MATRIX_EXPECTED_USER_ID` - optional Matrix user ID that must match `whoami` when set
 - `MATRIX_REQUEST_TIMEOUT_MS` - upstream request timeout in milliseconds, defaults to `5000`
+- `MATRIX_SMOKE_ROOM_ID` - dedicated live smoke room for the backend-owned topic-update flow
+- `MATRIX_SMOKE_TOPIC_PREFIX` - optional prefix for the temporary live smoke topic
 
 ## Local Run
 
@@ -66,6 +68,9 @@ The backend owns request validation, provider translation, and streaming semanti
 
 Matrix read-only routes are disabled by default. When disabled, they return
 `matrix_not_configured` and leave the chat backend unaffected.
+
+The router decision log is private, local, and gitignored. It is intended for
+operator audit only and is not a canonical source of truth for model selection.
 
 ### `GET /health`
 
@@ -264,11 +269,188 @@ Supported error codes:
 - `invalid_request`
 - `matrix_unauthorized`
 - `matrix_forbidden`
+- `matrix_room_not_found`
 - `matrix_unavailable`
 - `matrix_timeout`
 - `matrix_malformed_response`
 - `matrix_scope_not_found`
 - `matrix_internal_error`
+
+## Matrix Topic Write Contract
+
+These routes are backend-owned and approval-gated. The browser may submit only a room id, proposed topic text, and approval intent for a backend-created plan id. The browser does not send raw Matrix write payloads or credentials.
+
+Plans are stored in memory with a short TTL and are not persisted across restarts.
+
+### `POST /api/matrix/actions/promote`
+
+Request:
+
+```json
+{
+  "type": "update_room_topic",
+  "roomId": "!room:matrix.org",
+  "topic": "New topic"
+}
+```
+
+Behavior:
+
+- validates the request shape
+- reads the current room topic from Matrix
+- creates a backend-owned plan with a reviewable before/after diff
+- returns an opaque `planId`
+
+Response:
+
+```json
+{
+  "ok": true,
+  "plan": {
+    "planId": "opaque-plan-id",
+    "type": "update_room_topic",
+    "roomId": "!room:matrix.org",
+    "status": "pending_review",
+    "createdAt": "ISO_TIMESTAMP",
+    "expiresAt": "ISO_TIMESTAMP",
+    "diff": {
+      "field": "topic",
+      "before": "Old topic",
+      "after": "New topic"
+    },
+    "requiresApproval": true
+  }
+}
+```
+
+### `GET /api/matrix/actions/:planId`
+
+Returns the stored plan if it is still active.
+
+### `POST /api/matrix/actions/:planId/execute`
+
+Request:
+
+```json
+{
+  "approval": true
+}
+```
+
+Behavior:
+
+- fails closed unless approval is exactly `true`
+- fails if the plan is expired
+- fails if the plan was already executed
+- re-reads the current room topic before writing
+- fails with `matrix_stale_plan` if the room topic changed out of band
+- writes the new topic server-side with the Matrix access token
+- stores the execution result without inventing verification
+
+Response:
+
+```json
+{
+  "ok": true,
+  "result": {
+    "planId": "opaque-plan-id",
+    "status": "executed",
+    "executedAt": "ISO_TIMESTAMP",
+    "transactionId": "opaque-transaction-id"
+  }
+}
+```
+
+### `GET /api/matrix/actions/:planId/verify`
+
+Behavior:
+
+- re-reads the room topic from Matrix
+- compares the current topic with the planned after-topic
+- returns `verified`, `mismatch`, `pending`, or `failed`
+
+Response:
+
+```json
+{
+  "ok": true,
+  "verification": {
+    "planId": "opaque-plan-id",
+    "status": "verified",
+    "checkedAt": "ISO_TIMESTAMP",
+    "expected": "New topic",
+    "actual": "New topic"
+  }
+}
+```
+
+### Matrix Write Error Response
+
+All Matrix write errors are normalized as:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "matrix_stale_plan",
+    "message": "Matrix plan is stale and must be refreshed"
+  }
+}
+```
+
+Supported write error codes:
+
+- `invalid_request`
+- `matrix_not_configured`
+- `matrix_unauthorized`
+- `matrix_forbidden`
+- `matrix_room_not_found`
+- `matrix_write_forbidden`
+- `matrix_plan_not_found`
+- `matrix_plan_expired`
+- `matrix_plan_already_executed`
+- `matrix_stale_plan`
+- `matrix_verification_failed`
+- `matrix_unavailable`
+- `matrix_timeout`
+- `matrix_malformed_response`
+- `matrix_internal_error`
+
+## Live Matrix Smoke
+
+Use this only with a dedicated Matrix test room that is safe to retarget temporarily.
+The smoke script updates the room topic, verifies the change through the backend-owned
+`promote -> fetch -> execute -> verify` lifecycle, and then tries to restore the
+previous topic when possible.
+
+Required live smoke environment:
+
+- `MATRIX_ENABLED=true`
+- `MATRIX_BASE_URL`
+- `MATRIX_ACCESS_TOKEN`
+- `MATRIX_SMOKE_ROOM_ID`
+- `MATRIX_SMOKE_TOPIC_PREFIX` is optional and defaults to `ModelGate smoke`
+
+The server reads the repo-root `.env` file. Copy `server/.env.example` to `.env`
+before running the backend or the smoke.
+
+Run the manual smoke from the repository root:
+
+```bash
+npm run smoke:matrix
+```
+
+Behavior:
+
+- skips cleanly when the live smoke env is missing
+- never exposes Matrix credentials to the browser
+- uses backend-owned routes only
+- fails closed if verification does not return `verified`
+- attempts to restore the previous room topic after verification
+- prints the room id and restore target if cleanup cannot be completed
+
+CI remains unaffected because `npm run smoke:matrix` is manual-only and is not wired
+into `test`, `build`, or browser automation.
 
 ## Current Limitations
 

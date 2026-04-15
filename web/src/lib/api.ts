@@ -29,9 +29,16 @@ export type ChatStreamHandlers = {
 };
 
 const runtimeEnv = typeof import.meta !== "undefined" && "env" in import.meta
-  ? (import.meta.env as { VITE_API_BASE_URL?: string } | undefined)
+  ? (import.meta.env as { VITE_API_BASE_URL?: string; PROD?: boolean } | undefined)
   : undefined;
-const API_BASE_URL = (runtimeEnv?.VITE_API_BASE_URL ?? "http://127.0.0.1:8787").replace(/\/+$/, "");
+const API_BASE_URL = (
+  runtimeEnv?.VITE_API_BASE_URL
+  ?? (runtimeEnv?.PROD ? "" : "http://127.0.0.1:8787")
+).replace(/\/+$/, "");
+
+function resolveApiUrl(path: string) {
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
+}
 
 async function readErrorMessage(response: Response) {
   const contentType = response.headers.get("content-type") ?? "";
@@ -135,7 +142,7 @@ export async function* readSseEvents(stream: ReadableStream<Uint8Array>): AsyncG
 }
 
 export async function fetchHealth(): Promise<HealthResponse> {
-  const response = await fetch(`${API_BASE_URL}/health`);
+  const response = await fetch(resolveApiUrl("/health"));
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response));
@@ -145,7 +152,7 @@ export async function fetchHealth(): Promise<HealthResponse> {
 }
 
 export async function fetchModels(): Promise<ModelResponse> {
-  const response = await fetch(`${API_BASE_URL}/models`);
+  const response = await fetch(resolveApiUrl("/models"));
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response));
@@ -163,7 +170,7 @@ export async function streamChatCompletion(
   handlers: ChatStreamHandlers,
   signal?: AbortSignal
 ) {
-  const response = await fetch(`${API_BASE_URL}/chat`, {
+  const response = await fetch(resolveApiUrl("/chat"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
