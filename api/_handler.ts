@@ -13,10 +13,6 @@ function parseCsvList(value: string) {
 function createVercelEnv(source: NodeJS.ProcessEnv = process.env) {
   const openRouterApiKey = String(source.OPENROUTER_API_KEY ?? "").trim();
 
-  if (!openRouterApiKey) {
-    throw new Error("OPENROUTER_API_KEY is required");
-  }
-
   const port = Number.parseInt(String(source.PORT ?? "8787").trim(), 10);
 
   return {
