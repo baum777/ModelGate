@@ -379,3 +379,122 @@ test("/chat streams start, token, done, and sanitized error frames", async (t) =
   assert.ok(!failureResponse.body.includes("event: done"));
   assert.doesNotMatch(failureResponse.body, /stream exploded/);
 });
+
+test("/chat stream over HTTP always ends with exactly one terminal event", async (t) => {
+  const env = createTestEnv();
+  const app = createApp({
+    env,
+    openRouter: createMockOpenRouterClient({
+      relayChatCompletionStream: async (_request, selection, options) => {
+        options.onToken("Hello");
+
+        return {
+          model: selection.publicModelId,
+          text: "Hello"
+        };
+      }
+    }),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  await app.listen({
+    host: "127.0.0.1",
+    port: 0
+  });
+
+  const address = app.server.address();
+
+  if (!address || typeof address === "string") {
+    throw new Error("Test server did not expose an address");
+  }
+
+  const successResponse = await fetch(`http://127.0.0.1:${address.port}/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      stream: true,
+      messages: [
+        {
+          role: "user",
+          content: "Stream please"
+        }
+      ]
+    })
+  });
+
+  assert.equal(successResponse.status, 200);
+  assert.match(successResponse.headers.get("content-type") ?? "", /text\/event-stream/);
+  const successEvents = parseSseEvents(await successResponse.text());
+  assert.deepEqual(successEvents.map((event) => event.event), [
+    "start",
+    "token",
+    "done"
+  ]);
+  assert.deepEqual(successEvents.map((event) => JSON.parse(event.data) as { model?: string }).map((event) => event.model), [
+    "default",
+    undefined,
+    "default"
+  ]);
+
+  const failingApp = createApp({
+    env,
+    openRouter: createMockOpenRouterClient({
+      relayChatCompletionStream: async () => {
+        throw new Error("stream exploded");
+      }
+    }),
+    logger: false
+  });
+
+  t.after(async () => {
+    await failingApp.close();
+  });
+
+  await failingApp.listen({
+    host: "127.0.0.1",
+    port: 0
+  });
+
+  const failingAddress = failingApp.server.address();
+
+  if (!failingAddress || typeof failingAddress === "string") {
+    throw new Error("Failing test server did not expose an address");
+  }
+
+  const failureResponse = await fetch(`http://127.0.0.1:${failingAddress.port}/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      stream: true,
+      messages: [
+        {
+          role: "user",
+          content: "Stream please"
+        }
+      ]
+    })
+  });
+
+  assert.equal(failureResponse.status, 200);
+  assert.match(failureResponse.headers.get("content-type") ?? "", /text\/event-stream/);
+  const failureEvents = parseSseEvents(await failureResponse.text());
+  assert.deepEqual(failureEvents.map((event) => event.event), [
+    "start",
+    "error"
+  ]);
+  assert.deepEqual(JSON.parse(failureEvents[1].data), {
+    ok: false,
+    error: {
+      code: "upstream_error",
+      message: "Chat provider request failed"
+    }
+  });
+});

@@ -105,11 +105,13 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
         model: resolution.selection.publicModelId
       });
 
-      const onClose = () => {
+      // `close` can fire after a normal response finishes, so only treat an
+      // explicit client abort as a cancellation signal.
+      const onClientAbort = () => {
         abortController.abort();
       };
 
-      request.raw.on("close", onClose);
+      request.raw.on("aborted", onClientAbort);
 
       try {
         const result = await deps.openRouter.relayChatCompletionStream(body, resolution.selection, {
@@ -138,7 +140,7 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
 
         writeSseEvent(reply.raw, "error", buildUpstreamErrorResponse());
       } finally {
-        request.raw.off("close", onClose);
+        request.raw.off("aborted", onClientAbort);
         reply.raw.end();
       }
 
