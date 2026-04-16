@@ -289,3 +289,154 @@ test("matrix scope summary fails closed for missing and expired snapshots", asyn
     }
   });
 });
+
+test("matrix room provenance returns normalized read-only room metadata", async (t) => {
+  let whoamiCalls = 0;
+  let joinedRoomsCalls = 0;
+  let readTopicCalls = 0;
+
+  const app = createApp({
+    env: createTestEnv(),
+    openRouter: createMockOpenRouterClient(),
+    matrixConfig: createTestMatrixConfig({
+      expectedUserId: "@user:matrix.example",
+      baseUrl: "https://matrix.example"
+    }),
+    matrixClient: {
+      whoami: async () => {
+        whoamiCalls += 1;
+        return {
+          ok: true,
+          userId: "@user:matrix.example",
+          deviceId: "DEVICE",
+          homeserver: "https://matrix.example"
+        };
+      },
+      joinedRooms: async () => {
+        joinedRoomsCalls += 1;
+        return [
+          {
+            roomId: "!room:matrix.example",
+            name: "ModelGate Test",
+            canonicalAlias: "#modelgate-test:matrix.example",
+            roomType: "room"
+          }
+        ];
+      },
+      resolveScope: async () => {
+        throw new Error("resolveScope should not be called for provenance");
+      },
+      readRoomTopic: async () => {
+        readTopicCalls += 1;
+        throw new Error("readRoomTopic should not be called for provenance");
+      },
+      updateRoomTopic: async () => {
+        throw new Error("updateRoomTopic should not be called for provenance");
+      }
+    },
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/matrix/rooms/%21room%3Amatrix.example/provenance"
+  });
+
+  assert.equal(response.statusCode, 200);
+  const parsed = JSON.parse(response.body) as {
+    ok: true;
+    roomId: string;
+    snapshotId: string | null;
+    stateEventId: string | null;
+    originServer: string;
+    authChainIndex: number;
+    signatures: Array<{ signer: string; status: string }>;
+    integrityNotice: string;
+    provenance: {
+      source: string;
+      kind: string;
+      generatedAt: string;
+      items: Array<{
+        type: string;
+        id: string;
+        label: string;
+        alias: string | null;
+      }>;
+    };
+  };
+
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.roomId, "!room:matrix.example");
+  assert.equal(parsed.snapshotId, null);
+  assert.equal(parsed.stateEventId, null);
+  assert.equal(parsed.originServer, "https://matrix.example");
+  assert.equal(parsed.authChainIndex, 0);
+  assert.equal(parsed.signatures[0]?.signer, "@user:matrix.example");
+  assert.equal(parsed.signatures[0]?.status, "verified");
+  assert.equal(parsed.integrityNotice, "Read-only room metadata derived from joined rooms.");
+  assert.equal(parsed.provenance.source, "matrix");
+  assert.equal(parsed.provenance.kind, "room_metadata");
+  assert.equal(parsed.provenance.items[0]?.id, "!room:matrix.example");
+  assert.equal(parsed.provenance.items[0]?.label, "ModelGate Test");
+  assert.equal(parsed.provenance.items[0]?.alias, "#modelgate-test:matrix.example");
+  assert.match(parsed.provenance.generatedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(whoamiCalls, 1);
+  assert.equal(joinedRoomsCalls, 1);
+  assert.equal(readTopicCalls, 0);
+});
+
+test("matrix room provenance fails closed when the room is missing", async (t) => {
+  const app = createApp({
+    env: createTestEnv(),
+    openRouter: createMockOpenRouterClient(),
+    matrixConfig: createTestMatrixConfig(),
+    matrixClient: {
+      whoami: async () => ({
+        ok: true,
+        userId: "@user:matrix.example",
+        deviceId: "DEVICE",
+        homeserver: "https://matrix.example"
+      }),
+      joinedRooms: async () => [
+        {
+          roomId: "!other:matrix.example",
+          name: "Other room",
+          canonicalAlias: "#other:matrix.example",
+          roomType: "room"
+        }
+      ],
+      resolveScope: async () => {
+        throw new Error("resolveScope should not be called for provenance");
+      },
+      readRoomTopic: async () => {
+        throw new Error("readRoomTopic should not be called for provenance");
+      },
+      updateRoomTopic: async () => {
+        throw new Error("updateRoomTopic should not be called for provenance");
+      }
+    },
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/matrix/rooms/%21room%3Amatrix.example/provenance"
+  });
+
+  assert.equal(response.statusCode, 404);
+  assert.deepEqual(JSON.parse(response.body), {
+    ok: false,
+    error: {
+      code: "matrix_room_not_found",
+      message: "Matrix room was not found"
+    }
+  });
+});

@@ -1,0 +1,614 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { createApp } from "../src/app.js";
+import { createGitHubClient } from "../src/lib/github-client.js";
+import { createTestEnv, createMockOpenRouterClient, createTestGitHubConfig } from "../test-support/helpers.js";
+
+function makeJsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      ...headers
+    }
+  });
+}
+
+function encodeText(text: string) {
+  return Buffer.from(text, "utf8").toString("base64");
+}
+
+test("github proposal routes create a review-only plan scaffold and keep it readable", async (t) => {
+  let currentCommitSha = "commit-sha-1";
+  const fetchCalls: string[] = [];
+  const openRouter = createMockOpenRouterClient({
+    createChatCompletion: async (request, selection) => {
+      assert.equal(request.stream, false);
+      assert.equal(selection.publicModelId, "default");
+      assert.equal(request.messages.length, 1);
+      assert.equal(request.messages[0]?.role, "user");
+
+      const userContent = request.messages[0]?.content ?? "";
+      const userPayloadText = userContent.slice(userContent.indexOf("INPUT:") + "INPUT:".length);
+      const userPayload = JSON.parse(userPayloadText) as {
+        objective: string;
+        baseSha: string;
+        files: Array<{ path: string; currentContent: string }>;
+      };
+
+      assert.equal(userPayload.objective, "Review the widget flow");
+      assert.equal(userPayload.baseSha, "commit-sha-1");
+      assert.deepEqual(userPayload.files.map((file) => file.path), [
+        "src/utils.ts",
+        "src/index.ts"
+      ]);
+
+      return {
+        model: selection.publicModelId,
+        text: JSON.stringify({
+          summary: "Review the widget flow",
+          rationale: "Tighten the widget flow while keeping the backend reviewable.",
+          riskLevel: "medium_surface",
+          files: [
+            {
+              path: "src/index.ts",
+              changeType: "modified",
+              afterContent: [
+                "export const entry = 'widget';",
+                "export const mode = 'flow';"
+              ].join("\n") + "\n"
+            },
+            {
+              path: "src/utils.ts",
+              changeType: "modified",
+              afterContent: [
+                "export function explainFlow() {",
+                "  return 'flow through utils v2';",
+                "}"
+              ].join("\n") + "\n"
+            }
+          ]
+        })
+      };
+    }
+  });
+  const githubConfig = createTestGitHubConfig({
+    allowedRepos: ["acme/widget"],
+    allowedRepoSet: new Set(["acme/widget"]),
+    planTtlMs: 60_000
+  });
+
+  const githubClient = createGitHubClient({
+    config: githubConfig,
+    fetchImpl: async (input, init) => {
+      const url = new URL(String(input));
+      fetchCalls.push(`${url.pathname}${url.search}`);
+      assert.equal(new Headers(init?.headers).get("Authorization"), "Bearer test-github-token");
+
+      if (url.pathname === "/repos/acme/widget") {
+        return makeJsonResponse({
+          full_name: "acme/widget",
+          name: "widget",
+          default_branch: "main",
+          description: "Widget repo",
+          private: false,
+          archived: false,
+          disabled: false,
+          permissions: {
+            push: true
+          },
+          owner: {
+            login: "acme"
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/commits/main") {
+        return makeJsonResponse({
+          sha: currentCommitSha,
+          commit: {
+            tree: {
+              sha: currentCommitSha === "commit-sha-1" ? "tree-sha-1" : "tree-sha-2"
+            }
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/git/trees/tree-sha-1" || url.pathname === "/repos/acme/widget/git/trees/tree-sha-2") {
+        return makeJsonResponse({
+          sha: currentCommitSha === "commit-sha-1" ? "tree-sha-1" : "tree-sha-2",
+          truncated: false,
+          tree: [
+            {
+              path: "src/index.ts",
+              type: "blob",
+              sha: "blob-index",
+              size: 85,
+              mode: "100644"
+            },
+            {
+              path: "src/utils.ts",
+              type: "blob",
+              sha: "blob-utils",
+              size: 110,
+              mode: "100644"
+            }
+          ]
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/contents/src/utils.ts") {
+        return makeJsonResponse({
+          type: "file",
+          path: "src/utils.ts",
+          sha: "blob-utils",
+          size: 57,
+          encoding: "base64",
+          content: encodeText([
+            "export function explainFlow() {",
+            "  return 'flow through utils';",
+            "}"
+          ].join("\n") + "\n")
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/contents/src/index.ts") {
+        return makeJsonResponse({
+          type: "file",
+          path: "src/index.ts",
+          sha: "blob-index",
+          size: 61,
+          encoding: "base64",
+          content: encodeText([
+            "export const entry = 'widget';",
+            "export const mode = 'default';"
+          ].join("\n") + "\n")
+        });
+      }
+
+      throw new Error(`unexpected path: ${url.pathname}${url.search}`);
+    }
+  });
+
+  const app = createApp({
+    env: createTestEnv(),
+    openRouter,
+    githubConfig,
+    githubClient,
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const proposeResponse = await app.inject({
+    method: "POST",
+    url: "/api/github/actions/propose",
+    payload: {
+      repo: {
+        owner: "acme",
+        repo: "widget"
+      },
+      objective: "Review the widget flow",
+      question: "Explain the flow through the widget repo and utils",
+      ref: "main",
+      selectedPaths: ["src/utils.ts"],
+      constraints: ["keep behavior stable"]
+    }
+  });
+
+  assert.equal(proposeResponse.statusCode, 200);
+  const proposeBody = JSON.parse(proposeResponse.body) as {
+    ok: true;
+    plan: {
+      planId: string;
+      repo: { fullName: string };
+      baseRef: string;
+      baseSha: string;
+      branchName: string;
+      targetBranch: string;
+      status: string;
+      stale: boolean;
+      requiresApproval: true;
+      summary: string;
+      rationale: string;
+      riskLevel: string;
+      citations: Array<{ path: string }>;
+      diff: unknown[];
+      generatedAt: string;
+      expiresAt: string;
+    };
+  };
+
+  assert.equal(proposeBody.ok, true);
+  assert.match(proposeBody.plan.planId, /^plan_[0-9a-f-]{36}$/);
+  assert.equal(proposeBody.plan.repo.fullName, "acme/widget");
+  assert.equal(proposeBody.plan.baseRef, "main");
+  assert.equal(proposeBody.plan.baseSha, "commit-sha-1");
+  assert.equal(proposeBody.plan.branchName, `modelgate/github/${proposeBody.plan.planId}`);
+  assert.equal(proposeBody.plan.targetBranch, "main");
+  assert.equal(proposeBody.plan.status, "pending_review");
+  assert.equal(proposeBody.plan.stale, false);
+  assert.equal(proposeBody.plan.requiresApproval, true);
+  assert.equal(proposeBody.plan.summary, "Review the widget flow");
+  assert.match(
+    proposeBody.plan.rationale,
+    /Validated against 2 cited files from acme\/widget at main\./i
+  );
+  assert.equal(proposeBody.plan.riskLevel, "medium_surface");
+  assert.deepEqual(proposeBody.plan.citations.map((citation) => citation.path), [
+    "src/utils.ts",
+    "src/index.ts"
+  ]);
+  assert.deepEqual(proposeBody.plan.diff.map((file) => file.path), [
+    "src/index.ts",
+    "src/utils.ts"
+  ]);
+  assert.match(proposeBody.plan.diff[0]?.patch ?? "", /-export const mode = 'default';/);
+  assert.match(proposeBody.plan.diff[0]?.patch ?? "", /\+export const mode = 'flow';/);
+  assert.match(proposeBody.plan.diff[1]?.patch ?? "", /-  return 'flow through utils';/);
+  assert.match(proposeBody.plan.diff[1]?.patch ?? "", /\+  return 'flow through utils v2';/);
+  assert.match(proposeBody.plan.generatedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.match(proposeBody.plan.expiresAt, /^\d{4}-\d{2}-\d{2}T/);
+
+  currentCommitSha = "commit-sha-2";
+
+  const readResponse = await app.inject({
+    method: "GET",
+    url: `/api/github/actions/${proposeBody.plan.planId}`
+  });
+
+  assert.equal(readResponse.statusCode, 409);
+  assert.deepEqual(JSON.parse(readResponse.body), {
+    ok: false,
+    error: {
+      code: "github_stale_plan",
+      message: "GitHub plan is stale and must be refreshed"
+    }
+  });
+
+  assert.deepEqual(fetchCalls, [
+    "/repos/acme/widget",
+    "/repos/acme/widget/commits/main",
+    "/repos/acme/widget/commits/main",
+    "/repos/acme/widget/git/trees/tree-sha-1?recursive=1",
+    "/repos/acme/widget/contents/src/utils.ts?ref=main",
+    "/repos/acme/widget/contents/src/index.ts?ref=main",
+    "/repos/acme/widget/contents/src/utils.ts?ref=main",
+    "/repos/acme/widget/contents/src/index.ts?ref=main",
+    "/repos/acme/widget",
+    "/repos/acme/widget/commits/main"
+  ]);
+});
+
+test("github proposal routes fail closed when the repository changes during proposal generation", async (t) => {
+  let currentCommitSha = "commit-sha-1";
+  const githubConfig = createTestGitHubConfig({
+    allowedRepos: ["acme/widget"],
+    allowedRepoSet: new Set(["acme/widget"]),
+    planTtlMs: 60_000
+  });
+
+  const githubClient = createGitHubClient({
+    config: githubConfig,
+    fetchImpl: async (input) => {
+      const url = new URL(String(input));
+
+      if (url.pathname === "/repos/acme/widget") {
+        return makeJsonResponse({
+          full_name: "acme/widget",
+          name: "widget",
+          default_branch: "main",
+          description: "Widget repo",
+          private: false,
+          archived: false,
+          disabled: false,
+          permissions: {
+            push: true
+          },
+          owner: {
+            login: "acme"
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/commits/main") {
+        return makeJsonResponse({
+          sha: currentCommitSha,
+          commit: {
+            tree: {
+              sha: currentCommitSha === "commit-sha-1" ? "tree-sha-1" : "tree-sha-2"
+            }
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/git/trees/tree-sha-1" || url.pathname === "/repos/acme/widget/git/trees/tree-sha-2") {
+        return makeJsonResponse({
+          sha: currentCommitSha === "commit-sha-1" ? "tree-sha-1" : "tree-sha-2",
+          truncated: false,
+          tree: [
+            {
+              path: "src/index.ts",
+              type: "blob",
+              sha: "blob-index",
+              size: 85,
+              mode: "100644"
+            }
+          ]
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/contents/src/index.ts") {
+        return makeJsonResponse({
+          type: "file",
+          path: "src/index.ts",
+          sha: "blob-index",
+          size: 61,
+          encoding: "base64",
+          content: encodeText([
+            "export const entry = 'widget';",
+            "export const mode = 'default';"
+          ].join("\n") + "\n")
+        });
+      }
+
+      throw new Error(`unexpected path: ${url.pathname}${url.search}`);
+    }
+  });
+
+  const openRouter = createMockOpenRouterClient({
+    createChatCompletion: async (request, selection) => {
+      currentCommitSha = "commit-sha-2";
+      assert.equal(selection.publicModelId, "default");
+      assert.equal(request.stream, false);
+
+      return {
+        model: selection.publicModelId,
+        text: JSON.stringify({
+          summary: "Update the widget flow",
+          rationale: "Refresh the widget flow while the repo state is still reviewable.",
+          riskLevel: "medium_surface",
+          files: [
+            {
+              path: "src/index.ts",
+              changeType: "modified",
+              afterContent: [
+                "export const entry = 'widget';",
+                "export const mode = 'refreshed';"
+              ].join("\n") + "\n"
+            }
+          ]
+        })
+      };
+    }
+  });
+
+  const app = createApp({
+    env: createTestEnv(),
+    openRouter,
+    githubConfig,
+    githubClient,
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/github/actions/propose",
+    payload: {
+      repo: {
+        owner: "acme",
+        repo: "widget"
+      },
+      objective: "Update the widget flow",
+      ref: "main",
+      selectedPaths: ["src/index.ts"]
+    }
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.deepEqual(JSON.parse(response.body), {
+    ok: false,
+    error: {
+      code: "github_stale_plan",
+      message: "GitHub plan is stale and must be refreshed"
+    }
+  });
+});
+
+test("github proposal routes fail closed for missing plans and invalid proposal payloads", async (t) => {
+  const githubConfig = createTestGitHubConfig({
+    allowedRepos: ["acme/widget"],
+    allowedRepoSet: new Set(["acme/widget"])
+  });
+
+  const githubClient = createGitHubClient({
+    config: githubConfig,
+    fetchImpl: async () => {
+      throw new Error("upstream should not be called");
+    }
+  });
+
+  const app = createApp({
+    env: createTestEnv(),
+    openRouter: createMockOpenRouterClient(),
+    githubConfig,
+    githubClient,
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const invalidResponse = await app.inject({
+    method: "POST",
+    url: "/api/github/actions/propose",
+    payload: {
+      repo: {
+        owner: "acme",
+        repo: "widget"
+      },
+      objective: "",
+      selectedPaths: ["../secret"]
+    }
+  });
+
+  assert.equal(invalidResponse.statusCode, 400);
+  assert.deepEqual(JSON.parse(invalidResponse.body), {
+    ok: false,
+    error: {
+      code: "invalid_request",
+      message: "Invalid GitHub request"
+    }
+  });
+
+  const missingPlanResponse = await app.inject({
+    method: "GET",
+    url: "/api/github/actions/plan_missing"
+  });
+
+  assert.equal(missingPlanResponse.statusCode, 404);
+  assert.deepEqual(JSON.parse(missingPlanResponse.body), {
+    ok: false,
+    error: {
+      code: "github_plan_not_found",
+      message: "GitHub plan was not found"
+    }
+  });
+});
+
+test("github proposal routes reject malformed model drafts", async (t) => {
+  const githubConfig = createTestGitHubConfig({
+    allowedRepos: ["acme/widget"],
+    allowedRepoSet: new Set(["acme/widget"])
+  });
+
+  const githubClient = createGitHubClient({
+    config: githubConfig,
+    fetchImpl: async (input) => {
+      const url = new URL(String(input));
+
+      if (url.pathname === "/repos/acme/widget") {
+        return makeJsonResponse({
+          full_name: "acme/widget",
+          name: "widget",
+          default_branch: "main",
+          description: "Widget repo",
+          private: false,
+          archived: false,
+          disabled: false,
+          permissions: {
+            push: true
+          },
+          owner: {
+            login: "acme"
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/commits/main") {
+        return makeJsonResponse({
+          sha: "commit-sha",
+          commit: {
+            tree: {
+              sha: "tree-sha"
+            }
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/git/trees/tree-sha") {
+        return makeJsonResponse({
+          sha: "tree-sha",
+          truncated: false,
+          tree: [
+            {
+              path: "src/index.ts",
+              type: "blob",
+              sha: "blob-index",
+              size: 85,
+              mode: "100644"
+            }
+          ]
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/contents/src/index.ts") {
+        return makeJsonResponse({
+          type: "file",
+          path: "src/index.ts",
+          sha: "blob-index",
+          size: 61,
+          encoding: "base64",
+          content: encodeText([
+            "export const entry = 'widget';",
+            "export const mode = 'default';"
+          ].join("\n") + "\n")
+        });
+      }
+
+      throw new Error(`unexpected path: ${url.pathname}${url.search}`);
+    }
+  });
+
+  const app = createApp({
+    env: createTestEnv(),
+    openRouter: createMockOpenRouterClient({
+      createChatCompletion: async () => ({
+        model: "default",
+        text: [
+          "Here is the plan:",
+          "{",
+          '  "summary": "Update the widget flow",',
+          '  "rationale": "Keep it simple",',
+          '  "riskLevel": "medium_surface",',
+          '  "files": [',
+          '    {',
+          '      "path": "src/index.ts",',
+          '      "changeType": "modified",',
+          '      "afterContent": "export const mode = \'refreshed\';\\n"',
+          "    }",
+          "  ]",
+          "}",
+          "Thanks."
+        ].join("\n")
+      })
+    }),
+    githubConfig,
+    githubClient,
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/github/actions/propose",
+    payload: {
+      repo: {
+        owner: "acme",
+        repo: "widget"
+      },
+      objective: "Update the widget flow",
+      ref: "main",
+      selectedPaths: ["src/index.ts"]
+    }
+  });
+
+  assert.equal(response.statusCode, 422);
+  assert.deepEqual(JSON.parse(response.body), {
+    ok: false,
+    error: {
+      code: "github_patch_invalid",
+      message: "GitHub proposal response was invalid"
+    }
+  });
+});

@@ -21,7 +21,7 @@ Security note:
 | Test ID | Description | Current status | Verification method | Notes / owner |
 | --- | --- | --- | --- | --- |
 | P1 | `.env` is gitignored | implemented-but-manual | Check [.gitignore](../.gitignore) and verify `git check-ignore` against local env files | Repo hygiene; owner: backend + ops |
-| P2 | `OPENROUTER_API_KEY` is set | manual | Set in local env before running backend checks | Required runtime precondition; owner: operator |
+| P2 | `OPENROUTER_API_KEY` is set | manual | Set in local env before running chat checks; Matrix-only startup can omit it | Chat-only precondition; owner: operator |
 | P3 | `MATRIX_ENABLED=true` is set | manual | Set in local env before Matrix read-only smoke tests | Matrix read-only backend precondition; owner: operator |
 | P4 | `MATRIX_BASE_URL` is set | manual | Set in local env and confirm the backend resolves a Matrix origin | Matrix backend config; owner: operator |
 | P5 | `MATRIX_ACCESS_TOKEN` is set | manual | Set in local env and keep server-side only | Secret handling; owner: operator |
@@ -41,6 +41,7 @@ Security note:
 | B3 | Provider IDs do not become UI truth | automated | [server/test/backend.test.ts](../server/test/backend.test.ts) and [web/src/components/ChatWorkspace.tsx](../web/src/components/ChatWorkspace.tsx) | UI renders the public alias only; owner: backend + web |
 | B4 | Matrix disabled still allows chat boot | automated | [server/test/matrix-routes.test.ts](../server/test/matrix-routes.test.ts) | Matrix is fail-closed when disabled; owner: backend |
 | B5 | Invalid Matrix config fails closed without secrets in the error path | automated | [server/test/matrix-env.test.ts](../server/test/matrix-env.test.ts) and [server/test/matrix-routes.test.ts](../server/test/matrix-routes.test.ts) | Startup and route guards; owner: backend |
+| B6 | Matrix-only startup does not require an OpenRouter key | automated | [server/test/backend.test.ts](../server/test/backend.test.ts) and [server/test/openrouter.test.ts](../server/test/openrouter.test.ts) | Chat still fails closed without a key; owner: backend |
 
 ## 3. OpenRouter Chat Non-Stream
 
@@ -118,9 +119,10 @@ Security note:
 | M3 | `GET /api/matrix/joined-rooms` returns normalized rooms | automated | [server/test/matrix-routes.test.ts](../server/test/matrix-routes.test.ts) and [server/test/matrix-client.test.ts](../server/test/matrix-client.test.ts) | Matrix read-only backend is implemented; owner: backend |
 | M4 | Malformed upstream `200` becomes `matrix_malformed_response` | automated | [server/test/matrix-client.test.ts](../server/test/matrix-client.test.ts) and [web/test/matrix-api.test.ts](../web/test/matrix-api.test.ts) | Fail-closed parsing; owner: backend + web |
 | M5 | Invalid token becomes `matrix_unauthorized` | automated | [server/test/matrix-client.test.ts](../server/test/matrix-client.test.ts) | Unauthorized is normalized; owner: backend |
-| M6 | Homeserver down becomes `matrix_unavailable` | implemented-but-manual | Backend Matrix client path in [server/src/lib/matrix-client.ts](../server/src/lib/matrix-client.ts) | Code path exists; no direct repo test yet; owner: backend |
-| M7 | Timeout becomes `matrix_timeout` | automated | [server/test/matrix-client.test.ts](../server/test/matrix-client.test.ts) | Timeout is normalized; owner: backend |
-| M8 | Matrix errors do not leak secrets | implemented-but-manual | Backend route/client sanitization paths in [server/src/routes/matrix.ts](../server/src/routes/matrix.ts) and [server/src/lib/matrix-client.ts](../server/src/lib/matrix-client.ts) | No direct secret-leak assertion in repo yet; owner: backend |
+| M6 | `GET /api/matrix/rooms/:roomId/provenance` returns normalized room provenance | automated | [server/test/matrix-routes.test.ts](../server/test/matrix-routes.test.ts) and [web/test/matrix-api.test.ts](../web/test/matrix-api.test.ts) | Read-only room metadata is backend-owned and path-encoded; owner: backend + web |
+| M7 | Homeserver down becomes `matrix_unavailable` | implemented-but-manual | Backend Matrix client path in [server/src/lib/matrix-client.ts](../server/src/lib/matrix-client.ts) | Code path exists; no direct repo test yet; owner: backend |
+| M8 | Timeout becomes `matrix_timeout` | automated | [server/test/matrix-client.test.ts](../server/test/matrix-client.test.ts) | Timeout is normalized; owner: backend |
+| M9 | Matrix errors do not leak secrets | implemented-but-manual | Backend route/client sanitization paths in [server/src/routes/matrix.ts](../server/src/routes/matrix.ts) and [server/src/lib/matrix-client.ts](../server/src/lib/matrix-client.ts) | No direct secret-leak assertion in repo yet; owner: backend |
 
 ## 9. Matrix Explore UI
 
@@ -138,6 +140,7 @@ Security note:
 | E10 | Scope summary loads and renders | implemented-but-manual | Local browser run of the Vite client | Backend route is implemented; owner: web + backend |
 | E11 | Backend errors surface stage-specific messages | automated | [tests/browser/modelgate.spec.ts](../tests/browser/modelgate.spec.ts) | Fail-closed Matrix error state is exercised in browser; owner: web |
 | E12 | Reload after selection shows restored or stale state | implemented-but-manual | Local browser run of the Vite client | Restored state is visible, not backend truth; owner: web |
+| E13 | Provenance loads from the backend route after scope resolution | automated | [tests/browser/modelgate.spec.ts](../tests/browser/modelgate.spec.ts) | Browser calls the encoded provenance route and renders the returned read-only metadata; owner: web + backend |
 
 ## 10. Matrix Scope / Summary
 
@@ -154,7 +157,7 @@ Security note:
 
 ## 11. Matrix Topic / Write Tests
 
-Backend-owned room topic plan refresh, execute, and verify are locally wired, and the Matrix Workspace room-topic review flow is browser-tested. Analyze / provenance / hierarchy remain separate.
+Backend-owned room topic plan refresh, execute, and verify are locally wired, and the Matrix Workspace room-topic review flow is browser-tested. Analyze and hierarchy remain separate; provenance is now a backend-owned read-only route with browser coverage.
 
 | Test ID | Description | Current status | Verification method | Notes / owner |
 | --- | --- | --- | --- | --- |

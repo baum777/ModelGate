@@ -3,6 +3,11 @@ import type { ChatRequest } from "./chat-contract.js";
 import type { ResolvedModelSelection } from "./model-policy.js";
 import type { NormalizedChatResponse } from "./types.js";
 
+type OpenRouterMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
+
 export class OpenRouterError extends Error {
   public readonly status: number;
 
@@ -34,7 +39,7 @@ type OpenRouterClientOptions = {
   fetchImpl?: typeof fetch;
 };
 
-function buildMessages(env: AppEnv, request: ChatRequest) {
+function buildMessages(env: AppEnv, request: ChatRequest): OpenRouterMessage[] {
   return [
     { role: "system" as const, content: env.DEFAULT_SYSTEM_PROMPT },
     ...request.messages
@@ -48,6 +53,16 @@ function buildRequestBody(env: AppEnv, request: ChatRequest, stream: boolean, pr
     temperature: request.temperature ?? 0.7,
     stream
   };
+}
+
+function requireOpenRouterApiKey(env: AppEnv) {
+  const apiKey = env.OPENROUTER_API_KEY.trim();
+
+  if (!apiKey) {
+    throw createOpenRouterError("OpenRouter API key is not configured", 503);
+  }
+
+  return apiKey;
 }
 
 function extractAssistantText(payload: unknown, publicModelId: string): NormalizedChatResponse {
@@ -163,8 +178,10 @@ function extractSseEventData(block: string): string | null {
 }
 
 function getUpstreamHeaders(env: AppEnv) {
+  const apiKey = requireOpenRouterApiKey(env);
+
   return {
-    Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
+    Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json",
     "HTTP-Referer": `http://${env.HOST}:${env.PORT}`,
     "X-Title": env.APP_NAME

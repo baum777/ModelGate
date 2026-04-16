@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createApp } from "../src/app.js";
-import { createMockOpenRouterClient, createTestEnv } from "../test-support/helpers.js";
+import { createOpenRouterClient } from "../src/lib/openrouter.js";
+import { createMockMatrixClient, createMockOpenRouterClient, createTestEnv, createTestMatrixConfig } from "../test-support/helpers.js";
 
 function parseSseEvents(body: string) {
   return body
@@ -63,6 +64,80 @@ test("health and models return backend-owned metadata", async (t) => {
     models: ["default"],
     source: "backend-policy"
   });
+});
+
+test("server boots Matrix read-only routes without an OpenRouter key and chat fails closed", async (t) => {
+  const env = createTestEnv({
+    OPENROUTER_API_KEY: ""
+  });
+  let fetchCalls = 0;
+  const app = createApp({
+    env,
+    openRouter: createOpenRouterClient({
+      env,
+      fetchImpl: async () => {
+        fetchCalls += 1;
+        throw new Error("fetch should not be called without an api key");
+      }
+    }),
+    matrixConfig: createTestMatrixConfig(),
+    matrixClient: createMockMatrixClient(),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const healthResponse = await app.inject({
+    method: "GET",
+    url: "/health"
+  });
+
+  assert.equal(healthResponse.statusCode, 200);
+
+  const modelsResponse = await app.inject({
+    method: "GET",
+    url: "/models"
+  });
+
+  assert.equal(modelsResponse.statusCode, 200);
+
+  const whoamiResponse = await app.inject({
+    method: "GET",
+    url: "/api/matrix/whoami"
+  });
+
+  assert.equal(whoamiResponse.statusCode, 200);
+  assert.deepEqual(JSON.parse(whoamiResponse.body), {
+    ok: true,
+    userId: "@user:matrix.example",
+    deviceId: "DEVICE",
+    homeserver: "http://matrix.example"
+  });
+
+  const chatResponse = await app.inject({
+    method: "POST",
+    url: "/chat",
+    payload: {
+      messages: [
+        {
+          role: "user",
+          content: "Hello"
+        }
+      ]
+    }
+  });
+
+  assert.equal(chatResponse.statusCode, 502);
+  assert.deepEqual(JSON.parse(chatResponse.body), {
+    ok: false,
+    error: {
+      code: "upstream_error",
+      message: "Chat provider request failed"
+    }
+  });
+  assert.equal(fetchCalls, 0);
 });
 
 test("/chat rejects invalid payloads with a sanitized 400", async (t) => {

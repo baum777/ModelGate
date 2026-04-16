@@ -1,5 +1,8 @@
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import type { AppEnv } from "./lib/env.js";
+import { createGitHubClient, type GitHubClient } from "./lib/github-client.js";
+import { createGitHubConfig, type GitHubConfig } from "./lib/github-env.js";
+import { createGitHubActionStore, type GitHubActionStore } from "./lib/github-action-store.js";
 import { loadLlmRouterPolicy, type LlmRouterPolicy } from "./lib/llm-router.js";
 import { createDisabledMatrixConfig, type MatrixConfig } from "./lib/matrix-env.js";
 import { buildCorsHeaders } from "./lib/http.js";
@@ -9,6 +12,7 @@ import { createMatrixActionStore, type MatrixActionStore } from "./lib/matrix-ac
 import { createMatrixScopeStore, type MatrixScopeStore } from "./lib/matrix-scope-store.js";
 import type { OpenRouterClient } from "./lib/openrouter.js";
 import { chatRoutes } from "./routes/chat.js";
+import { githubRoutes } from "./routes/github.js";
 import { matrixRoutes } from "./routes/matrix.js";
 import { healthRoutes } from "./routes/health.js";
 import { modelRoutes } from "./routes/models.js";
@@ -16,6 +20,9 @@ import { modelRoutes } from "./routes/models.js";
 export type AppDependencies = {
   env: AppEnv;
   openRouter: OpenRouterClient;
+  githubConfig?: GitHubConfig;
+  githubClient?: GitHubClient;
+  githubActionStore?: GitHubActionStore;
   matrixConfig?: MatrixConfig;
   matrixClient?: MatrixClient;
   matrixStore?: MatrixScopeStore;
@@ -45,6 +52,9 @@ export function createApp(deps: AppDependencies) {
   const llmRouterPolicy = deps.llmRouterPolicy ?? loadLlmRouterPolicy({
     LLM_ROUTER_ENABLED: "false"
   });
+  const githubConfig = deps.githubConfig ?? createGitHubConfig(deps.env);
+  const githubClient = deps.githubClient ?? createGitHubClient({ config: githubConfig });
+  const githubActionStore = deps.githubActionStore ?? createGitHubActionStore(githubConfig.planTtlMs);
   const matrixConfig = deps.matrixConfig ?? createDisabledMatrixConfig();
   const matrixClient = deps.matrixClient ?? createMatrixClient({ config: matrixConfig });
   const matrixStore = deps.matrixStore ?? createMatrixScopeStore();
@@ -63,6 +73,13 @@ export function createApp(deps: AppDependencies) {
     client: matrixClient,
     store: matrixStore,
     actionStore: matrixActionStore
+  });
+  githubRoutes(app, {
+    config: githubConfig,
+    client: githubClient,
+    openRouter: deps.openRouter,
+    modelRegistry,
+    actionStore: githubActionStore
   });
   chatRoutes(app, {
     env: deps.env,

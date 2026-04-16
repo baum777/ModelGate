@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createApp } from "../server/src/app.js";
+import { createGitHubConfig } from "../server/src/lib/github-env.js";
 import { createMatrixConfig } from "../server/src/lib/matrix-env.js";
 import { loadLlmRouterPolicy } from "../server/src/lib/llm-router.js";
 import { createOpenRouterClient } from "../server/src/lib/openrouter.js";
@@ -12,8 +13,13 @@ function parseCsvList(value: string) {
 
 function createVercelEnv(source: NodeJS.ProcessEnv = process.env) {
   const openRouterApiKey = String(source.OPENROUTER_API_KEY ?? "").trim();
+  const githubToken = String(source.GITHUB_TOKEN ?? "").trim();
 
   const port = Number.parseInt(String(source.PORT ?? "8787").trim(), 10);
+  const githubRequestTimeoutMs = Number.parseInt(String(source.GITHUB_REQUEST_TIMEOUT_MS ?? "8000").trim(), 10);
+  const githubPlanTtlMs = Number.parseInt(String(source.GITHUB_PLAN_TTL_MS ?? "720000").trim(), 10);
+  const githubMaxContextFiles = Number.parseInt(String(source.GITHUB_MAX_CONTEXT_FILES ?? "6").trim(), 10);
+  const githubMaxContextBytes = Number.parseInt(String(source.GITHUB_MAX_CONTEXT_BYTES ?? "32768").trim(), 10);
 
   return {
     PORT: Number.isFinite(port) ? port : 8787,
@@ -27,6 +33,22 @@ function createVercelEnv(source: NodeJS.ProcessEnv = process.env) {
       source.DEFAULT_SYSTEM_PROMPT
       ?? "You are a concise, reliable assistant operating through a local OpenRouter proxy."
     ).trim(),
+    GITHUB_TOKEN: githubToken,
+    GITHUB_ALLOWED_REPOS: parseCsvList(String(source.GITHUB_ALLOWED_REPOS ?? "")),
+    GITHUB_API_BASE_URL: String(source.GITHUB_API_BASE_URL ?? "https://api.github.com").trim() || "https://api.github.com",
+    GITHUB_DEFAULT_OWNER: String(source.GITHUB_DEFAULT_OWNER ?? "").trim(),
+    GITHUB_BRANCH_PREFIX: String(source.GITHUB_BRANCH_PREFIX ?? "modelgate/github").trim() || "modelgate/github",
+    GITHUB_REQUEST_TIMEOUT_MS: Number.isFinite(githubRequestTimeoutMs) ? githubRequestTimeoutMs : 8000,
+    GITHUB_PLAN_TTL_MS: Number.isFinite(githubPlanTtlMs) ? githubPlanTtlMs : 720000,
+    GITHUB_MAX_CONTEXT_FILES: Number.isFinite(githubMaxContextFiles) ? githubMaxContextFiles : 6,
+    GITHUB_MAX_CONTEXT_BYTES: Number.isFinite(githubMaxContextBytes) ? githubMaxContextBytes : 32768,
+    GITHUB_SMOKE_REPO: String(source.GITHUB_SMOKE_REPO ?? "").trim(),
+    GITHUB_SMOKE_BASE_BRANCH: String(source.GITHUB_SMOKE_BASE_BRANCH ?? "").trim(),
+    GITHUB_SMOKE_TARGET_BRANCH: String(source.GITHUB_SMOKE_TARGET_BRANCH ?? "").trim(),
+    GITHUB_SMOKE_ENABLED: /^(1|true|yes|on)$/i.test(String(source.GITHUB_SMOKE_ENABLED ?? "").trim()),
+    GITHUB_APP_ID: String(source.GITHUB_APP_ID ?? "").trim(),
+    GITHUB_APP_PRIVATE_KEY: String(source.GITHUB_APP_PRIVATE_KEY ?? "").trim(),
+    GITHUB_APP_INSTALLATION_ID: String(source.GITHUB_APP_INSTALLATION_ID ?? "").trim(),
     CORS_ORIGINS: parseCsvList(
       String(
         source.CORS_ORIGINS
@@ -42,6 +64,7 @@ function createVercelApp() {
   return createApp({
     env,
     openRouter: createOpenRouterClient({ env }),
+    githubConfig: createGitHubConfig(env),
     matrixConfig: createMatrixConfig(process.env),
     llmRouterPolicy: loadLlmRouterPolicy(process.env),
     logger: false
@@ -62,7 +85,11 @@ export function normalizeVercelRequestUrl(originalUrl: string) {
 
   if (normalized.pathname === "/api") {
     normalized.pathname = "/";
-  } else if (normalized.pathname.startsWith("/api/") && !normalized.pathname.startsWith("/api/matrix/")) {
+  } else if (
+    normalized.pathname.startsWith("/api/")
+    && !normalized.pathname.startsWith("/api/matrix/")
+    && !normalized.pathname.startsWith("/api/github/")
+  ) {
     normalized.pathname = normalized.pathname.slice(4);
   }
 

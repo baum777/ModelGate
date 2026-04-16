@@ -1,7 +1,15 @@
+const importMetaEnv = (import.meta as {
+  env?: {
+    VITE_MATRIX_API_BASE_URL?: string;
+    VITE_API_BASE_URL?: string;
+    PROD?: boolean;
+  };
+}).env ?? {};
+
 export const MATRIX_API_BASE_URL = (
-  import.meta.env.VITE_MATRIX_API_BASE_URL
-  ?? import.meta.env.VITE_API_BASE_URL
-  ?? (import.meta.env.PROD ? "" : "http://127.0.0.1:8787")
+  importMetaEnv.VITE_MATRIX_API_BASE_URL
+  ?? importMetaEnv.VITE_API_BASE_URL
+  ?? (importMetaEnv.PROD ? "" : "http://127.0.0.1:8787")
 ).replace(/\/+$/, "");
 
 function resolveMatrixApiUrl(path: string) {

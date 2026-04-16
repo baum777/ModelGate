@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createOpenRouterClient } from "../src/lib/openrouter.js";
+import { OpenRouterError, createOpenRouterClient } from "../src/lib/openrouter.js";
 import { createTestEnv } from "../test-support/helpers.js";
 
 function parseRequestBody(init: RequestInit | undefined) {
@@ -139,4 +139,63 @@ test("openrouter client retries hidden provider targets and returns the public m
     "stream:openrouter/auto",
     "stream:anthropic/claude-3.5-sonnet"
   ]);
+});
+
+test("openrouter client fails closed when the api key is missing", async () => {
+  let fetchCalls = 0;
+
+  const client = createOpenRouterClient({
+    env: createTestEnv({
+      OPENROUTER_API_KEY: ""
+    }),
+    fetchImpl: async () => {
+      fetchCalls += 1;
+      throw new Error("fetch should not be called without an api key");
+    }
+  });
+
+  await assert.rejects(
+    client.createChatCompletion(
+      {
+        messages: [
+          {
+            role: "user",
+            content: "Hello"
+          }
+        ],
+        stream: false
+      },
+      {
+        publicModelId: "default",
+        logicalModelId: "stable-free-default",
+        providerTargets: ["openrouter/auto"]
+      }
+    ),
+    (error) => error instanceof OpenRouterError && error.status === 503 && error.message === "OpenRouter API key is not configured"
+  );
+
+  await assert.rejects(
+    client.relayChatCompletionStream(
+      {
+        messages: [
+          {
+            role: "user",
+            content: "Stream please"
+          }
+        ],
+        stream: true
+      },
+      {
+        publicModelId: "default",
+        logicalModelId: "stable-free-default",
+        providerTargets: ["openrouter/auto"]
+      },
+      {
+        onToken: () => {}
+      }
+    ),
+    (error) => error instanceof OpenRouterError && error.status === 503 && error.message === "OpenRouter API key is not configured"
+  );
+
+  assert.equal(fetchCalls, 0);
 });

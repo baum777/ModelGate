@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   analyzeScope,
+  fetchProvenance,
   fetchMatrixWhoAmI,
   MatrixRequestError
 } from "../src/lib/matrix-api.js";
@@ -94,6 +95,55 @@ test("matrix analysis rejects malformed nested candidate payloads", async () => 
         && error.operation === "Matrix analysis"
         && error.message.includes("candidateId")
     );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("matrix provenance requests the encoded room route and validates the read-only response", async () => {
+  const seenRequests: Array<{ url: string; method: string }> = [];
+  const restoreFetch = installFetchMock(async (input, init) => {
+    const requestUrl = typeof input === "string" ? input : input.url;
+    seenRequests.push({
+      url: requestUrl,
+      method: init?.method ?? "GET"
+    });
+
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        roomId: "!room:matrix.example",
+        snapshotId: null,
+        stateEventId: null,
+        originServer: "https://matrix.example",
+        authChainIndex: 0,
+        signatures: [
+          {
+            signer: "@user:matrix.example",
+            status: "verified"
+          }
+        ],
+        integrityNotice: "Read-only room metadata derived from joined rooms."
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json"
+        }
+      }
+    );
+  });
+
+  try {
+    const response = await fetchProvenance("!room:matrix.example");
+    const parsedUrl = new URL(seenRequests[0]?.url ?? "http://127.0.0.1");
+
+    assert.equal(response.ok, true);
+    assert.equal(response.roomId, "!room:matrix.example");
+    assert.equal(response.originServer, "https://matrix.example");
+    assert.equal(response.integrityNotice, "Read-only room metadata derived from joined rooms.");
+    assert.deepEqual(seenRequests.map((request) => request.method), ["GET"]);
+    assert.equal(parsedUrl.pathname, "/api/matrix/rooms/!room%3Amatrix.example/provenance");
   } finally {
     restoreFetch();
   }

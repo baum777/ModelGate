@@ -309,6 +309,124 @@ test("Matrix Explore shows read-only backend state", async ({ page }) => {
   await expect(page.getByTestId("matrix-rooms").getByText("!room:matrix.example")).toBeVisible();
 });
 
+test("Matrix provenance loads from the read-only backend route", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+
+  let scopeResolveCount = 0;
+  let scopeSummaryCount = 0;
+  let provenanceCount = 0;
+  const provenanceRequests: string[] = [];
+
+  await page.route("**/api/matrix/scope/resolve", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+
+    scopeResolveCount += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        scope: {
+          scopeId: "scope-provenance",
+          type: "room",
+          rooms: [
+            {
+              roomId: "!room:matrix.example",
+              name: "ModelGate Test",
+              canonicalAlias: "#modelgate-test:matrix.example",
+              roomType: "room",
+              members: 1,
+              lastEventSummary: "Latest room event",
+            },
+          ],
+          createdAt: "2026-04-15T08:00:00.000Z",
+        },
+      }),
+    });
+  });
+
+  await page.route("**/api/matrix/scope/scope-provenance/summary", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+
+    scopeSummaryCount += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        scopeId: "scope-provenance",
+        snapshotId: "snapshot-provenance",
+        generatedAt: "2026-04-15T08:00:30.000Z",
+        items: [
+          {
+            roomId: "!room:matrix.example",
+            name: "ModelGate Test",
+            canonicalAlias: "#modelgate-test:matrix.example",
+            members: 1,
+            lastEventSummary: "Latest room event",
+            freshnessMs: 1200,
+            selected: true,
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.route("**/api/matrix/rooms/!room%3Amatrix.example/provenance", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+
+    provenanceCount += 1;
+    provenanceRequests.push(route.request().url());
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        roomId: "!room:matrix.example",
+        snapshotId: null,
+        stateEventId: null,
+        originServer: "https://matrix.example",
+        authChainIndex: 0,
+        signatures: [
+          {
+            signer: "@user:matrix.example",
+            status: "verified",
+          },
+        ],
+        integrityNotice: "Read-only room metadata derived from joined rooms.",
+      }),
+    });
+  });
+
+  await loadConsole(page);
+  await page.getByTestId("tab-matrix").click();
+  await page.getByTestId("matrix-rooms").getByRole("button", { name: "Room name" }).click();
+  await page.getByRole("button", { name: "Proceed to Analyze" }).click();
+
+  await expect.poll(() => scopeResolveCount).toBe(1);
+  await expect.poll(() => scopeSummaryCount).toBe(1);
+  await expect.poll(() => provenanceCount).toBe(1);
+  await page.locator("button.workspace-tab").filter({ hasText: /^Explore$/ }).click();
+  await expect(page.getByText("Mode: Explore")).toBeVisible();
+  await expect(page.locator(".scope-summary").getByText("ModelGate Test", { exact: true })).toBeVisible();
+  await expect(page.locator(".scope-summary").getByText("#modelgate-test:matrix.example", { exact: true })).toBeVisible();
+  await page.locator("button.workspace-tab").filter({ hasText: /^Review$/ }).click();
+  await expect(page.getByText("Mode: Review")).toBeVisible();
+  await expect(page.locator(".provenance-card")).toBeVisible();
+  await expect(page.getByText("Provenance", { exact: true })).toBeVisible();
+  await expect(page.getByText("Read-only room metadata derived from joined rooms.")).toBeVisible();
+  await expect(provenanceRequests[0] ?? "").toContain("/api/matrix/rooms/!room%3Amatrix.example/provenance");
+});
+
 test("Matrix fail-closed rendering surfaces malformed Matrix responses", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "malformed" });
   await loadConsole(page);

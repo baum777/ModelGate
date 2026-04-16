@@ -217,6 +217,70 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
     });
   });
 
+  app.get("/api/matrix/rooms/:roomId/provenance", async (request, reply) => {
+    if (!deps.config.ready) {
+      return sendMatrixError(reply, "matrix_not_configured");
+    }
+
+    const roomId = typeof request.params === "object" && request.params !== null
+      ? (request.params as { roomId?: unknown }).roomId
+      : undefined;
+
+    if (typeof roomId !== "string" || roomId.trim().length === 0) {
+      return sendMatrixError(reply, "invalid_request");
+    }
+
+    try {
+      const identity = await deps.client.whoami();
+      assertExpectedMatrixUser(
+        deps.config,
+        identity,
+        "matrix_room_provenance",
+        `/api/matrix/rooms/${roomId}/provenance`
+      );
+
+      const rooms = await deps.client.joinedRooms();
+      const room = rooms.find((candidate) => candidate.roomId === roomId);
+
+      if (!room) {
+        return sendMatrixError(reply, "matrix_room_not_found");
+      }
+
+      const generatedAt = new Date().toISOString();
+
+      return reply.status(200).send({
+        ok: true,
+        roomId,
+        snapshotId: null,
+        stateEventId: null,
+        originServer: deps.config.baseUrl,
+        authChainIndex: 0,
+        signatures: [
+          {
+            signer: identity.userId,
+            status: "verified"
+          }
+        ],
+        integrityNotice: "Read-only room metadata derived from joined rooms.",
+        provenance: {
+          source: "matrix",
+          kind: "room_metadata",
+          generatedAt,
+          items: [
+            {
+              type: "room",
+              id: room.roomId,
+              label: room.name ?? room.canonicalAlias ?? room.roomId,
+              alias: room.canonicalAlias
+            }
+          ]
+        }
+      });
+    } catch (error) {
+      return handleMatrixError(reply, error);
+    }
+  });
+
   app.post("/api/matrix/actions/promote", async (request, reply) => {
     if (!deps.config.ready) {
       return sendMatrixError(reply, "matrix_not_configured");
