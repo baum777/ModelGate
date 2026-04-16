@@ -1,0 +1,126 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: SOVEREIGN CONSOLE
+      - heading "Thin consumer overlay for ModelGate" [level=1] [ref=e7]
+      - paragraph [ref=e8]: The backend owns provider calls, routing, Matrix writes, and stream framing. The browser only renders, consumes, and submits intent.
+    - generic [ref=e9]:
+      - generic [ref=e11]: Backend healthy
+      - generic [ref=e12]:
+        - generic [ref=e13]: "Active tab: Matrix Workspace"
+        - generic [ref=e14]: "Public model alias: default"
+        - generic [ref=e15]: "Backend context: local-openrouter-chat · local · openrouter"
+  - tablist "Primary console tabs" [ref=e16]:
+    - tab "Chat" [ref=e17] [cursor=pointer]
+    - tab "Matrix Workspace" [active] [selected] [ref=e18] [cursor=pointer]
+    - button "Show logs" [ref=e19] [cursor=pointer]
+  - generic [ref=e20]:
+    - generic [ref=e61]:
+      - generic [ref=e62]:
+        - generic [ref=e63]:
+          - paragraph [ref=e64]: Matrix backend error
+          - heading "Matrix Workspace" [level=1] [ref=e65]
+          - paragraph [ref=e66]: Backend-owned Explore, Analyze, Review, Execute, and Verify flow with approval-gated execution and bounded v1 action candidates.
+          - generic [ref=e67]:
+            - button "Explore" [ref=e68] [cursor=pointer]
+            - button "Analyze" [ref=e69] [cursor=pointer]
+            - button "Review" [ref=e70] [cursor=pointer]
+          - generic [ref=e71]:
+            - generic [ref=e72]: Explore
+            - generic [ref=e73]: Analyze
+            - generic [ref=e74]: Review
+            - generic [ref=e75]: Execute
+            - generic [ref=e76]: Verify
+        - complementary [ref=e77]:
+          - strong [ref=e78]: No scope resolved yet
+          - generic [ref=e79]:
+            - generic [ref=e80]: "User: unresolved"
+            - generic [ref=e81]: "Homeserver: unresolved"
+            - generic [ref=e82]: "Origin: http://127.0.0.1:8787"
+            - generic [ref=e83]: "Mode: Explore"
+            - generic [ref=e84]: "Scope: none"
+            - generic [ref=e85]: "Rooms: 0"
+            - generic [ref=e86]: "Candidates: 0"
+      - generic [ref=e87]:
+        - paragraph [ref=e88]: "Matrix bootstrap error. Origin: http://127.0.0.1:8787"
+        - paragraph [ref=e89]: "Matrix whoami failed 503 (matrix_not_configured): Matrix backend is not configured"
+        - paragraph [ref=e90]: "Matrix joined rooms failed 503 (matrix_not_configured): Matrix backend is not configured"
+      - generic [ref=e91]:
+        - generic [ref=e92]:
+          - generic [ref=e94]:
+            - generic [ref=e95]: Room topic update
+            - strong [ref=e96]: Review, approve, execute, and verify a backend-owned topic change
+          - generic [ref=e97]:
+            - paragraph [ref=e98]: Target room
+            - generic [ref=e99]:
+              - textbox "Room ID" [ref=e100]:
+                - /placeholder: "!room:matrix.org"
+              - button "Use selected room" [disabled] [ref=e101]
+          - generic [ref=e102]:
+            - paragraph [ref=e103]: Proposed topic
+            - textbox "Proposed topic" [ref=e104]:
+              - /placeholder: Propose a new Matrix room topic.
+          - generic [ref=e105]:
+            - button "Prepare topic update" [ref=e106] [cursor=pointer]
+            - generic [ref=e107]: The browser only sends a room ID, proposed topic text, and approval intent.
+          - paragraph [ref=e108]: Enter a room ID and proposed topic, then prepare a backend-owned review plan.
+        - generic [ref=e109]:
+          - generic [ref=e111]:
+            - generic [ref=e112]: Explore
+            - strong [ref=e113]: Identity, rooms, scope, and provenance
+          - generic [ref=e114]:
+            - generic [ref=e115]:
+              - paragraph [ref=e116]: Who am I
+              - paragraph [ref=e117]: Load backend identity to begin
+              - paragraph [ref=e118]: "Device: n/a · Homeserver: n/a"
+            - paragraph [ref=e119]: "Matrix whoami failed 503 (matrix_not_configured): Matrix backend is not configured"
+            - generic [ref=e120]:
+              - paragraph [ref=e121]: Joined rooms
+              - paragraph [ref=e123]: No joined rooms loaded yet.
+              - paragraph [ref=e124]: "Matrix joined rooms failed 503 (matrix_not_configured): Matrix backend is not configured"
+            - generic [ref=e125]:
+              - paragraph [ref=e126]: Selected scope inputs
+              - generic [ref=e127]:
+                - textbox "Add a space ID" [ref=e128]
+                - button "Add space" [ref=e129] [cursor=pointer]
+              - generic [ref=e131]: No scope inputs selected yet.
+              - generic [ref=e132]:
+                - button "Proceed to Analyze" [disabled] [ref=e133]
+                - generic [ref=e134]: Backend resolves the scope and generates the current snapshot.
+            - generic [ref=e135]:
+              - paragraph [ref=e136]: Current scope summary
+              - paragraph [ref=e137]: Resolve a scope to begin analysis.
+            - generic [ref=e138]:
+              - paragraph [ref=e139]: Hierarchy preview
+              - paragraph [ref=e140]: Add or preview a space ID to inspect hierarchy.
+    - complementary [ref=e48]:
+      - generic [ref=e49]:
+        - generic [ref=e50]:
+          - text: System context
+          - strong [ref=e51]: Bounded telemetry
+        - button "Clear" [ref=e52] [cursor=pointer]
+      - generic [ref=e53]:
+        - article [ref=e141]:
+          - strong [ref=e142]: Matrix state restored
+          - paragraph [ref=e143]: Local Matrix selection and mode were restored from the browser.
+        - article [ref=e144]:
+          - strong [ref=e145]: Matrix state restored
+          - paragraph [ref=e146]: Local Matrix selection and mode were restored from the browser.
+        - article [ref=e147]:
+          - strong [ref=e148]: Matrix state restored
+          - paragraph [ref=e149]: Local Matrix selection and mode were restored from the browser.
+        - article [ref=e150]:
+          - strong [ref=e151]: Matrix state restored
+          - paragraph [ref=e152]: Local Matrix selection and mode were restored from the browser.
+        - article [ref=e153]:
+          - strong [ref=e154]: Matrix state restored
+          - paragraph [ref=e155]: Local Matrix selection and mode were restored from the browser.
+        - article [ref=e156]:
+          - strong [ref=e157]: Matrix state restored
+          - paragraph [ref=e158]: Local Matrix selection and mode were restored from the browser.
+        - article [ref=e159]:
+          - strong [ref=e160]: Matrix state restored
+          - paragraph [ref=e161]: Local Matrix selection and mode were restored from the browser.
+        - article [ref=e162]:
+          - strong [ref=e163]: Matrix state restored
+          - paragraph [ref=e164]: Local Matrix selection and mode were restored from the browser.

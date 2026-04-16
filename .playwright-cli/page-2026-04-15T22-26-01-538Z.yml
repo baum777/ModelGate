@@ -1,0 +1,53 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - img [ref=e6]
+      - generic [ref=e9]:
+        - heading "Anmelden" [level=1] [ref=e10]
+        - paragraph [ref=e11]: "Bitte melde dich an, um fortzufahren:"
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - generic [ref=e14] [cursor=pointer]: Benutzername oder E-Mail-Adresse
+        - textbox "Benutzername oder E-Mail-Adresse" [ref=e15]
+      - generic [ref=e16]:
+        - generic [ref=e17] [cursor=pointer]: Passwort
+        - textbox "Passwort" [ref=e18]
+      - link "Passwort vergessen?" [ref=e19] [cursor=pointer]:
+        - /url: /recover
+    - generic [ref=e20]:
+      - button "Weiter" [ref=e21] [cursor=pointer]
+      - generic [ref=e22]:
+        - separator [ref=e23]
+        - paragraph [ref=e24]: Oder
+        - separator [ref=e25]
+      - link "Weiter mit Google" [ref=e26] [cursor=pointer]:
+        - /url: /upstream/authorize/01JJ4Q69B62EHVX38X6FX57E87?id=01KP9M0M8AMN68RKDYXK86KG0E&kind=continue_compat_sso_login
+        - img [ref=e27]
+        - text: Weiter mit Google
+      - link "Weiter mit Apple" [ref=e32] [cursor=pointer]:
+        - /url: /upstream/authorize/01JJ4R91WQC343JKZYMKVKP8JX?id=01KP9M0M8AMN68RKDYXK86KG0E&kind=continue_compat_sso_login
+        - img [ref=e33]
+        - text: Weiter mit Apple
+      - link "Weiter mit GitHub" [ref=e35] [cursor=pointer]:
+        - /url: /upstream/authorize/01JJ4QG3PPY6X73PCNEC7Q7MPH?id=01KP9M0M8AMN68RKDYXK86KG0E&kind=continue_compat_sso_login
+        - img [ref=e36]
+        - text: Weiter mit GitHub
+      - link "Weiter mit Facebook" [ref=e38] [cursor=pointer]:
+        - /url: /upstream/authorize/01JJ4R53DSK2XSH825W0C9NXAG?id=01KP9M0M8AMN68RKDYXK86KG0E&kind=continue_compat_sso_login
+        - img [ref=e39]
+        - text: Weiter mit Facebook
+      - link "Weiter mit GitLab" [ref=e42] [cursor=pointer]:
+        - /url: /upstream/authorize/01JJ4R3N29338SWQAX5WAE7KWT?id=01KP9M0M8AMN68RKDYXK86KG0E&kind=continue_compat_sso_login
+        - img [ref=e43]
+        - text: Weiter mit GitLab
+    - generic [ref=e51]:
+      - paragraph [ref=e52]: Du hast noch kein Konto?
+      - link "Konto erstellen" [ref=e53] [cursor=pointer]:
+        - /url: /register?id=01KP9M0M8AMN68RKDYXK86KG0E&kind=continue_compat_sso_login
+  - contentinfo [ref=e54]:
+    - navigation [ref=e55]:
+      - link "Datenschutzerklärung" [ref=e56] [cursor=pointer]:
+        - /url: https://matrix.org/legal/privacy-notice/
+      - generic [ref=e57]: •
+      - link "Allgemeine Geschäftsbedingungen" [ref=e58] [cursor=pointer]:
+        - /url: https://matrix.org/legal/terms-and-conditions/

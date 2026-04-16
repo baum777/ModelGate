@@ -1,0 +1,84 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: SOVEREIGN CONSOLE
+      - heading "Thin consumer overlay for ModelGate" [level=1] [ref=e7]
+      - paragraph [ref=e8]: The backend owns provider calls, routing, Matrix writes, and stream framing. The browser only renders, consumes, and submits intent.
+    - generic [ref=e9]:
+      - generic [ref=e11]: Backend healthy
+      - generic [ref=e12]:
+        - generic [ref=e13]: "Active tab: Matrix Workspace"
+        - generic [ref=e14]: "Public model alias: default"
+        - generic [ref=e15]: "Backend context: local-openrouter-chat · local · openrouter"
+  - tablist "Primary console tabs" [ref=e16]:
+    - tab "Chat" [ref=e17] [cursor=pointer]
+    - tab "Matrix Workspace" [selected] [ref=e18] [cursor=pointer]
+    - button "Show logs" [ref=e19] [cursor=pointer]
+  - generic [ref=e20]:
+    - generic [ref=e60]:
+      - generic [ref=e61]:
+        - generic [ref=e62]:
+          - paragraph [ref=e63]: Matrix backend ready
+          - heading "Matrix Workspace" [level=1] [ref=e64]
+          - paragraph [ref=e65]: Backend-owned Explore, Analyze, Review, Execute, and Verify flow with approval-gated execution and bounded v1 action candidates.
+          - generic [ref=e66]:
+            - button "Explore" [ref=e67] [cursor=pointer]
+            - button "Analyze" [ref=e68] [cursor=pointer]
+            - button "Review" [ref=e69] [cursor=pointer]
+          - generic [ref=e70]:
+            - generic [ref=e71]: Explore
+            - generic [ref=e72]: Analyze
+            - generic [ref=e73]: Review
+            - generic [ref=e74]: Execute
+            - generic [ref=e75]: Verify
+        - complementary [ref=e76]:
+          - strong [ref=e77]: room scope
+          - generic [ref=e78]:
+            - generic [ref=e79]: "User: @baum777:matrix.org"
+            - generic [ref=e80]: "Homeserver: https://matrix.org"
+            - generic [ref=e81]: "Origin: http://127.0.0.1:8787"
+            - generic [ref=e82]: "Mode: Analyze"
+            - generic [ref=e83]: "Scope: scope_0PVPYDXKrUX9dELSkx3ejm0j"
+            - generic [ref=e84]: "Rooms: 1"
+            - generic [ref=e85]: "Candidates: 0"
+      - generic [ref=e257]:
+        - generic [ref=e259]:
+          - generic [ref=e260]: Analyze
+          - strong [ref=e261]: Grounded review of the selected scope
+        - paragraph [ref=e263]: Contract-only surface. Backend-owned room topic updates are wired below.
+        - textbox "Describe what should be reviewed in the resolved scope." [disabled] [ref=e264]: Review the selected scope and identify bounded workspace actions.
+        - generic [ref=e265]:
+          - button "Analyze (contract-only)" [disabled] [ref=e266]
+          - generic [ref=e267]: Analysis remains backend-owned and is not wired for browser execution in this slice.
+        - paragraph [ref=e268]: Run analysis to produce grounded references and bounded candidates.
+    - complementary [ref=e48]:
+      - generic [ref=e49]:
+        - generic [ref=e50]:
+          - text: System context
+          - strong [ref=e51]: Bounded telemetry
+        - button "Clear" [ref=e52] [cursor=pointer]
+      - generic [ref=e53]:
+        - article [ref=e269]:
+          - strong [ref=e270]: Matrix state restored
+          - paragraph [ref=e271]: Local Matrix selection and mode were restored from the browser.
+        - article [ref=e272]:
+          - strong [ref=e273]: Matrix state restored
+          - paragraph [ref=e274]: Local Matrix selection and mode were restored from the browser.
+        - article [ref=e275]:
+          - strong [ref=e276]: Matrix state restored
+          - paragraph [ref=e277]: Local Matrix selection and mode were restored from the browser.
+        - article [ref=e278]:
+          - strong [ref=e279]: Matrix state restored
+          - paragraph [ref=e280]: Local Matrix selection and mode were restored from the browser.
+        - article [ref=e281]:
+          - strong [ref=e282]: Matrix state restored
+          - paragraph [ref=e283]: Local Matrix selection and mode were restored from the browser.
+        - article [ref=e284]:
+          - strong [ref=e285]: Matrix mode changed
+          - paragraph [ref=e286]: Analyze mode activated.
+        - article [ref=e287]:
+          - strong [ref=e288]: Matrix state restored
+          - paragraph [ref=e289]: Local Matrix selection and mode were restored from the browser.
+        - article [ref=e290]:
+          - strong [ref=e291]: Matrix state restored
+          - paragraph [ref=e292]: Local Matrix selection and mode were restored from the browser.

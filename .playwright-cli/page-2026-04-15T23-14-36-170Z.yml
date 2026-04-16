@@ -1,0 +1,156 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: SOVEREIGN CONSOLE
+      - heading "Thin consumer overlay for ModelGate" [level=1] [ref=e7]
+      - paragraph [ref=e8]: The backend owns provider calls, routing, Matrix writes, and stream framing. The browser only renders, consumes, and submits intent.
+    - generic [ref=e9]:
+      - generic [ref=e11]: Backend healthy
+      - generic [ref=e12]:
+        - generic [ref=e13]: "Active tab: Matrix Workspace"
+        - generic [ref=e14]: "Public model alias: default"
+        - generic [ref=e15]: "Backend context: local-openrouter-chat · local · openrouter"
+  - tablist "Primary console tabs" [ref=e16]:
+    - tab "Chat" [ref=e17] [cursor=pointer]
+    - tab "Matrix Workspace" [active] [selected] [ref=e18] [cursor=pointer]
+    - button "Show logs" [ref=e19] [cursor=pointer]
+  - generic [ref=e20]:
+    - generic [ref=e60]:
+      - generic [ref=e61]:
+        - generic [ref=e62]:
+          - paragraph [ref=e63]: Matrix backend ready
+          - heading "Matrix Workspace" [level=1] [ref=e64]
+          - paragraph [ref=e65]: Backend-owned Explore, Analyze, Review, Execute, and Verify flow with approval-gated execution and bounded v1 action candidates.
+          - generic [ref=e66]:
+            - button "Explore" [ref=e67] [cursor=pointer]
+            - button "Analyze" [ref=e68] [cursor=pointer]
+            - button "Review" [ref=e69] [cursor=pointer]
+          - generic [ref=e70]:
+            - generic [ref=e71]: Explore
+            - generic [ref=e72]: Analyze
+            - generic [ref=e73]: Review
+            - generic [ref=e74]: Execute
+            - generic [ref=e75]: Verify
+        - complementary [ref=e76]:
+          - strong [ref=e77]: No scope resolved yet
+          - generic [ref=e78]:
+            - generic [ref=e79]: "User: @baum777:matrix.org"
+            - generic [ref=e80]: "Homeserver: https://matrix.org"
+            - generic [ref=e81]: "Origin: http://127.0.0.1:8787"
+            - generic [ref=e82]: "Mode: Explore"
+            - generic [ref=e83]: "Scope: none"
+            - generic [ref=e84]: "Rooms: 0"
+            - generic [ref=e85]: "Candidates: 0"
+      - generic [ref=e86]:
+        - generic [ref=e87]:
+          - generic [ref=e89]:
+            - generic [ref=e90]: Room topic update
+            - strong [ref=e91]: Review, approve, execute, and verify a backend-owned topic change
+          - generic [ref=e92]:
+            - paragraph [ref=e93]: Target room
+            - generic [ref=e94]:
+              - textbox "Room ID" [ref=e95]:
+                - /placeholder: "!room:matrix.org"
+              - button "Use selected room" [disabled] [ref=e96]
+          - generic [ref=e97]:
+            - paragraph [ref=e98]: Proposed topic
+            - textbox "Proposed topic" [ref=e99]:
+              - /placeholder: Propose a new Matrix room topic.
+          - generic [ref=e100]:
+            - button "Prepare topic update" [ref=e101] [cursor=pointer]
+            - generic [ref=e102]: The browser only sends a room ID, proposed topic text, and approval intent.
+          - paragraph [ref=e103]: Enter a room ID and proposed topic, then prepare a backend-owned review plan.
+        - generic [ref=e104]:
+          - generic [ref=e106]:
+            - generic [ref=e107]: Explore
+            - strong [ref=e108]: Identity, rooms, scope, and provenance
+          - generic [ref=e109]:
+            - generic [ref=e110]:
+              - paragraph [ref=e111]: Who am I
+              - paragraph [ref=e112]: "@baum777:matrix.org"
+              - paragraph [ref=e113]: "Device: n/a · Homeserver: https://matrix.org"
+            - generic [ref=e114]:
+              - paragraph [ref=e115]: Joined rooms
+              - generic [ref=e116]:
+                - button "Research Feed room · !KGjTNEjeltGRcxRaqs:matrix.org" [ref=e117] [cursor=pointer]:
+                  - generic [ref=e118]: Research Feed
+                  - generic [ref=e119]: room · !KGjTNEjeltGRcxRaqs:matrix.org
+                - button "Tools & Builds room · !YMpyosuudCFWFOOzov:matrix.org" [ref=e120] [cursor=pointer]:
+                  - generic [ref=e121]: Tools & Builds
+                  - generic [ref=e122]: room · !YMpyosuudCFWFOOzov:matrix.org
+                - button "Brainpool room · !zrctxfcWmwjNzJPLVF:matrix.org" [ref=e123] [cursor=pointer]:
+                  - generic [ref=e124]: Brainpool
+                  - generic [ref=e125]: room · !zrctxfcWmwjNzJPLVF:matrix.org
+                - button "Research Feed room · !QteCZMnSYmFusQQezC:matrix.org" [ref=e126] [cursor=pointer]:
+                  - generic [ref=e127]: Research Feed
+                  - generic [ref=e128]: room · !QteCZMnSYmFusQQezC:matrix.org
+                - button "ModelGate Test room · !NGKHedIPbruwSXkeYr:matrix.org" [ref=e129] [cursor=pointer]:
+                  - generic [ref=e130]: ModelGate Test
+                  - generic [ref=e131]: room · !NGKHedIPbruwSXkeYr:matrix.org
+                - button "AI x Crypto room · !SxZJYhGUVlHCLPzoBW:matrix.org" [ref=e132] [cursor=pointer]:
+                  - generic [ref=e133]: AI x Crypto
+                  - generic [ref=e134]: room · !SxZJYhGUVlHCLPzoBW:matrix.org
+                - button "ai room · !CSxFoglrVxQTvIChwY:matrix.org" [ref=e135] [cursor=pointer]:
+                  - generic [ref=e136]: ai
+                  - generic [ref=e137]: room · !CSxFoglrVxQTvIChwY:matrix.org
+                - button "Agent Systems room · !eLETbkBNhgSXpYyWrR:matrix.org" [ref=e138] [cursor=pointer]:
+                  - generic [ref=e139]: Agent Systems
+                  - generic [ref=e140]: room · !eLETbkBNhgSXpYyWrR:matrix.org
+                - button "AI Research Hub | Welcome room · !NUidJRwFOSyYrGFuTc:matrix.org" [ref=e141] [cursor=pointer]:
+                  - generic [ref=e142]: AI Research Hub | Welcome
+                  - generic [ref=e143]: room · !NUidJRwFOSyYrGFuTc:matrix.org
+                - button "General room · !gOTHTchXIiyQRpxCXu:matrix.org" [ref=e144] [cursor=pointer]:
+                  - generic [ref=e145]: General
+                  - generic [ref=e146]: room · !gOTHTchXIiyQRpxCXu:matrix.org
+                - button "research room · !rBIiyQbHxoGfQBPvrg:matrix.org" [ref=e147] [cursor=pointer]:
+                  - generic [ref=e148]: research
+                  - generic [ref=e149]: room · !rBIiyQbHxoGfQBPvrg:matrix.org
+                - button "Lounge room · !fcRdUhvcjRXUVWyWHb:matrix.org" [ref=e150] [cursor=pointer]:
+                  - generic [ref=e151]: Lounge
+                  - generic [ref=e152]: room · !fcRdUhvcjRXUVWyWHb:matrix.org
+                - button "Knowledge Base room · !stjMlFiOCSfHbOrjCC:matrix.org" [ref=e153] [cursor=pointer]:
+                  - generic [ref=e154]: Knowledge Base
+                  - generic [ref=e155]: room · !stjMlFiOCSfHbOrjCC:matrix.org
+                - button "AI Research Hub | Welcome room · !TwkNsQCHgzqYWIRgkc:matrix.org" [ref=e156] [cursor=pointer]:
+                  - generic [ref=e157]: AI Research Hub | Welcome
+                  - generic [ref=e158]: room · !TwkNsQCHgzqYWIRgkc:matrix.org
+                - button "Matrix.org (Official Account) room · !jFnooUiyhOarImNKXH:matrix.org" [ref=e159] [cursor=pointer]:
+                  - generic [ref=e160]: Matrix.org (Official Account)
+                  - generic [ref=e161]: room · !jFnooUiyhOarImNKXH:matrix.org
+                - button "AI_brainpool room · !arldeajuTwXoQnehIM:matrix.org" [ref=e162] [cursor=pointer]:
+                  - generic [ref=e163]: AI_brainpool
+                  - generic [ref=e164]: room · !arldeajuTwXoQnehIM:matrix.org
+            - generic [ref=e165]:
+              - paragraph [ref=e166]: Selected scope inputs
+              - generic [ref=e167]:
+                - textbox "Add a space ID" [ref=e168]
+                - button "Add space" [ref=e169] [cursor=pointer]
+              - generic [ref=e171]: No scope inputs selected yet.
+              - generic [ref=e172]:
+                - button "Proceed to Analyze" [disabled] [ref=e173]
+                - generic [ref=e174]: Backend resolves the scope and generates the current snapshot.
+            - generic [ref=e175]:
+              - paragraph [ref=e176]: Current scope summary
+              - paragraph [ref=e177]: Resolve a scope to begin analysis.
+            - generic [ref=e178]:
+              - paragraph [ref=e179]: Hierarchy preview
+              - paragraph [ref=e180]: Add or preview a space ID to inspect hierarchy.
+    - complementary [ref=e48]:
+      - generic [ref=e49]:
+        - generic [ref=e50]:
+          - text: System context
+          - strong [ref=e51]: Bounded telemetry
+        - button "Clear" [ref=e52] [cursor=pointer]
+      - generic [ref=e53]:
+        - article [ref=e54]:
+          - strong [ref=e55]: Backend health loaded
+          - paragraph [ref=e56]: local-openrouter-chat reports local mode with 1 public model(s).
+        - article [ref=e57]:
+          - strong [ref=e58]: Public model alias loaded
+          - paragraph [ref=e59]: Selected alias default; provider targets remain backend-owned.
+        - article [ref=e181]:
+          - strong [ref=e182]: Switched tab
+          - paragraph [ref=e183]: Matrix Workspace activated.
+        - article [ref=e184]:
+          - strong [ref=e185]: Matrix state restored
+          - paragraph [ref=e186]: Local Matrix selection and mode were restored from the browser.
