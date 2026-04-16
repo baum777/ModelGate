@@ -289,7 +289,7 @@ export default function App() {
               : "Bounded telemetry"}
           </strong>
         </div>
-        <span className={`status-pill ${backendHealthy === false ? "status-error" : "status-ready"}`}>
+        <span className={`status-pill ${backendHealthy === false ? "status-error" : backendHealthy === true ? "status-ready" : "status-partial"}`}>
           {mode === "github" ? githubContext.connectionLabel : backendStatusLabel}
         </span>
       </div>
@@ -327,6 +327,43 @@ export default function App() {
             : "Die Browseroberfläche sendet nur Bedienabsicht. Alle Autorität bleibt im Backend."}
         </p>
       </div>
+
+      {mode === "github" && expertMode ? (
+        <details className="github-expert-details" open>
+          <summary>Technische Details</summary>
+          <div className="github-expert-grid">
+            <div>
+              <span>Erlaubtes Repo</span>
+              <strong>{githubContext.selectedRepoSlug ?? "n/a"}</strong>
+            </div>
+            <div>
+              <span>Anfrage-ID</span>
+              <strong>{githubContext.requestId ?? "n/a"}</strong>
+            </div>
+            <div>
+              <span>Plan-ID</span>
+              <strong>{githubContext.planId ?? "n/a"}</strong>
+            </div>
+            <div>
+              <span>Branch</span>
+              <strong>{githubContext.branchName ?? "n/a"}</strong>
+            </div>
+            <div>
+              <span>GitHub API Status</span>
+              <strong>{githubContext.apiStatus}</strong>
+            </div>
+            <div>
+              <span>Laufzeit-Ereignisse</span>
+              <strong>{githubContext.sseEvents.join(" · ")}</strong>
+            </div>
+          </div>
+          {githubContext.rawDiffPreview ? (
+            <pre className="github-diff-preview">{githubContext.rawDiffPreview}</pre>
+          ) : (
+            <p className="muted-copy">Raw diff preview erscheint erst nach einem vorbereiteten Vorschlag.</p>
+          )}
+        </details>
+      ) : null}
 
       {mode === "github" ? (
         <div className="context-summary-meta">

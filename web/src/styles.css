@@ -854,6 +854,38 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
   color: var(--text);
 }
 
+.github-next-step {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(139, 124, 246, 0.18);
+  background: rgba(139, 124, 246, 0.08);
+}
+
+.github-next-step-empty {
+  border-color: rgba(139, 124, 246, 0.18);
+  background: rgba(139, 124, 246, 0.08);
+}
+
+.github-next-step-ready {
+  border-color: rgba(103, 232, 201, 0.18);
+  background: rgba(103, 232, 201, 0.08);
+}
+
+.github-next-step strong {
+  display: block;
+  margin: 0.12rem 0 0.25rem;
+  font-size: 1.02rem;
+}
+
+.github-next-step p {
+  margin: 0;
+  color: var(--muted);
+}
+
 .empty-state-card {
   display: grid;
   gap: 18px;

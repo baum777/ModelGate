@@ -42,22 +42,6 @@ function readErrorMessage(payload: unknown) {
   return "Request failed";
 }
 
-function readErrorCode(payload: unknown) {
-  if (!isRecord(payload)) {
-    return null;
-  }
-
-  if (typeof payload.code === "string" && payload.code.trim().length > 0) {
-    return payload.code;
-  }
-
-  if (isRecord(payload.error) && typeof payload.error.code === "string" && payload.error.code.trim().length > 0) {
-    return payload.error.code;
-  }
-
-  return null;
-}
-
 async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers ?? {});
 
@@ -80,15 +64,16 @@ async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> 
     const contentType = response.headers.get("content-type") ?? "";
 
     if (contentType.includes("application/json")) {
+      let message = response.statusText || "GitHub request failed";
+
       try {
         const payload = await response.json() as unknown;
-        const message = readErrorMessage(payload);
-        const code = readErrorCode(payload);
-
-        throw new Error(code ? `${message} (${code})` : message);
+        message = readErrorMessage(payload);
       } catch {
-        throw new Error(response.statusText || "GitHub request failed");
+        // Fall through to the sanitized fallback message below.
       }
+
+      throw new Error(message);
     }
 
     const text = await response.text();

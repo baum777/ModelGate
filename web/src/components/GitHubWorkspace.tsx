@@ -133,9 +133,9 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     [repos, selectedRepoFullName],
   );
 
-  const connectionLabel = props.backendHealthy === false
-    ? "Nicht verbunden"
-    : "Bereit";
+  const connectionLabel = props.backendHealthy === true
+    ? "Bereit"
+    : "Nicht verbunden";
   const accessLabel = "Nur Lesen";
   const analysisLabel = proposalPlan
     ? "Plan erstellt"
@@ -173,6 +173,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     props.backendHealthy,
     props.onContextChange,
     props.expertMode,
+    eventTrail,
     rawDiffPreview,
     selectedRepo,
     selectedRepoLabel,
@@ -282,6 +283,16 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
   const analysisFiles = analysisBundle?.files ?? [];
   const proposalFiles = proposalPlan?.diff ?? [];
   const proposalReady = Boolean(proposalPlan);
+  const nextStepTitle = !hasSelection
+    ? "Nächster Schritt: Wähle ein GitHub-Repo aus."
+    : proposalPlan
+      ? "Nächster Schritt: Vorschlag prüfen."
+      : "Nächster Schritt: Analyse starten.";
+  const nextStepDescription = !hasSelection
+    ? "Die KI kann danach Dateien lesen, den Projektstand verstehen und einen sicheren Analyseplan vorbereiten."
+    : proposalPlan
+      ? "Änderungen werden erst nach deiner Freigabe vorbereitet oder ausgeführt."
+      : "Die Analyse ist nur lesend. Es werden keine Dateien geändert.";
 
   return (
     <section className="workspace-panel github-workspace" data-testid="github-workspace">
@@ -345,6 +356,17 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
         <p>Die KI kann dein Repo ansehen, aber keine Dateien verändern.</p>
         <span className="status-pill status-partial">Änderungen passieren erst nach deiner Freigabe.</span>
       </div>
+
+      <article className={`github-next-step ${hasSelection ? "github-next-step-ready" : "github-next-step-empty"}`}>
+        <div>
+          <p className="info-label">Nächster Schritt</p>
+          <strong>{nextStepTitle}</strong>
+          <p>{nextStepDescription}</p>
+        </div>
+        <span className={`status-pill ${proposalPlan ? "status-partial" : "status-ready"}`}>
+          {proposalPlan ? "Freigabe nötig" : "Nur Lesen"}
+        </span>
+      </article>
 
       {reposError ? <p className="error-banner" role="alert">{reposError}</p> : null}
 
@@ -476,12 +498,13 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                   <div className="github-plan-summary">
                     <div className="github-plan-header">
                       <div>
-                        <p className="info-label">Prepared plan</p>
-                    <strong>{proposalPlan.summary}</strong>
-                  </div>
-                  <span className="status-pill status-partial">Freigabe nötig</span>
-                </div>
-                <p>{proposalPlan.rationale}</p>
+                        <p className="info-label">Vorbereiteter Vorschlag</p>
+                        <strong>{proposalPlan.summary}</strong>
+                      </div>
+                      <span className="status-pill status-partial">Freigabe nötig</span>
+                    </div>
+
+                    <p>{proposalPlan.rationale}</p>
 
                     <div className="github-plan-file-grid">
                       {proposalFiles.map((file) => (
@@ -493,7 +516,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                     </div>
 
                     <div className="action-row">
-                    <span className="muted-copy">Änderungen werden erst nach deiner Freigabe vorbereitet oder ausgeführt.</span>
+                      <span className="muted-copy">Änderungen werden erst nach deiner Freigabe vorbereitet oder ausgeführt.</span>
                       <button
                         type="button"
                         className="secondary-button"
@@ -551,7 +574,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                   <strong>{props.backendHealthy === false ? "Nicht verbunden" : "Backend-Route aktiv"}</strong>
                 </div>
                 <div>
-                  <span>SSE-Ereignisse</span>
+                  <span>Laufzeit-Ereignisse</span>
                   <strong>{eventTrail.length > 0 ? eventTrail.join(" · ") : "Nicht relevant"}</strong>
                 </div>
               </div>
