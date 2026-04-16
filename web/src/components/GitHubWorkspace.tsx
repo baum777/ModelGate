@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ExpertDetails } from "./ExpertDetails.js";
 import {
   fetchGitHubContext,
   fetchGitHubRepos,
@@ -7,6 +8,7 @@ import {
   type GitHubContextBundle,
   type GitHubRepoSummary,
 } from "../lib/github-api.js";
+import type { ReviewItem } from "./ReviewWorkspace.js";
 
 export type GitHubWorkspaceStatus = {
   repositoryLabel: string;
@@ -14,14 +16,16 @@ export type GitHubWorkspaceStatus = {
   accessLabel: string;
   analysisLabel: string;
   approvalLabel: string;
-  requestId: string | null;
-  planId: string | null;
-  branchName: string | null;
-  apiStatus: string;
-  sseEvents: string[];
-  rawDiffPreview: string | null;
-  selectedRepoSlug: string | null;
-  safetyTip: string;
+  safetyText: string;
+  expertDetails: {
+    requestId: string | null;
+    planId: string | null;
+    branchName: string | null;
+    apiStatus: string;
+    sseEvents: string[];
+    rawDiffPreview: string | null;
+    selectedRepoSlug: string | null;
+  };
 };
 
 type GitHubWorkspaceProps = {
@@ -34,6 +38,7 @@ type GitHubWorkspaceProps = {
     detail?: string,
   ) => void;
   onContextChange: (status: GitHubWorkspaceStatus) => void;
+  onReviewItemsChange?: (items: ReviewItem[]) => void;
 };
 
 const ANALYSIS_QUESTION =
@@ -58,6 +63,10 @@ function formatRepoStatus(status: GitHubRepoSummary["status"]) {
 
 function formatRepoVisibility(isPrivate: boolean) {
   return isPrivate ? "Privat" : "Öffentlich";
+}
+
+function friendlyRepoLabel(index: number, expertMode: boolean, fullName: string) {
+  return expertMode ? fullName : `Repository ${index + 1}`;
 }
 
 function buildRawDiffPreview(plan: GitHubChangePlan | null) {
@@ -143,7 +152,11 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       ? "Bereit"
       : "Noch nicht gestartet";
   const approvalLabel = proposalPlan ? "Wartet auf dich" : "Nicht erforderlich";
-  const selectedRepoLabel = selectedRepo?.fullName ?? "Noch kein GitHub-Repo ausgewählt";
+  const selectedRepoLabel = selectedRepo
+    ? props.expertMode
+      ? selectedRepo.fullName
+      : "Repository gewählt"
+    : "Noch kein Repository gewählt";
   const rawDiffPreview = props.expertMode ? buildRawDiffPreview(proposalPlan) : null;
   const currentRequestId = requestId;
 
@@ -154,15 +167,16 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       accessLabel,
       analysisLabel,
       approvalLabel,
-      requestId: currentRequestId,
-      planId: proposalPlan?.planId ?? null,
-      branchName: proposalPlan?.branchName ?? null,
-      apiStatus: props.backendHealthy === false ? "Nicht verbunden" : "Backend-Routen aktiv",
-      sseEvents: eventTrail,
-      rawDiffPreview,
-      selectedRepoSlug: selectedRepo?.fullName ?? null,
-      safetyTip:
-        "Solange 'Nur Lesen' aktiv ist, kann die App keine Dateien ändern oder Commits erstellen.",
+      safetyText: "Die App kann Informationen ansehen, aber nichts verändern.",
+      expertDetails: {
+        requestId: currentRequestId,
+        planId: proposalPlan?.planId ?? null,
+        branchName: proposalPlan?.branchName ?? null,
+        apiStatus: props.backendHealthy === false ? "Nicht verbunden" : "Backend-Routen aktiv",
+        sseEvents: eventTrail,
+        rawDiffPreview,
+        selectedRepoSlug: selectedRepo?.fullName ?? null,
+      },
     });
   }, [
     accessLabel,
@@ -178,6 +192,26 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     selectedRepo,
     selectedRepoLabel,
   ]);
+
+  useEffect(() => {
+    if (props.onReviewItemsChange) {
+      props.onReviewItemsChange(
+        proposalPlan
+          ? [
+              {
+                id: proposalPlan.planId,
+                source: "github",
+                title: proposalPlan.summary,
+                summary: proposalPlan.rationale,
+                status: proposalPlan.stale ? "stale" : "pending_review",
+                stale: proposalPlan.stale,
+                sourceLabel: "GitHub Workspace",
+              },
+            ]
+          : [],
+      );
+    }
+  }, [proposalPlan, props.onReviewItemsChange]);
 
   function resetReviewState() {
     setAnalysisBundle(null);
@@ -284,22 +318,22 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
   const proposalFiles = proposalPlan?.diff ?? [];
   const proposalReady = Boolean(proposalPlan);
   const nextStepTitle = !hasSelection
-    ? "Nächster Schritt: Wähle ein GitHub-Repo aus."
+    ? "Nächster Schritt: Repository wählen."
     : proposalPlan
       ? "Nächster Schritt: Vorschlag prüfen."
       : "Nächster Schritt: Analyse starten.";
   const nextStepDescription = !hasSelection
     ? "Die KI kann danach Dateien lesen, den Projektstand verstehen und einen sicheren Analyseplan vorbereiten."
     : proposalPlan
-      ? "Änderungen werden erst nach deiner Freigabe vorbereitet oder ausgeführt."
-      : "Die Analyse ist nur lesend. Es werden keine Dateien geändert.";
+      ? "Nur nach Freigabe."
+      : "Keine Änderungen.";
 
   return (
     <section className="workspace-panel github-workspace" data-testid="github-workspace">
       <section className="workspace-hero github-hero">
         <div>
           <p className={`status-pill ${hasSelection ? "status-ready" : "status-partial"}`}>
-            {hasSelection ? "Nur Lesen aktiv" : "GitHub bereit"}
+            {hasSelection ? "Nur Lesen aktiv" : "Repository wählen"}
           </p>
           <h1>GitHub Workspace</h1>
           <p className="hero-copy">
@@ -319,9 +353,9 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             <option value="">
               {reposLoading ? "Lade erlaubte Repos…" : "Repo auswählen"}
             </option>
-            {repos.map((repo) => (
+            {repos.map((repo, index) => (
               <option key={repo.fullName} value={repo.fullName}>
-                {repo.fullName}
+                {friendlyRepoLabel(index, props.expertMode, repo.fullName)}
               </option>
             ))}
           </select>
@@ -331,14 +365,14 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
               <div className="github-repo-card-header">
                 <div>
                   <span>Verbundenes Repo</span>
-                  <strong>{selectedRepo.fullName}</strong>
+                  <strong>{props.expertMode ? selectedRepo.fullName : "Repository gewählt"}</strong>
                 </div>
                 <span className="status-pill status-ready">{accessLabel}</span>
               </div>
               <div className="github-repo-meta">
                 <span>{formatRepoVisibility(selectedRepo.isPrivate)}</span>
                 <span>•</span>
-                <span>Hauptzweig: {selectedRepo.defaultBranch}</span>
+                <span>{props.expertMode ? `Hauptzweig: ${selectedRepo.defaultBranch}` : "Nur Lesestatus"}</span>
                 <span>•</span>
                 <span>Status: {formatRepoStatus(selectedRepo.status)}</span>
               </div>
@@ -353,8 +387,8 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
 
       <div className="github-safety-strip">
         <span className="status-pill status-ready">Nur Lesen aktiv</span>
-        <p>Die KI kann dein Repo ansehen, aber keine Dateien verändern.</p>
-        <span className="status-pill status-partial">Änderungen passieren erst nach deiner Freigabe.</span>
+        <p>Keine Änderungen. Nur nach Freigabe.</p>
+        <span className="status-pill status-partial">Nur nach Freigabe</span>
       </div>
 
       <article className={`github-next-step ${hasSelection ? "github-next-step-ready" : "github-next-step-empty"}`}>
@@ -374,14 +408,14 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
         <article className="empty-state-card">
           <div className="empty-state-card-copy">
             <p className="info-label">GitHub Workspace</p>
-            <h2>Noch kein GitHub-Repo ausgewählt</h2>
+            <h2>Noch kein Repository gewählt</h2>
             <p>
-              Wähle ein erlaubtes Repo aus. Danach kann die KI Dateien lesen und einen sicheren Analyseplan erstellen.
+              Wähle ein Repository aus. Danach kann die KI Dateien lesen und einen sicheren Analyseplan erstellen.
             </p>
           </div>
 
           <ol className="guided-steps">
-            <li>Repo auswählen</li>
+            <li>Repository wählen</li>
             <li>Analyse starten</li>
             <li>Vorschlag prüfen</li>
             <li>Erst nach Freigabe ändern</li>
@@ -395,7 +429,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             >
               Repo auswählen
             </button>
-            <span className="muted-copy">Nur erlaubte Repos werden angezeigt</span>
+            <span className="muted-copy">Nur erlaubte Repositories werden angezeigt</span>
           </div>
         </article>
       ) : (
@@ -420,7 +454,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                 >
                   {analysisLoading ? "Analyse läuft…" : "Analyse starten"}
                 </button>
-                <span className="muted-copy">Keine Änderungen am Repo</span>
+                <span className="muted-copy">Keine Änderungen</span>
               </div>
             </article>
 
@@ -443,7 +477,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                 >
                   {proposalLoading ? "Vorschlag entsteht…" : "Vorschlag erstellen"}
                 </button>
-                <span className="muted-copy">Wird nicht automatisch ausgeführt</span>
+                <span className="muted-copy">Nur nach Freigabe</span>
               </div>
             </article>
           </div>
@@ -549,44 +583,25 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             )}
           </article>
 
-          {props.expertMode ? (
-            <details className="github-expert-details" open>
-              <summary>Technische Details</summary>
-              <div className="github-expert-grid">
-                <div>
-                  <span>Erlaubtes Repo</span>
-                  <strong>{selectedRepo?.fullName ?? "n/a"}</strong>
-                </div>
-                <div>
-                  <span>Anfrage-ID</span>
-                  <strong>{requestId ?? "n/a"}</strong>
-                </div>
-                <div>
-                  <span>Plan-ID</span>
-                  <strong>{proposalPlan?.planId ?? "n/a"}</strong>
-                </div>
-                <div>
-                  <span>Branch</span>
-                  <strong>{proposalPlan?.branchName ?? "n/a"}</strong>
-                </div>
-                <div>
-                  <span>GitHub API Status</span>
-                  <strong>{props.backendHealthy === false ? "Nicht verbunden" : "Backend-Route aktiv"}</strong>
-                </div>
-                <div>
-                  <span>Laufzeit-Ereignisse</span>
-                  <strong>{eventTrail.length > 0 ? eventTrail.join(" · ") : "Nicht relevant"}</strong>
-                </div>
-              </div>
-              {rawDiffPreview ? (
-                <pre className="github-diff-preview">{rawDiffPreview}</pre>
-              ) : (
-                <p className="muted-copy">
-                  Raw diff preview erscheint erst nach einem vorbereiteten Vorschlag.
-                </p>
-              )}
-            </details>
-          ) : null}
+          <ExpertDetails
+            expertMode={props.expertMode}
+            rows={[
+              { label: "Erlaubtes Repo", value: selectedRepo?.fullName ?? "n/a" },
+              { label: "Anfrage-ID", value: requestId ?? "n/a" },
+              { label: "Plan-ID", value: proposalPlan?.planId ?? "n/a" },
+              { label: "Branch", value: proposalPlan?.branchName ?? "n/a" },
+              { label: "GitHub API Status", value: props.backendHealthy === false ? "Nicht verbunden" : "Backend-Route aktiv" },
+              { label: "Laufzeit-Ereignisse", value: eventTrail.length > 0 ? eventTrail.join(" · ") : "Nicht relevant" },
+            ]}
+          >
+            {rawDiffPreview ? (
+              <pre className="github-diff-preview">{rawDiffPreview}</pre>
+            ) : (
+              <p className="muted-copy">
+                Diff erscheint erst nach einem vorbereiteten Vorschlag.
+              </p>
+            )}
+          </ExpertDetails>
         </>
       )}
     </section>

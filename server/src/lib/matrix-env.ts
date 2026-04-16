@@ -5,6 +5,9 @@ const MatrixEnvSchema = z.object({
   MATRIX_REQUIRED: z.string().trim().default("false"),
   MATRIX_BASE_URL: z.string().trim().default(""),
   MATRIX_ACCESS_TOKEN: z.string().trim().default(""),
+  MATRIX_REFRESH_TOKEN: z.string().trim().default(""),
+  MATRIX_CLIENT_ID: z.string().trim().default(""),
+  MATRIX_TOKEN_EXPIRES_AT: z.string().trim().default(""),
   MATRIX_EXPECTED_USER_ID: z.string().trim().default(""),
   MATRIX_REQUEST_TIMEOUT_MS: z.string().trim().default("5000")
 });
@@ -15,6 +18,9 @@ export type MatrixConfig = {
   ready: boolean;
   baseUrl: string | null;
   accessToken: string | null;
+  refreshToken: string | null;
+  clientId: string | null;
+  tokenExpiresAt: string | null;
   expectedUserId: string | null;
   requestTimeoutMs: number;
   issues: string[];
@@ -76,12 +82,31 @@ function parseTimeout(input: string) {
   return value;
 }
 
+function normalizeTokenExpiry(input: string) {
+  const trimmed = input.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  const value = new Date(trimmed);
+
+  if (Number.isNaN(value.getTime())) {
+    return null;
+  }
+
+  return value.toISOString();
+}
+
 export function createMatrixConfig(source: NodeJS.ProcessEnv = process.env): MatrixConfig {
   const parsed = MatrixEnvSchema.parse(source);
   const enabledParse = parseBoolean(parsed.MATRIX_ENABLED);
   const requiredParse = parseBoolean(parsed.MATRIX_REQUIRED);
   const baseUrl = normalizeBaseUrl(parsed.MATRIX_BASE_URL);
   const accessToken = parsed.MATRIX_ACCESS_TOKEN.trim() ? parsed.MATRIX_ACCESS_TOKEN.trim() : null;
+  const refreshToken = parsed.MATRIX_REFRESH_TOKEN.trim() ? parsed.MATRIX_REFRESH_TOKEN.trim() : null;
+  const clientId = parsed.MATRIX_CLIENT_ID.trim() ? parsed.MATRIX_CLIENT_ID.trim() : null;
+  const tokenExpiresAt = normalizeTokenExpiry(parsed.MATRIX_TOKEN_EXPIRES_AT);
   const expectedUserId = normalizeUserId(parsed.MATRIX_EXPECTED_USER_ID);
   const requestTimeoutMs = parseTimeout(parsed.MATRIX_REQUEST_TIMEOUT_MS);
   const issues: string[] = [];
@@ -98,12 +123,20 @@ export function createMatrixConfig(source: NodeJS.ProcessEnv = process.env): Mat
     issues.push("MATRIX_BASE_URL is required when MATRIX_ENABLED=true");
   }
 
-  if (enabledParse.value && !accessToken) {
-    issues.push("MATRIX_ACCESS_TOKEN is required when MATRIX_ENABLED=true");
+  if (enabledParse.value && !accessToken && !refreshToken) {
+    issues.push("MATRIX_ACCESS_TOKEN or MATRIX_REFRESH_TOKEN is required when MATRIX_ENABLED=true");
+  }
+
+  if (enabledParse.value && refreshToken && !clientId) {
+    issues.push("MATRIX_CLIENT_ID is required when MATRIX_REFRESH_TOKEN is set");
   }
 
   if (parsed.MATRIX_EXPECTED_USER_ID.trim() && !expectedUserId) {
     issues.push("MATRIX_EXPECTED_USER_ID must be a Matrix user ID when set");
+  }
+
+  if (parsed.MATRIX_TOKEN_EXPIRES_AT.trim() && !tokenExpiresAt) {
+    issues.push("MATRIX_TOKEN_EXPIRES_AT must be an ISO timestamp when set");
   }
 
   if (requestTimeoutMs === null) {
@@ -124,6 +157,9 @@ export function createMatrixConfig(source: NodeJS.ProcessEnv = process.env): Mat
     ready,
     baseUrl: ready ? baseUrl : null,
     accessToken: ready ? accessToken : null,
+    refreshToken: ready ? refreshToken : null,
+    clientId: ready ? clientId : null,
+    tokenExpiresAt: ready ? tokenExpiresAt : null,
     expectedUserId: ready ? expectedUserId : null,
     requestTimeoutMs: requestTimeoutMs ?? 5000,
     issues
@@ -137,6 +173,9 @@ export function createDisabledMatrixConfig(): MatrixConfig {
     ready: false,
     baseUrl: null,
     accessToken: null,
+    refreshToken: null,
+    clientId: null,
+    tokenExpiresAt: null,
     expectedUserId: null,
     requestTimeoutMs: 5000,
     issues: []

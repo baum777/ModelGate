@@ -48,6 +48,9 @@ Optional environment variables:
 - `MATRIX_REQUIRED` - defaults to `false`; fails startup closed if Matrix is enabled but invalid
 - `MATRIX_BASE_URL` - absolute Matrix homeserver origin used by the server when Matrix is enabled
 - `MATRIX_ACCESS_TOKEN` - server-side Matrix access token
+- `MATRIX_REFRESH_TOKEN` - optional server-side Matrix refresh token used to rotate access tokens backend-side
+- `MATRIX_CLIENT_ID` - required when `MATRIX_REFRESH_TOKEN` is set; used for the refresh token grant
+- `MATRIX_TOKEN_EXPIRES_AT` - optional ISO timestamp for the current access token expiry; near-expiry tokens are refreshed backend-side before the next Matrix request
 - `MATRIX_EXPECTED_USER_ID` - optional Matrix user ID that must match `whoami` when set
 - `MATRIX_REQUEST_TIMEOUT_MS` - upstream request timeout in milliseconds, defaults to `5000`
 - `MATRIX_SMOKE_ROOM_ID` - dedicated live smoke room for the backend-owned topic-update flow
@@ -68,6 +71,10 @@ The backend owns request validation, provider translation, and streaming semanti
 
 Matrix read-only routes are disabled by default. When disabled, they return
 `matrix_not_configured` and leave the chat backend unaffected.
+
+When refresh credentials are present, Matrix requests stay backend-only and the
+server may rotate the access token on `M_UNKNOWN_TOKEN`/401 or when the current
+token is near its expiry. The browser never receives the token material.
 
 The router decision log is private, local, and gitignored. It is intended for
 operator audit only and is not a canonical source of truth for model selection.

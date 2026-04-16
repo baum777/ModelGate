@@ -199,3 +199,188 @@ test("matrix client fails closed for malformed, unauthorized, forbidden, and tim
     (error) => error instanceof MatrixClientError && error.code === "matrix_timeout"
   );
 });
+
+test("matrix client refreshes rotated credentials on unauthorized responses and retries once", async () => {
+  const requests: Array<{
+    path: string;
+    method: string;
+    authorization: string | null;
+  }> = [];
+
+  const config = createTestMatrixConfig({
+    accessToken: "stale-access-token",
+    refreshToken: "initial-refresh-token",
+    clientId: "client-id"
+  });
+
+  const client = createMatrixClient({
+    config,
+    fetchImpl: async (input, init) => {
+      const url = new URL(String(input));
+      const method = String(init?.method ?? "GET");
+      const headers = new Headers(init?.headers);
+      requests.push({
+        path: url.pathname,
+        method,
+        authorization: headers.get("Authorization")
+      });
+
+      if (url.pathname === "/oauth2/token" && method === "POST") {
+        const rawBody = init?.body;
+        const body = rawBody instanceof URLSearchParams
+          ? rawBody
+          : typeof rawBody === "string"
+            ? new URLSearchParams(rawBody)
+            : new URLSearchParams(String(rawBody ?? ""));
+
+        assert.equal(headers.get("Authorization"), null);
+        assert.equal(body.get("grant_type"), "refresh_token");
+        assert.equal(body.get("refresh_token"), "initial-refresh-token");
+        assert.equal(body.get("client_id"), "client-id");
+
+        return makeJsonResponse({
+          access_token: "fresh-access-token",
+          refresh_token: "rotated-refresh-token",
+          expires_in: 3600
+        });
+      }
+
+      if (url.pathname === "/_matrix/client/v3/account/whoami") {
+        if (headers.get("Authorization") === "Bearer stale-access-token") {
+          return new Response("", { status: 401 });
+        }
+
+        assert.equal(headers.get("Authorization"), "Bearer fresh-access-token");
+        return makeJsonResponse({
+          user_id: "@user:matrix.example",
+          device_id: "DEVICE"
+        });
+      }
+
+      throw new Error(`unexpected request: ${method} ${url.pathname}`);
+    }
+  });
+
+  const whoami = await client.whoami();
+
+  assert.deepEqual(whoami, {
+    ok: true,
+    userId: "@user:matrix.example",
+    deviceId: "DEVICE",
+    homeserver: "http://matrix.example"
+  });
+  assert.deepEqual(requests.map((request) => `${request.method} ${request.path}`), [
+    "GET /_matrix/client/v3/account/whoami",
+    "POST /oauth2/token",
+    "GET /_matrix/client/v3/account/whoami"
+  ]);
+  assert.equal(config.accessToken, "fresh-access-token");
+  assert.equal(config.refreshToken, "rotated-refresh-token");
+  assert.match(config.tokenExpiresAt ?? "", /^\d{4}-\d{2}-\d{2}T/);
+});
+
+test("matrix client proactively refreshes near-expiry credentials before the request", async () => {
+  const requests: Array<{
+    path: string;
+    method: string;
+    authorization: string | null;
+  }> = [];
+
+  const config = createTestMatrixConfig({
+    accessToken: "soon-expiring-access-token",
+    refreshToken: "initial-refresh-token",
+    clientId: "client-id",
+    tokenExpiresAt: new Date(Date.now() + 15_000).toISOString()
+  });
+
+  const client = createMatrixClient({
+    config,
+    fetchImpl: async (input, init) => {
+      const url = new URL(String(input));
+      const method = String(init?.method ?? "GET");
+      const headers = new Headers(init?.headers);
+      requests.push({
+        path: url.pathname,
+        method,
+        authorization: headers.get("Authorization")
+      });
+
+      if (url.pathname === "/oauth2/token" && method === "POST") {
+        const rawBody = init?.body;
+        const body = rawBody instanceof URLSearchParams
+          ? rawBody
+          : typeof rawBody === "string"
+            ? new URLSearchParams(rawBody)
+            : new URLSearchParams(String(rawBody ?? ""));
+
+        assert.equal(headers.get("Authorization"), null);
+        assert.equal(body.get("grant_type"), "refresh_token");
+        assert.equal(body.get("refresh_token"), "initial-refresh-token");
+        assert.equal(body.get("client_id"), "client-id");
+
+        return makeJsonResponse({
+          access_token: "fresh-access-token",
+          refresh_token: "rotated-refresh-token",
+          expires_in: 3600
+        });
+      }
+
+      if (url.pathname === "/_matrix/client/v3/account/whoami") {
+        assert.equal(headers.get("Authorization"), "Bearer fresh-access-token");
+        return makeJsonResponse({
+          user_id: "@user:matrix.example",
+          device_id: "DEVICE"
+        });
+      }
+
+      throw new Error(`unexpected request: ${method} ${url.pathname}`);
+    }
+  });
+
+  const whoami = await client.whoami();
+
+  assert.deepEqual(whoami, {
+    ok: true,
+    userId: "@user:matrix.example",
+    deviceId: "DEVICE",
+    homeserver: "http://matrix.example"
+  });
+  assert.deepEqual(requests.map((request) => `${request.method} ${request.path}`), [
+    "POST /oauth2/token",
+    "GET /_matrix/client/v3/account/whoami"
+  ]);
+  assert.equal(config.accessToken, "fresh-access-token");
+  assert.equal(config.refreshToken, "rotated-refresh-token");
+});
+
+test("matrix client fails closed when the refresh backend is unavailable", async () => {
+  const requests: Array<string> = [];
+  const client = createMatrixClient({
+    config: createTestMatrixConfig({
+      accessToken: "stale-access-token",
+      refreshToken: "refresh-token",
+      clientId: "client-id"
+    }),
+    fetchImpl: async (input, init) => {
+      const url = new URL(String(input));
+      const method = String(init?.method ?? "GET");
+      requests.push(`${method} ${url.pathname}`);
+
+      if (url.pathname === "/oauth2/token" && method === "POST") {
+        return new Response("", { status: 503 });
+      }
+
+      throw new Error(`unexpected request: ${method} ${url.pathname}`);
+    }
+  });
+
+  await assert.rejects(
+    client.whoami(),
+    (error) => error instanceof MatrixClientError && error.code === "matrix_unavailable"
+  );
+
+  assert.deepEqual(requests, [
+    "GET /_matrix/client/v3/account/whoami",
+    "POST /oauth2/token"
+  ]);
+});

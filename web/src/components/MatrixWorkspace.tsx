@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ExpertDetails } from "./ExpertDetails.js";
 import {
   MATRIX_API_BASE_URL,
   analyzeScope,
@@ -29,18 +30,44 @@ import {
   type MatrixWhoAmI,
   verifyRoomTopicUpdate,
 } from "../lib/matrix-api.js";
+import type { ReviewItem } from "./ReviewWorkspace.js";
 
 type MatrixMode = "explore" | "analyze" | "review";
 type WorkflowStatus = "loading" | "partial" | "ready" | "error";
 type LoadStatus = "idle" | "loading" | "ready" | "error";
 
+export type MatrixWorkspaceStatus = {
+  scopeLabel: string;
+  summaryLabel: string;
+  approvalLabel: string;
+  safetyText: string;
+  expertDetails: {
+    route: string;
+    requestId: string | null;
+    planId: string | null;
+    roomId: string | null;
+    spaceId: string | null;
+    eventId: string | null;
+    httpStatus: number | null;
+    latency: string | null;
+    backendRouteStatus: string;
+    runtimeEventTrail: string[];
+    sseLifecycle: string;
+    rawPayload: string | null;
+  };
+  reviewItems: ReviewItem[];
+};
+
 type MatrixWorkspaceProps = {
   restoredSession: boolean;
+  expertMode: boolean;
   onTelemetry: (
     kind: "info" | "warning" | "error",
     label: string,
     detail?: string,
   ) => void;
+  onContextChange: (status: MatrixWorkspaceStatus) => void;
+  onReviewItemsChange?: (items: ReviewItem[]) => void;
 };
 
 type PersistedMatrixState = {
@@ -210,6 +237,70 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     () => selectedSpaceIds.filter((value) => value.trim().length > 0),
     [selectedSpaceIds],
   );
+
+  useEffect(() => {
+    const reviewPlan = promotedPlan ?? topicPlan;
+    const stale = Boolean(promotedPlan?.stale || stalePlanDetected);
+    const reviewTitle = promotedPlan?.summary ?? "Matrix Vorschlag";
+    const reviewSummary = promotedPlan?.rationale ?? "Freigabe erforderlich.";
+
+    const expertDetails = {
+      route: "/api/matrix/*",
+      requestId: null,
+      planId: reviewPlan?.planId ?? null,
+      roomId: promotedPlan?.targetRoomId ?? topicPlan?.roomId ?? (topicRoomId || null),
+      spaceId: selectedSpaces[0] ?? null,
+      eventId: null,
+      httpStatus: null,
+      latency: null,
+      backendRouteStatus: status === "error" ? "Nicht verfügbar" : "Aktiv",
+      runtimeEventTrail: [
+        currentScope ? "Bereich gewählt" : "Noch kein Bereich gewählt",
+        scopeSummary ? "Zusammenfassung bereit" : "Zusammenfassung ausstehend",
+        reviewPlan ? "Vorschlag bereit" : "Kein Vorschlag",
+      ],
+      sseLifecycle: "n/a",
+      rawPayload: analysisResult ? JSON.stringify(analysisResult, null, 2) : null,
+    };
+
+    const reviewItems: ReviewItem[] = reviewPlan
+      ? [
+          {
+            id: reviewPlan.planId,
+            source: "matrix" as const,
+            title: reviewTitle,
+            summary: reviewSummary,
+            status: stale ? "stale" : "pending_review",
+            stale,
+            sourceLabel: "Matrix Workspace",
+          },
+        ]
+      : [];
+
+    props.onContextChange({
+      scopeLabel: currentScope ? "Bereich gewählt" : "Noch kein Bereich gewählt",
+      summaryLabel: scopeSummary ? "Zusammenfassung bereit" : "Noch keine Zusammenfassung",
+      approvalLabel: reviewPlan ? "Freigabe erforderlich" : "Nicht erforderlich",
+      safetyText: "Die App kann Informationen ansehen, aber nichts verändern.",
+      expertDetails,
+      reviewItems,
+    });
+
+    props.onReviewItemsChange?.(reviewItems);
+  }, [
+    analysisResult,
+    currentScope,
+    currentScope?.scopeId,
+    props.onContextChange,
+    props.onReviewItemsChange,
+    promotedPlan,
+    scopeSummary,
+    selectedSpaces,
+    stalePlanDetected,
+    status,
+    topicPlan,
+    topicRoomId,
+  ]);
 
   useEffect(() => {
     persistState({
@@ -516,7 +607,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     const topic = topicText.trim();
 
     if (!roomId) {
-      setTopicPrepareError("Enter a Matrix room ID.");
+      setTopicPrepareError("Wähle zuerst einen Bereich.");
       return;
     }
 
@@ -786,8 +877,8 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 type="text"
                 value={topicRoomId}
                 onChange={(event) => setTopicRoomId(event.target.value)}
-                placeholder="!room:matrix.org"
-                aria-label="Room ID"
+                placeholder={props.expertMode ? "!room:matrix.org" : "Bereich wählen"}
+                aria-label={props.expertMode ? "Room ID" : "Bereich"}
                 data-testid="matrix-topic-room-id"
               />
               <button
@@ -796,7 +887,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 onClick={() => setTopicRoomId(selectedRoomIds[0] ?? "")}
                 disabled={!selectedRoomIds[0]}
               >
-                Use selected room
+                {props.expertMode ? "Use selected room" : "Auswahl übernehmen"}
               </button>
             </div>
           </div>{" "}
@@ -823,7 +914,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               {topicPrepareLoading ? "Preparing…" : "Prepare topic update"}
             </button>
             <span className="muted-copy">
-              The browser only sends a room ID, proposed topic text, and approval intent.
+              {props.expertMode ? "The browser only sends a room ID, proposed topic text, and approval intent." : "Nur nach Freigabe."}
             </span>
           </div>{" "}
           {topicPrepareError ? (
@@ -857,10 +948,12 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 </div>
               </div>
               <div className="detail-grid">
-                <div>
-                  <span>Room ID</span>
-                  <strong>{topicPlan.roomId}</strong>
-                </div>
+                {props.expertMode ? (
+                  <div>
+                    <span>Room ID</span>
+                    <strong>{topicPlan.roomId}</strong>
+                  </div>
+                ) : null}
                 <div>
                   <span>Status</span>
                   <strong>{topicPlan.status}</strong>
@@ -902,7 +995,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                     topicPlan.status !== "pending_review"
                   }
                 />
-                <span>I approve backend execution of this topic update.</span>
+                <span>Ich bestätige die Freigabe für diese Änderung.</span>
               </label>
               <div className="action-row">
                 <button
@@ -1003,8 +1096,10 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               ) : null}
             </div>
           ) : (
-            <p className="empty-state">
-              Enter a room ID and proposed topic, then prepare a backend-owned review plan.
+              <p className="empty-state">
+              {props.expertMode
+                ? "Enter a room ID and proposed topic, then prepare a backend-owned review plan."
+                : "Bereich wählen, dann Review vorbereiten."}
             </p>
           )}{" "}
         </section>{" "}
@@ -1086,7 +1181,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                   type="text"
                   value={spaceInput}
                   onChange={(event) => setSpaceInput(event.target.value)}
-                  placeholder="Add a space ID"
+                  placeholder={props.expertMode ? "Add a space ID" : "Bereich ergänzen"}
                 />{" "}
                 <button
                   type="button"
@@ -1181,7 +1276,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               {scopeSummary ? (
                 <div className="scope-summary">
                   <div className="scope-summary-meta">
-                    <span>Snapshot: {scopeSummary.snapshotId}</span>
+                    {props.expertMode ? <span>Snapshot: {scopeSummary.snapshotId}</span> : null}
                     <span>
                       Generated: {formatDate(scopeSummary.generatedAt)}
                     </span>
@@ -1232,7 +1327,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 <div className="scope-summary">
                   {" "}
                   <div className="scope-summary-meta">
-                    <span>Space ID: {spaceHierarchySpace}</span>
+                    {props.expertMode ? <span>Space ID: {spaceHierarchySpace}</span> : <span>Bereich aktiv</span>}
                   </div>{" "}
                   {spaceHierarchyLoading ? (
                     <p className="muted-copy">Loading hierarchy…</p>
@@ -1266,7 +1361,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 </div>
               ) : (
                 <p className="empty-state">
-                  Add or preview a space ID to inspect hierarchy.
+                  {props.expertMode ? "Add or preview a space ID to inspect hierarchy." : "Bereich wählen, um die Übersicht zu laden."}
                 </p>
               )}{" "}
             </div>{" "}
@@ -1318,7 +1413,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                     {analysisResult.response.content}
                   </p>
                   <div className="scope-summary-meta">
-                    <span>Snapshot: {analysisResult.snapshotId}</span>
+                    {props.expertMode ? <span>Snapshot: {analysisResult.snapshotId}</span> : null}
                   </div>
                 </div>
                 <div className="result-block">
@@ -1446,54 +1541,60 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                   </div>{" "}
                 </div>{" "}
                 <p>{promotedPlan.rationale}</p>{" "}
-                <div className="delta-grid">
-                  {" "}
-                  <div>
-                    {" "}
-                    <p className="info-label">Before</p>{" "}
-                    <pre>
-                      {JSON.stringify(
-                        promotedPlan.payloadDelta.before,
-                        null,
-                        2,
-                      )}
-                    </pre>{" "}
-                  </div>{" "}
-                  <div>
-                    {" "}
-                    <p className="info-label">After</p>{" "}
-                    <pre>
-                      {JSON.stringify(promotedPlan.payloadDelta.after, null, 2)}
-                    </pre>{" "}
-                  </div>{" "}
-                </div>{" "}
-                <div className="detail-grid">
-                  {" "}
-                  <div>
-                    <span>Plan ID</span>
-                    <strong>{promotedPlan.planId}</strong>
-                  </div>{" "}
-                  <div>
-                    <span>Scope ID</span>
-                    <strong>{promotedPlan.scopeId}</strong>
-                  </div>{" "}
-                  <div>
-                    <span>Snapshot ID</span>
-                    <strong>{promotedPlan.snapshotId}</strong>
-                  </div>{" "}
-                  <div>
-                    <span>Target room</span>
-                    <strong>{promotedPlan.targetRoomId}</strong>
-                  </div>{" "}
-                  <div>
-                    <span>Preflight</span>
-                    <strong>{promotedPlan.preflightStatus}</strong>
-                  </div>{" "}
-                  <div>
-                    <span>Required approval</span>
-                    <strong>{String(promotedPlan.requiredApproval)}</strong>
-                  </div>{" "}
-                </div>{" "}
+                {props.expertMode ? (
+                  <>
+                    <div className="delta-grid">
+                      {" "}
+                      <div>
+                        {" "}
+                        <p className="info-label">Before</p>{" "}
+                        <pre>
+                          {JSON.stringify(
+                            promotedPlan.payloadDelta.before,
+                            null,
+                            2,
+                          )}
+                        </pre>{" "}
+                      </div>{" "}
+                      <div>
+                        {" "}
+                        <p className="info-label">After</p>{" "}
+                        <pre>
+                          {JSON.stringify(promotedPlan.payloadDelta.after, null, 2)}
+                        </pre>{" "}
+                      </div>{" "}
+                    </div>{" "}
+                    <div className="detail-grid">
+                      {" "}
+                      <div>
+                        <span>Plan ID</span>
+                        <strong>{promotedPlan.planId}</strong>
+                      </div>{" "}
+                      <div>
+                        <span>Scope ID</span>
+                        <strong>{promotedPlan.scopeId}</strong>
+                      </div>{" "}
+                      <div>
+                        <span>Snapshot ID</span>
+                        <strong>{promotedPlan.snapshotId}</strong>
+                      </div>{" "}
+                      <div>
+                        <span>Target room</span>
+                        <strong>{promotedPlan.targetRoomId}</strong>
+                      </div>{" "}
+                      <div>
+                        <span>Preflight</span>
+                        <strong>{promotedPlan.preflightStatus}</strong>
+                      </div>{" "}
+                      <div>
+                        <span>Required approval</span>
+                        <strong>{String(promotedPlan.requiredApproval)}</strong>
+                      </div>{" "}
+                    </div>{" "}
+                  </>
+                ) : (
+                  <p className="muted-copy">Vorschlag bereit. Technische Details im Expert Mode.</p>
+                )}{" "}
                 <div className="list-block">
                   {" "}
                   <p className="info-label">Expected permissions</p>{" "}
@@ -1605,37 +1706,41 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             </header>{" "}
             {executionResult ? (
               <div className="verification-card">
-                <div className="detail-grid">
-                  <div>
-                    <span>Execution ID</span>
-                    <strong>{executionResult.executionId}</strong>
+                {props.expertMode ? (
+                  <div className="detail-grid">
+                    <div>
+                      <span>Execution ID</span>
+                      <strong>{executionResult.executionId}</strong>
+                    </div>
+                    <div>
+                      <span>Plan ID</span>
+                      <strong>{executionResult.planId}</strong>
+                    </div>
+                    <div>
+                      <span>Status</span>
+                      <strong>{executionResult.status}</strong>
+                    </div>
+                    <div>
+                      <span>Verified</span>
+                      <strong>{String(executionResult.verified)}</strong>
+                    </div>
                   </div>
-                  <div>
-                    <span>Plan ID</span>
-                    <strong>{executionResult.planId}</strong>
-                  </div>
-                  <div>
-                    <span>Status</span>
-                    <strong>{executionResult.status}</strong>
-                  </div>
-                  <div>
-                    <span>Verified</span>
-                    <strong>{String(executionResult.verified)}</strong>
-                  </div>
-                </div>
+                ) : null}
                 <p className="analysis-text">
                   {executionResult.verificationSummary}
                 </p>
-                <div className="delta-grid">
-                  <div>
-                    <p className="info-label">Before</p>
-                    <pre>{JSON.stringify(executionResult.before, null, 2)}</pre>
+                {props.expertMode ? (
+                  <div className="delta-grid">
+                    <div>
+                      <p className="info-label">Before</p>
+                      <pre>{JSON.stringify(executionResult.before, null, 2)}</pre>
+                    </div>
+                    <div>
+                      <p className="info-label">After</p>
+                      <pre>{JSON.stringify(executionResult.after, null, 2)}</pre>
+                    </div>
                   </div>
-                  <div>
-                    <p className="info-label">After</p>
-                    <pre>{JSON.stringify(executionResult.after, null, 2)}</pre>
-                  </div>
-                </div>
+                ) : null}
               </div>
             ) : (
               <p className="empty-state">
@@ -1687,32 +1792,36 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             {provenance ? (
               <div className="provenance-card">
                 <p className="info-label">Provenance</p>
-                <div className="detail-grid">
-                  <div>
-                    <span>Room ID</span>
-                    <strong>{provenance.roomId}</strong>
+                {props.expertMode ? (
+                  <div className="detail-grid">
+                    <div>
+                      <span>Room ID</span>
+                      <strong>{provenance.roomId}</strong>
+                    </div>
+                    <div>
+                      <span>Snapshot</span>
+                      <strong>{text(provenance.snapshotId)}</strong>
+                    </div>
+                    <div>
+                      <span>State event</span>
+                      <strong>{text(provenance.stateEventId)}</strong>
+                    </div>
+                    <div>
+                      <span>Origin server</span>
+                      <strong>{provenance.originServer}</strong>
+                    </div>
+                    <div>
+                      <span>Auth chain index</span>
+                      <strong>{provenance.authChainIndex}</strong>
+                    </div>
+                    <div>
+                      <span>Integrity</span>
+                      <strong>{provenance.integrityNotice}</strong>
+                    </div>
                   </div>
-                  <div>
-                    <span>Snapshot</span>
-                    <strong>{text(provenance.snapshotId)}</strong>
-                  </div>
-                  <div>
-                    <span>State event</span>
-                    <strong>{text(provenance.stateEventId)}</strong>
-                  </div>
-                  <div>
-                    <span>Origin server</span>
-                    <strong>{provenance.originServer}</strong>
-                  </div>
-                  <div>
-                    <span>Auth chain index</span>
-                    <strong>{provenance.authChainIndex}</strong>
-                  </div>
-                  <div>
-                    <span>Integrity</span>
-                    <strong>{provenance.integrityNotice}</strong>
-                  </div>
-                </div>
+                ) : (
+                  <p className="muted-copy">{provenance.integrityNotice}</p>
+                )}
                 <div className="list-block">
                   <p className="info-label">Signatures</p>
                   <div className="chip-list">

@@ -465,6 +465,23 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
   font-size: 0.92rem;
 }
 
+.global-safety-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 16px 18px;
+  border: 1px solid rgba(103, 232, 201, 0.14);
+  border-radius: 22px;
+  background: rgba(103, 232, 201, 0.06);
+  box-shadow: var(--shadow);
+}
+
+.global-safety-bar p {
+  margin: 0;
+}
+
 .status-restored {
   color: var(--warning);
 }
@@ -504,6 +521,100 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
   border: 1px solid var(--line);
   background: linear-gradient(180deg, var(--panel), var(--panel-strong));
   box-shadow: var(--shadow);
+}
+
+.workspace-context {
+  position: sticky;
+  top: 20px;
+  align-self: start;
+}
+
+.status-panel-card {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: linear-gradient(180deg, var(--panel), var(--panel-strong));
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.status-panel-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.status-panel-grid div,
+.expert-details-grid div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.status-panel-grid span,
+.expert-details-grid span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.status-panel-grid strong,
+.expert-details-grid strong {
+  font-size: 0.96rem;
+}
+
+.expert-details {
+  display: grid;
+  gap: 12px;
+  padding: 14px 0 0;
+}
+
+.expert-details summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.expert-details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.expert-details .github-diff-preview,
+.expert-details pre {
+  margin-top: 2px;
+}
+
+.review-workspace {
+  display: grid;
+  gap: 20px;
+}
+
+.review-list {
+  display: grid;
+  gap: 14px;
+}
+
+.review-item-card {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.diagnostic-feed {
+  display: grid;
+  gap: 10px;
 }
 
 .telemetry-feed {
@@ -1125,12 +1236,19 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
   .telemetry-dock {
     position: static;
   }
+
+  .workspace-context {
+    position: static;
+  }
 }
 
 @media (max-width: 900px) {
   .github-action-grid,
   .github-plan-file-grid,
   .github-expert-grid,
+  .expert-details-grid,
+  .settings-grid,
+  .status-panel-grid,
   .detail-grid,
   .delta-grid,
   .input-row {
@@ -1139,6 +1257,7 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 
   .github-safety-strip,
   .mode-toggle,
+  .global-safety-bar,
   .telemetry-actions {
     width: 100%;
   }

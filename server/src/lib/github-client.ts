@@ -51,6 +51,7 @@ export type GitHubClient = {
     sha: string;
     treeSha: string;
   }>;
+  readRepositoryReference(owner: string, repo: string, ref: string): Promise<GitHubRepositoryReference>;
   readRepositoryTree(
     owner: string,
     repo: string,
@@ -69,6 +70,77 @@ export type GitHubClient = {
       path: string;
     }
   ): Promise<GitHubFileContent>;
+  createRepositoryTree(
+    owner: string,
+    repo: string,
+    options: {
+      baseTreeSha: string;
+      entries: Array<{
+        path: string;
+        mode: string;
+        content: string;
+      }>;
+    }
+  ): Promise<{
+    sha: string;
+  }>;
+  createRepositoryCommit(
+    owner: string,
+    repo: string,
+    options: {
+      message: string;
+      treeSha: string;
+      parentShas: string[];
+      author: {
+        name: string;
+        email: string;
+        date: string;
+      };
+      committer: {
+        name: string;
+        email: string;
+        date: string;
+      };
+    }
+  ): Promise<{
+    sha: string;
+    treeSha: string;
+  }>;
+  createRepositoryReference(
+    owner: string,
+    repo: string,
+    ref: string,
+    sha: string
+  ): Promise<GitHubRepositoryReference>;
+  updateRepositoryReference(
+    owner: string,
+    repo: string,
+    ref: string,
+    sha: string
+  ): Promise<GitHubRepositoryReference>;
+  listPullRequests(
+    owner: string,
+    repo: string,
+    options?: {
+      state?: "open" | "closed" | "all";
+      head?: string;
+      base?: string;
+      perPage?: number;
+      page?: number;
+    }
+  ): Promise<GitHubPullRequestSummary[]>;
+  createPullRequest(
+    owner: string,
+    repo: string,
+    options: {
+      title: string;
+      head: string;
+      base: string;
+      body?: string;
+      draft?: boolean;
+      maintainerCanModify?: boolean;
+    }
+  ): Promise<GitHubPullRequestSummary>;
 };
 
 type GitHubClientOptions = {
@@ -97,6 +169,63 @@ type GitHubTreeResponse = {
   sha?: unknown;
   tree?: unknown;
   truncated?: unknown;
+};
+
+type GitHubReferenceResponse = {
+  ref?: unknown;
+  node_id?: unknown;
+  url?: unknown;
+  object?: unknown;
+};
+
+type GitHubTreeCreateResponse = {
+  sha?: unknown;
+};
+
+type GitHubCommitCreateResponse = {
+  sha?: unknown;
+  tree?: unknown;
+};
+
+type GitHubPullRequestResponse = {
+  number?: unknown;
+  html_url?: unknown;
+  state?: unknown;
+  head?: unknown;
+  base?: unknown;
+  mergeable?: unknown;
+  draft?: unknown;
+  title?: unknown;
+  body?: unknown;
+  created_at?: unknown;
+  updated_at?: unknown;
+  merge_commit_sha?: unknown;
+  url?: unknown;
+};
+
+export type GitHubRepositoryReference = {
+  ref: string;
+  sha: string;
+  url: string | null;
+  objectType: string | null;
+};
+
+export type GitHubPullRequestSummary = {
+  number: number;
+  htmlUrl: string;
+  state: "open" | "closed";
+  headRef: string;
+  headSha: string;
+  baseRef: string;
+  baseSha: string;
+  mergeable: boolean | null;
+  draft: boolean;
+  title: string;
+  body: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  mergeCommitSha: string | null;
+  url: string | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -235,6 +364,8 @@ async function requestJson<T>(
   failureCodes: {
     notFoundCode?: GitHubErrorCode;
     forbiddenCode?: GitHubErrorCode;
+    conflictCode?: GitHubErrorCode;
+    unprocessableCode?: GitHubErrorCode;
   } = {}
 ): Promise<T> {
   if (!config.ready || !config.token) {
@@ -300,11 +431,15 @@ async function requestJson<T>(
     const retryAfterSeconds = parseRetryAfterSeconds(response.headers.get("retry-after"));
     const code = isRateLimitedResponse(response)
       ? "github_rate_limited"
-      : mapFailureCode(
-          response.status,
-          failureCodes.notFoundCode ?? "github_repo_not_found",
-          failureCodes.forbiddenCode ?? "github_forbidden"
-        );
+      : response.status === 409 && failureCodes.conflictCode
+        ? failureCodes.conflictCode
+        : response.status === 422 && failureCodes.unprocessableCode
+          ? failureCodes.unprocessableCode
+          : mapFailureCode(
+              response.status,
+              failureCodes.notFoundCode ?? "github_repo_not_found",
+              failureCodes.forbiddenCode ?? "github_forbidden"
+            );
 
     throw createGitHubClientError({
       code,
@@ -913,6 +1048,104 @@ function mapFileContentResponse(
   };
 }
 
+function mapRepositoryReferenceResponse(
+  payload: unknown,
+  operation: string,
+  pathName: string,
+  refLabel: string
+): GitHubRepositoryReference {
+  const record = requireRecord(payload, operation, pathName, "reference response");
+  const ref = requireStringField(record, "ref", operation, pathName, "reference response");
+
+  if (!isRecord(record.object)) {
+    throw createGitHubClientError({
+      code: "github_malformed_response",
+      status: 502,
+      operation,
+      path: pathName,
+      baseUrl: "unavailable",
+      message: `GitHub ${refLabel} response must include an object`
+    });
+  }
+
+  const sha = requireStringField(record.object, "sha", operation, pathName, "reference response");
+  const objectType = optionalStringField(record.object, "type");
+  const url = optionalStringField(record, "url");
+
+  return {
+    ref,
+    sha,
+    url,
+    objectType
+  };
+}
+
+function mapPullRequestResponse(
+  payload: unknown,
+  operation: string,
+  pathName: string
+): GitHubPullRequestSummary {
+  const record = requireRecord(payload, operation, pathName, "pull request response");
+  const number = requireNumberField(record, "number", operation, pathName, "pull request response");
+  const htmlUrl = requireStringField(record, "html_url", operation, pathName, "pull request response");
+  const state = requireStringField(record, "state", operation, pathName, "pull request response");
+  const title = requireStringField(record, "title", operation, pathName, "pull request response");
+  const body = optionalStringField(record, "body");
+  const mergeCommitSha = optionalStringField(record, "merge_commit_sha");
+  const url = optionalStringField(record, "url");
+  const createdAt = optionalStringField(record, "created_at");
+  const updatedAt = optionalStringField(record, "updated_at");
+  const draft = typeof record.draft === "boolean" ? record.draft : false;
+  const mergeable = record.mergeable === null || typeof record.mergeable === "boolean"
+    ? record.mergeable
+    : null;
+
+  if (!isRecord(record.head) || !isRecord(record.base)) {
+    throw createGitHubClientError({
+      code: "github_malformed_response",
+      status: 502,
+      operation,
+      path: pathName,
+      baseUrl: "unavailable",
+      message: "GitHub pull request response must include head and base"
+    });
+  }
+
+  const headRef = requireStringField(record.head, "ref", operation, pathName, "pull request response");
+  const headSha = requireStringField(record.head, "sha", operation, pathName, "pull request response");
+  const baseRef = requireStringField(record.base, "ref", operation, pathName, "pull request response");
+  const baseSha = requireStringField(record.base, "sha", operation, pathName, "pull request response");
+
+  if (state !== "open" && state !== "closed") {
+    throw createGitHubClientError({
+      code: "github_malformed_response",
+      status: 502,
+      operation,
+      path: pathName,
+      baseUrl: "unavailable",
+      message: "GitHub pull request state was invalid"
+    });
+  }
+
+  return {
+    number,
+    htmlUrl,
+    state,
+    headRef,
+    headSha,
+    baseRef,
+    baseSha,
+    mergeable,
+    draft,
+    title,
+    body,
+    createdAt,
+    updatedAt,
+    mergeCommitSha,
+    url
+  };
+}
+
 export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
   const fetchImpl = options.fetchImpl ?? fetch;
   const config = options.config;
@@ -1081,6 +1314,234 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         normalizedPath,
         ref,
         checkedAt
+      );
+    },
+
+    async readRepositoryReference(owner, repo, ref) {
+      const normalized = normalizeRepoInput(owner, repo);
+      const pathName = `/repos/${normalized.owner}/${normalized.repo}/git/ref/${encodeURIComponent(ref)}`;
+
+      return requestJson(
+        config,
+        "GitHub repository reference",
+        pathName,
+        undefined,
+        (payload) => mapRepositoryReferenceResponse(payload, "GitHub repository reference", pathName, "reference"),
+        fetchImpl,
+        {
+          notFoundCode: "github_repo_not_found"
+        }
+      );
+    },
+
+    async createRepositoryTree(owner, repo, options) {
+      const normalized = normalizeRepoInput(owner, repo);
+      const pathName = `/repos/${normalized.owner}/${normalized.repo}/git/trees`;
+
+      return requestJson(
+        config,
+        "GitHub repository tree creation",
+        pathName,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            base_tree: options.baseTreeSha,
+            tree: options.entries.map((entry) => ({
+              path: entry.path,
+              mode: entry.mode,
+              type: "blob",
+              content: entry.content
+            }))
+          })
+        },
+        (payload) => {
+          const record = requireRecord(payload, "GitHub repository tree creation", pathName, "tree creation response");
+          const sha = requireStringField(record, "sha", "GitHub repository tree creation", pathName, "tree creation response");
+
+          return {
+            sha
+          };
+        },
+        fetchImpl,
+        {
+          conflictCode: "github_branch_conflict",
+          unprocessableCode: "github_patch_invalid"
+        }
+      );
+    },
+
+    async createRepositoryCommit(owner, repo, options) {
+      const normalized = normalizeRepoInput(owner, repo);
+      const pathName = `/repos/${normalized.owner}/${normalized.repo}/git/commits`;
+
+      return requestJson(
+        config,
+        "GitHub repository commit creation",
+        pathName,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            message: options.message,
+            tree: options.treeSha,
+            parents: options.parentShas,
+            author: options.author,
+            committer: options.committer
+          })
+        },
+        (payload) => {
+          const record = requireRecord(payload, "GitHub repository commit creation", pathName, "commit creation response");
+          const sha = requireStringField(record, "sha", "GitHub repository commit creation", pathName, "commit creation response");
+
+          if (!isRecord(record.tree)) {
+            throw createGitHubClientError({
+              code: "github_malformed_response",
+              status: 502,
+              operation: "GitHub repository commit creation",
+              path: pathName,
+              baseUrl: "unavailable",
+              message: "GitHub commit creation response must include a tree"
+            });
+          }
+
+          const treeSha = requireStringField(record.tree, "sha", "GitHub repository commit creation", pathName, "commit creation response");
+
+          return {
+            sha,
+            treeSha
+          };
+        },
+        fetchImpl,
+        {
+          conflictCode: "github_branch_conflict",
+          unprocessableCode: "github_patch_invalid"
+        }
+      );
+    },
+
+    async createRepositoryReference(owner, repo, ref, sha) {
+      const normalized = normalizeRepoInput(owner, repo);
+      const refName = ref.trim().replace(/^\/+/, "");
+      const pathName = `/repos/${normalized.owner}/${normalized.repo}/git/refs`;
+
+      return requestJson(
+        config,
+        "GitHub repository reference creation",
+        pathName,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            ref: refName.startsWith("refs/") ? refName : `refs/${refName}`,
+            sha
+          })
+        },
+        (payload) => mapRepositoryReferenceResponse(payload, "GitHub repository reference creation", pathName, "reference creation"),
+        fetchImpl,
+        {
+          conflictCode: "github_branch_conflict",
+          unprocessableCode: "github_branch_conflict"
+        }
+      );
+    },
+
+    async updateRepositoryReference(owner, repo, ref, sha) {
+      const normalized = normalizeRepoInput(owner, repo);
+      const refName = ref.trim().replace(/^\/+/, "");
+      const pathName = `/repos/${normalized.owner}/${normalized.repo}/git/refs/${encodeURIComponent(refName)}`;
+
+      return requestJson(
+        config,
+        "GitHub repository reference update",
+        pathName,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            sha,
+            force: false
+          })
+        },
+        (payload) => mapRepositoryReferenceResponse(payload, "GitHub repository reference update", pathName, "reference update"),
+        fetchImpl,
+        {
+          conflictCode: "github_branch_conflict",
+          unprocessableCode: "github_branch_conflict"
+        }
+      );
+    },
+
+    async listPullRequests(owner, repo, options = {}) {
+      const normalized = normalizeRepoInput(owner, repo);
+      const params = new URLSearchParams();
+      params.set("state", options.state ?? "open");
+
+      if (options.head) {
+        params.set("head", options.head);
+      }
+
+      if (options.base) {
+        params.set("base", options.base);
+      }
+
+      if (options.perPage) {
+        params.set("per_page", String(options.perPage));
+      }
+
+      if (options.page) {
+        params.set("page", String(options.page));
+      }
+
+      const pathName = `/repos/${normalized.owner}/${normalized.repo}/pulls${params.toString().length > 0 ? `?${params.toString()}` : ""}`;
+
+      return requestJson(
+        config,
+        "GitHub pull request list",
+        pathName,
+        undefined,
+        (payload) => {
+          if (!Array.isArray(payload)) {
+            throw createGitHubClientError({
+              code: "github_malformed_response",
+              status: 502,
+              operation: "GitHub pull request list",
+              path: pathName,
+              baseUrl: "unavailable",
+              message: "GitHub pull request list must be an array"
+            });
+          }
+
+          return payload.map((entry) => mapPullRequestResponse(entry, "GitHub pull request list", pathName));
+        },
+        fetchImpl,
+        {
+          notFoundCode: "github_repo_not_found"
+        }
+      );
+    },
+
+    async createPullRequest(owner, repo, options) {
+      const normalized = normalizeRepoInput(owner, repo);
+      const pathName = `/repos/${normalized.owner}/${normalized.repo}/pulls`;
+
+      return requestJson(
+        config,
+        "GitHub pull request creation",
+        pathName,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            title: options.title,
+            head: options.head,
+            base: options.base,
+            body: options.body,
+            draft: options.draft ?? false,
+            maintainer_can_modify: options.maintainerCanModify ?? true
+          })
+        },
+        (payload) => mapPullRequestResponse(payload, "GitHub pull request creation", pathName),
+        fetchImpl,
+        {
+          conflictCode: "github_pr_create_failed",
+          unprocessableCode: "github_pr_create_failed"
+        }
       );
     }
   };

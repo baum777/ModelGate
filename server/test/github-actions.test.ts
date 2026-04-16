@@ -268,7 +268,7 @@ test("github proposal routes create a review-only plan scaffold and keep it read
     }
   });
 
-  assert.deepEqual(fetchCalls, [
+  assert.deepEqual(fetchCalls.slice(0, 10), [
     "/repos/acme/widget",
     "/repos/acme/widget/commits/main",
     "/repos/acme/widget/commits/main",

@@ -23,15 +23,15 @@ function createId() {
 function statusLabel(state: ConnectionState) {
   switch (state) {
     case "submitting":
-      return "Submitting";
+      return "Senden";
     case "streaming":
-      return "Streaming";
+      return "Antwort läuft";
     case "completed":
-      return "Completed";
+      return "Fertig";
     case "error":
-      return "Error";
+      return "Fehler";
     default:
-      return "Idle";
+      return "Bereit";
   }
 }
 
@@ -213,7 +213,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           </p>
           <h1>Chat</h1>
           <p className="hero-copy">
-            SSE streaming with one mutable assistant draft, backend-owned alias selection, and visible malformed-stream handling.
+            Antworten werden im Backend erzeugt. Der Browser zeigt nur den Verlauf.
           </p>
         </div>
 
@@ -257,7 +257,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               Jump to latest
             </button>
             <button type="button" className="ghost-button" onClick={stopStreaming} disabled={!streamActive}>
-              Stop
+              Stopp
             </button>
           </div>
         </header>
@@ -314,7 +314,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
 
           <div className="composer-footer">
             <p className="hint">
-              The browser only submits intent. The backend owns provider calls, framing, and final truth.
+              Nur die Anfrage wird gesendet. Das Backend hält die Ausführung.
             </p>
             <button
               type="submit"

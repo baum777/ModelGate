@@ -58,6 +58,9 @@ export function createTestMatrixConfig(overrides: Partial<MatrixConfig> = {}): M
     ready: overrides.ready ?? true,
     baseUrl: overrides.baseUrl ?? "http://matrix.example",
     accessToken: overrides.accessToken ?? "test-matrix-token",
+    refreshToken: overrides.refreshToken ?? null,
+    clientId: overrides.clientId ?? null,
+    tokenExpiresAt: overrides.tokenExpiresAt ?? null,
     expectedUserId: overrides.expectedUserId ?? null,
     requestTimeoutMs: overrides.requestTimeoutMs ?? 5000,
     issues: overrides.issues ?? []

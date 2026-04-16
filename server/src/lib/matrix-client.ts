@@ -140,6 +140,173 @@ async function readErrorStatus(response: Response) {
   }
 }
 
+type MatrixTokenRefreshResponse = {
+  access_token: string;
+  refresh_token?: string | null;
+  expires_in?: number | null;
+  token_type?: string | null;
+  scope?: string | null;
+};
+
+const refreshLocks = new WeakMap<MatrixConfig, Promise<void>>();
+
+function canRefreshMatrixCredentials(config: MatrixConfig) {
+  return Boolean(config.baseUrl && config.refreshToken && config.clientId);
+}
+
+function isTokenExpiringSoon(config: MatrixConfig, thresholdMs = 60_000) {
+  if (!config.tokenExpiresAt) {
+    return false;
+  }
+
+  const expiresAt = new Date(config.tokenExpiresAt).getTime();
+
+  if (!Number.isFinite(expiresAt)) {
+    return false;
+  }
+
+  return expiresAt - Date.now() <= thresholdMs;
+}
+
+function matrixTokenRefreshUnavailable(operation: string, path: string, baseUrl: string) {
+  return createMatrixClientError({
+    code: "matrix_not_configured",
+    status: 503,
+    operation,
+    path,
+    baseUrl,
+    message: "Matrix backend is not configured"
+  });
+}
+
+async function refreshMatrixCredentials(
+  config: MatrixConfig,
+  fetchImpl: typeof fetch,
+  operation: string,
+  path: string
+) {
+  if (!canRefreshMatrixCredentials(config)) {
+    throw matrixTokenRefreshUnavailable(operation, path, config.baseUrl ?? "unconfigured");
+  }
+
+  const inFlight = refreshLocks.get(config);
+
+  if (inFlight) {
+    await inFlight;
+    return;
+  }
+
+  const refreshPromise = (async () => {
+    const refreshPath = "/oauth2/token";
+    const headers = new Headers({
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded"
+    });
+    const body = new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: config.refreshToken ?? "",
+      client_id: config.clientId ?? ""
+    });
+
+    let response: Response;
+
+    try {
+      response = await fetchImpl(`${normalizeBaseUrl(config.baseUrl ?? "")}${refreshPath}`, {
+        method: "POST",
+        headers,
+        body
+      });
+    } catch {
+      throw createMatrixClientError({
+        code: "matrix_unavailable",
+        status: 503,
+        operation,
+        path: refreshPath,
+        baseUrl: normalizeBaseUrl(config.baseUrl ?? ""),
+        message: "Matrix backend is unavailable"
+      });
+    }
+
+    if (!response.ok) {
+      throw createMatrixClientError({
+        code: response.status === 408 || response.status === 504
+          ? "matrix_timeout"
+          : response.status >= 500
+            ? "matrix_unavailable"
+            : "matrix_unauthorized",
+        status: response.status === 408 || response.status === 504
+          ? 504
+          : response.status >= 500
+            ? 503
+            : 401,
+        operation,
+        path: refreshPath,
+        baseUrl: normalizeBaseUrl(config.baseUrl ?? ""),
+        message: response.status === 408 || response.status === 504
+          ? "Matrix backend request timed out"
+          : response.status >= 500
+            ? "Matrix backend is unavailable"
+            : "Matrix credentials were rejected"
+      });
+    }
+
+    const payload = await response.json() as Partial<MatrixTokenRefreshResponse>;
+
+    if (typeof payload.access_token !== "string" || payload.access_token.trim().length === 0) {
+      throw createMatrixClientError({
+        code: "matrix_malformed_response",
+        status: 502,
+        operation,
+        path: refreshPath,
+        baseUrl: normalizeBaseUrl(config.baseUrl ?? ""),
+        message: "Matrix backend returned an invalid response"
+      });
+    }
+
+    config.accessToken = payload.access_token.trim();
+
+    if (typeof payload.refresh_token === "string" && payload.refresh_token.trim().length > 0) {
+      config.refreshToken = payload.refresh_token.trim();
+    }
+
+    if (typeof payload.expires_in === "number" && Number.isFinite(payload.expires_in)) {
+      config.tokenExpiresAt = new Date(Date.now() + payload.expires_in * 1000).toISOString();
+    }
+  })().finally(() => {
+    refreshLocks.delete(config);
+  });
+
+  refreshLocks.set(config, refreshPromise);
+  await refreshPromise;
+}
+
+async function resolveMatrixAccessToken(
+  config: MatrixConfig,
+  fetchImpl: typeof fetch,
+  operation: string,
+  path: string
+) {
+  if (!config.ready || !config.baseUrl) {
+    throw matrixTokenRefreshUnavailable(operation, path, config.baseUrl ?? "unconfigured");
+  }
+
+  if (!config.accessToken) {
+    if (canRefreshMatrixCredentials(config)) {
+      await refreshMatrixCredentials(config, fetchImpl, operation, path);
+    } else {
+      throw matrixTokenRefreshUnavailable(operation, path, normalizeBaseUrl(config.baseUrl));
+    }
+  } else if (isTokenExpiringSoon(config) && canRefreshMatrixCredentials(config)) {
+    await refreshMatrixCredentials(config, fetchImpl, operation, path);
+  }
+
+  if (!config.accessToken) {
+    throw matrixTokenRefreshUnavailable(operation, path, normalizeBaseUrl(config.baseUrl));
+  }
+
+  return config.accessToken;
+}
+
 async function requestJson<T>(
   config: MatrixConfig,
   operation: string,
@@ -150,9 +317,10 @@ async function requestJson<T>(
   failureCodes: {
     notFoundCode?: MatrixClientError["code"];
     forbiddenCode?: MatrixClientError["code"];
-  } = {}
+  } = {},
+  retryOnUnauthorized = true
 ): Promise<T> {
-  if (!config.ready || !config.baseUrl || !config.accessToken) {
+  if (!config.ready || !config.baseUrl) {
     throw createMatrixClientError({
       code: "matrix_not_configured",
       status: 503,
@@ -163,8 +331,9 @@ async function requestJson<T>(
     });
   }
 
+  const accessToken = await resolveMatrixAccessToken(config, fetchImpl, operation, path);
   const headers = new Headers(init?.headers ?? {});
-  headers.set("Authorization", `Bearer ${config.accessToken}`);
+  headers.set("Authorization", `Bearer ${accessToken}`);
 
   if (init?.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -210,6 +379,11 @@ async function requestJson<T>(
   }
 
   if (!response.ok) {
+    if (response.status === 401 && retryOnUnauthorized && canRefreshMatrixCredentials(config)) {
+      await refreshMatrixCredentials(config, fetchImpl, operation, path);
+      return requestJson(config, operation, path, init, validate, fetchImpl, failureCodes, false);
+    }
+
     const bodyText = await readErrorStatus(response);
     void bodyText;
     throw createMatrixClientError({
@@ -261,9 +435,10 @@ async function requestOptionalJson<T>(
   failureCodes: {
     notFoundCode?: MatrixClientError["code"];
     forbiddenCode?: MatrixClientError["code"];
-  } = {}
+  } = {},
+  retryOnUnauthorized = true
 ): Promise<T | null> {
-  if (!config.ready || !config.baseUrl || !config.accessToken) {
+  if (!config.ready || !config.baseUrl) {
     throw createMatrixClientError({
       code: "matrix_not_configured",
       status: 503,
@@ -274,8 +449,9 @@ async function requestOptionalJson<T>(
     });
   }
 
+  const accessToken = await resolveMatrixAccessToken(config, fetchImpl, operation, path);
   const headers = new Headers(init?.headers ?? {});
-  headers.set("Authorization", `Bearer ${config.accessToken}`);
+  headers.set("Authorization", `Bearer ${accessToken}`);
 
   if (init?.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -325,6 +501,11 @@ async function requestOptionalJson<T>(
   }
 
   if (!response.ok) {
+    if (response.status === 401 && retryOnUnauthorized && canRefreshMatrixCredentials(config)) {
+      await refreshMatrixCredentials(config, fetchImpl, operation, path);
+      return requestOptionalJson(config, operation, path, init, validate, fetchImpl, failureCodes, false);
+    }
+
     throw createMatrixClientError({
       code: requestFailureCode(
         response.status,

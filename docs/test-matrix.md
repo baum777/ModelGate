@@ -94,6 +94,10 @@ Security note:
 | U6 | Reload restores active tab/scope state | implemented-but-manual | Local browser run of the Vite client | Restored state is not backend truth; owner: web |
 | U7 | `RESTORED_SESSION` badge is visible | implemented-but-manual | Local browser run of the Vite client | Badge exists in [web/src/App.tsx](../web/src/App.tsx); owner: web |
 | U8 | UI shows only the public alias, not provider IDs | automated | [tests/browser/modelgate.spec.ts](../tests/browser/modelgate.spec.ts) | Provider IDs are excluded from visible UI text; owner: web + backend |
+| U9 | Beginner navigation exposes only Chat, GitHub Workspace, Matrix Workspace, Review, Settings | automated | [tests/browser/modelgate.spec.ts](../tests/browser/modelgate.spec.ts) | Shell IA uses the beginner-safe nav contract; owner: web |
+| U10 | Beginner Mode hides technical identifiers and raw details | automated | [tests/browser/modelgate.spec.ts](../tests/browser/modelgate.spec.ts) | Guarded through `Technische Details`; owner: web |
+| U11 | Expert Mode reveals technical details inside labeled disclosure blocks | automated | [tests/browser/modelgate.spec.ts](../tests/browser/modelgate.spec.ts) | Expert disclosure path stays explicit; owner: web |
+| U12 | Browser does not call `api.github.com` or `matrix.org` directly | automated | [tests/browser/modelgate.spec.ts](../tests/browser/modelgate.spec.ts) | ModelGate backend remains the only browser authority; owner: web + backend |
 
 ## 7. Chat UI Inputs
 

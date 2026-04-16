@@ -182,6 +182,253 @@ test("github client normalizes repository summaries, trees, and file content", a
   ]);
 });
 
+test("github client normalizes branch, commit, tree, and pull request write primitives", async () => {
+  const calls: string[] = [];
+  const client = createGitHubClient({
+    config: createTestGitHubConfig({
+      allowedRepos: ["acme/widget"],
+      allowedRepoSet: new Set(["acme/widget"])
+    }),
+    fetchImpl: async (input, init) => {
+      const url = new URL(String(input));
+      calls.push(`${url.pathname}${url.search}`);
+      assert.equal(new Headers(init?.headers).get("Authorization"), "Bearer test-github-token");
+
+      if (url.pathname === "/repos/acme/widget/git/ref/heads%2Fmodelgate%2Fgithub%2Fplan_1" && (init?.method ?? "GET") === "GET") {
+        return makeJsonResponse({
+          ref: "heads/modelgate/github/plan_1",
+          url: "https://api.github.com/repos/acme/widget/git/refs/heads/modelgate/github/plan_1",
+          object: {
+            sha: "commit-sha-existing",
+            type: "commit"
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/git/refs/heads%2Fmodelgate%2Fgithub%2Fplan_1" && (init?.method ?? "GET") === "PATCH") {
+        return makeJsonResponse({
+          ref: "refs/heads/modelgate/github/plan_1",
+          url: "https://api.github.com/repos/acme/widget/git/refs/heads/modelgate/github/plan_1",
+          object: {
+            sha: "commit-sha-write",
+            type: "commit"
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/git/trees" && (init?.method ?? "GET") === "POST") {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          base_tree: string;
+          tree: Array<{ path: string; mode: string; type: string; content: string }>;
+        };
+
+        assert.equal(body.base_tree, "tree-sha-base");
+        assert.deepEqual(body.tree, [
+          {
+            path: "src/index.ts",
+            mode: "100644",
+            type: "blob",
+            content: "export const value = 2;\n"
+          }
+        ]);
+
+        return makeJsonResponse({
+          sha: "tree-sha-write"
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/git/commits" && (init?.method ?? "GET") === "POST") {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          message: string;
+          tree: string;
+          parents: string[];
+          author: { name: string; email: string; date: string };
+          committer: { name: string; email: string; date: string };
+        };
+
+        assert.equal(body.message, "ModelGate plan plan_1");
+        assert.equal(body.tree, "tree-sha-write");
+        assert.deepEqual(body.parents, ["commit-sha-base"]);
+        assert.equal(body.author.name, "ModelGate");
+        assert.equal(body.committer.email, "modelgate@users.noreply.github.com");
+
+        return makeJsonResponse({
+          sha: "commit-sha-write",
+          tree: {
+            sha: "tree-sha-write"
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/git/refs" && (init?.method ?? "GET") === "POST") {
+        const body = JSON.parse(String(init?.body ?? "{}")) as { ref: string; sha: string };
+
+        assert.equal(body.ref, "refs/heads/modelgate/github/plan_1");
+        assert.equal(body.sha, "commit-sha-write");
+
+        return makeJsonResponse({
+          ref: "refs/heads/modelgate/github/plan_1",
+          url: "https://api.github.com/repos/acme/widget/git/refs/heads/modelgate/github/plan_1",
+          object: {
+            sha: "commit-sha-write",
+            type: "commit"
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/pulls" && (init?.method ?? "GET") === "GET") {
+        assert.equal(url.searchParams.get("state"), "all");
+        assert.equal(url.searchParams.get("head"), "acme:modelgate/github/plan_1");
+        assert.equal(url.searchParams.get("base"), "main");
+        assert.equal(url.searchParams.get("per_page"), "10");
+        assert.equal(url.searchParams.get("page"), "1");
+
+        return makeJsonResponse([]);
+      }
+
+      if (url.pathname === "/repos/acme/widget/pulls" && (init?.method ?? "GET") === "POST") {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          title: string;
+          head: string;
+          base: string;
+          body: string;
+          draft: boolean;
+          maintainer_can_modify: boolean;
+        };
+
+        assert.equal(body.title, "ModelGate plan plan_1");
+        assert.equal(body.head, "modelgate/github/plan_1");
+        assert.equal(body.base, "main");
+        assert.equal(body.draft, false);
+        assert.equal(body.maintainer_can_modify, true);
+
+        return makeJsonResponse({
+          number: 12,
+          html_url: "https://github.com/acme/widget/pull/12",
+          state: "open",
+          head: {
+            ref: "modelgate/github/plan_1",
+            sha: "commit-sha-write"
+          },
+          base: {
+            ref: "main",
+            sha: "commit-sha-base"
+          },
+          mergeable: true,
+          draft: false,
+          title: "ModelGate plan plan_1",
+          body: "ModelGate approval-gated proposal"
+        });
+      }
+
+      throw new Error(`unexpected path: ${url.pathname}${url.search}`);
+    }
+  });
+
+  const reference = await client.readRepositoryReference("acme", "widget", "heads/modelgate/github/plan_1");
+  assert.deepEqual(reference, {
+    ref: "heads/modelgate/github/plan_1",
+    sha: "commit-sha-existing",
+    url: "https://api.github.com/repos/acme/widget/git/refs/heads/modelgate/github/plan_1",
+    objectType: "commit"
+  });
+
+  const tree = await client.createRepositoryTree("acme", "widget", {
+    baseTreeSha: "tree-sha-base",
+    entries: [
+      {
+        path: "src/index.ts",
+        mode: "100644",
+        content: "export const value = 2;\n"
+      }
+    ]
+  });
+  assert.deepEqual(tree, {
+    sha: "tree-sha-write"
+  });
+
+  const commit = await client.createRepositoryCommit("acme", "widget", {
+    message: "ModelGate plan plan_1",
+    treeSha: "tree-sha-write",
+    parentShas: ["commit-sha-base"],
+    author: {
+      name: "ModelGate",
+      email: "modelgate@users.noreply.github.com",
+      date: "2026-04-16T00:00:00.000Z"
+    },
+    committer: {
+      name: "ModelGate",
+      email: "modelgate@users.noreply.github.com",
+      date: "2026-04-16T00:00:00.000Z"
+    }
+  });
+  assert.deepEqual(commit, {
+    sha: "commit-sha-write",
+    treeSha: "tree-sha-write"
+  });
+
+  const createdReference = await client.createRepositoryReference("acme", "widget", "heads/modelgate/github/plan_1", "commit-sha-write");
+  assert.deepEqual(createdReference, {
+    ref: "refs/heads/modelgate/github/plan_1",
+    sha: "commit-sha-write",
+    url: "https://api.github.com/repos/acme/widget/git/refs/heads/modelgate/github/plan_1",
+    objectType: "commit"
+  });
+
+  const updatedReference = await client.updateRepositoryReference("acme", "widget", "heads/modelgate/github/plan_1", "commit-sha-write");
+  assert.deepEqual(updatedReference, {
+    ref: "refs/heads/modelgate/github/plan_1",
+    sha: "commit-sha-write",
+    url: "https://api.github.com/repos/acme/widget/git/refs/heads/modelgate/github/plan_1",
+    objectType: "commit"
+  });
+
+  const pullRequests = await client.listPullRequests("acme", "widget", {
+    state: "all",
+    head: "acme:modelgate/github/plan_1",
+    base: "main",
+    perPage: 10,
+    page: 1
+  });
+  assert.deepEqual(pullRequests, []);
+
+  const pullRequest = await client.createPullRequest("acme", "widget", {
+    title: "ModelGate plan plan_1",
+    head: "modelgate/github/plan_1",
+    base: "main",
+    body: "ModelGate approval-gated proposal",
+    draft: false,
+    maintainerCanModify: true
+  });
+  assert.deepEqual(pullRequest, {
+    number: 12,
+    htmlUrl: "https://github.com/acme/widget/pull/12",
+    state: "open",
+    headRef: "modelgate/github/plan_1",
+    headSha: "commit-sha-write",
+    baseRef: "main",
+    baseSha: "commit-sha-base",
+    mergeable: true,
+    draft: false,
+    title: "ModelGate plan plan_1",
+    body: "ModelGate approval-gated proposal",
+    createdAt: null,
+    updatedAt: null,
+    mergeCommitSha: null,
+    url: null
+  });
+
+  assert.deepEqual(calls, [
+    "/repos/acme/widget/git/ref/heads%2Fmodelgate%2Fgithub%2Fplan_1",
+    "/repos/acme/widget/git/trees",
+    "/repos/acme/widget/git/commits",
+    "/repos/acme/widget/git/refs",
+    "/repos/acme/widget/git/refs/heads%2Fmodelgate%2Fgithub%2Fplan_1",
+    "/repos/acme/widget/pulls?state=all&head=acme%3Amodelgate%2Fgithub%2Fplan_1&base=main&per_page=10&page=1",
+    "/repos/acme/widget/pulls"
+  ]);
+});
+
 test("github client fails closed for malformed responses, unauthorized requests, and timeouts", async () => {
   const malformedClient = createGitHubClient({
     config: createTestGitHubConfig({

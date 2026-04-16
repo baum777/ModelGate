@@ -10,6 +10,9 @@ test("matrix config defaults to disabled", () => {
   assert.equal(config.ready, false);
   assert.equal(config.baseUrl, null);
   assert.equal(config.accessToken, null);
+  assert.equal(config.refreshToken, null);
+  assert.equal(config.clientId, null);
+  assert.equal(config.tokenExpiresAt, null);
   assert.equal(config.expectedUserId, null);
   assert.equal(config.issues.length, 0);
 });
@@ -39,7 +42,33 @@ test("matrix config becomes ready when enabled with a valid origin and token", (
   assert.equal(config.ready, true);
   assert.equal(config.baseUrl, "https://matrix.example");
   assert.equal(config.accessToken, "token");
+  assert.equal(config.refreshToken, null);
+  assert.equal(config.clientId, null);
+  assert.equal(config.tokenExpiresAt, null);
   assert.equal(config.expectedUserId, "@user:matrix.example");
+  assert.equal(config.requestTimeoutMs, 4000);
+  assert.deepEqual(config.issues, []);
+});
+
+test("matrix config becomes ready when enabled with refresh credentials", () => {
+  const config = createMatrixConfig({
+    MATRIX_ENABLED: "true",
+    MATRIX_REQUIRED: "false",
+    MATRIX_BASE_URL: "https://matrix.example",
+    MATRIX_REFRESH_TOKEN: "refresh-token",
+    MATRIX_CLIENT_ID: "client-id",
+    MATRIX_TOKEN_EXPIRES_AT: "2026-04-16T10:00:00.000Z",
+    MATRIX_REQUEST_TIMEOUT_MS: "4000"
+  });
+
+  assert.equal(config.enabled, true);
+  assert.equal(config.required, false);
+  assert.equal(config.ready, true);
+  assert.equal(config.baseUrl, "https://matrix.example");
+  assert.equal(config.accessToken, null);
+  assert.equal(config.refreshToken, "refresh-token");
+  assert.equal(config.clientId, "client-id");
+  assert.equal(config.tokenExpiresAt, "2026-04-16T10:00:00.000Z");
   assert.equal(config.requestTimeoutMs, 4000);
   assert.deepEqual(config.issues, []);
 });
@@ -58,4 +87,21 @@ test("matrix config rejects malformed expected user ids when set", () => {
   assert.equal(config.ready, false);
   assert.equal(config.expectedUserId, null);
   assert.match(config.issues.join("; "), /MATRIX_EXPECTED_USER_ID must be a Matrix user ID/);
+});
+
+test("matrix config rejects malformed token expiry when set", () => {
+  const config = createMatrixConfig({
+    MATRIX_ENABLED: "true",
+    MATRIX_REQUIRED: "false",
+    MATRIX_BASE_URL: "https://matrix.example",
+    MATRIX_REFRESH_TOKEN: "refresh-token",
+    MATRIX_CLIENT_ID: "client-id",
+    MATRIX_TOKEN_EXPIRES_AT: "not-a-timestamp",
+    MATRIX_REQUEST_TIMEOUT_MS: "4000"
+  });
+
+  assert.equal(config.enabled, true);
+  assert.equal(config.ready, false);
+  assert.equal(config.tokenExpiresAt, null);
+  assert.match(config.issues.join("; "), /MATRIX_TOKEN_EXPIRES_AT must be an ISO timestamp/);
 });

@@ -145,9 +145,12 @@ async function installBaseMocks(page: Page, options?: { matrixStatus?: MatrixSta
 async function loadConsole(page: Page) {
   await page.goto("/");
   await expect(page.getByTestId("app-shell")).toBeVisible();
-  await expect(page.getByText("Thin consumer overlay for ModelGate")).toBeVisible();
+  await expect(page.getByText("ModelGate Console")).toBeVisible();
   await expect(page.getByTestId("tab-chat")).toBeVisible();
+  await expect(page.getByTestId("tab-github")).toBeVisible();
   await expect(page.getByTestId("tab-matrix")).toBeVisible();
+  await expect(page.getByTestId("tab-review")).toBeVisible();
+  await expect(page.getByTestId("tab-settings")).toBeVisible();
 }
 
 function submitChord() {
@@ -156,6 +159,10 @@ function submitChord() {
 
 test("app shell renders, tabs open, header shows backend truth, and secrets stay out of DOM text", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
+  const requestUrls: string[] = [];
+  page.on("request", (request) => {
+    requestUrls.push(request.url());
+  });
   await loadConsole(page);
 
   await expect(page.locator("header.global-header").getByText("Backend healthy")).toBeVisible();
@@ -166,15 +173,191 @@ test("app shell renders, tabs open, header shows backend truth, and secrets stay
   await expect(page.getByRole("heading", { name: "Chat" })).toBeVisible();
   await expect(page.getByTestId("chat-workspace")).toBeVisible();
 
+  await page.getByTestId("tab-github").click();
+  await expect(page.getByRole("heading", { name: "GitHub Workspace" })).toBeVisible();
+
   await page.getByTestId("tab-matrix").click();
   await expect(page.getByRole("heading", { name: "Matrix Workspace" })).toBeVisible();
   await expect(page.getByTestId("matrix-workspace")).toBeVisible();
 
+  await page.getByTestId("tab-review").click();
+  await expect(page.getByRole("heading", { name: "Review" })).toBeVisible();
+  await page.getByTestId("tab-settings").click();
+  await expect(page.getByRole("heading", { name: "Einstellungen" })).toBeVisible();
+
   const body = page.locator("body");
+  await expect(body).not.toContainText("Dashboard");
+  await expect(body).not.toContainText("Active Streams");
+  await expect(body).not.toContainText("Security Matrix");
+  await expect(body).not.toContainText("Telemetry");
+  await expect(body).not.toContainText("Logs");
+  await expect(body).not.toContainText("Archive");
+  await expect(body).not.toContainText("GitHub bereit");
   await expect(body).not.toContainText("openrouter/auto");
   await expect(body).not.toContainText("anthropic/claude-3.5-sonnet");
   await expect(body).not.toContainText("sk-test-openrouter-key");
   await expect(body).not.toContainText("sk-test-matrix-token");
+  expect(requestUrls.every((url) => !url.includes("api.github.com") && !url.includes("matrix.org"))).toBe(true);
+});
+
+test("beginner hides technical GitHub fields while expert details reveal them", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+
+  await page.route("**/api/github/repos", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        checkedAt: "2026-04-16T08:00:00.000Z",
+        repos: [
+          {
+            owner: "octo",
+            repo: "demo",
+            fullName: "octo/demo",
+            defaultBranch: "main",
+            defaultBranchSha: "abc123",
+            description: "Demo repository",
+            isPrivate: false,
+            status: "ready",
+            permissions: { canWrite: false },
+            checkedAt: "2026-04-16T08:00:00.000Z"
+          },
+          {
+            owner: "octo",
+            repo: "sample",
+            fullName: "octo/sample",
+            defaultBranch: "main",
+            defaultBranchSha: "def456",
+            description: "Sample repository",
+            isPrivate: false,
+            status: "ready",
+            permissions: { canWrite: false },
+            checkedAt: "2026-04-16T08:00:00.000Z"
+          }
+        ]
+      })
+    });
+  });
+
+  await page.route("**/api/github/context", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        context: {
+          repo: {
+            owner: "octo",
+            repo: "demo",
+            fullName: "octo/demo",
+            defaultBranch: "main",
+            defaultBranchSha: "abc123",
+            description: "Demo repository",
+            isPrivate: false,
+            status: "ready",
+            permissions: { canWrite: false },
+            checkedAt: "2026-04-16T08:00:00.000Z"
+          },
+          ref: "main",
+          baseSha: "abc123",
+          question: "Beschreibe die Projektstruktur und nenne die sichere nächste Aktion.",
+          files: [
+            {
+              path: "README.md",
+              sha: "sha-readme",
+              excerpt: "Demo",
+              citations: [],
+              truncated: false
+            }
+          ],
+          citations: [],
+          tokenBudget: {
+            maxTokens: 1000,
+            usedTokens: 100,
+            truncated: false
+          },
+          warnings: [],
+          generatedAt: "2026-04-16T08:00:00.000Z"
+        }
+      })
+    });
+  });
+
+  await page.route("**/api/github/actions/propose", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        plan: {
+          planId: "plan-123",
+          repo: {
+            owner: "octo",
+            repo: "demo",
+            fullName: "octo/demo",
+            defaultBranch: "main",
+            defaultBranchSha: "abc123",
+            description: "Demo repository",
+            isPrivate: false,
+            status: "ready",
+            permissions: { canWrite: false },
+            checkedAt: "2026-04-16T08:00:00.000Z"
+          },
+          baseRef: "main",
+          baseSha: "abc123",
+          branchName: "modelgate/demo-plan",
+          targetBranch: "main",
+          status: "pending_review",
+          stale: false,
+          requiresApproval: true,
+          summary: "Demo plan",
+          rationale: "Nur ein Beispielplan.",
+          riskLevel: "low_surface",
+          citations: [],
+          diff: [
+            {
+              path: "README.md",
+              changeType: "modified",
+              beforeSha: "before",
+              afterSha: "after",
+              additions: 1,
+              deletions: 1,
+              patch: "@@ -1 +1 @@\n-Hello\n+Hello world",
+              citations: []
+            }
+          ],
+          generatedAt: "2026-04-16T08:00:00.000Z",
+          expiresAt: "2026-04-16T09:00:00.000Z"
+        }
+      })
+    });
+  });
+
+  await loadConsole(page);
+  await page.getByTestId("tab-github").click();
+
+  await expect(page.locator(".empty-state-card").getByRole("heading", { name: "Noch kein Repository gewählt" })).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("octo/demo");
+  await expect(page.locator("body")).not.toContainText("plan-123");
+  await expect(page.locator("body")).not.toContainText("Anfrage-ID");
+  await expect(page.locator("body")).not.toContainText("Plan-ID");
+
+  await page.getByLabel("Repo auswählen").selectOption({ label: "Repository 1" });
+  await page.getByRole("button", { name: "Analyse starten" }).click();
+  await expect(page.getByText("Analyse abgeschlossen")).toBeVisible();
+  await page.getByRole("button", { name: "Vorschlag erstellen" }).click();
+  await expect(page.getByText("Bereit zur Freigabe")).toBeVisible();
+
+  await expect(page.locator("body")).not.toContainText("Anfrage-ID");
+  await expect(page.locator("body")).not.toContainText("Plan-ID");
+  await expect(page.locator("body")).not.toContainText("octo/demo");
+
+  await page.getByRole("button", { name: "Expert" }).click();
+  await expect(page.getByText("Technische Details")).toBeVisible();
+  await expect(page.getByText("Anfrage-ID")).toBeVisible();
+  await expect(page.getByText("Plan-ID")).toBeVisible();
+  await expect(page.getByText("Route")).toBeVisible();
 });
 
 test("chat keyboard submit is wired, requests the backend, and keeps focus usable", async ({ page }) => {
@@ -209,10 +392,10 @@ test("chat keyboard submit is wired, requests the backend, and keeps focus usabl
   await expect(page.getByRole("tab", { name: "Chat" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Matrix Workspace" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Jump to latest" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Stop" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Stopp" })).toBeVisible();
   await expect(page.locator(".message-list")).toHaveAttribute("aria-live", "polite");
   await expect(sendButton).toBeDisabled();
-  await expect(connectionState).toHaveText("Idle");
+  await expect(connectionState).toHaveText("Bereit");
 
   await composer.fill("Please harden the browser harness");
   await expect(sendButton).toBeEnabled();
@@ -220,9 +403,9 @@ test("chat keyboard submit is wired, requests the backend, and keeps focus usabl
   await composer.press(submitChord());
 
   await expect(sendButton).toBeDisabled();
-  await expect(connectionState).toHaveText(/Submitting|Streaming|Completed/);
+  await expect(connectionState).toHaveText(/Senden|Antwort läuft|Fertig/);
   await expect(page.getByText("Hello from mocked backend")).toBeVisible();
-  await expect(connectionState).toHaveText("Completed");
+  await expect(connectionState).toHaveText("Fertig");
   await expect(page.locator(".message-user")).toHaveCount(1);
   await expect(page.locator(".message-assistant")).toHaveCount(1);
   await composer.focus();
@@ -263,7 +446,7 @@ test("empty composer cannot submit and sends no backend request", async ({ page 
   await composer.press(submitChord());
 
   expect(chatRequestCount).toBe(0);
-  await expect(connectionState(page)).toHaveText("Idle");
+  await expect(connectionState(page)).toHaveText("Bereit");
   await expect(composer).toBeFocused();
 });
 
@@ -291,7 +474,7 @@ test("backend chat error renders visibly and does not finalize a fake assistant 
   await composer.press(submitChord());
 
   await expect(page.getByRole("alert")).toHaveText(/mocked backend failure/);
-  await expect(connectionState(page)).toHaveText("Error");
+  await expect(connectionState(page)).toHaveText("Fehler");
   await expect(page.locator(".message-user")).toHaveCount(1);
   await expect(page.locator(".message-assistant")).toHaveCount(0);
   await composer.focus();

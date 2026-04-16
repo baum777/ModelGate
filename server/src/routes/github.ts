@@ -5,20 +5,24 @@ import {
   buildGitHubErrorResponse,
   githubErrorStatus,
   type GitHubErrorCode,
+  GitHubExecuteRequestSchema,
   GitHubContextRequestSchema,
   GitHubPlanIdSchema,
   GitHubRepoFileQuerySchema,
   GitHubRepoPathParamsSchema,
   GitHubRepoTreeQuerySchema,
   type GitHubChangePlan,
+  type GitHubExecuteResult,
   type GitHubFileContent,
   type GitHubFileTree,
-  type GitHubRepoSummary
+  type GitHubRepoSummary,
+  type GitHubVerifyResult
 } from "../lib/github-contract.js";
 import { GitHubClientError, type GitHubClient } from "../lib/github-client.js";
 import { createGitHubContextBuilder } from "../lib/github-context-builder.js";
 import { createGitHubActionStore, type GitHubActionStore } from "../lib/github-action-store.js";
 import { createGitHubProposalPlanner } from "../lib/github-plan-builder.js";
+import { createGitHubActionExecutionService } from "../lib/github-execution.js";
 import type { GitHubConfig } from "../lib/github-env.js";
 import { isGitHubRepoAllowed, normalizeGitHubRepoFullName } from "../lib/github-env.js";
 import { normalizeGitHubRelativePath } from "../lib/github-paths.js";
@@ -136,6 +140,11 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     modelRegistry: deps.modelRegistry
   });
   const actionStore = deps.actionStore ?? createGitHubActionStore(deps.config.planTtlMs);
+  const actionExecutor = createGitHubActionExecutionService({
+    config: deps.config,
+    client: deps.client,
+    actionStore
+  });
 
   app.get("/api/github/repos", async (_request, reply) => {
     if (!deps.config.ready) {
@@ -291,6 +300,86 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
           ...lookup.plan,
           stale: false
         }
+      });
+    } catch (error) {
+      return handleGitHubError(reply, error);
+    }
+  });
+
+  app.post("/api/github/actions/:planId/execute", async (request, reply) => {
+    if (!deps.config.ready) {
+      return sendGitHubError(reply, "github_not_configured");
+    }
+
+    const parsedPlanId = GitHubPlanIdSchema.safeParse(
+      typeof request.params === "object" && request.params !== null
+        ? (request.params as { planId?: unknown }).planId
+        : undefined
+    );
+
+    if (!parsedPlanId.success) {
+      return sendGitHubError(reply, "invalid_request");
+    }
+
+    const parsedBody = GitHubExecuteRequestSchema.safeParse(request.body);
+
+    if (!parsedBody.success) {
+      return sendGitHubError(reply, "invalid_request");
+    }
+
+    const lookup = actionStore.readPlan(parsedPlanId.data);
+
+    if (lookup.state === "missing") {
+      return sendGitHubError(reply, "github_plan_not_found");
+    }
+
+    if (lookup.state === "expired") {
+      return sendGitHubError(reply, "github_plan_expired");
+    }
+
+    try {
+      const execution: GitHubExecuteResult = await actionExecutor.executePlan(lookup.plan);
+
+      return reply.status(200).send({
+        ok: true,
+        result: execution
+      });
+    } catch (error) {
+      return handleGitHubError(reply, error);
+    }
+  });
+
+  app.get("/api/github/actions/:planId/verify", async (request, reply) => {
+    if (!deps.config.ready) {
+      return sendGitHubError(reply, "github_not_configured");
+    }
+
+    const parsedPlanId = GitHubPlanIdSchema.safeParse(
+      typeof request.params === "object" && request.params !== null
+        ? (request.params as { planId?: unknown }).planId
+        : undefined
+    );
+
+    if (!parsedPlanId.success) {
+      return sendGitHubError(reply, "invalid_request");
+    }
+
+    const lookup = actionStore.readPlan(parsedPlanId.data);
+
+    if (lookup.state === "missing") {
+      return sendGitHubError(reply, "github_plan_not_found");
+    }
+
+    if (lookup.state === "expired") {
+      return sendGitHubError(reply, "github_plan_expired");
+    }
+
+    try {
+      const verification: GitHubVerifyResult = await actionExecutor.verifyPlan(lookup.plan);
+
+      return reply.status(200).send({
+        ok: true,
+        verification
       });
     } catch (error) {
       return handleGitHubError(reply, error);
