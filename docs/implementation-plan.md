@@ -9,8 +9,7 @@ Deliver a thin console overlay that makes backend authority visible, keeps SSE c
 - Chat backend authority already exists in `server/src/routes/chat.ts`
 - `/health` and `/models` are implemented backend seams
 - `POST /chat` streaming is locally verified with exactly one terminal event: `done` or `error`
-- Matrix read-only Explore routes are locally wired against backend-owned Matrix client logic
-- Matrix Analyze / Review / Execute / Verify remain backend-owned contract surfaces
+- Matrix read-only Explore routes, provenance, topic-access, analyze, and approval-gated topic update plan/execute/verify are locally wired against backend-owned Matrix client logic
 - Matrix frontend adapters validate malformed `200 OK` payloads and fail closed
 - Browser navigation and visibility are now being refactored toward `Chat / GitHub Workspace / Matrix Workspace / Review / Settings`
 
@@ -26,18 +25,13 @@ Locally verified:
 - Matrix malformed-200 fail-closed behavior
 - beginner/expert disclosure guard in the shell and workspaces
 
-Contract-only / external-backend:
+Partially wired / external-backend:
 
-- Matrix Analyze
-- Matrix Review
-- Matrix Execute
-- Matrix Verify
-- Matrix write / approval / provenance / hierarchy endpoints not yet locally wired
+- Matrix hierarchy preview in the browser still depends on a mock route in this repo
+- live Matrix E2E verification against a real Matrix origin
 
 Deferred:
 
-- live Matrix E2E verification against a real Matrix origin
-- Matrix writes and approval-gated execution
 - Undo
 - cross-device sync
 - bulk review queue

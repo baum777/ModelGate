@@ -1,6 +1,6 @@
 # Server
 
-Fastify-based backend authority for OpenRouter chat orchestration.
+Fastify-based backend authority for OpenRouter chat, GitHub workspace review, and Matrix workspace operations.
 
 ## Scripts
 
@@ -12,11 +12,16 @@ Fastify-based backend authority for OpenRouter chat orchestration.
 
 ## Environment
 
-Copy `.env.example` to `.env` and set `OPENROUTER_API_KEY`.
+Copy the repo-root `.env.example` to `.env` and set `OPENROUTER_API_KEY`.
 
 Required environment variables:
 
 - `OPENROUTER_API_KEY`
+
+GitHub remote flow required when enabled:
+
+- `GITHUB_TOKEN` - required GitHub token for the backend-owned remote flow
+- `GITHUB_ALLOWED_REPOS` - required comma-separated allowlist of `owner/repo` values; the GitHub remote flow stays fail-closed until at least one repository is allowed
 
 Optional environment variables:
 
@@ -47,6 +52,7 @@ Optional environment variables:
 - `MATRIX_ENABLED` - defaults to `false`; enables the server-owned Matrix read-only routes when `true`
 - `MATRIX_REQUIRED` - defaults to `false`; fails startup closed if Matrix is enabled but invalid
 - `MATRIX_BASE_URL` - absolute Matrix homeserver origin used by the server when Matrix is enabled
+- `MATRIX_HOMESERVER_URL` - alias for `MATRIX_BASE_URL`
 - `MATRIX_ACCESS_TOKEN` - server-side Matrix access token
 - `MATRIX_REFRESH_TOKEN` - optional server-side Matrix refresh token used to rotate access tokens backend-side
 - `MATRIX_CLIENT_ID` - required when `MATRIX_REFRESH_TOKEN` is set; used for the refresh token grant
@@ -55,6 +61,20 @@ Optional environment variables:
 - `MATRIX_REQUEST_TIMEOUT_MS` - upstream request timeout in milliseconds, defaults to `5000`
 - `MATRIX_SMOKE_ROOM_ID` - dedicated live smoke room for the backend-owned topic-update flow
 - `MATRIX_SMOKE_TOPIC_PREFIX` - optional prefix for the temporary live smoke topic
+- `GITHUB_API_BASE_URL` - GitHub API base URL, defaults to `https://api.github.com`
+- `GITHUB_DEFAULT_OWNER` - optional default owner used by GitHub routing helpers
+- `GITHUB_BRANCH_PREFIX` - branch prefix for backend-created GitHub plans, defaults to `modelgate/github`
+- `GITHUB_REQUEST_TIMEOUT_MS` - GitHub upstream request timeout in milliseconds, defaults to `8000`
+- `GITHUB_PLAN_TTL_MS` - plan TTL in milliseconds, defaults to `720000`
+- `GITHUB_MAX_CONTEXT_FILES` - max files collected for `/api/github/context`, defaults to `6`
+- `GITHUB_MAX_CONTEXT_BYTES` - max context budget in bytes, defaults to `32768`
+- `GITHUB_SMOKE_REPO` - optional repository used by the manual GitHub smoke path
+- `GITHUB_SMOKE_BASE_BRANCH` - optional base branch for the manual GitHub smoke path
+- `GITHUB_SMOKE_TARGET_BRANCH` - optional target branch for the manual GitHub smoke path
+- `GITHUB_SMOKE_ENABLED` - optional boolean flag for the manual GitHub smoke path
+- `GITHUB_APP_ID` - currently schema-only and not wired into the GitHub runtime path
+- `GITHUB_APP_PRIVATE_KEY` - currently schema-only and not wired into the GitHub runtime path
+- `GITHUB_APP_INSTALLATION_ID` - currently schema-only and not wired into the GitHub runtime path
 
 ## Local Run
 
@@ -167,6 +187,42 @@ event: error
 data: {"ok":false,"error":{"code":"upstream_error","message":"Chat provider request failed"}}
 ```
 
+## GitHub Workspace Contract
+
+These routes are backend-owned and review-first. The browser may read allowed repositories, build read context, prepare a proposal plan, and submit approval intent only. Execution and verification stay server-side and fail closed until `GITHUB_TOKEN` and `GITHUB_ALLOWED_REPOS` are configured.
+
+### `GET /api/github/repos`
+
+Returns normalized allowed repository summaries.
+
+### `POST /api/github/context`
+
+Reads repository context for an allowed repo and returns a bounded backend-owned context bundle.
+
+### `POST /api/github/actions/propose`
+
+Creates a backend-owned proposal plan with a reviewable diff and returns an opaque `planId`.
+
+### `GET /api/github/actions/:planId`
+
+Returns the stored GitHub plan while it is still active.
+
+### `POST /api/github/actions/:planId/execute`
+
+Requires `{ "approval": true }`, re-checks the plan freshness, and creates the backend-owned execution result.
+
+### `GET /api/github/actions/:planId/verify`
+
+Re-reads the repository state and returns `verified`, `mismatch`, `pending`, or `failed`.
+
+### `GET /api/github/repos/:owner/:repo/tree`
+
+Returns a read-only file tree for an allowed repository.
+
+### `GET /api/github/repos/:owner/:repo/file`
+
+Returns a read-only file body for an allowed repository.
+
 ## Matrix Read-Only Contract
 
 These routes are server-owned and fail closed. They do not expose Matrix credentials or raw upstream payloads.
@@ -255,6 +311,18 @@ Returns a bounded read-only summary for a cached scope snapshot:
   ]
 }
 ```
+
+### `GET /api/matrix/rooms/:roomId/provenance`
+
+Returns normalized read-only room provenance derived from the joined-rooms backend path.
+
+### `GET /api/matrix/rooms/:roomId/topic-access`
+
+Returns Matrix topic power-level access details for a room and fails closed on identity or access mismatches.
+
+### `POST /api/matrix/analyze`
+
+Creates a backend-owned room topic analysis plan with a single `set_room_topic` action, `pending_review` status, and approval required.
 
 ### Matrix Error Response
 
@@ -438,7 +506,7 @@ Required live smoke environment:
 - `MATRIX_SMOKE_ROOM_ID`
 - `MATRIX_SMOKE_TOPIC_PREFIX` is optional and defaults to `ModelGate smoke`
 
-The server reads the repo-root `.env` file. Copy `server/.env.example` to `.env`
+The server reads the repo-root `.env` file. Copy `.env.example` to `.env`
 before running the backend or the smoke.
 
 Run the manual smoke from the repository root:

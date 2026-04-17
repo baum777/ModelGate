@@ -1,17 +1,18 @@
-# ModelGate Console / Guided Workspace v1
+# ModelGate Console / Guided Workspace
 
 ## Status Ledger
 
-- Locally verified: backend health, public model alias, SSE chat consumption, thin shell tabs, reducer-driven chat state, Matrix malformed-200 fail-closed behavior, Matrix read-only `/api/matrix/*` routes, beginner/expert shell toggle
-- Contract-only / external-backend: Matrix Analyze / Review / Execute / Verify, provenance payload shape, execution verification payload shape, Matrix write and approval surfaces
-- Deferred: live Matrix E2E verification against a real Matrix origin, repository-local intake contract, browser-side write authority, Undo, cross-device sync, bulk review queue, advanced observability
+- Locally verified: backend health, public model alias, SSE chat consumption, PWA shell, thin nav tabs, reducer-driven chat state, restored-session badge, beginner/expert shell toggle, GitHub repos/context/proposal/execute/verify, Matrix whoami, joined rooms, scope resolve, scope summary, provenance, topic-access, analyze, room topic plan/execute/verify, Matrix malformed-200 fail-closed behavior
+- Partially covered: Matrix hierarchy preview still depends on a browser-side mock in this repo because the server route is not wired here
+- Deferred: live Matrix E2E verification against a real Matrix origin, Undo, cross-device sync, bulk review queue, advanced observability
 
 ## UI Boundaries
 
 - `ModelGate Console` is the visible brand
 - primary navigation is `Chat`, `GitHub Workspace`, `Matrix Workspace`, `Review`, `Settings`
 - `Chat` is a consumer surface for backend-owned SSE and renders public model aliases only
-- `GitHub Workspace` and `Matrix Workspace` stay backend-authoritative, with browser-side proposal intent only
+- `GitHub Workspace` reads allowed repos, prepares proposals, and stays review-first and approval-gated
+- `Matrix Workspace` covers Explore, Analyze, Review, and Verify; backend-owned write flows stay approval-gated
 - `Review` is the only approval surface
 - `Settings` hosts beginner/expert mode and Expert-only diagnostics
 - restored local state is visible, but it is never backend truth
@@ -42,3 +43,5 @@
 - provider routing in the browser
 - direct Matrix writes from the frontend
 - silent repair of malformed streams
+- treating Matrix hierarchy preview as wired backend truth
+

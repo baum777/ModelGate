@@ -76,7 +76,7 @@ Security note:
 | R1 | `LLM_ROUTER_LOG_ENABLED=false` creates no log file | automated | [server/test/router-evidence-log.test.ts](../server/test/router-evidence-log.test.ts) | Private logging stays off by default; owner: backend |
 | R2 | `LLM_ROUTER_LOG_ENABLED=true` creates `.local-ai/logs/ROUTER_DECISIONS.log.md` | automated | [server/test/router-evidence-log.test.ts](../server/test/router-evidence-log.test.ts) | Log path is repo-local and gitignored; owner: backend |
 | R3 | Router evidence appends and does not overwrite | automated | [server/test/router-evidence-log.test.ts](../server/test/router-evidence-log.test.ts) | Append-only local audit trail; owner: backend |
-| R4 | `sk-...` secrets are redacted | automated | [server/test/router-evidence-log.test.ts](../server/test/router-evidence-log.test.ts) | Secret-safe markdown logging; owner: backend |
+| R4 | Token-like secrets are redacted | automated | [server/test/router-evidence-log.test.ts](../server/test/router-evidence-log.test.ts) | Secret-safe markdown logging; owner: backend |
 | R5 | Bearer tokens are redacted | automated | [server/test/router-evidence-log.test.ts](../server/test/router-evidence-log.test.ts) | Secret-safe markdown logging; owner: backend |
 | R6 | Full prompt is not logged verbatim | automated | [server/test/router-evidence-log.test.ts](../server/test/router-evidence-log.test.ts) | Evidence stays summarized; owner: backend |
 | R7 | Provider IDs remain local to gitignored logs | automated | [server/test/router-evidence-log.test.ts](../server/test/router-evidence-log.test.ts) and [.gitignore](../.gitignore) | Operator audit only; owner: backend |
@@ -161,21 +161,21 @@ Security note:
 
 ## 11. Matrix Topic / Write Tests
 
-Backend-owned room topic plan refresh, execute, and verify are locally wired, and the Matrix Workspace room-topic review flow is browser-tested. Analyze and hierarchy remain separate; provenance is now a backend-owned read-only route with browser coverage.
+Backend-owned room topic analyze, plan refresh, execute, and verify are locally wired, and the Matrix Workspace room-topic review flow is browser-tested. Provenance is now a backend-owned read-only route with browser coverage. Hierarchy preview remains separate because the server route is still unwired here.
 
 | Test ID | Description | Current status | Verification method | Notes / owner |
 | --- | --- | --- | --- | --- |
-| T1 | Analyze produces a candidate for changing room topic | contract-only | No local Matrix analyze backend route yet | Analyze remains contract-only; owner: backend |
+| T1 | Analyze produces a candidate for changing room topic | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Backend Matrix analyze route is wired; owner: backend |
 | T2 | Promote to Review creates a plan with `planId` | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Backend-owned plan promotion is now wired; owner: backend |
 | T3 | Review shows before/after topic diff | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Diff comes from the backend plan store; owner: backend |
 | T4 | Without approval, no topic change occurs | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Approval-gated execution fails closed; owner: backend |
 | T5 | Approve and Execute runs backend-owned write | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Backend-owned write helper is exercised; owner: backend |
 | T6 | Verify reads back the topic from Matrix | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Verification readback is backend-owned; owner: backend |
 | T7 | UI shows verified result | automated | [tests/browser/modelgate.spec.ts](../tests/browser/modelgate.spec.ts) | Room topic review shows verified backend readback; owner: web |
-| T8 | Reload leaves old analysis stale | contract-only | No local browser wiring for the write flow yet | Staleness is a UI concern until the flow is wired; owner: web |
+| T8 | Reload leaves old analysis stale | implemented-but-manual | Local browser run of the Vite client | Staleness is a UI concern and the browser flow exists; owner: web |
 | T9 | Wrong power level yields normalized failure | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Backend normalizes write-forbidden failures; owner: backend |
 | T10 | Stale plan execution is blocked | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Backend re-reads before write and fails stale plans; owner: backend |
-| T11 | Dismiss does not change the room topic | contract-only | No local browser wiring for the write flow yet | Dismiss remains a UI intent only; owner: web |
+| T11 | Dismiss does not change the room topic | implemented-but-manual | Local browser run of the Vite client | Dismiss remains a UI intent only; browser automation does not cover it yet; owner: web |
 | T12 | Tokens or secrets do not appear in logs | implemented-but-manual | Route error-shaping paths in [server/src/routes/matrix.ts](../server/src/routes/matrix.ts) and [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Responses are secret-safe; log-path coverage is still limited; owner: backend |
 | T13 | Refresh plan reloads canonical topic state | automated | [tests/browser/modelgate.spec.ts](../tests/browser/modelgate.spec.ts) | Refresh uses only `GET /api/matrix/actions/:planId` and re-renders canonical plan fields; owner: web |
 | T14 | Expired or missing plan refresh fails closed | automated | [tests/browser/modelgate.spec.ts](../tests/browser/modelgate.spec.ts) | Refresh clears executable state and blocks approval/execution on backend error; owner: web |
@@ -184,8 +184,8 @@ Backend-owned room topic plan refresh, execute, and verify are locally wired, an
 
 | Test ID | Description | Current status | Verification method | Notes / owner |
 | --- | --- | --- | --- | --- |
-| A1 | Analyze with scope returns grounded output | contract-only | Matrix analyze contract in [web/src/lib/matrix-api.ts](../web/src/lib/matrix-api.ts) | No local backend wiring yet; owner: backend |
-| A2 | Provenance chips are backend-issued only | contract-only | Matrix provenance contract in [web/src/lib/matrix-api.ts](../web/src/lib/matrix-api.ts) | Contract-only surface; owner: backend |
+| A1 | Analyze with scope returns grounded output | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) and [web/test/matrix-api.test.ts](../web/test/matrix-api.test.ts) | Matrix analyze is backend-owned and client-validated; owner: backend + web |
+| A2 | Provenance chips are backend-issued only | automated | [server/test/matrix-routes.test.ts](../server/test/matrix-routes.test.ts) and [tests/browser/modelgate.spec.ts](../tests/browser/modelgate.spec.ts) | Read-only provenance is backend-owned and browser-rendered; owner: backend + web |
 | A3 | Promote candidate creates a plan-based transition | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Backend plan promotion is now real; owner: backend |
 | R1 | Review plan shows a structured diff | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Diff is returned by the backend plan fetch route; owner: backend |
 | R2 | Approve sends approval intent only | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Execute requires an explicit approval intent; owner: backend + web |
