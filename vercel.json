@@ -20,6 +20,14 @@
     {
       "source": "/chat",
       "destination": "/api/chat"
+    },
+    {
+      "source": "/api/matrix/(.*)",
+      "destination": "/api/matrix/[...path]?...path=$1"
+    },
+    {
+      "source": "/api/github/(.*)",
+      "destination": "/api/[...path]?...path=$1"
     }
   ]
 }

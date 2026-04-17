@@ -89,7 +89,7 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
     const body = parsed.data;
     const resolution = deps.modelRegistry.resolveModel(body.model);
 
-    if (!resolution.ok) {
+    if (resolution.ok === false) {
       if (resolution.reason === "unsupported_model") {
         return reply.status(400).send(buildInvalidRequestResponse());
       }

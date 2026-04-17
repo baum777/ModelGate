@@ -324,7 +324,11 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
     try {
       const identity = await deps.client.whoami();
       assertExpectedMatrixUser(deps.config, identity, "matrix_scope_resolve", "/api/matrix/scope/resolve");
-      const resolution = await deps.client.resolveScope(parsed.data);
+      const resolutionRequest = {
+        roomIds: parsed.data.roomIds,
+        spaceIds: parsed.data.spaceIds
+      };
+      const resolution = await deps.client.resolveScope(resolutionRequest);
       const snapshot: MatrixScopeSnapshot = {
         scopeId: resolution.scopeId,
         snapshotId: resolution.snapshotId,

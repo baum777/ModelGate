@@ -1096,9 +1096,13 @@ function mapPullRequestResponse(
   const createdAt = optionalStringField(record, "created_at");
   const updatedAt = optionalStringField(record, "updated_at");
   const draft = typeof record.draft === "boolean" ? record.draft : false;
-  const mergeable = record.mergeable === null || typeof record.mergeable === "boolean"
-    ? record.mergeable
-    : null;
+  let mergeable: boolean | null = null;
+
+  if (record.mergeable === null) {
+    mergeable = null;
+  } else if (typeof record.mergeable === "boolean") {
+    mergeable = record.mergeable;
+  }
 
   if (!isRecord(record.head) || !isRecord(record.base)) {
     throw createGitHubClientError({

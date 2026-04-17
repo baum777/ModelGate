@@ -187,7 +187,19 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
 
     try {
-      const context = await contextBuilder.buildContext(parsedBody.data);
+      const contextRequest = {
+        repo: {
+          owner: parsedBody.data.repo.owner,
+          repo: parsedBody.data.repo.repo
+        },
+        question: parsedBody.data.question,
+        ref: parsedBody.data.ref,
+        selectedPaths: parsedBody.data.selectedPaths,
+        rootPath: parsedBody.data.rootPath,
+        maxFiles: parsedBody.data.maxFiles,
+        maxBytes: parsedBody.data.maxBytes
+      };
+      const context = await contextBuilder.buildContext(contextRequest);
 
       return reply.status(200).send({
         ok: true,
@@ -220,17 +232,29 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
 
     try {
+      const proposalRequest = {
+        repo: {
+          owner: parsedBody.data.repo.owner,
+          repo: parsedBody.data.repo.repo
+        },
+        objective: parsedBody.data.objective,
+        question: parsedBody.data.question,
+        ref: parsedBody.data.ref,
+        selectedPaths: parsedBody.data.selectedPaths,
+        constraints: parsedBody.data.constraints,
+        baseBranch: parsedBody.data.baseBranch
+      };
       const planId = `plan_${randomUUID()}`;
       const context = await contextBuilder.buildContext({
-        repo: parsedBody.data.repo,
-        question: parsedBody.data.question ?? parsedBody.data.objective,
-        ref: parsedBody.data.baseBranch ?? parsedBody.data.ref,
-        selectedPaths: parsedBody.data.selectedPaths
+        repo: proposalRequest.repo,
+        question: proposalRequest.question ?? proposalRequest.objective,
+        ref: proposalRequest.baseBranch ?? proposalRequest.ref,
+        selectedPaths: proposalRequest.selectedPaths
       });
       const createdAt = new Date().toISOString();
       const plan = await proposalPlanner.buildPlan({
         planId,
-        request: parsedBody.data,
+        request: proposalRequest,
         context,
         createdAt
       });
@@ -249,7 +273,7 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
 
       actionStore.createPlan({
         ...plan,
-        request: parsedBody.data,
+        request: proposalRequest,
         context
       });
 

@@ -41,8 +41,11 @@ type OpenRouterClientOptions = {
 
 function buildMessages(env: AppEnv, request: ChatRequest): OpenRouterMessage[] {
   return [
-    { role: "system" as const, content: env.DEFAULT_SYSTEM_PROMPT },
-    ...request.messages
+    { role: "system", content: env.DEFAULT_SYSTEM_PROMPT },
+    ...request.messages.map((message) => ({
+      role: message.role,
+      content: message.content
+    }))
   ];
 }
 

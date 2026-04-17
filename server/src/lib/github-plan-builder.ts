@@ -242,7 +242,7 @@ async function generateProposalDraft(
   try {
     const jsonText = extractJsonObject(response.text);
     const parsed = JSON.parse(jsonText) as unknown;
-    return GitHubProposalDraftSchema.parse(parsed);
+    return GitHubProposalDraftSchema.parse(parsed) as GitHubProposalDraft;
   } catch {
     throw new GitHubClientError({
       code: "github_patch_invalid",
