@@ -366,6 +366,10 @@ test("matrix client fails closed when the refresh backend is unavailable", async
       const method = String(init?.method ?? "GET");
       requests.push(`${method} ${url.pathname}`);
 
+      if (url.pathname === "/_matrix/client/v3/account/whoami") {
+        return new Response("", { status: 401 });
+      }
+
       if (url.pathname === "/oauth2/token" && method === "POST") {
         return new Response("", { status: 503 });
       }

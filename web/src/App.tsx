@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChatWorkspace } from "./components/ChatWorkspace.js";
 import {
   GitHubWorkspace,
@@ -36,11 +36,13 @@ type PersistedShellState = {
 const SHELL_STORAGE_KEY = "modelgate.console.shell.v2";
 
 const DEFAULT_GITHUB_CONTEXT: GitHubWorkspaceStatus = {
-  repositoryLabel: "Noch kein Repository gewählt",
+  repositoryLabel: "Noch kein GitHub-Repo ausgewählt",
   connectionLabel: "Nicht verbunden",
   accessLabel: "Nur Lesen",
   analysisLabel: "Noch nicht gestartet",
+  proposalLabel: "Noch nicht erstellt",
   approvalLabel: "Nicht erforderlich",
+  resultLabel: "Noch nicht gestartet",
   safetyText: "Die App kann Informationen ansehen, aber nichts verändern.",
   expertDetails: {
     requestId: null,
@@ -303,32 +305,31 @@ export default function App() {
     });
   }, [expertMode, mode]);
 
-  function recordTelemetry(
-    kind: TelemetryEntry["kind"],
-    label: string,
-    detail?: string,
-  ) {
-    setTelemetry((current) =>
-      appendTelemetry(current, {
-        id: createId(),
-        kind,
-        label,
-        detail,
-      }),
-    );
-  }
+  const recordTelemetry = useCallback(
+    (kind: TelemetryEntry["kind"], label: string, detail?: string) => {
+      setTelemetry((current) =>
+        appendTelemetry(current, {
+          id: createId(),
+          kind,
+          label,
+          detail,
+        }),
+      );
+    },
+    [],
+  );
 
-  function updateGitHubReviewItems(items: ReviewItem[]) {
+  const updateGitHubReviewItems = useCallback((items: ReviewItem[]) => {
     setReviewItems((current) => mergeReviewItems(current.filter((item) => item.source !== "github"), items));
-  }
+  }, []);
 
-  function updateMatrixReviewItems(items: ReviewItem[]) {
+  const updateMatrixReviewItems = useCallback((items: ReviewItem[]) => {
     setReviewItems((current) => mergeReviewItems(current.filter((item) => item.source !== "matrix"), items));
-  }
+  }, []);
 
-  function removeModeReviewItems(source: ReviewItem["source"]) {
+  const removeModeReviewItems = useCallback((source: ReviewItem["source"]) => {
     setReviewItems((current) => current.filter((item) => item.source !== source));
-  }
+  }, []);
 
   const chatRows: StatusPanelRow[] = [
     { label: "Modell", value: activeModelAlias ?? "Noch nicht gewählt" },
@@ -340,7 +341,9 @@ export default function App() {
   const githubRows: StatusPanelRow[] = [
     { label: "Repository", value: githubContext.repositoryLabel },
     { label: "Lesestatus", value: githubContext.analysisLabel },
+    { label: "Vorschlag", value: githubContext.proposalLabel },
     { label: "Freigabe", value: githubContext.approvalLabel },
+    { label: "Ergebnis", value: githubContext.resultLabel },
     { label: "Sicherheit", value: githubContext.accessLabel },
   ];
 

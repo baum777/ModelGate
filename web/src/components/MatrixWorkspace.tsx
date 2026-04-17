@@ -237,14 +237,27 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     () => selectedSpaceIds.filter((value) => value.trim().length > 0),
     [selectedSpaceIds],
   );
+  const reviewPlan = promotedPlan ?? topicPlan;
+  const matrixReviewItems = useMemo<ReviewItem[]>(() => {
+    if (!reviewPlan) {
+      return [];
+    }
 
-  useEffect(() => {
-    const reviewPlan = promotedPlan ?? topicPlan;
     const stale = Boolean(promotedPlan?.stale || stalePlanDetected);
-    const reviewTitle = promotedPlan?.summary ?? "Matrix Vorschlag";
-    const reviewSummary = promotedPlan?.rationale ?? "Freigabe erforderlich.";
-
-    const expertDetails = {
+    return [
+      {
+        id: reviewPlan.planId,
+        source: "matrix" as const,
+        title: promotedPlan?.summary ?? "Matrix Vorschlag",
+        summary: promotedPlan?.rationale ?? "Freigabe erforderlich.",
+        status: stale ? "stale" : "pending_review",
+        stale,
+        sourceLabel: "Matrix Workspace",
+      },
+    ];
+  }, [promotedPlan?.rationale, promotedPlan?.stale, promotedPlan?.summary, promotedPlan, reviewPlan, stalePlanDetected, topicPlan]);
+  const matrixExpertDetails = useMemo(
+    () => ({
       route: "/api/matrix/*",
       requestId: null,
       planId: reviewPlan?.planId ?? null,
@@ -261,46 +274,35 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       ],
       sseLifecycle: "n/a",
       rawPayload: analysisResult ? JSON.stringify(analysisResult, null, 2) : null,
-    };
-
-    const reviewItems: ReviewItem[] = reviewPlan
-      ? [
-          {
-            id: reviewPlan.planId,
-            source: "matrix" as const,
-            title: reviewTitle,
-            summary: reviewSummary,
-            status: stale ? "stale" : "pending_review",
-            stale,
-            sourceLabel: "Matrix Workspace",
-          },
-        ]
-      : [];
-
-    props.onContextChange({
+    }),
+    [
+      analysisResult,
+      currentScope,
+      promotedPlan?.targetRoomId,
+      reviewPlan,
+      scopeSummary,
+      selectedSpaces,
+      status,
+      topicPlan?.roomId,
+      topicRoomId,
+    ],
+  );
+  const matrixContextPayload = useMemo<MatrixWorkspaceStatus>(
+    () => ({
       scopeLabel: currentScope ? "Bereich gewählt" : "Noch kein Bereich gewählt",
       summaryLabel: scopeSummary ? "Zusammenfassung bereit" : "Noch keine Zusammenfassung",
       approvalLabel: reviewPlan ? "Freigabe erforderlich" : "Nicht erforderlich",
       safetyText: "Die App kann Informationen ansehen, aber nichts verändern.",
-      expertDetails,
-      reviewItems,
-    });
+      expertDetails: matrixExpertDetails,
+      reviewItems: matrixReviewItems,
+    }),
+    [currentScope, matrixExpertDetails, matrixReviewItems, reviewPlan, scopeSummary],
+  );
 
-    props.onReviewItemsChange?.(reviewItems);
-  }, [
-    analysisResult,
-    currentScope,
-    currentScope?.scopeId,
-    props.onContextChange,
-    props.onReviewItemsChange,
-    promotedPlan,
-    scopeSummary,
-    selectedSpaces,
-    stalePlanDetected,
-    status,
-    topicPlan,
-    topicRoomId,
-  ]);
+  useEffect(() => {
+    props.onContextChange(matrixContextPayload);
+    props.onReviewItemsChange?.(matrixReviewItems);
+  }, [matrixContextPayload, matrixReviewItems, props.onContextChange, props.onReviewItemsChange]);
 
   useEffect(() => {
     persistState({
@@ -349,7 +351,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     return () => {
       cancelled = true;
     };
-  }, [persisted, props]);
+  }, [persisted, props.onTelemetry, props.restoredSession]);
   async function loadProvenance(roomId: string) {
     setProvenanceLoading(true);
     setProvenanceError(null);
@@ -827,20 +829,32 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
           {" "}
           <strong>
             {currentScope
-              ? `${currentScope.type} scope`
-              : "No scope resolved yet"}
+              ? props.expertMode
+                ? `${currentScope.type} scope`
+                : "Bereich gewählt"
+              : "Noch kein Bereich gewählt"}
           </strong>{" "}
           <div className="summary-stack">
-            {" "}
-            <span>User: {whoami?.userId ?? "unresolved"}</span>{" "}
-            <span>Homeserver: {whoami?.homeserver ?? "unresolved"}</span>{" "}
-            <span>Origin: {MATRIX_API_BASE_URL}</span>{" "}
-            <span>Mode: {modeLabel(mode)}</span>{" "}
-            <span>Scope: {currentScope?.scopeId ?? "none"}</span>{" "}
-            <span>Rooms: {scopeSummary?.items.length ?? 0}</span>{" "}
-            <span>
-              Candidates: {analysisResult?.actionCandidates.length ?? 0}
-            </span>{" "}
+            {props.expertMode ? (
+              <>
+                <span>User: {whoami?.userId ?? "unresolved"}</span>
+                <span>Homeserver: {whoami?.homeserver ?? "unresolved"}</span>
+                <span>Origin: {MATRIX_API_BASE_URL}</span>
+                <span>Mode: {modeLabel(mode)}</span>
+                <span>Scope: {currentScope?.scopeId ?? "none"}</span>
+                <span>Rooms: {scopeSummary?.items.length ?? 0}</span>
+                <span>
+                  Candidates: {analysisResult?.actionCandidates.length ?? 0}
+                </span>
+              </>
+            ) : (
+              <>
+                <span>Bereichstatus: {currentScope ? "Bereit" : "Wartet"}</span>
+                <span>Zusammenfassung: {scopeSummary ? "Vorhanden" : "Noch nicht geladen"}</span>
+                <span>Freigabe: {promotedPlan || topicPlan ? "Nötig" : "Nicht erforderlich"}</span>
+                <span>Sicherheit: Nur Lesen aktiv</span>
+              </>
+            )}
           </div>{" "}
         </aside>{" "}
       </section>{" "}
@@ -848,7 +862,9 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
         <section className="alert-banner">
           {" "}
           <p>
-            Matrix bootstrap {status}. Origin: {MATRIX_API_BASE_URL}
+            {props.expertMode
+              ? `Matrix bootstrap ${status}. Origin: ${MATRIX_API_BASE_URL}`
+              : `Matrix bootstrap ${status}.`}
           </p>{" "}
           {identityError ? <p>{identityError}</p> : null}{" "}
           {roomsError ? <p>{roomsError}</p> : null}{" "}
@@ -1116,12 +1132,20 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             <div className="info-block">
               <p className="info-label">Who am I</p>
               <p className="info-value">
-                {whoami?.userId ?? "Load backend identity to begin"}
+                {props.expertMode
+                  ? whoami?.userId ?? "Load backend identity to begin"
+                  : whoami
+                    ? "Identität geladen"
+                    : "Backend-Identität wird geladen"}
               </p>
-              <p className="info-note">
-                Device: {text(whoami?.deviceId)} · Homeserver:{" "}
-                {text(whoami?.homeserver)}
-              </p>
+              {props.expertMode ? (
+                <p className="info-note">
+                  Device: {text(whoami?.deviceId)} · Homeserver:{" "}
+                  {text(whoami?.homeserver)}
+                </p>
+              ) : (
+                <p className="info-note">Bereich wählen, um die Übersicht zu laden.</p>
+              )}
             </div>{" "}
             {identityError ? (
               <p className="error-banner" data-testid="matrix-identity-error">{identityError}</p>
@@ -1158,10 +1182,14 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                       >
                         {" "}
                         <span className="room-picker-title">
-                          {room.name ?? room.canonicalAlias ?? room.roomId}
+                          {props.expertMode
+                            ? room.name ?? room.canonicalAlias ?? room.roomId
+                            : room.name ?? "Bereich"}
                         </span>{" "}
                         <span className="room-picker-meta">
-                          {room.roomType ?? "room"} · {room.roomId}
+                          {props.expertMode
+                            ? `${room.roomType ?? "room"} · ${room.roomId}`
+                            : "Bereich auswählen"}
                         </span>{" "}
                       </button>
                     );
@@ -1206,9 +1234,9 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                     No scope inputs selected yet.
                   </span>
                 ) : null}{" "}
-                {selectedRoomIds.map((roomId) => (
+                {selectedRoomIds.map((roomId, index) => (
                   <span key={roomId} className="scope-chip">
-                    <span>Room: {roomId}</span>
+                    <span>{props.expertMode ? `Room: ${roomId}` : `Bereich ${index + 1}`}</span>
                     <button
                       type="button"
                       className="chip-action"
@@ -1222,9 +1250,9 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                     </button>
                   </span>
                 ))}{" "}
-                {selectedSpaces.map((spaceId) => (
+                {selectedSpaces.map((spaceId, index) => (
                   <span key={spaceId} className="scope-chip">
-                    <span>Space: {spaceId}</span>
+                    <span>{props.expertMode ? `Space: ${spaceId}` : `Bereich ${index + 1}`}</span>
                     <button
                       type="button"
                       className="chip-action"
@@ -1289,10 +1317,10 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                       >
                         <div>
                           <strong>{text(item.name)}</strong>
-                          <span>{text(item.canonicalAlias)}</span>
+                          <span>{props.expertMode ? text(item.canonicalAlias) : "Bereich bereit"}</span>
                         </div>
                         <small>
-                          {item.members} members · {item.lastEventSummary}
+                          {props.expertMode ? `${item.members} members · ${item.lastEventSummary}` : "Übersicht bereit"}
                         </small>
                         <div className="scope-summary-actions">
                           <button
@@ -1300,7 +1328,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                             className="secondary-button"
                             onClick={() => void loadProvenance(item.roomId)}
                           >
-                            View provenance
+                            {props.expertMode ? "View provenance" : "Übersicht ansehen"}
                           </button>
                         </div>
                       </article>
@@ -1344,11 +1372,12 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                         >
                           <div>
                             <strong>{text(room.name ?? null)}</strong>
-                            <span>{text(room.canonical_alias ?? null)}</span>
+                            <span>{props.expertMode ? text(room.canonical_alias ?? null) : "Bereich verbunden"}</span>
                           </div>
                           <small>
-                            {text(room.room_type ?? null)} ·{" "}
-                            {room.room_id ?? "unknown room"}
+                            {props.expertMode
+                              ? `${text(room.room_type ?? null)} · ${room.room_id ?? "unknown room"}`
+                              : "Übersicht bereit"}
                           </small>
                         </article>
                       ))}

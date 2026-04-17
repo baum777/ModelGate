@@ -188,8 +188,8 @@ export type GitHubChangePlan = {
   }>;
   generatedAt: string;
   expiresAt: string;
-  execution?: unknown;
-  verification?: unknown;
+  execution?: GitHubExecuteResult;
+  verification?: GitHubVerifyResult;
 };
 
 export type GitHubRepoListResponse = {
@@ -224,6 +224,48 @@ export type GitHubChangeProposalRequest = {
   baseBranch?: string;
 };
 
+export type GitHubExecuteRequest = {
+  approval: true;
+};
+
+export type GitHubExecuteResult = {
+  planId: string;
+  status: "executed";
+  branchName: string;
+  baseSha: string;
+  headSha: string;
+  commitSha: string;
+  prNumber: number;
+  prUrl: string;
+  targetBranch: string;
+  executedAt: string;
+};
+
+export type GitHubVerifyResult = {
+  planId: string;
+  status: "verified" | "mismatch" | "pending" | "failed";
+  checkedAt: string;
+  branchName: string;
+  targetBranch: string;
+  expectedBaseSha: string;
+  actualBaseSha: string | null;
+  expectedCommitSha: string | null;
+  actualCommitSha: string | null;
+  prNumber: number | null;
+  prUrl: string | null;
+  mismatchReasons: string[];
+};
+
+export type GitHubExecuteResponse = {
+  ok: true;
+  result: GitHubExecuteResult;
+};
+
+export type GitHubVerifyResponse = {
+  ok: true;
+  verification: GitHubVerifyResult;
+};
+
 export async function fetchGitHubRepos() {
   return requestJson<GitHubRepoListResponse>("/api/github/repos");
 }
@@ -244,4 +286,15 @@ export async function proposeGitHubAction(body: GitHubChangeProposalRequest) {
 
 export async function fetchGitHubPlan(planId: string) {
   return requestJson<{ ok: true; plan: GitHubChangePlan }>(`/api/github/actions/${encodeURIComponent(planId)}`);
+}
+
+export async function executeGitHubPlan(planId: string, body: GitHubExecuteRequest) {
+  return requestJson<GitHubExecuteResponse>(`/api/github/actions/${encodeURIComponent(planId)}/execute`, {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
+export async function verifyGitHubPlan(planId: string) {
+  return requestJson<GitHubVerifyResponse>(`/api/github/actions/${encodeURIComponent(planId)}/verify`);
 }

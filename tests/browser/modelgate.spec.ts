@@ -142,15 +142,272 @@ async function installBaseMocks(page: Page, options?: { matrixStatus?: MatrixSta
   }
 }
 
+type GitHubWorkspaceMockOptions = {
+  proposalStale?: boolean;
+  executeResponse?: {
+    status: number;
+    body: unknown;
+  };
+  verifyResponse?: {
+    status: number;
+    body: unknown;
+  };
+};
+
+async function installGitHubWorkspaceMocks(page: Page, options: GitHubWorkspaceMockOptions = {}) {
+  const counters = {
+    execute: 0,
+    verify: 0
+  };
+
+  await page.route("**/api/github/repos", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        checkedAt: "2026-04-16T08:00:00.000Z",
+        repos: [
+          {
+            owner: "octo",
+            repo: "demo",
+            fullName: "octo/demo",
+            defaultBranch: "main",
+            defaultBranchSha: "abc123",
+            description: "Demo repository",
+            isPrivate: false,
+            status: "ready",
+            permissions: { canWrite: false },
+            checkedAt: "2026-04-16T08:00:00.000Z"
+          },
+          {
+            owner: "octo",
+            repo: "sample",
+            fullName: "octo/sample",
+            defaultBranch: "main",
+            defaultBranchSha: "def456",
+            description: "Sample repository",
+            isPrivate: false,
+            status: "ready",
+            permissions: { canWrite: false },
+            checkedAt: "2026-04-16T08:00:00.000Z"
+          }
+        ]
+      })
+    });
+  });
+
+  await page.route("**/api/github/context", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        context: {
+          repo: {
+            owner: "octo",
+            repo: "demo",
+            fullName: "octo/demo",
+            defaultBranch: "main",
+            defaultBranchSha: "abc123",
+            description: "Demo repository",
+            isPrivate: false,
+            status: "ready",
+            permissions: { canWrite: false },
+            checkedAt: "2026-04-16T08:00:00.000Z"
+          },
+          ref: "main",
+          baseSha: "abc123",
+          question: "Beschreibe die Projektstruktur und nenne die sichere nächste Aktion.",
+          files: [
+            {
+              path: "README.md",
+              sha: "sha-readme",
+              excerpt: "Demo",
+              citations: [],
+              truncated: false
+            },
+            {
+              path: "web/src/App.tsx",
+              sha: "sha-app",
+              excerpt: "App",
+              citations: [],
+              truncated: false
+            }
+          ],
+          citations: [],
+          tokenBudget: {
+            maxTokens: 1000,
+            usedTokens: 100,
+            truncated: false
+          },
+          warnings: [],
+          generatedAt: "2026-04-16T08:00:00.000Z"
+        }
+      })
+    });
+  });
+
+  await page.route("**/api/github/actions/propose", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        plan: {
+          planId: "plan-123",
+          repo: {
+            owner: "octo",
+            repo: "demo",
+            fullName: "octo/demo",
+            defaultBranch: "main",
+            defaultBranchSha: "abc123",
+            description: "Demo repository",
+            isPrivate: false,
+            status: "ready",
+            permissions: { canWrite: false },
+            checkedAt: "2026-04-16T08:00:00.000Z"
+          },
+          baseRef: "main",
+          baseSha: "abc123",
+          branchName: "modelgate/demo-plan",
+          targetBranch: "main",
+          status: "pending_review",
+          stale: Boolean(options.proposalStale),
+          requiresApproval: true,
+          summary: "Demo plan",
+          rationale: "Nur ein Beispielplan.",
+          riskLevel: "low_surface",
+          citations: [],
+          diff: [
+            {
+              path: "README.md",
+              changeType: "modified",
+              beforeSha: "before",
+              afterSha: "after",
+              additions: 1,
+              deletions: 1,
+              patch: "@@ -1 +1 @@\n-Hello\n+Hello world",
+              citations: []
+            }
+          ],
+          generatedAt: "2026-04-16T08:00:00.000Z",
+          expiresAt: "2026-04-16T09:00:00.000Z"
+        }
+      })
+    });
+  });
+
+  await page.route("**/api/github/actions/plan-123/execute", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+
+    counters.execute += 1;
+
+    if (options.executeResponse) {
+      await route.fulfill({
+        status: options.executeResponse.status,
+        contentType: "application/json",
+        body: JSON.stringify(options.executeResponse.body)
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        result: {
+          planId: "plan-123",
+          status: "executed",
+          branchName: "modelgate/demo-plan",
+          baseSha: "abc123",
+          headSha: "def456",
+          commitSha: "def456",
+          prNumber: 42,
+          prUrl: "https://github.com/octo/demo/pull/42",
+          targetBranch: "main",
+          executedAt: "2026-04-16T08:30:00.000Z"
+        }
+      })
+    });
+  });
+
+  await page.route("**/api/github/actions/plan-123/verify", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+
+    counters.verify += 1;
+
+    if (options.verifyResponse) {
+      await route.fulfill({
+        status: options.verifyResponse.status,
+        contentType: "application/json",
+        body: JSON.stringify(options.verifyResponse.body)
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        verification: {
+          planId: "plan-123",
+          status: "verified",
+          checkedAt: "2026-04-16T08:31:00.000Z",
+          branchName: "modelgate/demo-plan",
+          targetBranch: "main",
+          expectedBaseSha: "abc123",
+          actualBaseSha: "abc123",
+          expectedCommitSha: "def456",
+          actualCommitSha: "def456",
+          prNumber: 42,
+          prUrl: "https://github.com/octo/demo/pull/42",
+          mismatchReasons: []
+        }
+      })
+    });
+  });
+
+  return counters;
+}
+
 async function loadConsole(page: Page) {
-  await page.goto("/");
-  await expect(page.getByTestId("app-shell")).toBeVisible();
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("app-shell")).toBeVisible({ timeout: 15000 });
   await expect(page.getByText("ModelGate Console")).toBeVisible();
   await expect(page.getByTestId("tab-chat")).toBeVisible();
   await expect(page.getByTestId("tab-github")).toBeVisible();
   await expect(page.getByTestId("tab-matrix")).toBeVisible();
   await expect(page.getByTestId("tab-review")).toBeVisible();
   await expect(page.getByTestId("tab-settings")).toBeVisible();
+}
+
+async function waitForMatrixWorkspace(page: Page) {
+  await expect(page.getByTestId("matrix-status")).toHaveText("Matrix backend ready");
+  await expect(page.getByTestId("matrix-rooms")).toBeVisible();
 }
 
 function submitChord() {
@@ -174,16 +431,7 @@ test("app shell renders, tabs open, header shows backend truth, and secrets stay
   await expect(page.getByTestId("chat-workspace")).toBeVisible();
 
   await page.getByTestId("tab-github").click();
-  await expect(page.getByRole("heading", { name: "GitHub Workspace" })).toBeVisible();
-
-  await page.getByTestId("tab-matrix").click();
-  await expect(page.getByRole("heading", { name: "Matrix Workspace" })).toBeVisible();
-  await expect(page.getByTestId("matrix-workspace")).toBeVisible();
-
-  await page.getByTestId("tab-review").click();
-  await expect(page.getByRole("heading", { name: "Review" })).toBeVisible();
-  await page.getByTestId("tab-settings").click();
-  await expect(page.getByRole("heading", { name: "Einstellungen" })).toBeVisible();
+  await expect(page.getByTestId("github-workspace")).toBeVisible();
 
   const body = page.locator("body");
   await expect(body).not.toContainText("Dashboard");
@@ -337,7 +585,7 @@ test("beginner hides technical GitHub fields while expert details reveal them", 
   await loadConsole(page);
   await page.getByTestId("tab-github").click();
 
-  await expect(page.locator(".empty-state-card").getByRole("heading", { name: "Noch kein Repository gewählt" })).toBeVisible();
+  await expect(page.locator(".empty-state-card").getByRole("heading", { name: "Noch kein GitHub-Repo ausgewählt" })).toBeVisible();
   await expect(page.locator("body")).not.toContainText("octo/demo");
   await expect(page.locator("body")).not.toContainText("plan-123");
   await expect(page.locator("body")).not.toContainText("Anfrage-ID");
@@ -351,13 +599,237 @@ test("beginner hides technical GitHub fields while expert details reveal them", 
 
   await expect(page.locator("body")).not.toContainText("Anfrage-ID");
   await expect(page.locator("body")).not.toContainText("Plan-ID");
+  await expect(page.locator("body")).not.toContainText("Branch: n/a");
+  await expect(page.locator("body")).not.toContainText("Commit: n/a");
+  await expect(page.locator("body")).not.toContainText("GitHub API Status");
+  await expect(page.locator("body")).not.toContainText("Anfrage: n/a");
+  await expect(page.locator("body")).not.toContainText("Plan: n/a");
+  await expect(page.locator("body")).not.toContainText("Route: -");
   await expect(page.locator("body")).not.toContainText("octo/demo");
 
   await page.getByRole("button", { name: "Expert" }).click();
-  await expect(page.getByText("Technische Details")).toBeVisible();
-  await expect(page.getByText("Anfrage-ID")).toBeVisible();
-  await expect(page.getByText("Plan-ID")).toBeVisible();
-  await expect(page.getByText("Route")).toBeVisible();
+  await expect(page.getByTestId("github-workspace").locator("summary").filter({ hasText: "Technische Details" })).toBeVisible();
+  await expect(page.getByTestId("github-workspace").locator(".expert-details").getByText("Anfrage-ID", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("github-workspace").locator(".expert-details").getByText("Plan-ID", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("github-workspace").locator(".expert-details").getByText("Route")).toBeVisible();
+});
+
+test("GitHub approval gate executes once, verifies the PR, and shows the result", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  const counters = await installGitHubWorkspaceMocks(page);
+
+  await loadConsole(page);
+  await page.getByTestId("tab-github").click();
+  await page.getByLabel("Repo auswählen").selectOption({ label: "Repository 1" });
+  await page.getByRole("button", { name: "Analyse starten" }).click();
+  await page.getByRole("button", { name: "Vorschlag erstellen" }).click();
+
+  const approval = page.getByLabel("Ich habe den Vorschlag geprüft und möchte einen Pull Request erstellen.");
+  const executeButton = page.getByRole("button", { name: "Freigeben und ausführen" });
+
+  await expect(page.getByTestId("github-approval-gate")).toBeVisible();
+  await expect(approval).not.toBeChecked();
+  await expect(executeButton).toBeDisabled();
+
+  await approval.check();
+  await expect(executeButton).toBeEnabled();
+  await executeButton.click();
+
+  await expect(page.getByTestId("github-pr-result")).toBeVisible();
+  await expect(page.getByTestId("github-pr-result")).toContainText("Pull Request erstellt");
+  await expect(page.getByTestId("github-pr-result")).toContainText("Geprüft");
+  await expect(page.getByTestId("github-pr-result")).toContainText("Bereit zur Prüfung auf GitHub");
+  await expect(page.getByRole("link", { name: "Auf GitHub öffnen" })).toBeVisible();
+  await expect(approval).not.toBeChecked();
+
+  expect(counters.execute).toBe(1);
+  expect(counters.verify).toBe(1);
+});
+
+test("stale GitHub plans block execution and clear approval", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  const counters = await installGitHubWorkspaceMocks(page, {
+    executeResponse: {
+      status: 409,
+      body: {
+        ok: false,
+        error: {
+          code: "github_stale_plan",
+          message: "GitHub plan is stale and must be refreshed"
+        }
+      }
+    }
+  });
+
+  await loadConsole(page);
+  await page.getByTestId("tab-github").click();
+  await page.getByLabel("Repo auswählen").selectOption({ label: "Repository 1" });
+  await page.getByRole("button", { name: "Analyse starten" }).click();
+  await page.getByRole("button", { name: "Vorschlag erstellen" }).click();
+
+  const approval = page.getByLabel("Ich habe den Vorschlag geprüft und möchte einen Pull Request erstellen.");
+  const executeButton = page.getByRole("button", { name: "Freigeben und ausführen" });
+
+  await approval.check();
+  await executeButton.click();
+
+  await expect(page.getByTestId("github-stale-plan-warning")).toBeVisible();
+  await expect(approval).not.toBeChecked();
+  await expect(executeButton).toBeDisabled();
+  await expect(page.getByTestId("github-pr-result")).toHaveCount(0);
+
+  expect(counters.execute).toBe(1);
+  expect(counters.verify).toBe(0);
+});
+
+test("changing the selected GitHub repo clears approval and hides execution controls", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await installGitHubWorkspaceMocks(page);
+
+  await loadConsole(page);
+  await page.getByTestId("tab-github").click();
+  await page.getByLabel("Repo auswählen").selectOption({ label: "Repository 1" });
+  await page.getByRole("button", { name: "Analyse starten" }).click();
+  await page.getByRole("button", { name: "Vorschlag erstellen" }).click();
+
+  const approval = page.getByLabel("Ich habe den Vorschlag geprüft und möchte einen Pull Request erstellen.");
+  await approval.check();
+  await expect(approval).toBeChecked();
+
+  await page.getByLabel("Repo auswählen").selectOption({ label: "Repository 2" });
+
+  await expect(page.getByTestId("github-approval-gate")).toHaveCount(0);
+  await expect(page.getByTestId("github-pr-result")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Freigeben und ausführen" })).toHaveCount(0);
+});
+
+test("chat remains proposal-only and cannot trigger GitHub execute or verify routes", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+
+  const counters = {
+    execute: 0,
+    verify: 0
+  };
+
+  await page.route("**/api/github/actions/**/execute", async (route) => {
+    counters.execute += 1;
+    await route.fulfill({
+      status: 500,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: false,
+        error: {
+          code: "unexpected_route",
+          message: "execute should not be called from chat"
+        }
+      })
+    });
+  });
+
+  await page.route("**/api/github/actions/**/verify", async (route) => {
+    counters.verify += 1;
+    await route.fulfill({
+      status: 500,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: false,
+        error: {
+          code: "unexpected_route",
+          message: "verify should not be called from chat"
+        }
+      })
+    });
+  });
+
+  await page.route("**/chat", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      body: CHAT_STREAM
+    });
+  });
+
+  await loadConsole(page);
+  await page.getByTestId("tab-chat").click();
+  await page.getByTestId("chat-composer").fill("Hello");
+  await page.getByTestId("chat-send").click();
+  await expect(page.getByText("Hello from mocked backend")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Freigeben und ausführen" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Ergebnis prüfen" })).toHaveCount(0);
+
+  expect(counters.execute).toBe(0);
+  expect(counters.verify).toBe(0);
+});
+
+test("GitHub expert details stay hidden in beginner mode and reveal execution metadata in Expert mode", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await installGitHubWorkspaceMocks(page);
+
+  await loadConsole(page);
+  await page.getByTestId("tab-github").click();
+  await page.getByLabel("Repo auswählen").selectOption({ label: "Repository 1" });
+  await page.getByRole("button", { name: "Analyse starten" }).click();
+  await page.getByRole("button", { name: "Vorschlag erstellen" }).click();
+
+  const approval = page.getByLabel("Ich habe den Vorschlag geprüft und möchte einen Pull Request erstellen.");
+  await approval.check();
+  await page.getByRole("button", { name: "Freigeben und ausführen" }).click();
+
+  const body = page.locator("body");
+  await expect(body).not.toContainText("Anfrage-ID");
+  await expect(body).not.toContainText("Plan-ID");
+  await expect(body).not.toContainText("Branch");
+  await expect(body).not.toContainText("Commit");
+  await expect(body).not.toContainText("Route");
+  await expect(body).not.toContainText("GitHub API Status");
+  await expect(body).not.toContainText("raw diff");
+
+  await page.getByRole("button", { name: "Expert" }).click();
+  const expertDetails = page.getByTestId("github-workspace").locator(".expert-details");
+  await expect(expertDetails.getByText("Anfrage-ID", { exact: true })).toBeVisible();
+  await expect(expertDetails.getByText("Plan-ID", { exact: true })).toBeVisible();
+  await expect(expertDetails.getByText("Branch", { exact: true })).toBeVisible();
+  await expect(expertDetails.getByText("Commit", { exact: true })).toBeVisible();
+  await expect(expertDetails.getByText("Pull Request", { exact: true })).toBeVisible();
+  await expect(expertDetails.getByText("Verifikation", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("github-workspace").getByText("Pull Request URL:")).toBeVisible();
+  await expect(page.getByTestId("github-workspace").locator(".reference-chip").getByText("README.md", { exact: true })).toBeVisible();
+});
+
+test("beginner hides Matrix identifiers while expert details reveal them", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  const requestUrls: string[] = [];
+  page.on("request", (request) => {
+    requestUrls.push(request.url());
+  });
+  await loadConsole(page);
+
+  await page.getByTestId("tab-matrix").click();
+  await waitForMatrixWorkspace(page);
+
+  const rooms = page.getByTestId("matrix-rooms");
+  await expect(rooms.getByText("Room name", { exact: true })).toBeVisible();
+  await expect(rooms).not.toContainText("!room:matrix.example");
+  await expect(rooms).not.toContainText("@user:matrix.example");
+  await expect(page.locator(".workspace-context")).not.toContainText("https://matrix.example");
+  await expect(page.locator(".workspace-context")).not.toContainText("Route");
+  await expect(page.locator(".workspace-context")).not.toContainText("HTTP-Status");
+  await expect(page.locator(".workspace-context")).not.toContainText("SSE lifecycle");
+
+  await page.getByRole("button", { name: "Expert" }).click();
+  const expertDetails = page.locator(".workspace-context").locator(".expert-details");
+  await expect(expertDetails.locator("summary")).toHaveText("Technische Details");
+  await expect(expertDetails.getByText("Route", { exact: true })).toBeVisible();
+  await expect(expertDetails.getByText("Request ID", { exact: true })).toBeVisible();
+  await expect(expertDetails.getByText("Room ID", { exact: true })).toBeVisible();
+  await expect(expertDetails.getByText("Space ID", { exact: true })).toBeVisible();
+  await expect(expertDetails.getByText("SSE lifecycle", { exact: true })).toBeVisible();
+  expect(requestUrls.every((url) => !url.includes("matrix.org"))).toBe(true);
 });
 
 test("chat keyboard submit is wired, requests the backend, and keeps focus usable", async ({ page }) => {
@@ -486,10 +958,13 @@ test("Matrix Explore shows read-only backend state", async ({ page }) => {
   await loadConsole(page);
 
   await page.getByTestId("tab-matrix").click();
-  await expect(page.getByTestId("matrix-status")).toHaveText("Matrix backend ready");
-  await expect(page.getByTestId("matrix-workspace").locator(".workspace-summary-card").getByText("User: @user:matrix.example")).toBeVisible();
+  await waitForMatrixWorkspace(page);
   await expect(page.getByTestId("matrix-rooms").getByText("Room name")).toBeVisible();
-  await expect(page.getByTestId("matrix-rooms").getByText("!room:matrix.example")).toBeVisible();
+  await expect(page.getByTestId("matrix-rooms")).not.toContainText("!room:matrix.example");
+  await expect(page.getByTestId("matrix-workspace")).not.toContainText("@user:matrix.example");
+  await expect(page.getByTestId("matrix-workspace")).not.toContainText("https://matrix.example");
+  await expect(page.getByTestId("matrix-workspace")).toContainText("Bereichstatus");
+  await expect(page.getByTestId("matrix-workspace")).toContainText("Sicherheit: Nur Lesen aktiv");
 });
 
 test("Matrix provenance loads from the read-only backend route", async ({ page }) => {
@@ -592,19 +1067,14 @@ test("Matrix provenance loads from the read-only backend route", async ({ page }
 
   await loadConsole(page);
   await page.getByTestId("tab-matrix").click();
-  await page.getByTestId("matrix-rooms").getByRole("button", { name: "Room name" }).click();
+  await waitForMatrixWorkspace(page);
+  await page.getByTestId("matrix-rooms").getByText("Room name", { exact: true }).click();
   await page.getByRole("button", { name: "Proceed to Analyze" }).click();
+  await page.locator("button.workspace-tab").filter({ hasText: /^Review$/ }).click();
 
   await expect.poll(() => scopeResolveCount).toBe(1);
   await expect.poll(() => scopeSummaryCount).toBe(1);
   await expect.poll(() => provenanceCount).toBe(1);
-  await page.locator("button.workspace-tab").filter({ hasText: /^Explore$/ }).click();
-  await expect(page.getByText("Mode: Explore")).toBeVisible();
-  await expect(page.locator(".scope-summary").getByText("ModelGate Test", { exact: true })).toBeVisible();
-  await expect(page.locator(".scope-summary").getByText("#modelgate-test:matrix.example", { exact: true })).toBeVisible();
-  await page.locator("button.workspace-tab").filter({ hasText: /^Review$/ }).click();
-  await expect(page.getByText("Mode: Review")).toBeVisible();
-  await expect(page.locator(".provenance-card")).toBeVisible();
   await expect(page.getByText("Provenance", { exact: true })).toBeVisible();
   await expect(page.getByText("Read-only room metadata derived from joined rooms.")).toBeVisible();
   await expect(provenanceRequests[0] ?? "").toContain("/api/matrix/rooms/!room%3Amatrix.example/provenance");
@@ -615,7 +1085,8 @@ test("Matrix fail-closed rendering surfaces malformed Matrix responses", async (
   await loadConsole(page);
 
   await page.getByTestId("tab-matrix").click();
-  await expect(page.getByTestId("matrix-status")).toHaveText("Matrix backend error");
+  await expect(page.getByTestId("matrix-status")).toContainText("Matrix backend error");
+  await expect(page.getByTestId("matrix-rooms")).toBeVisible();
   await expect(page.getByTestId("matrix-identity-error")).toContainText("Matrix whoami");
   await expect(page.getByTestId("matrix-rooms-error")).toContainText("Matrix joined rooms");
 
@@ -710,12 +1181,13 @@ test("Matrix room topic update success flows from prepare to verified execute", 
 
   await loadConsole(page);
   await page.getByTestId("tab-matrix").click();
+  await waitForMatrixWorkspace(page);
   await page.getByRole("button", { name: "Review" }).click();
 
   const roomId = page.getByTestId("matrix-topic-room-id");
   const topicText = page.getByTestId("matrix-topic-text");
   const planCard = page.getByTestId("matrix-topic-plan");
-  const approveCheckbox = page.getByLabel("I approve backend execution of this topic update.");
+  const approveCheckbox = page.getByLabel("Ich bestätige die Freigabe für diese Änderung.");
 
   await roomId.fill("!room:matrix.example");
   await topicText.fill("New topic");
@@ -723,7 +1195,6 @@ test("Matrix room topic update success flows from prepare to verified execute", 
   await page.getByRole("button", { name: "Prepare topic update" }).click();
 
   await expect(planCard).toBeVisible();
-  await expect(planCard).toContainText("!room:matrix.example");
   await expect(planCard).toContainText("Old topic");
   await expect(planCard).toContainText("New topic");
   await expect(planCard).toContainText("pending_review");
@@ -815,6 +1286,7 @@ test("Matrix room topic update refresh reloads the canonical plan details", asyn
 
   await loadConsole(page);
   await page.getByTestId("tab-matrix").click();
+  await waitForMatrixWorkspace(page);
   await page.getByRole("button", { name: "Review" }).click();
 
   await page.getByTestId("matrix-topic-room-id").fill("!room:matrix.example");
@@ -903,6 +1375,7 @@ test("Matrix room topic update refresh fails closed for expired plans", async ({
 
   await loadConsole(page);
   await page.getByTestId("tab-matrix").click();
+  await waitForMatrixWorkspace(page);
   await page.getByRole("button", { name: "Review" }).click();
 
   await page.getByTestId("matrix-topic-room-id").fill("!room:matrix.example");
@@ -970,6 +1443,7 @@ test("Matrix room topic update refresh fails closed for missing plans", async ({
 
   await loadConsole(page);
   await page.getByTestId("tab-matrix").click();
+  await waitForMatrixWorkspace(page);
   await page.getByRole("button", { name: "Review" }).click();
 
   await page.getByTestId("matrix-topic-room-id").fill("!room:matrix.example");
@@ -1062,13 +1536,14 @@ test("Matrix room topic update stale-plan failure is surfaced and does not fake 
 
   await loadConsole(page);
   await page.getByTestId("tab-matrix").click();
+  await waitForMatrixWorkspace(page);
   await page.getByRole("button", { name: "Review" }).click();
 
   await page.getByTestId("matrix-topic-room-id").fill("!room:matrix.example");
   await page.getByTestId("matrix-topic-text").fill("New topic");
   await page.getByRole("button", { name: "Prepare topic update" }).click();
 
-  await page.getByLabel("I approve backend execution of this topic update.").check();
+  await page.getByLabel("Ich bestätige die Freigabe für diese Änderung").check();
   await page.getByTestId("matrix-topic-execute").click();
 
   await expect(page.getByTestId("matrix-topic-execute-error")).toContainText("matrix_stale_plan");

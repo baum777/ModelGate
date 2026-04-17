@@ -66,6 +66,10 @@ button:disabled {
   color: var(--text);
   border: 1px solid var(--line);
   box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
 }
 
 .app-shell {
@@ -1065,6 +1069,26 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
   display: grid;
   gap: 14px;
   padding: 16px;
+}
+
+.github-approval-gate {
+  display: grid;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.github-pr-result-card {
+  display: grid;
+  gap: 14px;
+}
+
+.github-result-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.github-pr-link {
+  width: fit-content;
 }
 
 .github-plan-file-grid {
