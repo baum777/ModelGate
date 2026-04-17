@@ -57,6 +57,7 @@ export function createTestMatrixConfig(overrides: Partial<MatrixConfig> = {}): M
     required: overrides.required ?? false,
     ready: overrides.ready ?? true,
     baseUrl: overrides.baseUrl ?? "http://matrix.example",
+    homeserverUrl: overrides.homeserverUrl ?? overrides.baseUrl ?? "http://matrix.example",
     accessToken: overrides.accessToken ?? "test-matrix-token",
     refreshToken: overrides.refreshToken ?? null,
     clientId: overrides.clientId ?? null,
@@ -102,6 +103,17 @@ export function createMockMatrixClient(overrides: Partial<MatrixClient> = {}): M
       ]
     })),
     readRoomTopic: overrides.readRoomTopic ?? (async () => "Room topic"),
+    readRoomPowerLevels: overrides.readRoomPowerLevels ?? (async () => ({
+      users: {
+        "@user:matrix.example": 100
+      },
+      users_default: 0,
+      events: {
+        "m.room.topic": 50
+      },
+      events_default: 0,
+      state_default: 50
+    })),
     updateRoomTopic: overrides.updateRoomTopic ?? (async () => ({
       transactionId: "txn_test"
     }))

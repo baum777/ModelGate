@@ -231,6 +231,33 @@ export type MatrixRoomTopicVerificationResult = {
   actual: string | null;
 };
 
+export type MatrixRoomTopicPlanAction = {
+  type: "set_room_topic";
+  roomId: string;
+  currentValue: string | null;
+  proposedValue: string;
+};
+
+export type MatrixRoomTopicAgentPlan = {
+  planId: string;
+  roomId: string;
+  scopeId: string | null;
+  snapshotId: string | null;
+  status: "pending_review" | "executed";
+  actions: MatrixRoomTopicPlanAction[];
+  currentValue: string | null;
+  proposedValue: string;
+  risk: "low" | "medium" | "high";
+  requiresApproval: true;
+  createdAt: string;
+  expiresAt: string;
+};
+
+export type MatrixRoomTopicAgentAnalysisResponse = {
+  ok: true;
+  plan: MatrixRoomTopicAgentPlan;
+};
+
 type MatrixValidator<T> = (payload: unknown, operation: string, path: string) => T;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -731,6 +758,65 @@ function validateRoomTopicVerificationResponse(payload: unknown, operation: stri
   };
 }
 
+function validateRoomTopicAgentPlanResponse(payload: unknown, operation: string, path: string): MatrixRoomTopicAgentPlan {
+  const response = requireRecord(payload, operation, path, "room topic analysis response");
+  requireBooleanField(response, "ok", operation, path, true);
+  const plan = requireRecord(requireField(response, "plan", operation, path), operation, path, "room topic analysis plan");
+  const planId = requireStringField(plan, "planId", operation, path);
+  const roomId = requireStringField(plan, "roomId", operation, path);
+  const scopeId = requireNullableStringField(plan, "scopeId", operation, path);
+  const snapshotId = requireNullableStringField(plan, "snapshotId", operation, path);
+  const status = requireOneOfField(plan, "status", ["pending_review", "executed"], operation, path);
+  const actions = requireArrayField(plan, "actions", operation, path).map((action, index) => {
+    const item = requireRecord(action, operation, `${path}#actions[${index}]`, "room topic analysis action");
+    const type = requireStringField(item, "type", operation, `${path}#actions[${index}]`);
+    const actionRoomId = requireStringField(item, "roomId", operation, `${path}#actions[${index}]`);
+    const currentValue = requireNullableStringFieldAllowEmpty(item, "currentValue", operation, `${path}#actions[${index}]`);
+    const proposedValue = requireStringField(item, "proposedValue", operation, `${path}#actions[${index}]`);
+
+    if (type !== "set_room_topic") {
+      failMatrixParse(operation, path, "Matrix room topic analysis action type must be set_room_topic");
+    }
+
+    return {
+      type: "set_room_topic" as const,
+      roomId: actionRoomId,
+      currentValue,
+      proposedValue
+    };
+  });
+  const currentValue = requireNullableStringFieldAllowEmpty(plan, "currentValue", operation, path);
+  const proposedValue = requireStringField(plan, "proposedValue", operation, path);
+  const risk = requireOneOfField(plan, "risk", ["low", "medium", "high"], operation, path);
+  requireBooleanField(plan, "requiresApproval", operation, path, true);
+  const createdAt = requireStringField(plan, "createdAt", operation, path);
+  const expiresAt = requireStringField(plan, "expiresAt", operation, path);
+
+  if (
+    actions.length !== 1
+    || actions[0]?.roomId !== roomId
+    || actions[0]?.currentValue !== currentValue
+    || actions[0]?.proposedValue !== proposedValue
+  ) {
+    failMatrixParse(operation, path, "Matrix room topic analysis plan actions are invalid");
+  }
+
+  return {
+    planId,
+    roomId,
+    scopeId,
+    snapshotId,
+    status,
+    actions: actions as MatrixRoomTopicPlanAction[],
+    currentValue,
+    proposedValue,
+    risk,
+    requiresApproval: true,
+    createdAt,
+    expiresAt
+  };
+}
+
 function extractErrorMessage(payload: unknown): string {
   if (!payload || typeof payload !== "object") {
     return "Request failed";
@@ -911,6 +997,28 @@ export async function analyzeScope(body: { scopeId: string; prompt: string; mode
   }, validateAnalysisResponse);
 }
 
+export async function analyzeRoomTopicUpdate(body: { roomId: string; proposedValue: string; scopeId?: string | null }) {
+  const payload = await requestJson<{ ok: true; plan: MatrixRoomTopicAgentPlan }>("Matrix room topic analyze", "/api/matrix/analyze", {
+    method: "POST",
+    body: JSON.stringify({
+      roomId: body.roomId,
+      proposedValue: body.proposedValue,
+      ...(body.scopeId ? { scopeId: body.scopeId } : {})
+    })
+  }, (response, operation, path) => {
+    const record = requireRecord(response, operation, path, "room topic analyze response");
+    requireBooleanField(record, "ok", operation, path, true);
+    const plan = requireRecord(requireField(record, "plan", operation, path), operation, path, "room topic analysis plan");
+
+    return {
+      ok: true as const,
+      plan: validateRoomTopicAgentPlanResponse({ ok: true, plan }, operation, `${path}#plan`)
+    };
+  });
+
+  return payload.plan;
+}
+
 export async function promoteCandidate(body: { candidateId: string; scopeId: string; snapshotId: string }) {
   const payload = await requestJson<{ ok: true; plan: MatrixPlan }>("Matrix promote", "/api/matrix/actions/promote", {
     method: "POST",
@@ -962,6 +1070,21 @@ export async function prepareRoomTopicUpdate(body: { type: "update_room_topic"; 
     return {
       ok: true as const,
       plan: validateRoomTopicPlanResponse({ ok: true, plan }, operation, `${path}#plan`)
+    };
+  });
+
+  return payload.plan;
+}
+
+export async function fetchRoomTopicAnalysisPlan(planId: string) {
+  const payload = await requestJson<{ ok: true; plan: MatrixRoomTopicAgentPlan }>("Matrix room topic analysis plan fetch", `/api/matrix/actions/${encodeURIComponent(planId)}`, {}, (response, operation, path) => {
+    const record = requireRecord(response, operation, path, "room topic analysis plan fetch response");
+    requireBooleanField(record, "ok", operation, path, true);
+    const plan = requireRecord(requireField(record, "plan", operation, path), operation, path, "room topic analysis plan");
+
+    return {
+      ok: true as const,
+      plan: validateRoomTopicAgentPlanResponse({ ok: true, plan }, operation, `${path}#plan`)
     };
   });
 

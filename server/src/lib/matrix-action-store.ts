@@ -1,10 +1,13 @@
 import type {
+  MatrixAgentPlan,
   MatrixActionExecutionResult,
   MatrixActionPlan,
   MatrixActionVerificationResult
 } from "./matrix-action-contract.js";
 
-export type MatrixActionStoreEntry = MatrixActionPlan & {
+export type MatrixActionStorePlan = MatrixActionPlan | MatrixAgentPlan;
+
+export type MatrixActionStoreEntry<T extends MatrixActionStorePlan = MatrixActionStorePlan> = T & {
   createdAtMs: number;
   expiresAtMs: number;
   execution?: MatrixActionExecutionResult;
@@ -18,7 +21,7 @@ export type MatrixActionStoreLookup =
 
 export type MatrixActionStore = {
   ttlMs: number;
-  createPlan(plan: Omit<MatrixActionStoreEntry, "createdAtMs" | "expiresAtMs">): MatrixActionStoreEntry;
+  createPlan<T extends MatrixActionStorePlan>(plan: T): MatrixActionStoreEntry<T>;
   readPlan(planId: string): MatrixActionStoreLookup;
   updatePlan(planId: string, updater: (plan: MatrixActionStoreEntry) => MatrixActionStoreEntry): MatrixActionStoreLookup;
 };
@@ -43,13 +46,13 @@ export function createMatrixActionStore(ttlMs = 12 * 60 * 1000, now: () => numbe
 
   return {
     ttlMs,
-    createPlan(plan) {
+    createPlan<T extends MatrixActionStorePlan>(plan: T) {
       const createdAtMs = now();
-      const entry: MatrixActionStoreEntry = {
+      const entry: MatrixActionStoreEntry<T> = {
         ...plan,
         createdAtMs,
         expiresAtMs: createdAtMs + ttlMs
-      };
+      } as MatrixActionStoreEntry<T>;
 
       plans.set(entry.planId, entry);
       return entry;
@@ -71,4 +74,3 @@ export function createMatrixActionStore(ttlMs = 12 * 60 * 1000, now: () => numbe
     }
   };
 }
-

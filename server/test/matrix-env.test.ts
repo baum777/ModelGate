@@ -9,6 +9,7 @@ test("matrix config defaults to disabled", () => {
   assert.equal(config.required, false);
   assert.equal(config.ready, false);
   assert.equal(config.baseUrl, null);
+  assert.equal(config.homeserverUrl, null);
   assert.equal(config.accessToken, null);
   assert.equal(config.refreshToken, null);
   assert.equal(config.clientId, null);
@@ -41,6 +42,7 @@ test("matrix config becomes ready when enabled with a valid origin and token", (
   assert.equal(config.required, false);
   assert.equal(config.ready, true);
   assert.equal(config.baseUrl, "https://matrix.example");
+  assert.equal(config.homeserverUrl, "https://matrix.example");
   assert.equal(config.accessToken, "token");
   assert.equal(config.refreshToken, null);
   assert.equal(config.clientId, null);
@@ -65,6 +67,7 @@ test("matrix config becomes ready when enabled with refresh credentials", () => 
   assert.equal(config.required, false);
   assert.equal(config.ready, true);
   assert.equal(config.baseUrl, "https://matrix.example");
+  assert.equal(config.homeserverUrl, "https://matrix.example");
   assert.equal(config.accessToken, null);
   assert.equal(config.refreshToken, "refresh-token");
   assert.equal(config.clientId, "client-id");
@@ -104,4 +107,20 @@ test("matrix config rejects malformed token expiry when set", () => {
   assert.equal(config.ready, false);
   assert.equal(config.tokenExpiresAt, null);
   assert.match(config.issues.join("; "), /MATRIX_TOKEN_EXPIRES_AT must be an ISO timestamp/);
+});
+
+test("matrix config accepts MATRIX_HOMESERVER_URL as a base url alias", () => {
+  const config = createMatrixConfig({
+    MATRIX_ENABLED: "true",
+    MATRIX_REQUIRED: "false",
+    MATRIX_HOMESERVER_URL: "https://matrix.example",
+    MATRIX_ACCESS_TOKEN: "token",
+    MATRIX_REQUEST_TIMEOUT_MS: "4000"
+  });
+
+  assert.equal(config.enabled, true);
+  assert.equal(config.ready, true);
+  assert.equal(config.baseUrl, "https://matrix.example");
+  assert.equal(config.homeserverUrl, "https://matrix.example");
+  assert.equal(config.accessToken, "token");
 });

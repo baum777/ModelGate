@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   analyzeScope,
+  analyzeRoomTopicUpdate,
   fetchProvenance,
+  fetchRoomTopicAnalysisPlan,
   fetchMatrixWhoAmI,
   MatrixRequestError
 } from "../src/lib/matrix-api.js";
@@ -94,6 +96,105 @@ test("matrix analysis rejects malformed nested candidate payloads", async () => 
         && error.kind === "parse"
         && error.operation === "Matrix analysis"
         && error.message.includes("candidateId")
+    );
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("matrix room topic analysis validates structured plan payloads", async () => {
+  const restoreFetch = installFetchMock(async () =>
+    new Response(
+      JSON.stringify({
+        ok: true,
+        plan: {
+          planId: "plan-1",
+          roomId: "!room:example",
+          scopeId: null,
+          snapshotId: null,
+          status: "pending_review",
+          actions: [
+            {
+              type: "set_room_topic",
+              roomId: "!room:example",
+              currentValue: "Old topic",
+              proposedValue: "New topic"
+            }
+          ],
+          currentValue: "Old topic",
+          proposedValue: "New topic",
+          risk: "medium",
+          requiresApproval: true,
+          createdAt: "2026-04-16T10:00:00.000Z",
+          expiresAt: "2026-04-16T10:10:00.000Z"
+        }
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json"
+        }
+      }
+    )
+  );
+
+  try {
+    const plan = await analyzeRoomTopicUpdate({
+      roomId: "!room:example",
+      proposedValue: "New topic"
+    });
+
+    assert.equal(plan.roomId, "!room:example");
+    assert.equal(plan.actions[0]?.type, "set_room_topic");
+    assert.equal(plan.proposedValue, "New topic");
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("matrix room topic analysis rejects malformed actions in fetched plans", async () => {
+  const restoreFetch = installFetchMock(async () =>
+    new Response(
+      JSON.stringify({
+        ok: true,
+        plan: {
+          planId: "plan-1",
+          roomId: "!room:example",
+          scopeId: null,
+          snapshotId: null,
+          status: "pending_review",
+          actions: [
+            {
+              type: "set_room_topic",
+              roomId: "!room:example",
+              currentValue: "Old topic"
+            }
+          ],
+          currentValue: "Old topic",
+          proposedValue: "New topic",
+          risk: "medium",
+          requiresApproval: true,
+          createdAt: "2026-04-16T10:00:00.000Z",
+          expiresAt: "2026-04-16T10:10:00.000Z"
+        }
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json"
+        }
+      }
+    )
+  );
+
+  try {
+    await assert.rejects(
+      fetchRoomTopicAnalysisPlan("plan-1"),
+      (error) =>
+        error instanceof MatrixRequestError
+        && error.kind === "parse"
+        && error.operation === "Matrix room topic analysis plan fetch"
+        && error.message.includes("proposedValue")
     );
   } finally {
     restoreFetch();

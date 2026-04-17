@@ -4,6 +4,7 @@ const MatrixEnvSchema = z.object({
   MATRIX_ENABLED: z.string().trim().default("false"),
   MATRIX_REQUIRED: z.string().trim().default("false"),
   MATRIX_BASE_URL: z.string().trim().default(""),
+  MATRIX_HOMESERVER_URL: z.string().trim().default(""),
   MATRIX_ACCESS_TOKEN: z.string().trim().default(""),
   MATRIX_REFRESH_TOKEN: z.string().trim().default(""),
   MATRIX_CLIENT_ID: z.string().trim().default(""),
@@ -17,6 +18,7 @@ export type MatrixConfig = {
   required: boolean;
   ready: boolean;
   baseUrl: string | null;
+  homeserverUrl: string | null;
   accessToken: string | null;
   refreshToken: string | null;
   clientId: string | null;
@@ -56,6 +58,10 @@ function normalizeBaseUrl(input: string) {
   } catch {
     return null;
   }
+}
+
+function normalizeHomeserverUrl(primary: string, fallback: string) {
+  return normalizeBaseUrl(primary) ?? normalizeBaseUrl(fallback);
 }
 
 function normalizeUserId(input: string) {
@@ -102,7 +108,7 @@ export function createMatrixConfig(source: NodeJS.ProcessEnv = process.env): Mat
   const parsed = MatrixEnvSchema.parse(source);
   const enabledParse = parseBoolean(parsed.MATRIX_ENABLED);
   const requiredParse = parseBoolean(parsed.MATRIX_REQUIRED);
-  const baseUrl = normalizeBaseUrl(parsed.MATRIX_BASE_URL);
+  const baseUrl = normalizeHomeserverUrl(parsed.MATRIX_BASE_URL, parsed.MATRIX_HOMESERVER_URL);
   const accessToken = parsed.MATRIX_ACCESS_TOKEN.trim() ? parsed.MATRIX_ACCESS_TOKEN.trim() : null;
   const refreshToken = parsed.MATRIX_REFRESH_TOKEN.trim() ? parsed.MATRIX_REFRESH_TOKEN.trim() : null;
   const clientId = parsed.MATRIX_CLIENT_ID.trim() ? parsed.MATRIX_CLIENT_ID.trim() : null;
@@ -156,6 +162,7 @@ export function createMatrixConfig(source: NodeJS.ProcessEnv = process.env): Mat
     required: requiredParse.value,
     ready,
     baseUrl: ready ? baseUrl : null,
+    homeserverUrl: ready ? baseUrl : null,
     accessToken: ready ? accessToken : null,
     refreshToken: ready ? refreshToken : null,
     clientId: ready ? clientId : null,
@@ -172,6 +179,7 @@ export function createDisabledMatrixConfig(): MatrixConfig {
     required: false,
     ready: false,
     baseUrl: null,
+    homeserverUrl: null,
     accessToken: null,
     refreshToken: null,
     clientId: null,

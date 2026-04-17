@@ -3,6 +3,7 @@ import { ExpertDetails } from "./ExpertDetails.js";
 import {
   MATRIX_API_BASE_URL,
   analyzeScope,
+  analyzeRoomTopicUpdate,
   executePlan,
   executeRoomTopicUpdate,
   fetchJoinedRooms,
@@ -12,8 +13,7 @@ import {
   fetchRoomHierarchy,
   fetchScopeSummary,
   promoteCandidate,
-  prepareRoomTopicUpdate,
-  fetchRoomTopicUpdatePlan,
+  fetchRoomTopicAnalysisPlan,
   resolveScope,
   MatrixRequestError,
   type MatrixActionCandidate,
@@ -21,8 +21,8 @@ import {
   type MatrixJoinedRoom,
   type MatrixPlan,
   type MatrixProvenance,
+  type MatrixRoomTopicAgentPlan,
   type MatrixRoomTopicExecutionResult,
-  type MatrixRoomTopicPlan,
   type MatrixRoomTopicVerificationResult,
   type MatrixScope,
   type MatrixScopeSummary,
@@ -90,7 +90,7 @@ const formatDate = (value: string) => {
 const text = (value: string | null | undefined) =>
   value && value.trim() ? value : "n/a";
 const releaseScopeNotice =
-  "Matrix topic updates are wired end-to-end for Explore, scope summary, provenance, approval, execute, and verify.";
+  "Matrix topic updates are wired end-to-end for Explore, scope summary, provenance, analyze, review, execute, and verify.";
 
 function modeLabel(mode: MatrixMode) {
   switch (mode) {
@@ -209,7 +209,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     persisted?.selectedRoomIds?.[0] ?? "",
   );
   const [topicText, setTopicText] = useState("");
-  const [topicPlan, setTopicPlan] = useState<MatrixRoomTopicPlan | null>(null);
+  const [topicPlan, setTopicPlan] = useState<MatrixRoomTopicAgentPlan | null>(null);
   const [topicApprovalPending, setTopicApprovalPending] = useState(false);
   const [topicExecution, setTopicExecution] =
     useState<MatrixRoomTopicExecutionResult | null>(null);
@@ -237,30 +237,41 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     () => selectedSpaceIds.filter((value) => value.trim().length > 0),
     [selectedSpaceIds],
   );
-  const reviewPlan = promotedPlan ?? topicPlan;
   const matrixReviewItems = useMemo<ReviewItem[]>(() => {
-    if (!reviewPlan) {
-      return [];
-    }
+    const items: ReviewItem[] = [];
 
-    const stale = Boolean(promotedPlan?.stale || stalePlanDetected);
-    return [
-      {
-        id: reviewPlan.planId,
+    if (promotedPlan) {
+      const stale = Boolean(promotedPlan.stale || stalePlanDetected);
+      items.push({
+        id: promotedPlan.planId,
         source: "matrix" as const,
-        title: promotedPlan?.summary ?? "Matrix Vorschlag",
-        summary: promotedPlan?.rationale ?? "Freigabe erforderlich.",
+        title: promotedPlan.summary ?? "Matrix Vorschlag",
+        summary: promotedPlan.rationale ?? "Freigabe erforderlich.",
         status: stale ? "stale" : "pending_review",
         stale,
         sourceLabel: "Matrix Workspace",
-      },
-    ];
-  }, [promotedPlan?.rationale, promotedPlan?.stale, promotedPlan?.summary, promotedPlan, reviewPlan, stalePlanDetected, topicPlan]);
+      });
+    }
+
+    if (topicPlan) {
+      items.push({
+        id: topicPlan.planId,
+        source: "matrix" as const,
+        title: "Room topic update plan",
+        summary: `Current value: ${text(topicPlan.currentValue)} · Proposed value: ${text(topicPlan.proposedValue)} · Risk: ${topicPlan.risk}`,
+        status: topicPlan.status === "executed" ? "executed" : "pending_review",
+        stale: false,
+        sourceLabel: "Matrix Workspace",
+      });
+    }
+
+    return items;
+  }, [promotedPlan, stalePlanDetected, topicPlan]);
   const matrixExpertDetails = useMemo(
     () => ({
       route: "/api/matrix/*",
       requestId: null,
-      planId: reviewPlan?.planId ?? null,
+      planId: promotedPlan?.planId ?? topicPlan?.planId ?? null,
       roomId: promotedPlan?.targetRoomId ?? topicPlan?.roomId ?? (topicRoomId || null),
       spaceId: selectedSpaces[0] ?? null,
       eventId: null,
@@ -270,20 +281,20 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       runtimeEventTrail: [
         currentScope ? "Bereich gewählt" : "Noch kein Bereich gewählt",
         scopeSummary ? "Zusammenfassung bereit" : "Zusammenfassung ausstehend",
-        topicPlan ? "Topic proposal ready" : "No topic proposal",
+        topicPlan ? "Topic plan ready" : "No topic plan",
       ],
       sseLifecycle: "n/a",
-      rawPayload: analysisResult ? JSON.stringify(analysisResult, null, 2) : null,
+      rawPayload: topicPlan ? JSON.stringify(topicPlan, null, 2) : analysisResult ? JSON.stringify(analysisResult, null, 2) : null,
     }),
     [
       analysisResult,
       currentScope,
+      promotedPlan?.planId,
       promotedPlan?.targetRoomId,
-      reviewPlan,
       scopeSummary,
       selectedSpaces,
       status,
-      topicPlan?.roomId,
+      topicPlan,
       topicRoomId,
     ],
   );
@@ -291,12 +302,15 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     () => ({
       scopeLabel: currentScope ? "Bereich gewählt" : "Noch kein Bereich gewählt",
       summaryLabel: scopeSummary ? "Zusammenfassung bereit" : "Noch keine Zusammenfassung",
-      approvalLabel: reviewPlan ? "Freigabe erforderlich" : "Nicht erforderlich",
+      approvalLabel:
+        (promotedPlan && !promotedPlan.stale) || topicPlan?.status === "pending_review"
+          ? "Freigabe erforderlich"
+          : "Nicht erforderlich",
       safetyText: "Die App kann Informationen ansehen, aber nichts verändern.",
       expertDetails: matrixExpertDetails,
       reviewItems: matrixReviewItems,
     }),
-    [currentScope, matrixExpertDetails, matrixReviewItems, reviewPlan, scopeSummary],
+    [currentScope, matrixExpertDetails, matrixReviewItems, promotedPlan, scopeSummary, topicPlan],
   );
 
   useEffect(() => {
@@ -628,17 +642,17 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     setTopicVerifyError(null);
 
     try {
-      const plan = await prepareRoomTopicUpdate({
-        type: "update_room_topic",
+      const plan = await analyzeRoomTopicUpdate({
         roomId,
-        topic,
+        proposedValue: topic,
+        scopeId: currentScope?.scopeId ?? null,
       });
       setTopicPlan(plan);
       setTopicApprovalPending(false);
     } catch (error) {
       setTopicPlan(null);
       setTopicPrepareError(
-        describeMatrixError("Matrix room topic prepare", error),
+        describeMatrixError("Matrix room topic analyze", error),
       );
     } finally {
       setTopicPrepareLoading(false);
@@ -648,7 +662,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   async function refreshTopicUpdatePlan() {
     if (!topicPlan) {
       setTopicPlanRefreshError(
-        "Prepare a topic update before refreshing the plan.",
+        "Analyze a topic update before refreshing the plan.",
       );
       return;
     }
@@ -659,7 +673,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     setTopicVerifyError(null);
 
     try {
-      const refreshed = await fetchRoomTopicUpdatePlan(topicPlan.planId);
+      const refreshed = await fetchRoomTopicAnalysisPlan(topicPlan.planId);
       setTopicPlan(refreshed);
       setTopicApprovalPending(false);
     } catch (error) {
@@ -677,7 +691,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
 
   async function executeTopicUpdate() {
     if (!topicPlan) {
-      setTopicExecuteError("Prepare a topic update before execution.");
+      setTopicExecuteError("Analyze a topic update before execution.");
       return;
     }
 
@@ -743,8 +757,8 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
           <h1>Matrix Workspace</h1>{" "}
           <p className="hero-copy">
             {" "}
-            Backend-owned Explore, scope summary, provenance, room topic
-            proposal, approval, execute, and verify flow for Matrix topic
+            Backend-owned Explore, scope summary, provenance, analyze,
+            review, approval, execute, and verify flow for Matrix topic
             updates only.{" "}
           </p>{" "}
           {props.restoredSession ? (
@@ -757,8 +771,8 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             <span className="workflow-chip workflow-chip-complete">Explore</span>
             <span className="workflow-chip workflow-chip-complete">Scope summary</span>
             <span className="workflow-chip workflow-chip-complete">Provenance</span>
-            <span className={`workflow-chip ${topicPlan ? "workflow-chip-active" : "workflow-chip-idle"}`}>
-              Topic proposal
+              <span className={`workflow-chip ${topicPlan ? "workflow-chip-active" : "workflow-chip-idle"}`}>
+              Topic plan
             </span>
             <span className={`workflow-chip ${topicPlan && !topicApprovalPending ? "workflow-chip-active" : "workflow-chip-idle"}`}>
               Approval
@@ -795,14 +809,14 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 Boolean(provenance) && !provenanceLoading,
               ],
               [
-                "Topic proposal",
+                "Topic plan",
                 Boolean(topicPlan) || topicPrepareLoading,
-                Boolean(topicPlan) && !topicPrepareLoading,
+                topicPlan?.status === "executed",
               ],
               [
                 "Approval",
                 Boolean(topicPlan) || topicApprovalPending,
-                Boolean(topicApprovalPending) && Boolean(topicPlan),
+                topicPlan?.status === "executed",
               ],
               [
                 "Execute",
@@ -842,7 +856,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 <span>Slice: Topic update</span>
                 <span>Scope: {currentScope?.scopeId ?? "none"}</span>
                 <span>Rooms: {scopeSummary?.items.length ?? 0}</span>
-                <span>Topic proposal: {topicPlan ? "Ready" : "None"}</span>
+                <span>Topic plan: {topicPlan ? (topicPlan.status === "executed" ? "Executed" : "Ready") : "None"}</span>
               </>
             ) : (
               <>
@@ -878,7 +892,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             <div>
               <span>Room topic update</span>
               <strong>
-                Prepare, approve, execute, and verify a backend-owned topic change
+                Analyze, approve, execute, and verify a backend-owned topic change
               </strong>
             </div>
           </header>{" "}
@@ -923,14 +937,14 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               }}
               disabled={topicPrepareLoading}
             >
-              {topicPrepareLoading ? "Preparing…" : "Prepare topic update"}
+              {topicPrepareLoading ? "Analyzing…" : "Analyze topic update"}
             </button>
             <span className="muted-copy">
-              {props.expertMode ? "The browser only sends a room ID, proposed topic text, and approval intent." : "Nur nach Freigabe."}
+              {props.expertMode ? "The browser only sends a room ID, proposed topic text, and approval intent. The backend reads the current room state and builds the plan." : "Nur nach Freigabe."}
             </span>
           </div>{" "}
           {topicPrepareError ? (
-            <p className="error-banner" data-testid="matrix-topic-prepare-error">
+            <p className="error-banner" data-testid="matrix-topic-analyze-error">
               {topicPrepareError}
             </p>
           ) : null}{" "}
@@ -955,42 +969,66 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                   >
                     {topicPlan.status === "pending_review"
                       ? "Approval pending"
-                      : "Plan refreshed"}
+                      : "Plan executed"}
                   </span>
                 </div>
               </div>
               <div className="detail-grid">
                 {props.expertMode ? (
-                  <div>
-                    <span>Room ID</span>
-                    <strong>{topicPlan.roomId}</strong>
-                  </div>
+                  <>
+                    <div>
+                      <span>Room ID</span>
+                      <strong>{topicPlan.roomId}</strong>
+                    </div>
+                    <div>
+                      <span>Scope ID</span>
+                      <strong>{text(topicPlan.scopeId)}</strong>
+                    </div>
+                    <div>
+                      <span>Snapshot ID</span>
+                      <strong>{text(topicPlan.snapshotId)}</strong>
+                    </div>
+                  </>
                 ) : null}
                 <div>
                   <span>Status</span>
                   <strong>{topicPlan.status}</strong>
                 </div>
                 <div>
-                  <span>Expires at</span>
-                  <strong>{formatDate(topicPlan.expiresAt)}</strong>
-                </div>
-                <div>
-                  <span>Field</span>
-                  <strong>{topicPlan.diff.field}</strong>
+                  <span>Risk</span>
+                  <strong>{topicPlan.risk}</strong>
                 </div>
                 <div>
                   <span>Requires approval</span>
                   <strong>{String(topicPlan.requiresApproval)}</strong>
                 </div>
+                <div>
+                  <span>Actions</span>
+                  <strong>{topicPlan.actions.length}</strong>
+                </div>
+                <div>
+                  <span>Expires at</span>
+                  <strong>{formatDate(topicPlan.expiresAt)}</strong>
+                </div>
               </div>
               <div className="delta-grid">
                 <div>
-                  <p className="info-label">Before topic</p>
-                  <pre>{text(topicPlan.diff.before)}</pre>
+                  <p className="info-label">Current value</p>
+                  <pre>{text(topicPlan.currentValue)}</pre>
                 </div>
                 <div>
-                  <p className="info-label">After topic</p>
-                  <pre>{text(topicPlan.diff.after)}</pre>
+                  <p className="info-label">Proposed value</p>
+                  <pre>{text(topicPlan.proposedValue)}</pre>
+                </div>
+              </div>
+              <div className="list-block">
+                <p className="info-label">Actions</p>
+                <div className="chip-list">
+                  {topicPlan.actions.map((action, index) => (
+                    <span key={`${action.type}:${index}`} className="reference-chip">
+                      {action.type} · {action.roomId}
+                    </span>
+                  ))}
                 </div>
               </div>
               <label className="approval-check">
@@ -1110,8 +1148,8 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
           ) : (
               <p className="empty-state">
               {props.expertMode
-                ? "Enter a room ID and proposed topic, then prepare a backend-owned topic update plan."
-                : "Bereich wählen, dann Topic Update vorbereiten."}
+                ? "Enter a room ID and proposed topic, then analyze a backend-owned topic update plan."
+                : "Bereich wählen, dann Topic Update analysieren."}
             </p>
           )}{" "}
         </section>{" "}

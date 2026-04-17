@@ -203,21 +203,23 @@ function readMatrixSmokeConfig(sourceEnv = process.env, options = {}) {
     ...sourceEnv
   };
   const missing = [];
+  const homeserverUrl = String(env.MATRIX_BASE_URL ?? env.MATRIX_HOMESERVER_URL ?? "").trim();
+  const smokeRoomId = String(env.MATRIX_SMOKE_ROOM_ID ?? env.MATRIX_ROOM_ID ?? "").trim();
 
   if (!truthy(env.MATRIX_ENABLED)) {
     missing.push("MATRIX_ENABLED=true");
   }
 
-  if (!String(env.MATRIX_BASE_URL ?? "").trim()) {
-    missing.push("MATRIX_BASE_URL");
+  if (!homeserverUrl) {
+    missing.push("MATRIX_BASE_URL or MATRIX_HOMESERVER_URL");
   }
 
   if (!String(env.MATRIX_ACCESS_TOKEN ?? "").trim()) {
     missing.push("MATRIX_ACCESS_TOKEN");
   }
 
-  if (!String(env.MATRIX_SMOKE_ROOM_ID ?? "").trim()) {
-    missing.push("MATRIX_SMOKE_ROOM_ID");
+  if (!smokeRoomId) {
+    missing.push("MATRIX_SMOKE_ROOM_ID or MATRIX_ROOM_ID");
   }
 
   if (missing.length > 0) {
@@ -232,12 +234,16 @@ function readMatrixSmokeConfig(sourceEnv = process.env, options = {}) {
     state: "ready",
     config: {
       backendBaseUrl: normalizeBackendBaseUrl(env),
-      matrixBaseUrl: String(env.MATRIX_BASE_URL).trim(),
+      matrixBaseUrl: homeserverUrl,
       matrixAccessToken: String(env.MATRIX_ACCESS_TOKEN).trim(),
-      roomId: String(env.MATRIX_SMOKE_ROOM_ID).trim(),
+      roomId: smokeRoomId,
       topicPrefix: normalizeTopicPrefix(env.MATRIX_SMOKE_TOPIC_PREFIX)
     }
   };
+}
+
+async function fetchTopicAccess(fetchImpl, backendBaseUrl, roomId) {
+  return callBackendJson(fetchImpl, backendBaseUrl, "GET", `/api/matrix/rooms/${encodeURIComponent(roomId)}/topic-access`);
 }
 
 async function promoteTopic(fetchImpl, backendBaseUrl, roomId, topic) {
@@ -307,6 +313,65 @@ function normalizeVerificationResponse(payload, expectedTopic) {
 }
 
 async function runUpdateLifecycle(fetchImpl, backendBaseUrl, roomId, topic, options = {}) {
+  const whoamiResult = await callBackendJson(fetchImpl, backendBaseUrl, "GET", "/api/matrix/whoami");
+
+  if (!whoamiResult.ok) {
+    return {
+      ok: false,
+      phase: "whoami",
+      error: whoamiResult.error
+    };
+  }
+
+  const joinedRoomsResult = await callBackendJson(fetchImpl, backendBaseUrl, "GET", "/api/matrix/joined-rooms");
+
+  if (!joinedRoomsResult.ok) {
+    return {
+      ok: false,
+      phase: "joined_rooms",
+      error: joinedRoomsResult.error
+    };
+  }
+
+  const topicAccessResult = await fetchTopicAccess(fetchImpl, backendBaseUrl, roomId);
+
+  if (!topicAccessResult.ok) {
+    return {
+      ok: false,
+      phase: "topic_access",
+      error: topicAccessResult.error
+    };
+  }
+
+  const access = topicAccessResult.body?.access;
+
+  if (!access || typeof access !== "object") {
+    return createSmokeError("smoke_backend_error", "Backend returned an invalid topic access result", "topic_access");
+  }
+
+  if (access.roomStatus === "not_found") {
+    return createSmokeError("matrix_wrong_room_id", "Configured Matrix smoke room does not resolve", "topic_access", { roomId });
+  }
+
+  if (!access.joined) {
+    return createSmokeError("matrix_not_joined", "Matrix user is not joined to the smoke room", "topic_access", { roomId });
+  }
+
+  if (!access.canUpdateTopic) {
+    return createSmokeError(
+      "matrix_insufficient_power_level",
+      "Matrix user lacks room power to update the topic",
+      "topic_access",
+      {
+        roomId,
+        access: {
+          currentPowerLevel: access.currentPowerLevel ?? null,
+          requiredPowerLevel: access.requiredPowerLevel ?? null
+        }
+      }
+    );
+  }
+
   const promoteResult = await promoteTopic(fetchImpl, backendBaseUrl, roomId, topic);
 
   if (!promoteResult.ok) {

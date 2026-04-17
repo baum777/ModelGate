@@ -9,12 +9,18 @@ import type { MatrixResolvedRoom, MatrixScopeSnapshot } from "./matrix-scope-sto
 
 export class MatrixClientError extends Error {
   readonly code:
+    | "matrix_invalid_token"
+    | "matrix_token_expired"
     | "matrix_not_configured"
     | "matrix_unauthorized"
     | "matrix_forbidden"
     | "matrix_room_not_found"
+    | "matrix_not_joined"
+    | "matrix_insufficient_power_level"
+    | "matrix_wrong_room_id"
     | "matrix_write_forbidden"
     | "matrix_unavailable"
+    | "matrix_homeserver_unreachable"
     | "matrix_timeout"
     | "matrix_malformed_response"
     | "matrix_scope_not_found"
@@ -53,7 +59,16 @@ export type MatrixClient = {
   joinedRooms(): Promise<MatrixJoinedRoom[]>;
   resolveScope(body: MatrixScopeResolveRequest): Promise<MatrixScopeSnapshot>;
   readRoomTopic(roomId: string): Promise<string | null>;
+  readRoomPowerLevels(roomId: string): Promise<MatrixRoomPowerLevels>;
   updateRoomTopic(roomId: string, topic: string): Promise<{ transactionId: string }>;
+};
+
+export type MatrixRoomPowerLevels = {
+  users: Record<string, number>;
+  users_default: number;
+  events: Record<string, number>;
+  events_default: number;
+  state_default: number;
 };
 
 type MatrixClientOptions = {
@@ -110,7 +125,7 @@ function requestFailureCode(
   forbiddenCode: MatrixClientError["code"] = "matrix_forbidden"
 ): MatrixClientError["code"] {
   if (status === 401) {
-    return "matrix_unauthorized";
+    return "matrix_invalid_token";
   }
 
   if (status === 403) {
@@ -130,6 +145,47 @@ function requestFailureCode(
   }
 
   return "matrix_internal_error";
+}
+
+function requestFailureCodeForResponse(
+  status: number,
+  config: MatrixConfig,
+  notFoundCode: MatrixClientError["code"],
+  forbiddenCode: MatrixClientError["code"] = "matrix_forbidden"
+) {
+  if (status === 401) {
+    return classifyUnauthorizedCode(config);
+  }
+
+  return requestFailureCode(status, notFoundCode, forbiddenCode);
+}
+
+function requestFailureMessageForResponse(status: number, config: MatrixConfig) {
+  if (status === 401) {
+    return classifyUnauthorizedCode(config) === "matrix_token_expired"
+      ? "Matrix access token expired"
+      : "Matrix credentials were rejected";
+  }
+
+  return requestFailureMessage(status);
+}
+
+function tokenIsExpired(config: MatrixConfig) {
+  if (!config.tokenExpiresAt) {
+    return false;
+  }
+
+  const expiresAt = new Date(config.tokenExpiresAt).getTime();
+
+  if (!Number.isFinite(expiresAt)) {
+    return false;
+  }
+
+  return expiresAt <= Date.now();
+}
+
+function classifyUnauthorizedCode(config: MatrixConfig) {
+  return tokenIsExpired(config) ? "matrix_token_expired" : "matrix_invalid_token";
 }
 
 async function readErrorStatus(response: Response) {
@@ -218,12 +274,12 @@ async function refreshMatrixCredentials(
       });
     } catch {
       throw createMatrixClientError({
-        code: "matrix_unavailable",
+        code: "matrix_homeserver_unreachable",
         status: 503,
         operation,
         path: refreshPath,
         baseUrl: normalizeBaseUrl(config.baseUrl ?? ""),
-        message: "Matrix backend is unavailable"
+        message: "Matrix homeserver is unreachable"
       });
     }
 
@@ -233,7 +289,7 @@ async function refreshMatrixCredentials(
           ? "matrix_timeout"
           : response.status >= 500
             ? "matrix_unavailable"
-            : "matrix_unauthorized",
+            : classifyUnauthorizedCode(config),
         status: response.status === 408 || response.status === 504
           ? 504
           : response.status >= 500
@@ -246,7 +302,9 @@ async function refreshMatrixCredentials(
           ? "Matrix backend request timed out"
           : response.status >= 500
             ? "Matrix backend is unavailable"
-            : "Matrix credentials were rejected"
+            : classifyUnauthorizedCode(config) === "matrix_token_expired"
+              ? "Matrix access token expired"
+              : "Matrix credentials were rejected"
       });
     }
 
@@ -367,12 +425,12 @@ async function requestJson<T>(
     }
 
     throw createMatrixClientError({
-      code: "matrix_unavailable",
+      code: "matrix_homeserver_unreachable",
       status: 503,
       operation,
       path,
       baseUrl: normalizeBaseUrl(config.baseUrl),
-      message: "Matrix backend is unavailable"
+      message: "Matrix homeserver is unreachable"
     });
   } finally {
     globalThis.clearTimeout(timeoutId);
@@ -387,8 +445,9 @@ async function requestJson<T>(
     const bodyText = await readErrorStatus(response);
     void bodyText;
     throw createMatrixClientError({
-      code: requestFailureCode(
+      code: requestFailureCodeForResponse(
         response.status,
+        config,
         failureCodes.notFoundCode ?? "matrix_unavailable",
         failureCodes.forbiddenCode ?? "matrix_forbidden"
       ),
@@ -406,7 +465,7 @@ async function requestJson<T>(
       operation,
       path,
       baseUrl: normalizeBaseUrl(config.baseUrl),
-      message: requestFailureMessage(response.status)
+      message: requestFailureMessageForResponse(response.status, config)
     });
   }
 
@@ -485,12 +544,12 @@ async function requestOptionalJson<T>(
     }
 
     throw createMatrixClientError({
-      code: "matrix_unavailable",
+      code: "matrix_homeserver_unreachable",
       status: 503,
       operation,
       path,
       baseUrl: normalizeBaseUrl(config.baseUrl),
-      message: "Matrix backend is unavailable"
+      message: "Matrix homeserver is unreachable"
     });
   } finally {
     globalThis.clearTimeout(timeoutId);
@@ -507,8 +566,9 @@ async function requestOptionalJson<T>(
     }
 
     throw createMatrixClientError({
-      code: requestFailureCode(
+      code: requestFailureCodeForResponse(
         response.status,
+        config,
         failureCodes.notFoundCode ?? "matrix_unavailable",
         failureCodes.forbiddenCode ?? "matrix_forbidden"
       ),
@@ -524,7 +584,7 @@ async function requestOptionalJson<T>(
       operation,
       path,
       baseUrl: normalizeBaseUrl(config.baseUrl),
-      message: requestFailureMessage(response.status)
+      message: requestFailureMessageForResponse(response.status, config)
     });
   }
 
@@ -541,6 +601,67 @@ async function requestOptionalJson<T>(
       message: "Matrix backend returned an invalid response"
     });
   }
+}
+
+function readNumberField(
+  payload: Record<string, unknown>,
+  field: string,
+  operation: string,
+  path: string,
+  label: string,
+  defaultValue = 0
+) {
+  const value = payload[field];
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "undefined") {
+    return defaultValue;
+  }
+
+  throw createMatrixClientError({
+    code: "matrix_malformed_response",
+    status: 502,
+    operation,
+    path,
+    baseUrl: "unavailable",
+    message: `Matrix ${label} field ${field} must be a number`
+  });
+}
+
+function readNumberMapField(
+  payload: Record<string, unknown>,
+  field: string,
+  operation: string,
+  path: string,
+  label: string
+) {
+  const value = payload[field];
+
+  if (!isRecord(value)) {
+    return {} as Record<string, number>;
+  }
+
+  const result: Record<string, number> = {};
+
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry !== "number" || !Number.isFinite(entry)) {
+      throw createMatrixClientError({
+        code: "matrix_malformed_response",
+        status: 502,
+        operation,
+        path,
+        baseUrl: "unavailable",
+        message: `Matrix ${label} field ${field} must contain numeric values`
+      });
+    }
+
+    result[key] = entry;
+  }
+
+  return result;
 }
 
 function requireRecord(payload: unknown, operation: string, path: string, label: string) {
@@ -944,6 +1065,46 @@ export function createMatrixClient(options: MatrixClientOptions): MatrixClient {
 
     async readRoomTopic(roomId) {
       return readMatrixRoomTopic(options.config, fetchImpl, roomId);
+    },
+
+    async readRoomPowerLevels(roomId) {
+      const roomPath = encodeURIComponent(roomId);
+      const powerLevelsPath = `/_matrix/client/v3/rooms/${roomPath}/state/m.room.power_levels`;
+
+      const powerLevels = await requestOptionalJson(
+        options.config,
+        "Matrix room power levels",
+        powerLevelsPath,
+        undefined,
+        (payload) => {
+          const record = requireRecord(payload, "Matrix room power levels", powerLevelsPath, "room power levels event");
+
+          return {
+            users: readNumberMapField(record, "users", "Matrix room power levels", powerLevelsPath, "room power levels event"),
+            users_default: readNumberField(record, "users_default", "Matrix room power levels", powerLevelsPath, "room power levels event", 0),
+            events: readNumberMapField(record, "events", "Matrix room power levels", powerLevelsPath, "room power levels event"),
+            events_default: readNumberField(record, "events_default", "Matrix room power levels", powerLevelsPath, "room power levels event", 0),
+            state_default: readNumberField(record, "state_default", "Matrix room power levels", powerLevelsPath, "room power levels event", 50)
+          };
+        },
+        fetchImpl,
+        {
+          notFoundCode: "matrix_room_not_found",
+          forbiddenCode: "matrix_write_forbidden"
+        }
+      );
+
+      if (!powerLevels) {
+        return {
+          users: {},
+          users_default: 0,
+          events: {},
+          events_default: 0,
+          state_default: 50
+        };
+      }
+
+      return powerLevels;
     },
 
     async updateRoomTopic(roomId, topic) {

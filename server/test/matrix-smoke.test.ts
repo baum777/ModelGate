@@ -30,9 +30,9 @@ test("matrix smoke skips cleanly when required env vars are missing", async () =
   assert.equal(result.status, "skipped");
   assert.deepEqual(result.missing, [
     "MATRIX_ENABLED=true",
-    "MATRIX_BASE_URL",
+    "MATRIX_BASE_URL or MATRIX_HOMESERVER_URL",
     "MATRIX_ACCESS_TOKEN",
-    "MATRIX_SMOKE_ROOM_ID"
+    "MATRIX_SMOKE_ROOM_ID or MATRIX_ROOM_ID"
   ]);
   assert.equal(fetchCalls, 0);
 });
@@ -115,6 +115,44 @@ test("matrix smoke calls the backend routes in order and redacts token values", 
               after: expectedPreviousTopic
             },
             requiresApproval: true
+          }
+        });
+      }
+
+      if (requestUrl.pathname === "/api/matrix/whoami" && method === "GET") {
+        return createJsonResponse({
+          ok: true,
+          userId: "@user:matrix.example",
+          deviceId: "DEVICE",
+          homeserver: "https://matrix.example"
+        });
+      }
+
+      if (requestUrl.pathname === "/api/matrix/joined-rooms" && method === "GET") {
+        return createJsonResponse({
+          ok: true,
+          rooms: [
+            {
+              roomId: expectedRoomId,
+              name: "Smoke room",
+              canonicalAlias: "#smoke:matrix.example",
+              roomType: "room"
+            }
+          ]
+        });
+      }
+
+      if (requestUrl.pathname === `/api/matrix/rooms/${encodeURIComponent(expectedRoomId)}/topic-access` && method === "GET") {
+        return createJsonResponse({
+          ok: true,
+          access: {
+            roomId: expectedRoomId,
+            userId: "@user:matrix.example",
+            roomStatus: "joined",
+            joined: true,
+            currentPowerLevel: 100,
+            requiredPowerLevel: 50,
+            canUpdateTopic: true
           }
         });
       }
@@ -223,10 +261,16 @@ test("matrix smoke calls the backend routes in order and redacts token values", 
   assert.deepEqual(
     requests.map((request) => `${request.method} ${request.path}`),
     [
+      "GET /api/matrix/whoami",
+      "GET /api/matrix/joined-rooms",
+      `GET /api/matrix/rooms/${encodeURIComponent(expectedRoomId)}/topic-access`,
       "POST /api/matrix/actions/promote",
       "GET /api/matrix/actions/plan-forward",
       "POST /api/matrix/actions/plan-forward/execute",
       "GET /api/matrix/actions/plan-forward/verify",
+      "GET /api/matrix/whoami",
+      "GET /api/matrix/joined-rooms",
+      `GET /api/matrix/rooms/${encodeURIComponent(expectedRoomId)}/topic-access`,
       "POST /api/matrix/actions/promote",
       "GET /api/matrix/actions/plan-restore",
       "POST /api/matrix/actions/plan-restore/execute",
@@ -255,6 +299,44 @@ test("matrix smoke surfaces cleanup failure with room and topic details", async 
       const requestUrl = typeof input === "string" ? new URL(input) : new URL(input.url);
       const method = String(init?.method ?? "GET");
       const body = typeof init?.body === "string" ? JSON.parse(init.body) : null;
+
+      if (requestUrl.pathname === "/api/matrix/whoami" && method === "GET") {
+        return createJsonResponse({
+          ok: true,
+          userId: "@user:matrix.example",
+          deviceId: "DEVICE",
+          homeserver: "https://matrix.example"
+        });
+      }
+
+      if (requestUrl.pathname === "/api/matrix/joined-rooms" && method === "GET") {
+        return createJsonResponse({
+          ok: true,
+          rooms: [
+            {
+              roomId: "!cleanup:matrix.example",
+              name: "Cleanup room",
+              canonicalAlias: "#cleanup:matrix.example",
+              roomType: "room"
+            }
+          ]
+        });
+      }
+
+      if (requestUrl.pathname === `/api/matrix/rooms/${encodeURIComponent("!cleanup:matrix.example")}/topic-access` && method === "GET") {
+        return createJsonResponse({
+          ok: true,
+          access: {
+            roomId: "!cleanup:matrix.example",
+            userId: "@user:matrix.example",
+            roomStatus: "joined",
+            joined: true,
+            currentPowerLevel: 100,
+            requiredPowerLevel: 50,
+            canUpdateTopic: true
+          }
+        });
+      }
 
       if (requestUrl.pathname === "/api/matrix/actions/promote" && method === "POST" && body?.topic?.startsWith("Cleanup smoke")) {
         return createJsonResponse({

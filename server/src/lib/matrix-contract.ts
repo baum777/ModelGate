@@ -3,11 +3,17 @@ import { z } from "zod";
 export type MatrixErrorCode =
   | "matrix_not_configured"
   | "invalid_request"
+  | "matrix_invalid_token"
+  | "matrix_token_expired"
   | "matrix_unauthorized"
   | "matrix_forbidden"
   | "matrix_room_not_found"
+  | "matrix_not_joined"
+  | "matrix_insufficient_power_level"
+  | "matrix_wrong_room_id"
   | "matrix_write_forbidden"
   | "matrix_unavailable"
+  | "matrix_homeserver_unreachable"
   | "matrix_timeout"
   | "matrix_malformed_response"
   | "matrix_scope_not_found"
@@ -95,11 +101,17 @@ export const MatrixScopeResolveRequestSchema = z.object({
 const MATRIX_ERROR_MESSAGES: Record<MatrixErrorCode, string> = {
   matrix_not_configured: "Matrix backend is not configured",
   invalid_request: "Invalid Matrix request",
+  matrix_invalid_token: "Matrix credentials were rejected",
+  matrix_token_expired: "Matrix access token expired",
   matrix_unauthorized: "Matrix credentials were rejected",
   matrix_forbidden: "Matrix backend denied access",
   matrix_room_not_found: "Matrix room was not found",
+  matrix_not_joined: "Matrix user is not joined to the room",
+  matrix_insufficient_power_level: "Matrix user lacks room power level to update the topic",
+  matrix_wrong_room_id: "Matrix room id does not match the joined room",
   matrix_write_forbidden: "Matrix backend denied write access",
   matrix_unavailable: "Matrix backend is unavailable",
+  matrix_homeserver_unreachable: "Matrix homeserver is unreachable",
   matrix_timeout: "Matrix backend request timed out",
   matrix_malformed_response: "Matrix backend returned an invalid response",
   matrix_scope_not_found: "Matrix scope was not found",
@@ -114,11 +126,17 @@ const MATRIX_ERROR_MESSAGES: Record<MatrixErrorCode, string> = {
 const MATRIX_ERROR_STATUS: Record<MatrixErrorCode, number> = {
   matrix_not_configured: 503,
   invalid_request: 400,
+  matrix_invalid_token: 401,
+  matrix_token_expired: 401,
   matrix_unauthorized: 401,
   matrix_forbidden: 403,
   matrix_room_not_found: 404,
+  matrix_not_joined: 403,
+  matrix_insufficient_power_level: 403,
+  matrix_wrong_room_id: 404,
   matrix_write_forbidden: 403,
   matrix_unavailable: 503,
+  matrix_homeserver_unreachable: 503,
   matrix_timeout: 504,
   matrix_malformed_response: 502,
   matrix_scope_not_found: 404,

@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import {
+  MatrixAgentPlan,
+  MatrixAnalyzeRequestSchema,
   MatrixActionExecuteRequestSchema,
   MatrixActionPlanIdSchema,
   MatrixUpdateRoomTopicRequestSchema,
@@ -15,7 +17,11 @@ import {
 } from "../lib/matrix-contract.js";
 import { MatrixClientError, type MatrixClient } from "../lib/matrix-client.js";
 import type { MatrixConfig } from "../lib/matrix-env.js";
-import { createMatrixActionStore, type MatrixActionStore } from "../lib/matrix-action-store.js";
+import {
+  createMatrixActionStore,
+  type MatrixActionStore,
+  type MatrixActionStoreEntry
+} from "../lib/matrix-action-store.js";
 import {
   buildMatrixScopeSummaryItems,
   createMatrixScopeStore,
@@ -82,6 +88,64 @@ function serializeActionPlan(plan: MatrixActionPlan): MatrixActionPlan {
   };
 }
 
+function isMatrixAgentPlan(
+  plan: MatrixActionStoreEntry
+): plan is MatrixActionStoreEntry & MatrixAgentPlan {
+  return "actions" in plan;
+}
+
+function serializeMatrixAgentPlan(plan: MatrixActionStoreEntry & MatrixAgentPlan): MatrixAgentPlan {
+  return {
+    planId: plan.planId,
+    roomId: plan.roomId,
+    scopeId: plan.scopeId,
+    snapshotId: plan.snapshotId,
+    status: plan.status,
+    actions: plan.actions.map((action) => ({
+      type: action.type,
+      roomId: action.roomId,
+      currentValue: action.currentValue,
+      proposedValue: action.proposedValue
+    })),
+    currentValue: plan.currentValue,
+    proposedValue: plan.proposedValue,
+    risk: plan.risk,
+    requiresApproval: true,
+    createdAt: plan.createdAt,
+    expiresAt: plan.expiresAt
+  };
+}
+
+function deriveMatrixAgentRisk(snapshot: MatrixScopeSnapshot | null, currentValue: string | null, proposedValue: string) {
+  if (snapshot && snapshot.rooms.length > 1) {
+    return "medium" as const;
+  }
+
+  if (currentValue !== null && currentValue === proposedValue) {
+    return "low" as const;
+  }
+
+  if (proposedValue.length > 120) {
+    return "medium" as const;
+  }
+
+  return "low" as const;
+}
+
+function validateSupportedMatrixAgentPlan(plan: MatrixAgentPlan) {
+  if (
+    plan.actions.length !== 1
+    || plan.actions[0]?.type !== "set_room_topic"
+    || plan.actions[0]?.roomId !== plan.roomId
+    || plan.actions[0]?.currentValue !== plan.currentValue
+    || plan.actions[0]?.proposedValue !== plan.proposedValue
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 function assertExpectedMatrixUser(
   config: MatrixConfig,
   identity: MatrixWhoAmIResponse,
@@ -98,6 +162,116 @@ function assertExpectedMatrixUser(
       message: "Matrix backend returned an unexpected user identity"
     });
   }
+}
+
+function getRoomRequiredTopicPowerLevel(powerLevels: {
+  events: Record<string, number>;
+  state_default: number;
+}) {
+  return powerLevels.events["m.room.topic"] ?? powerLevels.state_default ?? 50;
+}
+
+function getRoomUserPowerLevel(
+  powerLevels: {
+    users: Record<string, number>;
+    users_default: number;
+  },
+  userId: string
+) {
+  return powerLevels.users[userId] ?? powerLevels.users_default ?? 0;
+}
+
+async function readMatrixRoomTopicAccess(
+  deps: MatrixRouteDependencies,
+  roomId: string
+) {
+  const identity = await deps.client.whoami();
+  assertExpectedMatrixUser(deps.config, identity, "matrix_room_topic_access", `/api/matrix/rooms/${roomId}/topic-access`);
+
+  const joinedRooms = await deps.client.joinedRooms();
+  const joined = joinedRooms.some((room) => room.roomId === roomId);
+
+  let roomStatus: "joined" | "not_joined" | "not_found" = joined ? "joined" : "not_joined";
+  let currentPowerLevel: number | null = null;
+  let requiredPowerLevel: number | null = null;
+  let canUpdateTopic = false;
+
+  if (!joined) {
+    try {
+      await deps.client.readRoomTopic(roomId);
+      roomStatus = "not_joined";
+    } catch (error) {
+      if (error instanceof MatrixClientError && error.code === "matrix_room_not_found") {
+        roomStatus = "not_found";
+      } else if (error instanceof MatrixClientError && (
+        error.code === "matrix_unauthorized"
+        || error.code === "matrix_invalid_token"
+        || error.code === "matrix_forbidden"
+        || error.code === "matrix_write_forbidden"
+      )) {
+        roomStatus = "not_joined";
+      } else {
+        throw error;
+      }
+    }
+  } else {
+    const powerLevels = await deps.client.readRoomPowerLevels(roomId);
+    currentPowerLevel = getRoomUserPowerLevel(powerLevels, identity.userId);
+    requiredPowerLevel = getRoomRequiredTopicPowerLevel(powerLevels);
+    canUpdateTopic = currentPowerLevel >= requiredPowerLevel;
+  }
+
+  return {
+    roomId,
+    userId: identity.userId,
+    roomStatus,
+    joined,
+    currentPowerLevel,
+    requiredPowerLevel,
+    canUpdateTopic
+  };
+}
+
+async function assertMatrixRoomTopicUpdateReady(
+  deps: MatrixRouteDependencies,
+  roomId: string
+) {
+  const access = await readMatrixRoomTopicAccess(deps, roomId);
+
+  if (access.roomStatus === "not_found") {
+    throw new MatrixClientError({
+      code: "matrix_room_not_found",
+      status: 404,
+      operation: "matrix_room_topic_access",
+      path: `/api/matrix/rooms/${roomId}/topic-access`,
+      baseUrl: deps.config.baseUrl ?? "unconfigured",
+      message: "Matrix room was not found"
+    });
+  }
+
+  if (!access.joined) {
+    throw new MatrixClientError({
+      code: "matrix_not_joined",
+      status: 403,
+      operation: "matrix_room_topic_access",
+      path: `/api/matrix/rooms/${roomId}/topic-access`,
+      baseUrl: deps.config.baseUrl ?? "unconfigured",
+      message: "Matrix user is not joined to the room"
+    });
+  }
+
+  if (!access.canUpdateTopic) {
+    throw new MatrixClientError({
+      code: "matrix_insufficient_power_level",
+      status: 403,
+      operation: "matrix_room_topic_access",
+      path: `/api/matrix/rooms/${roomId}/topic-access`,
+      baseUrl: deps.config.baseUrl ?? "unconfigured",
+      message: "Matrix user lacks room power level to update the topic"
+    });
+  }
+
+  return access;
 }
 
 export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies) {
@@ -171,6 +345,65 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
           rooms: resolution.rooms.map(({ members, lastEventSummary, ...room }) => room),
           createdAt: resolution.createdAt
         }
+      });
+    } catch (error) {
+      return handleMatrixError(reply, error);
+    }
+  });
+
+  app.post("/api/matrix/analyze", async (request, reply) => {
+    if (!deps.config.ready) {
+      return sendMatrixError(reply, "matrix_not_configured");
+    }
+
+    const parsed = MatrixAnalyzeRequestSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return sendMatrixError(reply, "invalid_request");
+    }
+
+    try {
+      const identity = await deps.client.whoami();
+      assertExpectedMatrixUser(deps.config, identity, "matrix_analyze", "/api/matrix/analyze");
+
+      const scopeSnapshot = parsed.data.scopeId ? store.get(parsed.data.scopeId) : null;
+
+      if (parsed.data.scopeId && !scopeSnapshot) {
+        return sendMatrixError(reply, "matrix_scope_not_found");
+      }
+
+      if (scopeSnapshot && !scopeSnapshot.rooms.some((room) => room.roomId === parsed.data.roomId)) {
+        return sendMatrixError(reply, "matrix_room_not_found");
+      }
+
+      await assertMatrixRoomTopicUpdateReady(deps, parsed.data.roomId);
+      const currentValue = await deps.client.readRoomTopic(parsed.data.roomId);
+      const createdAt = new Date().toISOString();
+      const plan = actionStore.createPlan({
+        planId: `plan_${randomUUID()}`,
+        roomId: parsed.data.roomId,
+        scopeId: scopeSnapshot?.scopeId ?? parsed.data.scopeId ?? null,
+        snapshotId: scopeSnapshot?.snapshotId ?? null,
+        status: "pending_review",
+        actions: [
+          {
+            type: "set_room_topic",
+            roomId: parsed.data.roomId,
+            currentValue,
+            proposedValue: parsed.data.proposedValue
+          }
+        ],
+        currentValue,
+        proposedValue: parsed.data.proposedValue,
+        risk: deriveMatrixAgentRisk(scopeSnapshot, currentValue, parsed.data.proposedValue),
+        requiresApproval: true,
+        createdAt,
+        expiresAt: new Date(Date.now() + actionStore.ttlMs).toISOString()
+      }) as MatrixActionStoreEntry & MatrixAgentPlan;
+
+      return reply.status(200).send({
+        ok: true,
+        plan: serializeMatrixAgentPlan(plan)
       });
     } catch (error) {
       return handleMatrixError(reply, error);
@@ -281,6 +514,31 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
     }
   });
 
+  app.get("/api/matrix/rooms/:roomId/topic-access", async (request, reply) => {
+    if (!deps.config.ready) {
+      return sendMatrixError(reply, "matrix_not_configured");
+    }
+
+    const roomId = typeof request.params === "object" && request.params !== null
+      ? (request.params as { roomId?: unknown }).roomId
+      : undefined;
+
+    if (typeof roomId !== "string" || roomId.trim().length === 0) {
+      return sendMatrixError(reply, "invalid_request");
+    }
+
+    try {
+      const access = await readMatrixRoomTopicAccess(deps, roomId);
+
+      return reply.status(200).send({
+        ok: true,
+        access
+      });
+    } catch (error) {
+      return handleMatrixError(reply, error);
+    }
+  });
+
   app.post("/api/matrix/actions/promote", async (request, reply) => {
     if (!deps.config.ready) {
       return sendMatrixError(reply, "matrix_not_configured");
@@ -293,6 +551,7 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
     }
 
     try {
+      await assertMatrixRoomTopicUpdateReady(deps, parsed.data.roomId);
       const before = await deps.client.readRoomTopic(parsed.data.roomId);
       const plan = actionStore.createPlan({
         planId: `plan_${randomUUID()}`,
@@ -339,6 +598,13 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
       return lookup.error;
     }
 
+    if (isMatrixAgentPlan(lookup.plan)) {
+      return reply.status(200).send({
+        ok: true,
+        plan: serializeMatrixAgentPlan(lookup.plan)
+      });
+    }
+
     return reply.status(200).send({
       ok: true,
       plan: serializeActionPlan(lookup.plan)
@@ -378,7 +644,42 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
     }
 
     try {
+      await assertMatrixRoomTopicUpdateReady(deps, plan.roomId);
       const currentTopic = await deps.client.readRoomTopic(plan.roomId);
+
+      if (isMatrixAgentPlan(plan)) {
+        if (!validateSupportedMatrixAgentPlan(plan)) {
+          return sendMatrixError(reply, "invalid_request");
+        }
+
+        if (currentTopic !== plan.currentValue) {
+          return sendMatrixError(reply, "matrix_stale_plan");
+        }
+
+        const executedAt = new Date().toISOString();
+        const transaction = await deps.client.updateRoomTopic(plan.roomId, plan.proposedValue);
+
+        actionStore.updatePlan(plan.planId, (current) => ({
+          ...current,
+          status: "executed",
+          execution: {
+            planId: current.planId,
+            status: "executed",
+            executedAt,
+            transactionId: transaction.transactionId
+          }
+        }));
+
+        return reply.status(200).send({
+          ok: true,
+          result: {
+            planId: plan.planId,
+            status: "executed",
+            executedAt,
+            transactionId: transaction.transactionId
+          }
+        });
+      }
 
       if (currentTopic !== plan.diff.before) {
         return sendMatrixError(reply, "matrix_stale_plan");
@@ -448,11 +749,12 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
       const checkedAt = new Date().toISOString();
 
       let status: "verified" | "mismatch" | "pending" | "failed" = "pending";
+      const expected = isMatrixAgentPlan(plan) ? plan.proposedValue : plan.diff.after;
 
       if (plan.status === "executed") {
         status = actual === null
           ? "failed"
-          : actual === plan.diff.after
+          : actual === expected
             ? "verified"
             : "mismatch";
       }
@@ -463,7 +765,7 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
           planId: current.planId,
           status,
           checkedAt,
-          expected: current.diff.after,
+          expected: isMatrixAgentPlan(current) ? current.proposedValue : current.diff.after,
           actual
         }
       }));
@@ -474,7 +776,7 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
           planId: plan.planId,
           status,
           checkedAt,
-          expected: plan.diff.after,
+          expected,
           actual
         }
       });

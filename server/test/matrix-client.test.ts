@@ -89,6 +89,45 @@ test("matrix joined rooms normalizes room metadata from upstream state", async (
   ]);
 });
 
+test("matrix room power levels normalize numeric topic permissions", async () => {
+  const client = createMatrixClient({
+    config: createTestMatrixConfig(),
+    fetchImpl: async (input) => {
+      const url = new URL(String(input));
+
+      if (url.pathname.endsWith("/state/m.room.power_levels")) {
+        return makeJsonResponse({
+          users: {
+            "@user:matrix.example": 100
+          },
+          users_default: 0,
+          events: {
+            "m.room.topic": 50
+          },
+          events_default: 0,
+          state_default: 50
+        });
+      }
+
+      throw new Error(`unexpected path: ${url.pathname}`);
+    }
+  });
+
+  const powerLevels = await client.readRoomPowerLevels("!room:matrix.example");
+
+  assert.deepEqual(powerLevels, {
+    users: {
+      "@user:matrix.example": 100
+    },
+    users_default: 0,
+    events: {
+      "m.room.topic": 50
+    },
+    events_default: 0,
+    state_default: 50
+  });
+});
+
 test("matrix scope resolve normalizes a cached snapshot", async () => {
   const client = createMatrixClient({
     config: createTestMatrixConfig(),
@@ -167,7 +206,7 @@ test("matrix client fails closed for malformed, unauthorized, forbidden, and tim
 
   await assert.rejects(
     unauthorizedClient.whoami(),
-    (error) => error instanceof MatrixClientError && error.code === "matrix_unauthorized"
+    (error) => error instanceof MatrixClientError && error.code === "matrix_invalid_token"
   );
 
   const forbiddenClient = createMatrixClient({
@@ -387,4 +426,33 @@ test("matrix client fails closed when the refresh backend is unavailable", async
     "GET /_matrix/client/v3/account/whoami",
     "POST /oauth2/token"
   ]);
+});
+
+test("matrix client reports expired tokens distinctly when the cached expiry has passed", async () => {
+  const client = createMatrixClient({
+    config: createTestMatrixConfig({
+      accessToken: "expired-access-token",
+      tokenExpiresAt: new Date(Date.now() - 60_000).toISOString()
+    }),
+    fetchImpl: async () => new Response("", { status: 401 })
+  });
+
+  await assert.rejects(
+    client.whoami(),
+    (error) => error instanceof MatrixClientError && error.code === "matrix_token_expired"
+  );
+});
+
+test("matrix client reports homeserver network failures distinctly", async () => {
+  const client = createMatrixClient({
+    config: createTestMatrixConfig(),
+    fetchImpl: async () => {
+      throw new Error("socket closed");
+    }
+  });
+
+  await assert.rejects(
+    client.whoami(),
+    (error) => error instanceof MatrixClientError && error.code === "matrix_homeserver_unreachable"
+  );
 });

@@ -1150,7 +1150,7 @@ test("Matrix room topic update success flows from prepare to verified execute", 
   let executeCount = 0;
   let verifyCount = 0;
 
-  await page.route("**/api/matrix/actions/promote", async (route) => {
+  await page.route("**/api/matrix/analyze", async (route) => {
     if (route.request().method() !== "POST") {
       await route.continue();
       return;
@@ -1164,17 +1164,24 @@ test("Matrix room topic update success flows from prepare to verified execute", 
         ok: true,
         plan: {
           planId: "plan-topic-update",
-          type: "update_room_topic",
           roomId: "!room:matrix.example",
+          scopeId: null,
+          snapshotId: null,
           status: "pending_review",
+          actions: [
+            {
+              type: "set_room_topic",
+              roomId: "!room:matrix.example",
+              currentValue: "Old topic",
+              proposedValue: "New topic",
+            },
+          ],
+          currentValue: "Old topic",
+          proposedValue: "New topic",
+          risk: "low",
+          requiresApproval: true,
           createdAt: "2026-04-15T08:00:00.000Z",
           expiresAt: "2026-04-15T08:12:00.000Z",
-          diff: {
-            field: "topic",
-            before: "Old topic",
-            after: "New topic",
-          },
-          requiresApproval: true,
         },
       }),
     });
@@ -1236,7 +1243,7 @@ test("Matrix room topic update success flows from prepare to verified execute", 
   await roomId.fill("!room:matrix.example");
   await topicText.fill("New topic");
 
-  await page.getByRole("button", { name: "Prepare topic update" }).click();
+  await page.getByRole("button", { name: "Analyze topic update" }).click();
 
   await expect(planCard).toBeVisible();
   await expect(planCard).toContainText("Old topic");
@@ -1268,7 +1275,7 @@ test("Matrix room topic update refresh reloads the canonical plan details", asyn
     releaseRefresh = resolve;
   });
 
-  await page.route("**/api/matrix/actions/promote", async (route) => {
+  await page.route("**/api/matrix/analyze", async (route) => {
     if (route.request().method() !== "POST") {
       await route.continue();
       return;
@@ -1281,17 +1288,24 @@ test("Matrix room topic update refresh reloads the canonical plan details", asyn
         ok: true,
         plan: {
           planId: "plan-topic-refresh",
-          type: "update_room_topic",
           roomId: "!room:matrix.example",
+          scopeId: null,
+          snapshotId: null,
           status: "pending_review",
+          actions: [
+            {
+              type: "set_room_topic",
+              roomId: "!room:matrix.example",
+              currentValue: "Old topic",
+              proposedValue: "New topic",
+            },
+          ],
+          currentValue: "Old topic",
+          proposedValue: "New topic",
+          risk: "low",
+          requiresApproval: true,
           createdAt: "2026-04-15T08:00:00.000Z",
           expiresAt: "2026-04-15T08:12:00.000Z",
-          diff: {
-            field: "topic",
-            before: "Old topic",
-            after: "New topic",
-          },
-          requiresApproval: true,
         },
       }),
     });
@@ -1312,17 +1326,24 @@ test("Matrix room topic update refresh reloads the canonical plan details", asyn
         ok: true,
         plan: {
           planId: "plan-topic-refresh",
-          type: "update_room_topic",
           roomId: "!room:matrix.example",
+          scopeId: null,
+          snapshotId: null,
           status: "pending_review",
+          actions: [
+            {
+              type: "set_room_topic",
+              roomId: "!room:matrix.example",
+              currentValue: "Refreshed old topic",
+              proposedValue: "Refreshed new topic",
+            },
+          ],
+          currentValue: "Refreshed old topic",
+          proposedValue: "Refreshed new topic",
+          risk: "low",
+          requiresApproval: true,
           createdAt: "2026-04-15T08:00:00.000Z",
           expiresAt: "2026-04-15T08:20:00.000Z",
-          diff: {
-            field: "topic",
-            before: "Refreshed old topic",
-            after: "Refreshed new topic",
-          },
-          requiresApproval: true,
         },
       }),
     });
@@ -1333,7 +1354,7 @@ test("Matrix room topic update refresh reloads the canonical plan details", asyn
   await waitForMatrixWorkspace(page);
   await page.getByTestId("matrix-topic-room-id").fill("!room:matrix.example");
   await page.getByTestId("matrix-topic-text").fill("New topic");
-  await page.getByRole("button", { name: "Prepare topic update" }).click();
+  await page.getByRole("button", { name: "Analyze topic update" }).click();
 
   const planCard = page.getByTestId("matrix-topic-plan");
   const refreshButton = page.getByTestId("matrix-topic-refresh");
@@ -1367,7 +1388,7 @@ test("Matrix room topic update refresh reloads the canonical plan details", asyn
 test("Matrix room topic update refresh fails closed for expired plans", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
 
-  await page.route("**/api/matrix/actions/promote", async (route) => {
+  await page.route("**/api/matrix/analyze", async (route) => {
     if (route.request().method() !== "POST") {
       await route.continue();
       return;
@@ -1380,17 +1401,24 @@ test("Matrix room topic update refresh fails closed for expired plans", async ({
         ok: true,
         plan: {
           planId: "plan-expired-topic",
-          type: "update_room_topic",
           roomId: "!room:matrix.example",
+          scopeId: null,
+          snapshotId: null,
           status: "pending_review",
+          actions: [
+            {
+              type: "set_room_topic",
+              roomId: "!room:matrix.example",
+              currentValue: "Old topic",
+              proposedValue: "New topic",
+            },
+          ],
+          currentValue: "Old topic",
+          proposedValue: "New topic",
+          risk: "low",
+          requiresApproval: true,
           createdAt: "2026-04-15T08:00:00.000Z",
           expiresAt: "2026-04-15T08:12:00.000Z",
-          diff: {
-            field: "topic",
-            before: "Old topic",
-            after: "New topic",
-          },
-          requiresApproval: true,
         },
       }),
     });
@@ -1420,7 +1448,7 @@ test("Matrix room topic update refresh fails closed for expired plans", async ({
   await waitForMatrixWorkspace(page);
   await page.getByTestId("matrix-topic-room-id").fill("!room:matrix.example");
   await page.getByTestId("matrix-topic-text").fill("New topic");
-  await page.getByRole("button", { name: "Prepare topic update" }).click();
+  await page.getByRole("button", { name: "Analyze topic update" }).click();
 
   await page.getByTestId("matrix-topic-refresh").click();
 
@@ -1433,7 +1461,7 @@ test("Matrix room topic update refresh fails closed for expired plans", async ({
 test("Matrix room topic update refresh fails closed for missing plans", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
 
-  await page.route("**/api/matrix/actions/promote", async (route) => {
+  await page.route("**/api/matrix/analyze", async (route) => {
     if (route.request().method() !== "POST") {
       await route.continue();
       return;
@@ -1446,17 +1474,24 @@ test("Matrix room topic update refresh fails closed for missing plans", async ({
         ok: true,
         plan: {
           planId: "plan-missing-topic",
-          type: "update_room_topic",
           roomId: "!room:matrix.example",
+          scopeId: null,
+          snapshotId: null,
           status: "pending_review",
+          actions: [
+            {
+              type: "set_room_topic",
+              roomId: "!room:matrix.example",
+              currentValue: "Old topic",
+              proposedValue: "New topic",
+            },
+          ],
+          currentValue: "Old topic",
+          proposedValue: "New topic",
+          risk: "low",
+          requiresApproval: true,
           createdAt: "2026-04-15T08:00:00.000Z",
           expiresAt: "2026-04-15T08:12:00.000Z",
-          diff: {
-            field: "topic",
-            before: "Old topic",
-            after: "New topic",
-          },
-          requiresApproval: true,
         },
       }),
     });
@@ -1486,7 +1521,7 @@ test("Matrix room topic update refresh fails closed for missing plans", async ({
   await waitForMatrixWorkspace(page);
   await page.getByTestId("matrix-topic-room-id").fill("!room:matrix.example");
   await page.getByTestId("matrix-topic-text").fill("New topic");
-  await page.getByRole("button", { name: "Prepare topic update" }).click();
+  await page.getByRole("button", { name: "Analyze topic update" }).click();
 
   await page.getByTestId("matrix-topic-refresh").click();
 
@@ -1501,7 +1536,7 @@ test("Matrix room topic update stale-plan failure is surfaced and does not fake 
 
   let verifyCount = 0;
 
-  await page.route("**/api/matrix/actions/promote", async (route) => {
+  await page.route("**/api/matrix/analyze", async (route) => {
     if (route.request().method() !== "POST") {
       await route.continue();
       return;
@@ -1514,17 +1549,24 @@ test("Matrix room topic update stale-plan failure is surfaced and does not fake 
         ok: true,
         plan: {
           planId: "plan-stale-topic",
-          type: "update_room_topic",
           roomId: "!room:matrix.example",
+          scopeId: null,
+          snapshotId: null,
           status: "pending_review",
+          actions: [
+            {
+              type: "set_room_topic",
+              roomId: "!room:matrix.example",
+              currentValue: "Old topic",
+              proposedValue: "New topic",
+            },
+          ],
+          currentValue: "Old topic",
+          proposedValue: "New topic",
+          risk: "low",
+          requiresApproval: true,
           createdAt: "2026-04-15T08:00:00.000Z",
           expiresAt: "2026-04-15T08:12:00.000Z",
-          diff: {
-            field: "topic",
-            before: "Old topic",
-            after: "New topic",
-          },
-          requiresApproval: true,
         },
       }),
     });
@@ -1577,7 +1619,7 @@ test("Matrix room topic update stale-plan failure is surfaced and does not fake 
   await waitForMatrixWorkspace(page);
   await page.getByTestId("matrix-topic-room-id").fill("!room:matrix.example");
   await page.getByTestId("matrix-topic-text").fill("New topic");
-  await page.getByRole("button", { name: "Prepare topic update" }).click();
+  await page.getByRole("button", { name: "Analyze topic update" }).click();
 
   await page.getByLabel("Ich bestätige die Freigabe für diese Änderung").check();
   await page.getByTestId("matrix-topic-execute").click();

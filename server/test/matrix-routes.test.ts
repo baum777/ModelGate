@@ -57,6 +57,9 @@ test("matrix routes fail closed when the expected user id does not match whoami"
         joinedRoomsCalls += 1;
         throw new Error("joinedRooms should not be called when identity mismatches");
       },
+      readRoomPowerLevels: async () => {
+        throw new Error("readRoomPowerLevels should not be called when identity mismatches");
+      },
       resolveScope: async () => {
         resolveScopeCalls += 1;
         throw new Error("resolveScope should not be called when identity mismatches");
@@ -156,6 +159,79 @@ test("matrix scope resolve rejects empty selections", async (t) => {
       message: "Invalid Matrix request"
     }
   });
+});
+
+test("matrix analyze rejects missing room ids", async (t) => {
+  const app = createApp({
+    env: createTestEnv(),
+    openRouter: createMockOpenRouterClient(),
+    matrixConfig: createTestMatrixConfig(),
+    matrixClient: createMockMatrixClient(),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/matrix/analyze",
+    payload: {
+      roomId: "   ",
+      proposedValue: "New topic"
+    }
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.deepEqual(JSON.parse(response.body), {
+    ok: false,
+    error: {
+      code: "invalid_request",
+      message: "Invalid Matrix request"
+    }
+  });
+});
+
+test("matrix topic access reports joined room power details", async (t) => {
+  const app = createApp({
+    env: createTestEnv(),
+    openRouter: createMockOpenRouterClient(),
+    matrixConfig: createTestMatrixConfig(),
+    matrixClient: createMockMatrixClient(),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/matrix/rooms/!room:matrix.example/topic-access"
+  });
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: true;
+    access: {
+      roomId: string;
+      userId: string;
+      roomStatus: "joined" | "not_joined" | "not_found";
+      joined: boolean;
+      currentPowerLevel: number | null;
+      requiredPowerLevel: number | null;
+      canUpdateTopic: boolean;
+    };
+  };
+
+  assert.equal(body.ok, true);
+  assert.equal(body.access.roomId, "!room:matrix.example");
+  assert.equal(body.access.roomStatus, "joined");
+  assert.equal(body.access.joined, true);
+  assert.equal(body.access.currentPowerLevel, 100);
+  assert.equal(body.access.requiredPowerLevel, 50);
+  assert.equal(body.access.canUpdateTopic, true);
 });
 
 test("matrix scope resolve stores a snapshot and summary reads it back", async (t) => {
@@ -330,6 +406,9 @@ test("matrix room provenance returns normalized read-only room metadata", async 
         readTopicCalls += 1;
         throw new Error("readRoomTopic should not be called for provenance");
       },
+      readRoomPowerLevels: async () => {
+        throw new Error("readRoomPowerLevels should not be called for provenance");
+      },
       updateRoomTopic: async () => {
         throw new Error("updateRoomTopic should not be called for provenance");
       }
@@ -414,6 +493,9 @@ test("matrix room provenance fails closed when the room is missing", async (t) =
       },
       readRoomTopic: async () => {
         throw new Error("readRoomTopic should not be called for provenance");
+      },
+      readRoomPowerLevels: async () => {
+        throw new Error("readRoomPowerLevels should not be called for provenance");
       },
       updateRoomTopic: async () => {
         throw new Error("updateRoomTopic should not be called for provenance");

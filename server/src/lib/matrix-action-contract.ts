@@ -14,6 +14,14 @@ export const MatrixActionExecuteRequestSchema = z.object({
 
 export const MatrixActionPlanIdSchema = z.string().trim().min(1);
 
+export const MatrixAnalyzeRequestSchema = z.object({
+  roomId: z.string().trim().min(1),
+  proposedValue: z.string().refine((value) => value.trim().length > 0, {
+    message: "Matrix proposed value must not be blank"
+  }),
+  scopeId: z.string().trim().min(1).optional()
+});
+
 export type MatrixUpdateRoomTopicRequest = z.infer<typeof MatrixUpdateRoomTopicRequestSchema>;
 
 export type MatrixActionExecuteRequest = z.infer<typeof MatrixActionExecuteRequestSchema>;
@@ -54,3 +62,30 @@ export type MatrixActionVerificationResult = {
   actual: string | null;
 };
 
+export type MatrixAnalyzeRequest = z.infer<typeof MatrixAnalyzeRequestSchema>;
+
+export type MatrixAgentRisk = "low" | "medium" | "high";
+
+export type MatrixAgentAction = {
+  type: "set_room_topic";
+  roomId: string;
+  currentValue: string | null;
+  proposedValue: string;
+};
+
+export type MatrixAgentPlanStatus = "pending_review" | "executed";
+
+export type MatrixAgentPlan = {
+  planId: string;
+  roomId: string;
+  scopeId: string | null;
+  snapshotId: string | null;
+  status: MatrixAgentPlanStatus;
+  actions: MatrixAgentAction[];
+  currentValue: string | null;
+  proposedValue: string;
+  risk: MatrixAgentRisk;
+  requiresApproval: true;
+  createdAt: string;
+  expiresAt: string;
+};

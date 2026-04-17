@@ -147,6 +147,136 @@ test("matrix promote creates a reviewable topic plan", async (t) => {
   assert.equal(fetched.plan.diff.before, "Old room topic");
 });
 
+test("matrix analyze creates a structured topic plan and execute/verify use it", async (t) => {
+  const topicClient = createMatrixActionClient({
+    roomTopic: "Old room topic",
+    writeTransactionId: "event-456"
+  });
+  const app = makeApp({
+    matrixClient: topicClient.client
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const resolveResponse = await app.inject({
+    method: "POST",
+    url: "/api/matrix/scope/resolve",
+    payload: {
+      roomIds: ["!room:matrix.example"],
+      spaceIds: []
+    }
+  });
+
+  assert.equal(resolveResponse.statusCode, 200);
+  const resolved = JSON.parse(resolveResponse.body) as { scope: { scopeId: string } };
+
+  const analyzeResponse = await app.inject({
+    method: "POST",
+    url: "/api/matrix/analyze",
+    payload: {
+      roomId: "!room:matrix.example",
+      proposedValue: "New room topic",
+      scopeId: resolved.scope.scopeId
+    }
+  });
+
+  assert.equal(analyzeResponse.statusCode, 200);
+  const analyzed = JSON.parse(analyzeResponse.body) as {
+    ok: true;
+    plan: {
+      planId: string;
+      roomId: string;
+      scopeId: string | null;
+      snapshotId: string | null;
+      status: "pending_review";
+      actions: Array<{
+        type: "set_room_topic";
+        roomId: string;
+        currentValue: string | null;
+        proposedValue: string;
+      }>;
+      currentValue: string | null;
+      proposedValue: string;
+      risk: "low" | "medium" | "high";
+      requiresApproval: true;
+      createdAt: string;
+      expiresAt: string;
+    };
+  };
+
+  assert.equal(analyzed.ok, true);
+  assert.match(analyzed.plan.planId, /^plan_/);
+  assert.equal(analyzed.plan.roomId, "!room:matrix.example");
+  assert.equal(analyzed.plan.scopeId, resolved.scope.scopeId);
+  assert.equal(analyzed.plan.status, "pending_review");
+  assert.equal(analyzed.plan.actions.length, 1);
+  assert.equal(analyzed.plan.actions[0]?.type, "set_room_topic");
+  assert.equal(analyzed.plan.actions[0]?.currentValue, "Old room topic");
+  assert.equal(analyzed.plan.actions[0]?.proposedValue, "New room topic");
+  assert.equal(analyzed.plan.currentValue, "Old room topic");
+  assert.equal(analyzed.plan.proposedValue, "New room topic");
+  assert.equal(analyzed.plan.requiresApproval, true);
+  assert.match(analyzed.plan.createdAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.match(analyzed.plan.expiresAt, /^\d{4}-\d{2}-\d{2}T/);
+
+  const planResponse = await app.inject({
+    method: "GET",
+    url: `/api/matrix/actions/${analyzed.plan.planId}`
+  });
+
+  assert.equal(planResponse.statusCode, 200);
+  const fetched = JSON.parse(planResponse.body) as typeof analyzed;
+  assert.equal(fetched.plan.planId, analyzed.plan.planId);
+  assert.equal(fetched.plan.actions[0]?.type, "set_room_topic");
+  assert.equal(fetched.plan.actions[0]?.proposedValue, "New room topic");
+
+  const executeResponse = await app.inject({
+    method: "POST",
+    url: `/api/matrix/actions/${analyzed.plan.planId}/execute`,
+    payload: {
+      approval: true
+    }
+  });
+
+  assert.equal(executeResponse.statusCode, 200);
+  const executed = JSON.parse(executeResponse.body) as {
+    ok: true;
+    result: {
+      planId: string;
+      status: "executed";
+      executedAt: string;
+      transactionId: string;
+    };
+  };
+
+  assert.equal(executed.result.planId, analyzed.plan.planId);
+  assert.equal(executed.result.status, "executed");
+  assert.equal(executed.result.transactionId, "event-456");
+  assert.equal(topicClient.getCurrentTopic(), "New room topic");
+
+  const verifyResponse = await app.inject({
+    method: "GET",
+    url: `/api/matrix/actions/${analyzed.plan.planId}/verify`
+  });
+
+  assert.equal(verifyResponse.statusCode, 200);
+  const verified = JSON.parse(verifyResponse.body) as {
+    ok: true;
+    verification: {
+      planId: string;
+      status: "verified" | "mismatch" | "pending" | "failed";
+      expected: string;
+      actual: string | null;
+    };
+  };
+
+  assert.equal(verified.verification.status, "verified");
+  assert.equal(verified.verification.expected, "New room topic");
+  assert.equal(verified.verification.actual, "New room topic");
+});
+
 test("matrix execute rejects requests without approval", async (t) => {
   const topicClient = createMatrixActionClient();
   const app = makeApp({
@@ -468,7 +598,7 @@ test("matrix writer routes normalize authorization and timeout failures without 
       matrixClient: createMockMatrixClient({
         readRoomTopic: async () => {
           throw new MatrixClientError({
-            code: "matrix_unauthorized",
+            code: "matrix_invalid_token",
             status: 401,
             operation: "Matrix room topic",
             path: "/_matrix/client/v3/rooms/!room%3Amatrix.example/state/m.room.topic",
@@ -495,7 +625,7 @@ test("matrix writer routes normalize authorization and timeout failures without 
       assert.deepEqual(JSON.parse(response.body), {
         ok: false,
         error: {
-          code: "matrix_unauthorized",
+          code: "matrix_invalid_token",
           message: "Matrix credentials were rejected"
         }
       });
