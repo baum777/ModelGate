@@ -14,6 +14,7 @@ function parseCsvList(value: string) {
 function createVercelEnv(source: NodeJS.ProcessEnv = process.env) {
   const openRouterApiKey = String(source.OPENROUTER_API_KEY ?? "").trim();
   const githubToken = String(source.GITHUB_TOKEN ?? "").trim();
+  const githubAgentApiKey = String(source.GITHUB_AGENT_API_KEY ?? "").trim();
 
   const port = Number.parseInt(String(source.PORT ?? "8787").trim(), 10);
   const githubRequestTimeoutMs = Number.parseInt(String(source.GITHUB_REQUEST_TIMEOUT_MS ?? "8000").trim(), 10);
@@ -35,6 +36,7 @@ function createVercelEnv(source: NodeJS.ProcessEnv = process.env) {
     ).trim(),
     GITHUB_TOKEN: githubToken,
     GITHUB_ALLOWED_REPOS: parseCsvList(String(source.GITHUB_ALLOWED_REPOS ?? "")),
+    GITHUB_AGENT_API_KEY: githubAgentApiKey,
     GITHUB_API_BASE_URL: String(source.GITHUB_API_BASE_URL ?? "https://api.github.com").trim() || "https://api.github.com",
     GITHUB_DEFAULT_OWNER: String(source.GITHUB_DEFAULT_OWNER ?? "").trim(),
     GITHUB_BRANCH_PREFIX: String(source.GITHUB_BRANCH_PREFIX ?? "modelgate/github").trim() || "modelgate/github",

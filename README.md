@@ -82,6 +82,7 @@ cp web/.env.example web/.env
 
 4. Set `OPENROUTER_API_KEY` in `.env`.
 5. Add `GITHUB_TOKEN` and `GITHUB_ALLOWED_REPOS` only if you want GitHub workspace routes enabled.
+   Add `GITHUB_AGENT_API_KEY` if you want approval-gated execute enabled; send it only as `X-ModelGate-Admin-Key` from trusted server-side callers.
 6. Add `MATRIX_ENABLED=true`, `MATRIX_BASE_URL`, and `MATRIX_ACCESS_TOKEN` only if you want Matrix routes enabled.
 
 Run the backend:
@@ -155,6 +156,7 @@ Secrets stay backend-only. Do not put tokens in Vite public env vars.
 | `LLM_MODEL_DAILY` | backend only | Daily/general task model target. |
 | `GITHUB_TOKEN` | backend only | Required for GitHub workspace routes. |
 | `GITHUB_ALLOWED_REPOS` | backend only | Required allowlist for GitHub workspace routes. |
+| `GITHUB_AGENT_API_KEY` | backend only | Admin key required for approval-gated execute requests. |
 | `GITHUB_API_BASE_URL` | backend only | GitHub API base URL. |
 | `GITHUB_DEFAULT_OWNER` | backend only | Optional default owner. |
 | `GITHUB_BRANCH_PREFIX` | backend only | Backend-created branch prefix. |
@@ -213,4 +215,3 @@ For browser and UI checks:
 npm run typecheck:web
 npm run test:web
 ```
-

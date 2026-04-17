@@ -7,6 +7,7 @@ export type GitHubConfig = {
   token: string | null;
   allowedRepos: string[];
   allowedRepoSet: Set<string>;
+  agentApiKey: string | null;
   defaultOwner: string | null;
   branchPrefix: string;
   requestTimeoutMs: number;
@@ -100,6 +101,7 @@ function parsePositiveInt(input: string, fallback: number, min: number, max: num
 
 export function createGitHubConfig(env: AppEnv): GitHubConfig {
   const token = env.GITHUB_TOKEN.trim() || null;
+  const agentApiKey = env.GITHUB_AGENT_API_KEY.trim() || null;
   const baseUrl = normalizeBaseUrl(env.GITHUB_API_BASE_URL);
   const allowedRepos = [...new Set(
     env.GITHUB_ALLOWED_REPOS
@@ -166,6 +168,7 @@ export function createGitHubConfig(env: AppEnv): GitHubConfig {
     token,
     allowedRepos,
     allowedRepoSet: new Set(allowedRepos),
+    agentApiKey,
     defaultOwner,
     branchPrefix,
     requestTimeoutMs,
@@ -188,6 +191,7 @@ export function createDisabledGitHubConfig(): GitHubConfig {
     token: null,
     allowedRepos: [],
     allowedRepoSet: new Set<string>(),
+    agentApiKey: null,
     defaultOwner: null,
     branchPrefix: "modelgate/github",
     requestTimeoutMs: 8000,

@@ -56,6 +56,7 @@ GitHub stays backend-only. The remote flow remains fail-closed until the require
 | --- | --- | --- | --- | --- |
 | `GITHUB_TOKEN` | yes | yes | Auth token for the server-side GitHub API client. | required |
 | `GITHUB_ALLOWED_REPOS` | yes | no | Comma-separated `owner/repo` allowlist for `/api/github/*`. | required |
+| `GITHUB_AGENT_API_KEY` | yes | yes | Admin key for approval-gated GitHub execute requests. Send only in `X-ModelGate-Admin-Key`. | required for execute |
 | `GITHUB_API_BASE_URL` | no | no | GitHub API base URL. | optional |
 | `GITHUB_DEFAULT_OWNER` | no | no | Default owner used by GitHub routing helpers. | optional |
 | `GITHUB_BRANCH_PREFIX` | no | no | Prefix for backend-created branches. | optional |
@@ -163,4 +164,3 @@ After deployment, verify:
 6. The browser uses relative paths in production and does not depend on a Vite public API host.
 7. No Matrix token or provider secret appears in browser DOM, logs, or client bundles.
 8. `npm run smoke:matrix` remains manual-only and is not part of deployment.
-

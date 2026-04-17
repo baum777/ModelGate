@@ -18,6 +18,8 @@ function encodeText(text: string) {
   return Buffer.from(text, "utf8").toString("base64");
 }
 
+const TEST_ADMIN_KEY = "test-github-admin-key";
+
 test("github execution routes create a branch, commit, pull request, and verify the result", async (t) => {
   let currentCommitSha = "commit-sha-1";
   let branchExists = false;
@@ -62,7 +64,8 @@ test("github execution routes create a branch, commit, pull request, and verify 
   const githubConfig = createTestGitHubConfig({
     allowedRepos: ["acme/widget"],
     allowedRepoSet: new Set(["acme/widget"]),
-    planTtlMs: 60_000
+    planTtlMs: 60_000,
+    agentApiKey: TEST_ADMIN_KEY
   });
 
   const githubClient = createGitHubClient({
@@ -394,6 +397,9 @@ test("github execution routes create a branch, commit, pull request, and verify 
   const executeResponse = await app.inject({
     method: "POST",
     url: `/api/github/actions/${proposeBody.plan.planId}/execute`,
+    headers: {
+      "x-modelgate-admin-key": TEST_ADMIN_KEY
+    },
     payload: {
       approval: true
     }
@@ -448,6 +454,9 @@ test("github execution routes create a branch, commit, pull request, and verify 
   const retryExecuteResponse = await app.inject({
     method: "POST",
     url: `/api/github/actions/${proposeBody.plan.planId}/execute`,
+    headers: {
+      "x-modelgate-admin-key": TEST_ADMIN_KEY
+    },
     payload: {
       approval: true
     }
@@ -480,12 +489,98 @@ test("github execution routes create a branch, commit, pull request, and verify 
   assert.ok(fetchCalls.includes("/repos/acme/widget/git/commits"));
 });
 
+test("github execution routes reject missing or invalid admin keys before touching plan state", async (t) => {
+  const githubConfig = createTestGitHubConfig({
+    allowedRepos: ["acme/widget"],
+    allowedRepoSet: new Set(["acme/widget"]),
+    agentApiKey: TEST_ADMIN_KEY
+  });
+
+  const app = createApp({
+    env: createTestEnv(),
+    openRouter: createMockOpenRouterClient(),
+    githubConfig,
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const missingKeyResponse = await app.inject({
+    method: "POST",
+    url: "/api/github/actions/plan_missing/execute",
+    payload: {
+      approval: true
+    }
+  });
+
+  assert.equal(missingKeyResponse.statusCode, 401);
+  assert.deepEqual(JSON.parse(missingKeyResponse.body), {
+    ok: false,
+    error: {
+      code: "github_unauthorized",
+      message: "GitHub credentials were rejected"
+    }
+  });
+
+  const wrongKeyResponse = await app.inject({
+    method: "POST",
+    url: "/api/github/actions/plan_missing/execute",
+    headers: {
+      "x-modelgate-admin-key": "wrong-key"
+    },
+    payload: {
+      approval: true
+    }
+  });
+
+  assert.equal(wrongKeyResponse.statusCode, 403);
+  assert.deepEqual(JSON.parse(wrongKeyResponse.body), {
+    ok: false,
+    error: {
+      code: "github_forbidden",
+      message: "GitHub backend denied access"
+    }
+  });
+});
+
+test("github execution routes stay fail closed when GitHub is not configured", async (t) => {
+  const app = createApp({
+    env: createTestEnv(),
+    openRouter: createMockOpenRouterClient(),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/github/actions/plan_missing/execute",
+    payload: {
+      approval: true
+    }
+  });
+
+  assert.equal(response.statusCode, 503);
+  assert.deepEqual(JSON.parse(response.body), {
+    ok: false,
+    error: {
+      code: "github_not_configured",
+      message: "GitHub backend is not configured"
+    }
+  });
+});
+
 test("github execution routes fail closed when the repository becomes stale before execution", async (t) => {
   let currentCommitSha = "commit-sha-1";
   const githubConfig = createTestGitHubConfig({
     allowedRepos: ["acme/widget"],
     allowedRepoSet: new Set(["acme/widget"]),
-    planTtlMs: 60_000
+    planTtlMs: 60_000,
+    agentApiKey: TEST_ADMIN_KEY
   });
 
   const githubClient = createGitHubClient({
@@ -619,6 +714,9 @@ test("github execution routes fail closed when the repository becomes stale befo
   const executeResponse = await app.inject({
     method: "POST",
     url: `/api/github/actions/${planId}/execute`,
+    headers: {
+      "x-modelgate-admin-key": TEST_ADMIN_KEY
+    },
     payload: {
       approval: true
     }
@@ -638,7 +736,8 @@ test("github execution routes fail closed when the approved branch diverges", as
   const githubConfig = createTestGitHubConfig({
     allowedRepos: ["acme/widget"],
     allowedRepoSet: new Set(["acme/widget"]),
-    planTtlMs: 60_000
+    planTtlMs: 60_000,
+    agentApiKey: TEST_ADMIN_KEY
   });
 
   const githubClient = createGitHubClient({
@@ -797,6 +896,9 @@ test("github execution routes fail closed when the approved branch diverges", as
   const executeResponse = await app.inject({
     method: "POST",
     url: `/api/github/actions/${planId}/execute`,
+    headers: {
+      "x-modelgate-admin-key": TEST_ADMIN_KEY
+    },
     payload: {
       approval: true
     }

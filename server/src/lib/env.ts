@@ -24,6 +24,7 @@ export const EnvSchema = z.object({
     .default("http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173"),
   GITHUB_TOKEN: z.string().trim().default(""),
   GITHUB_ALLOWED_REPOS: z.string().trim().default(""),
+  GITHUB_AGENT_API_KEY: z.string().trim().default(""),
   GITHUB_API_BASE_URL: z.string().trim().default("https://api.github.com"),
   GITHUB_DEFAULT_OWNER: z.string().trim().default(""),
   GITHUB_BRANCH_PREFIX: z.string().trim().default("modelgate/github"),
@@ -52,6 +53,7 @@ export type AppEnv = {
   CORS_ORIGINS: string[];
   GITHUB_TOKEN: string;
   GITHUB_ALLOWED_REPOS: string[];
+  GITHUB_AGENT_API_KEY: string;
   GITHUB_API_BASE_URL: string;
   GITHUB_DEFAULT_OWNER: string;
   GITHUB_BRANCH_PREFIX: string;
@@ -86,6 +88,7 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     CORS_ORIGINS: parseCsvList(parsed.CORS_ORIGINS),
     GITHUB_TOKEN: parsed.GITHUB_TOKEN.trim(),
     GITHUB_ALLOWED_REPOS: parseCsvList(parsed.GITHUB_ALLOWED_REPOS),
+    GITHUB_AGENT_API_KEY: parsed.GITHUB_AGENT_API_KEY.trim(),
     GITHUB_API_BASE_URL: parsed.GITHUB_API_BASE_URL.trim().replace(/\/+$/, "") || "https://api.github.com",
     GITHUB_DEFAULT_OWNER: parsed.GITHUB_DEFAULT_OWNER.trim(),
     GITHUB_BRANCH_PREFIX: parsed.GITHUB_BRANCH_PREFIX.trim() || "modelgate/github",

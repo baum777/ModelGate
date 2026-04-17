@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
-import type { FastifyInstance, FastifyReply } from "fastify";
+import { randomUUID, timingSafeEqual } from "node:crypto";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   GitHubChangeProposalRequestSchema,
   buildGitHubErrorResponse,
@@ -36,6 +36,8 @@ type GitHubRouteDependencies = {
   modelRegistry: ModelRegistry;
   actionStore?: GitHubActionStore;
 };
+
+const GITHUB_ADMIN_KEY_HEADER = "x-modelgate-admin-key";
 
 function sendGitHubError(reply: FastifyReply, code: GitHubErrorCode, message?: string, retryAfterSeconds?: number | null) {
   return reply.status(githubErrorStatus(code)).send(
@@ -126,6 +128,65 @@ function isFreshGitHubPlan(summary: GitHubRepoSummary, plan: GitHubChangePlan) {
   return summary.status === "ready"
     && summary.defaultBranch === plan.targetBranch
     && summary.defaultBranchSha === plan.baseSha;
+}
+
+function readGitHubAdminKeyHeader(request: FastifyRequest) {
+  const rawValue = request.headers[GITHUB_ADMIN_KEY_HEADER];
+
+  if (Array.isArray(rawValue)) {
+    return rawValue[0] ?? null;
+  }
+
+  return typeof rawValue === "string" ? rawValue : null;
+}
+
+function sendGitHubAdminKeyError(reply: FastifyReply, code: "github_unauthorized" | "github_forbidden") {
+  return sendGitHubError(reply, code);
+}
+
+function requiresGitHubAdminKey(config: GitHubConfig) {
+  return Boolean(config.agentApiKey && config.agentApiKey.trim().length > 0);
+}
+
+function hasMatchingAdminKey(request: FastifyRequest, config: GitHubConfig) {
+  const configuredKey = config.agentApiKey?.trim();
+
+  if (!configuredKey) {
+    return false;
+  }
+
+  const providedKey = readGitHubAdminKeyHeader(request)?.trim();
+
+  if (!providedKey) {
+    return false;
+  }
+
+  const configuredKeyBuffer = Buffer.from(configuredKey);
+  const providedKeyBuffer = Buffer.from(providedKey);
+
+  if (configuredKeyBuffer.length !== providedKeyBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(configuredKeyBuffer, providedKeyBuffer);
+}
+
+function requireGitHubAdminKey(request: FastifyRequest, reply: FastifyReply, config: GitHubConfig) {
+  if (!requiresGitHubAdminKey(config)) {
+    return sendGitHubError(reply, "github_not_configured");
+  }
+
+  const providedKey = readGitHubAdminKeyHeader(request)?.trim();
+
+  if (!providedKey) {
+    return sendGitHubAdminKeyError(reply, "github_unauthorized");
+  }
+
+  if (!hasMatchingAdminKey(request, config)) {
+    return sendGitHubAdminKeyError(reply, "github_forbidden");
+  }
+
+  return null;
 }
 
 export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies) {
@@ -333,6 +394,12 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   app.post("/api/github/actions/:planId/execute", async (request, reply) => {
     if (!deps.config.ready) {
       return sendGitHubError(reply, "github_not_configured");
+    }
+
+    const authError = requireGitHubAdminKey(request, reply, deps.config);
+
+    if (authError) {
+      return authError;
     }
 
     const parsedPlanId = GitHubPlanIdSchema.safeParse(

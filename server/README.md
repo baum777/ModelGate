@@ -22,6 +22,7 @@ GitHub remote flow required when enabled:
 
 - `GITHUB_TOKEN` - required GitHub token for the backend-owned remote flow
 - `GITHUB_ALLOWED_REPOS` - required comma-separated allowlist of `owner/repo` values; the GitHub remote flow stays fail-closed until at least one repository is allowed
+- `GITHUB_AGENT_API_KEY` - required to approve execute requests; send it only from trusted server-side callers via `X-ModelGate-Admin-Key`
 
 Optional environment variables:
 
@@ -189,7 +190,7 @@ data: {"ok":false,"error":{"code":"upstream_error","message":"Chat provider requ
 
 ## GitHub Workspace Contract
 
-These routes are backend-owned and review-first. The browser may read allowed repositories, build read context, prepare a proposal plan, and submit approval intent only. Execution and verification stay server-side and fail closed until `GITHUB_TOKEN` and `GITHUB_ALLOWED_REPOS` are configured.
+These routes are backend-owned and review-first. The browser may read allowed repositories, build read context, prepare a proposal plan, and submit approval intent only. Execution stays server-side and fails closed until `GITHUB_TOKEN`, `GITHUB_ALLOWED_REPOS`, and `GITHUB_AGENT_API_KEY` are configured.
 
 ### `GET /api/github/repos`
 
@@ -209,7 +210,7 @@ Returns the stored GitHub plan while it is still active.
 
 ### `POST /api/github/actions/:planId/execute`
 
-Requires `{ "approval": true }`, re-checks the plan freshness, and creates the backend-owned execution result.
+Requires `{ "approval": true }`, re-checks the plan freshness, and creates the backend-owned execution result. The request must also include `X-ModelGate-Admin-Key` matching `GITHUB_AGENT_API_KEY`; otherwise the route fails closed with 401 or 403.
 
 ### `GET /api/github/actions/:planId/verify`
 
