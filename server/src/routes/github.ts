@@ -64,6 +64,10 @@ function handleGitHubError(reply: FastifyReply, error: unknown) {
   }
 
   if (error instanceof OpenRouterError) {
+    if (error.status === 504) {
+      return sendGitHubError(reply, "github_propose_timeout");
+    }
+
     if (error.status === 503) {
       return sendGitHubError(reply, "github_not_configured");
     }
@@ -80,6 +84,35 @@ function handleGitHubError(reply: FastifyReply, error: unknown) {
   }
 
   return sendGitHubError(reply, "github_internal_error");
+}
+
+function createGitHubProposalTimeoutError() {
+  return new GitHubClientError({
+    code: "github_propose_timeout",
+    status: 504,
+    operation: "GitHub proposal generation",
+    path: "/api/github/actions/propose",
+    baseUrl: "unavailable",
+    message: "GitHub proposal generation timed out"
+  });
+}
+
+async function runWithTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  const timeoutPromise = new Promise<T>((_resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(createGitHubProposalTimeoutError());
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([operation, timeoutPromise]);
+  } finally {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 function normalizeRepoParams(requestParams: unknown) {
@@ -293,50 +326,56 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
 
     try {
-      const proposalRequest = {
-        repo: {
-          owner: parsedBody.data.repo.owner,
-          repo: parsedBody.data.repo.repo
-        },
-        objective: parsedBody.data.objective,
-        question: parsedBody.data.question,
-        ref: parsedBody.data.ref,
-        selectedPaths: parsedBody.data.selectedPaths,
-        constraints: parsedBody.data.constraints,
-        baseBranch: parsedBody.data.baseBranch
-      };
-      const planId = `plan_${randomUUID()}`;
-      const context = await contextBuilder.buildContext({
-        repo: proposalRequest.repo,
-        question: proposalRequest.question ?? proposalRequest.objective,
-        ref: proposalRequest.baseBranch ?? proposalRequest.ref,
-        selectedPaths: proposalRequest.selectedPaths
-      });
-      const createdAt = new Date().toISOString();
-      const plan = await proposalPlanner.buildPlan({
-        planId,
-        request: proposalRequest,
-        context,
-        createdAt
-      });
-      const currentSummary = await deps.client.readRepositorySummary(plan.repo.owner, plan.repo.repo);
-
-      if (!isFreshGitHubPlan(currentSummary, plan)) {
-        throw new GitHubClientError({
-          code: "github_stale_plan",
-          status: 409,
-          operation: "GitHub proposal generation",
-          path: "/api/github/actions/propose",
-          baseUrl: "unavailable",
-          message: "GitHub plan is stale and must be refreshed"
+      const plan = await runWithTimeout((async () => {
+        const proposalRequest = {
+          repo: {
+            owner: parsedBody.data.repo.owner,
+            repo: parsedBody.data.repo.repo
+          },
+          objective: parsedBody.data.objective,
+          question: parsedBody.data.question,
+          ref: parsedBody.data.ref,
+          selectedPaths: parsedBody.data.selectedPaths,
+          constraints: parsedBody.data.constraints,
+          baseBranch: parsedBody.data.baseBranch
+        };
+        const planId = `plan_${randomUUID()}`;
+        const context = await contextBuilder.buildContext({
+          repo: proposalRequest.repo,
+          question: proposalRequest.question ?? proposalRequest.objective,
+          ref: proposalRequest.baseBranch ?? proposalRequest.ref,
+          selectedPaths: proposalRequest.selectedPaths,
+          maxFiles: Math.min(deps.config.maxContextFiles, 4),
+          maxBytes: Math.min(deps.config.maxContextBytes, 16_384)
         });
-      }
+        const createdAt = new Date().toISOString();
+        const builtPlan = await proposalPlanner.buildPlan({
+          planId,
+          request: proposalRequest,
+          context,
+          createdAt
+        });
+        const currentSummary = await deps.client.readRepositorySummary(builtPlan.repo.owner, builtPlan.repo.repo);
 
-      actionStore.createPlan({
-        ...plan,
-        request: proposalRequest,
-        context
-      });
+        if (!isFreshGitHubPlan(currentSummary, builtPlan)) {
+          throw new GitHubClientError({
+            code: "github_stale_plan",
+            status: 409,
+            operation: "GitHub proposal generation",
+            path: "/api/github/actions/propose",
+            baseUrl: "unavailable",
+            message: "GitHub plan is stale and must be refreshed"
+          });
+        }
+
+        actionStore.createPlan({
+          ...builtPlan,
+          request: proposalRequest,
+          context
+        });
+
+        return builtPlan;
+      })(), deps.config.requestTimeoutMs);
 
       return reply.status(200).send({
         ok: true,

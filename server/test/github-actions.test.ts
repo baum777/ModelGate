@@ -25,6 +25,7 @@ test("github proposal routes create a review-only plan scaffold and keep it read
     createChatCompletion: async (request, selection) => {
       assert.equal(request.stream, false);
       assert.equal(selection.publicModelId, "default");
+      assert.deepEqual(selection.providerTargets, ["openrouter/auto"]);
       assert.equal(request.messages.length, 1);
       assert.equal(request.messages[0]?.role, "user");
 
@@ -280,6 +281,123 @@ test("github proposal routes create a review-only plan scaffold and keep it read
     "/repos/acme/widget",
     "/repos/acme/widget/commits/main"
   ]);
+});
+
+test("github proposal routes fail closed with a controlled timeout when the LLM stalls", async (t) => {
+  const githubConfig = createTestGitHubConfig({
+    allowedRepos: ["acme/widget"],
+    allowedRepoSet: new Set(["acme/widget"]),
+    maxContextFiles: 2,
+    maxContextBytes: 2000,
+    requestTimeoutMs: 250
+  });
+
+  const githubClient = createGitHubClient({
+    config: githubConfig,
+    fetchImpl: async (input) => {
+      const url = new URL(String(input));
+
+      if (url.pathname === "/repos/acme/widget") {
+        return makeJsonResponse({
+          full_name: "acme/widget",
+          name: "widget",
+          default_branch: "main",
+          description: "Widget repo",
+          private: false,
+          archived: false,
+          disabled: false,
+          permissions: {
+            push: true
+          },
+          owner: {
+            login: "acme"
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/commits/main") {
+        return makeJsonResponse({
+          sha: "commit-sha",
+          commit: {
+            tree: {
+              sha: "tree-sha"
+            }
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/git/trees/tree-sha") {
+        return makeJsonResponse({
+          sha: "tree-sha",
+          truncated: false,
+          tree: [
+            {
+              path: "README.md",
+              type: "blob",
+              sha: "blob-readme",
+              size: 70,
+              mode: "100644"
+            }
+          ]
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/contents/README.md") {
+        return makeJsonResponse({
+          type: "file",
+          path: "README.md",
+          sha: "blob-readme",
+          size: 70,
+          encoding: "base64",
+          content: encodeText("widget repo\n")
+        });
+      }
+
+      throw new Error(`unexpected path: ${url.pathname}${url.search}`);
+    }
+  });
+
+  const openRouter = createMockOpenRouterClient({
+    createChatCompletion: async () => {
+      return await new Promise<never>(() => {});
+    }
+  });
+
+  const app = createApp({
+    env: createTestEnv(),
+    openRouter,
+    githubConfig,
+    githubClient,
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/github/actions/propose",
+    payload: {
+      repo: {
+        owner: "acme",
+        repo: "widget"
+      },
+      objective: "Smoke the proposal timeout",
+      ref: "main",
+      selectedPaths: ["README.md"]
+    }
+  });
+
+  assert.equal(response.statusCode, 504);
+  assert.deepEqual(JSON.parse(response.body), {
+    ok: false,
+    error: {
+      code: "github_propose_timeout",
+      message: "GitHub proposal generation timed out"
+    }
+  });
+  assert.doesNotMatch(response.body, /ghp_|github_pat_/);
 });
 
 test("github proposal routes fail closed when the repository changes during proposal generation", async (t) => {

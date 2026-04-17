@@ -31,6 +31,7 @@ Optional environment variables:
 - `OPENROUTER_BASE_URL` - OpenRouter API base URL, defaults to `https://openrouter.ai/api/v1`
 - `OPENROUTER_MODEL` - provider execution target for the public default alias
 - `OPENROUTER_MODELS` - comma-separated hidden provider fallback pool
+- `OPENROUTER_REQUEST_TIMEOUT_MS` - OpenRouter request timeout in milliseconds, defaults to `15000`
 - `APP_NAME` - defaults to `local-openrouter-chat`
 - `DEFAULT_SYSTEM_PROMPT` - injected server-side before forwarding to OpenRouter
 - `CORS_ORIGINS` - comma-separated list of allowed frontend origins

@@ -15,6 +15,7 @@ function createVercelEnv(source: NodeJS.ProcessEnv = process.env) {
   const openRouterApiKey = String(source.OPENROUTER_API_KEY ?? "").trim();
   const githubToken = String(source.GITHUB_TOKEN ?? "").trim();
   const githubAgentApiKey = String(source.GITHUB_AGENT_API_KEY ?? "").trim();
+  const openRouterRequestTimeoutMs = Number.parseInt(String(source.OPENROUTER_REQUEST_TIMEOUT_MS ?? "15000").trim(), 10);
 
   const port = Number.parseInt(String(source.PORT ?? "8787").trim(), 10);
   const githubRequestTimeoutMs = Number.parseInt(String(source.GITHUB_REQUEST_TIMEOUT_MS ?? "8000").trim(), 10);
@@ -29,6 +30,7 @@ function createVercelEnv(source: NodeJS.ProcessEnv = process.env) {
     OPENROUTER_BASE_URL: String(source.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1").trim() || "https://openrouter.ai/api/v1",
     OPENROUTER_MODEL: String(source.OPENROUTER_MODEL ?? "openrouter/auto").trim() || "openrouter/auto",
     OPENROUTER_MODELS: parseCsvList(String(source.OPENROUTER_MODELS ?? "")),
+    OPENROUTER_REQUEST_TIMEOUT_MS: Number.isFinite(openRouterRequestTimeoutMs) ? openRouterRequestTimeoutMs : 15000,
     APP_NAME: String(source.APP_NAME ?? "local-openrouter-chat").trim() || "local-openrouter-chat",
     DEFAULT_SYSTEM_PROMPT: String(
       source.DEFAULT_SYSTEM_PROMPT

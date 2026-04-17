@@ -14,6 +14,7 @@ export type GitHubErrorCode =
   | "github_verification_failed"
   | "github_rate_limited"
   | "github_timeout"
+  | "github_propose_timeout"
   | "github_malformed_response"
   | "github_internal_error"
   | "invalid_request"
@@ -296,6 +297,7 @@ const GITHUB_ERROR_MESSAGES: Record<GitHubErrorCode, string> = {
   github_verification_failed: "GitHub verification failed",
   github_rate_limited: "GitHub rate limit was hit",
   github_timeout: "GitHub backend request timed out",
+  github_propose_timeout: "GitHub proposal generation timed out",
   github_malformed_response: "GitHub backend returned an invalid response",
   github_internal_error: "GitHub backend failed",
   invalid_request: "Invalid GitHub request",
@@ -318,6 +320,7 @@ const GITHUB_ERROR_STATUS: Record<GitHubErrorCode, number> = {
   github_verification_failed: 502,
   github_rate_limited: 429,
   github_timeout: 504,
+  github_propose_timeout: 504,
   github_malformed_response: 502,
   github_internal_error: 500,
   invalid_request: 400,

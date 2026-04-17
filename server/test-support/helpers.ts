@@ -12,6 +12,7 @@ export function createTestEnv(overrides: Partial<AppEnv> = {}): AppEnv {
     OPENROUTER_BASE_URL: overrides.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1",
     OPENROUTER_MODEL: overrides.OPENROUTER_MODEL ?? "openrouter/auto",
     OPENROUTER_MODELS: overrides.OPENROUTER_MODELS ?? ["openrouter/auto", "anthropic/claude-3.5-sonnet"],
+    OPENROUTER_REQUEST_TIMEOUT_MS: overrides.OPENROUTER_REQUEST_TIMEOUT_MS ?? 15000,
     APP_NAME: overrides.APP_NAME ?? "modelgate-test",
     DEFAULT_SYSTEM_PROMPT: overrides.DEFAULT_SYSTEM_PROMPT ?? "Backend-owned system prompt.",
     CORS_ORIGINS: overrides.CORS_ORIGINS ?? ["http://localhost:5173"],

@@ -12,6 +12,7 @@ export const EnvSchema = z.object({
   OPENROUTER_BASE_URL: z.string().trim().default("https://openrouter.ai/api/v1"),
   OPENROUTER_MODEL: z.string().trim().min(1).default("openrouter/auto"),
   OPENROUTER_MODELS: z.string().trim().default(""),
+  OPENROUTER_REQUEST_TIMEOUT_MS: z.string().trim().default("15000"),
   APP_NAME: z.string().trim().min(1).default("local-openrouter-chat"),
   DEFAULT_SYSTEM_PROMPT: z
     .string()
@@ -48,6 +49,7 @@ export type AppEnv = {
   OPENROUTER_BASE_URL: string;
   OPENROUTER_MODEL: string;
   OPENROUTER_MODELS: string[];
+  OPENROUTER_REQUEST_TIMEOUT_MS: number;
   APP_NAME: string;
   DEFAULT_SYSTEM_PROMPT: string;
   CORS_ORIGINS: string[];
@@ -85,6 +87,7 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   return {
     ...parsed,
     OPENROUTER_MODELS: parseCsvList(parsed.OPENROUTER_MODELS),
+    OPENROUTER_REQUEST_TIMEOUT_MS: Number.parseInt(parsed.OPENROUTER_REQUEST_TIMEOUT_MS.trim(), 10),
     CORS_ORIGINS: parseCsvList(parsed.CORS_ORIGINS),
     GITHUB_TOKEN: parsed.GITHUB_TOKEN.trim(),
     GITHUB_ALLOWED_REPOS: parseCsvList(parsed.GITHUB_ALLOWED_REPOS),

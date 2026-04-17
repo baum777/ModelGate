@@ -199,3 +199,52 @@ test("openrouter client fails closed when the api key is missing", async () => {
 
   assert.equal(fetchCalls, 0);
 });
+
+test("openrouter client times out upstream requests and aborts cleanly", async () => {
+  const env = createTestEnv({
+    OPENROUTER_REQUEST_TIMEOUT_MS: 250
+  });
+  let fetchCalls = 0;
+
+  const client = createOpenRouterClient({
+    env,
+    fetchImpl: async (_url, init) => {
+      fetchCalls += 1;
+
+      return await new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+
+        if (signal?.aborted) {
+          reject(Object.assign(new Error("AbortError"), { name: "AbortError" }));
+          return;
+        }
+
+        signal?.addEventListener("abort", () => {
+          reject(Object.assign(new Error("AbortError"), { name: "AbortError" }));
+        }, { once: true });
+      });
+    }
+  });
+
+  await assert.rejects(
+    client.createChatCompletion(
+      {
+        messages: [
+          {
+            role: "user",
+            content: "Hello"
+          }
+        ],
+        stream: false
+      },
+      {
+        publicModelId: "default",
+        logicalModelId: "stable-free-default",
+        providerTargets: ["openrouter/auto"]
+      }
+    ),
+    (error) => error instanceof OpenRouterError && error.status === 504 && error.message === "OpenRouter request timed out"
+  );
+
+  assert.equal(fetchCalls, 1);
+});

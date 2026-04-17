@@ -132,6 +132,7 @@ Secrets stay backend-only. Do not put tokens in Vite public env vars.
 | `OPENROUTER_BASE_URL` | backend only | Overrides the OpenRouter API base URL. |
 | `OPENROUTER_MODEL` | backend only | Hidden provider target for the public default alias. |
 | `OPENROUTER_MODELS` | backend only | Hidden fallback provider targets. |
+| `OPENROUTER_REQUEST_TIMEOUT_MS` | backend only | OpenRouter request timeout in milliseconds. |
 | `APP_NAME` | backend only | Upstream application name. |
 | `DEFAULT_SYSTEM_PROMPT` | backend only | Server-side system prompt injected before chat forwarding. |
 | `CORS_ORIGINS` | backend only | Allowlist of browser origins. |

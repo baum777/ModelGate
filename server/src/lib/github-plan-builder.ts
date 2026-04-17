@@ -165,9 +165,7 @@ async function loadProposalFiles(
   client: GitHubClient,
   context: GitHubContextBundle
 ): Promise<LoadedProposalFile[]> {
-  const files: LoadedProposalFile[] = [];
-
-  for (const entry of context.files) {
+  const files = await Promise.all(context.files.map(async (entry) => {
     const file = await client.readRepositoryFile(context.repo.owner, context.repo.repo, {
       ref: context.ref,
       path: entry.path
@@ -184,14 +182,14 @@ async function loadProposalFiles(
       });
     }
 
-    files.push({
+    return {
       path: file.path,
       content: normalizeLineEndings(file.content),
       sha: file.sha,
       binary: file.binary,
       truncated: file.truncated
-    });
-  }
+    };
+  }));
 
   return files;
 }
@@ -215,6 +213,11 @@ async function generateProposalDraft(
     });
   }
 
+  const proposalSelection = {
+    ...selection.selection,
+    providerTargets: selection.selection.providerTargets.slice(0, 1)
+  };
+
   const response = await options.openRouter.createChatCompletion(
     {
       stream: false,
@@ -236,7 +239,7 @@ async function generateProposalDraft(
         }
       ]
     },
-    selection.selection
+    proposalSelection
   );
 
   try {

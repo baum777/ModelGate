@@ -44,6 +44,7 @@ Set these in Vercel project settings. Keep all secrets in server-side env settin
 | `OPENROUTER_BASE_URL` | no | no | OpenRouter API base URL. |
 | `OPENROUTER_MODEL` | no | no | Hidden provider target for the public default alias. |
 | `OPENROUTER_MODELS` | no | no | Hidden fallback provider targets. |
+| `OPENROUTER_REQUEST_TIMEOUT_MS` | no | no | OpenRouter request timeout in milliseconds. |
 | `APP_NAME` | no | no | Upstream application name. |
 | `DEFAULT_SYSTEM_PROMPT` | no | no | Server-side system prompt. |
 | `CORS_ORIGINS` | no | no | Allowlist for browser origins and preview URLs. |

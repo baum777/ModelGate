@@ -114,22 +114,81 @@ function extractDelta(payload: unknown): { delta: string; finished: boolean } {
   return { delta, finished };
 }
 
-async function consumeResponseBody(response: Response) {
+function createAbortTimeoutError() {
+  return createOpenRouterError("OpenRouter request timed out", 504);
+}
+
+async function raceWithAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) {
+    return promise;
+  }
+
+  let cleanup = () => {};
+  const abortPromise = new Promise<never>((_, reject) => {
+    const onAbort = () => reject(createAbortTimeoutError());
+
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+
+    signal.addEventListener("abort", onAbort, { once: true });
+    cleanup = () => signal.removeEventListener("abort", onAbort);
+  });
+
   try {
-    await response.text();
+    return await Promise.race([promise, abortPromise]);
+  } finally {
+    cleanup();
+  }
+}
+
+async function readResponseText(response: Response, signal?: AbortSignal) {
+  if (!response.body) {
+    return "";
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+
+  try {
+    while (true) {
+      const result = await raceWithAbort(reader.read(), signal);
+
+      if (result.done) {
+        break;
+      }
+
+      text += decoder.decode(result.value, { stream: true });
+    }
+
+    text += decoder.decode();
+    return text;
+  } finally {
+    void reader.cancel().catch(() => {
+      // Best-effort cleanup only.
+    });
+    reader.releaseLock();
+  }
+}
+
+async function consumeResponseBody(response: Response, signal?: AbortSignal) {
+  try {
+    await readResponseText(response, signal);
   } catch {
     // Best-effort drain only. The caller only needs the status code.
   }
 }
 
-async function* readSseData(stream: ReadableStream<Uint8Array>): AsyncGenerator<string> {
+async function* readSseData(stream: ReadableStream<Uint8Array>, signal?: AbortSignal): AsyncGenerator<string> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
 
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await raceWithAbort(reader.read(), signal);
 
       if (done) {
         break;
@@ -159,6 +218,9 @@ async function* readSseData(stream: ReadableStream<Uint8Array>): AsyncGenerator<
       yield tailData;
     }
   } finally {
+    void reader.cancel().catch(() => {
+      // Best-effort cleanup only.
+    });
     reader.releaseLock();
   }
 }
@@ -211,115 +273,159 @@ async function parseSsePayload(data: string) {
   }
 }
 
+function normalizeTimeoutMs(timeoutMs: number) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 250 || timeoutMs > 60_000) {
+    return 15_000;
+  }
+
+  return timeoutMs;
+}
+
+function createMergedAbortController(timeoutMs: number, externalSignal?: AbortSignal) {
+  const timeoutController = new AbortController();
+  const mergedController = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => {
+    timeoutController.abort();
+  }, timeoutMs);
+
+  const onAbort = () => {
+    if (!mergedController.signal.aborted) {
+      mergedController.abort();
+    }
+  };
+
+  timeoutController.signal.addEventListener("abort", onAbort, { once: true });
+
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      onAbort();
+    } else {
+      externalSignal.addEventListener("abort", onAbort, { once: true });
+    }
+  }
+
+  return {
+    signal: mergedController.signal,
+    cleanup() {
+      globalThis.clearTimeout(timeoutId);
+      timeoutController.signal.removeEventListener("abort", onAbort);
+      if (externalSignal) {
+        externalSignal.removeEventListener("abort", onAbort);
+      }
+    },
+    timedOut() {
+      return timeoutController.signal.aborted;
+    }
+  };
+}
+
 export function createOpenRouterClient(options: OpenRouterClientOptions): OpenRouterClient {
   const fetchImpl = options.fetchImpl ?? fetch;
   const chatUrl = buildOpenRouterChatUrl(options.env);
+  const requestTimeoutMs = normalizeTimeoutMs(options.env.OPENROUTER_REQUEST_TIMEOUT_MS);
+
+  async function executeRequest(
+    request: ChatRequest,
+    selection: ResolvedModelSelection,
+    stream: boolean,
+    signal?: AbortSignal,
+    onToken?: (delta: string) => void
+  ) {
+    let lastError: OpenRouterError | undefined;
+
+    for (const providerModel of selection.providerTargets) {
+      const merged = createMergedAbortController(requestTimeoutMs, signal);
+      let response: Response;
+
+      try {
+        response = await fetchImpl(chatUrl, {
+          method: "POST",
+          headers: getUpstreamHeaders(options.env),
+          body: JSON.stringify(buildRequestBody(options.env, request, stream, providerModel)),
+          signal: merged.signal
+        });
+      } catch (error) {
+        if (merged.timedOut() || (error instanceof Error && error.name === "AbortError")) {
+          lastError = createOpenRouterError("OpenRouter request timed out", 504);
+          continue;
+        }
+
+        if (error instanceof OpenRouterError) {
+          lastError = error;
+          continue;
+        }
+
+        if (error instanceof TypeError || error instanceof SyntaxError) {
+          lastError = createOpenRouterError("OpenRouter request failed", 502);
+          continue;
+        }
+
+        throw error;
+      } finally {
+        merged.cleanup();
+      }
+
+      if (!response.ok) {
+        await consumeResponseBody(response, merged.signal);
+        lastError = createOpenRouterError("OpenRouter request failed", response.status);
+        continue;
+      }
+
+      if (!stream) {
+        const payloadText = await readResponseText(response, merged.signal);
+        const payload = payloadText.length > 0 ? JSON.parse(payloadText) as unknown : null;
+        return extractAssistantText(payload, selection.publicModelId);
+      }
+
+      if (!response.body) {
+        lastError = createOpenRouterError("OpenRouter response did not include a stream body", 502);
+        continue;
+      }
+
+      let emittedToken = false;
+      let text = "";
+
+      try {
+        for await (const data of readSseData(response.body, merged.signal)) {
+          if (data === "[DONE]") {
+            break;
+          }
+
+          const payload = await parseSsePayload(data);
+          const delta = extractDelta(payload);
+
+          if (delta.delta) {
+            emittedToken = true;
+            text += delta.delta;
+            onToken?.(delta.delta);
+          }
+
+          if (delta.finished) {
+            break;
+          }
+        }
+
+        return { model: selection.publicModelId, text };
+      } catch (error) {
+        if (error instanceof TypeError && !emittedToken) {
+          lastError = createOpenRouterError("OpenRouter request failed", 502);
+          continue;
+        }
+
+        throw error;
+      }
+    }
+
+    throw lastError ?? createOpenRouterError("OpenRouter request failed", 502);
+  }
 
   return {
     async createChatCompletion(request, selection, signal) {
-      let lastError: OpenRouterError | undefined;
-
-      for (const providerModel of selection.providerTargets) {
-        try {
-          const response = await fetchImpl(chatUrl, {
-            method: "POST",
-            headers: getUpstreamHeaders(options.env),
-            body: JSON.stringify(buildRequestBody(options.env, request, false, providerModel)),
-            signal
-          });
-
-          if (!response.ok) {
-            await consumeResponseBody(response);
-            lastError = createOpenRouterError("OpenRouter request failed", response.status);
-            continue;
-          }
-
-          const payload = await response.json() as unknown;
-          return extractAssistantText(payload, selection.publicModelId);
-        } catch (error) {
-          if (error instanceof OpenRouterError) {
-            lastError = error;
-            continue;
-          }
-
-          if (error instanceof TypeError || error instanceof SyntaxError) {
-            lastError = createOpenRouterError("OpenRouter request failed", 502);
-            continue;
-          }
-
-          throw error;
-        }
-      }
-
-      throw lastError ?? createOpenRouterError("OpenRouter request failed", 502);
+      return executeRequest(request, selection, false, signal);
     },
 
     async relayChatCompletionStream(request, selection, streamOptions) {
-      let lastError: OpenRouterError | undefined;
-
-      for (const providerModel of selection.providerTargets) {
-        let emittedToken = false;
-
-        try {
-          const response = await fetchImpl(chatUrl, {
-            method: "POST",
-            headers: getUpstreamHeaders(options.env),
-            body: JSON.stringify(buildRequestBody(options.env, request, true, providerModel)),
-            signal: streamOptions.signal
-          });
-
-          if (!response.ok) {
-            await consumeResponseBody(response);
-            lastError = createOpenRouterError("OpenRouter request failed", response.status);
-            continue;
-          }
-
-          if (!response.body) {
-            lastError = createOpenRouterError("OpenRouter response did not include a stream body", 502);
-            continue;
-          }
-
-          let text = "";
-
-          for await (const data of readSseData(response.body)) {
-            if (data === "[DONE]") {
-              break;
-            }
-
-            const payload = await parseSsePayload(data);
-            const delta = extractDelta(payload);
-
-            if (delta.delta) {
-              emittedToken = true;
-              text += delta.delta;
-              streamOptions.onToken(delta.delta);
-            }
-
-            if (delta.finished) {
-              break;
-            }
-          }
-
-          return { model: selection.publicModelId, text };
-        } catch (error) {
-          if (error instanceof OpenRouterError) {
-            lastError = error;
-
-            if (!emittedToken) {
-              continue;
-            }
-          }
-
-          if (error instanceof TypeError && !emittedToken) {
-            lastError = createOpenRouterError("OpenRouter request failed", 502);
-            continue;
-          }
-
-          throw error;
-        }
-      }
-
-      throw lastError ?? createOpenRouterError("OpenRouter request failed", 502);
+      return executeRequest(request, selection, true, streamOptions.signal, streamOptions.onToken);
     }
   };
 }
