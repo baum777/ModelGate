@@ -912,7 +912,8 @@ async function requestJson<T>(operation: string, path: string, init: RequestInit
   try {
     response = await fetch(resolveMatrixApiUrl(path), {
       ...init,
-      headers
+      headers,
+      credentials: "include"
     });
   } catch (error) {
     throw new MatrixRequestError({

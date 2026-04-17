@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { ChatWorkspace } from "./components/ChatWorkspace.js";
+import { GitHubAdminLogin } from "./components/GitHubAdminLogin.js";
 import {
   GitHubWorkspace,
   type GitHubWorkspaceStatus,
@@ -17,7 +18,19 @@ import {
   type DiagnosticEntry,
 } from "./components/SettingsWorkspace.js";
 import { StatusPanel, type StatusPanelRow } from "./components/StatusPanel.js";
-import { fetchHealth, fetchModels } from "./lib/api.js";
+import {
+  fetchAuthSession,
+  fetchHealth,
+  fetchModels,
+  loginAdmin,
+  logoutAdmin
+} from "./lib/api.js";
+import {
+  createInitialGitHubAuthState,
+  describeGitHubAuthError,
+  githubAuthReducer,
+  type GitHubAuthState
+} from "./lib/github-auth.js";
 
 type WorkspaceMode = "chat" | "github" | "matrix" | "review" | "settings";
 
@@ -209,6 +222,8 @@ export default function App() {
   const persisted = readPersistedShellState();
   const [mode, setMode] = useState<WorkspaceMode>(persisted?.activeTab ?? "chat");
   const [expertMode, setExpertMode] = useState(persisted?.expertMode ?? false);
+  const [githubAuthState, dispatchGitHubAuth] = useReducer(githubAuthReducer, undefined, createInitialGitHubAuthState);
+  const [githubPassword, setGitHubPassword] = useState("");
   const [backendHealthy, setBackendHealthy] = useState<boolean | null>(null);
   const [backendHealthLabel, setBackendHealthLabel] = useState<string | null>(null);
   const [activeModelAlias, setActiveModelAlias] = useState<string | null>(null);
@@ -218,6 +233,7 @@ export default function App() {
   const [githubContext, setGitHubContext] = useState<GitHubWorkspaceStatus>(DEFAULT_GITHUB_CONTEXT);
   const [matrixContext, setMatrixContext] = useState<MatrixWorkspaceStatus>(DEFAULT_MATRIX_CONTEXT);
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
+  const githubUnlocked = githubAuthState.status === "authenticated";
 
   useEffect(() => {
     let cancelled = false;
@@ -299,11 +315,56 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadGitHubSession() {
+      dispatchGitHubAuth({
+        type: "session_check_started"
+      });
+
+      try {
+        const session = await fetchAuthSession();
+
+        if (cancelled) {
+          return;
+        }
+
+        dispatchGitHubAuth({
+          type: "session_check_succeeded",
+          authenticated: session.authenticated
+        });
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        dispatchGitHubAuth({
+          type: "session_check_failed",
+          error: error instanceof Error ? error.message : "GitHub-Session konnte nicht geprüft werden."
+        });
+      }
+    }
+
+    void loadGitHubSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     persistShellState({
       activeTab: mode,
       expertMode,
     });
   }, [expertMode, mode]);
+
+  useEffect(() => {
+    if (!githubUnlocked) {
+      setGitHubContext(DEFAULT_GITHUB_CONTEXT);
+      setReviewItems((current) => current.filter((item) => item.source !== "github"));
+    }
+  }, [githubUnlocked]);
 
   const recordTelemetry = useCallback(
     (kind: TelemetryEntry["kind"], label: string, detail?: string) => {
@@ -331,6 +392,57 @@ export default function App() {
     setReviewItems((current) => current.filter((item) => item.source !== source));
   }, []);
 
+  const handleGitHubLogin = useCallback(async () => {
+    const password = githubPassword;
+
+    if (password.trim().length === 0 || githubAuthState.busy) {
+      return;
+    }
+
+    dispatchGitHubAuth({
+      type: "login_started"
+    });
+
+    try {
+      await loginAdmin(password);
+      dispatchGitHubAuth({
+        type: "login_succeeded"
+      });
+      setGitHubPassword("");
+    } catch (error) {
+      dispatchGitHubAuth({
+        type: "login_failed",
+        error: error instanceof Error ? describeGitHubAuthError(error.message) : "GitHub login failed."
+      });
+      setGitHubPassword("");
+    }
+  }, [githubAuthState.busy, githubPassword]);
+
+  const handleGitHubLogout = useCallback(async () => {
+    if (githubAuthState.busy) {
+      return;
+    }
+
+    dispatchGitHubAuth({
+      type: "logout_started"
+    });
+
+    try {
+      await logoutAdmin();
+      dispatchGitHubAuth({
+        type: "logout_succeeded"
+      });
+      setGitHubPassword("");
+      setGitHubContext(DEFAULT_GITHUB_CONTEXT);
+      removeModeReviewItems("github");
+    } catch (error) {
+      dispatchGitHubAuth({
+        type: "logout_failed",
+        error: error instanceof Error ? describeGitHubAuthError(error.message) : "GitHub logout failed."
+      });
+    }
+  }, [githubAuthState.busy, removeModeReviewItems]);
+
   const chatRows: StatusPanelRow[] = [
     { label: "Modell", value: activeModelAlias ?? "Noch nicht gewählt" },
     { label: "Kontext", value: availableModels.length > 0 ? "Modell verfügbar" : "Keine Auswahl" },
@@ -342,9 +454,9 @@ export default function App() {
     { label: "Repository", value: githubContext.repositoryLabel },
     { label: "Lesestatus", value: githubContext.analysisLabel },
     { label: "Vorschlag", value: githubContext.proposalLabel },
-    { label: "Freigabe", value: githubContext.approvalLabel },
+    { label: "Freigabe", value: githubUnlocked ? githubContext.approvalLabel : "Admin-Login erforderlich" },
     { label: "Ergebnis", value: githubContext.resultLabel },
-    { label: "Sicherheit", value: githubContext.accessLabel },
+    { label: "Sicherheit", value: githubUnlocked ? githubContext.accessLabel : "Gesperrt" },
   ];
 
   const matrixRows: StatusPanelRow[] = [
@@ -386,7 +498,7 @@ export default function App() {
   const currentStatusBadge = useMemo(() => {
     switch (mode) {
       case "github":
-        return githubContext.connectionLabel;
+        return githubUnlocked ? githubContext.connectionLabel : "Gesperrt";
       case "matrix":
         return matrixContext.expertDetails.backendRouteStatus ?? "Bereit";
       case "review":
@@ -396,11 +508,12 @@ export default function App() {
       default:
         return backendHealthy === false ? "Nicht verfügbar" : backendHealthy === true ? "Bereit" : "Wird geprüft";
     }
-  }, [backendHealthy, expertMode, githubContext.connectionLabel, matrixContext.expertDetails.backendRouteStatus, mode, reviewItems.length]);
+  }, [backendHealthy, expertMode, githubContext.connectionLabel, githubUnlocked, matrixContext.expertDetails.backendRouteStatus, mode, reviewItems.length]);
 
   const currentStatusTone = useMemo(() => {
     switch (mode) {
       case "github":
+        return githubUnlocked ? "partial" : "error";
       case "matrix":
         return "ready";
       case "review":
@@ -410,11 +523,19 @@ export default function App() {
       default:
         return backendHealthy === false ? "error" : backendHealthy === true ? "ready" : "partial";
     }
-  }, [backendHealthy, mode, reviewItems.length]);
+  }, [backendHealthy, githubUnlocked, mode, reviewItems.length]);
 
   const currentExpertRows = useMemo(() => {
     switch (mode) {
       case "github":
+        if (!githubUnlocked) {
+          return [
+            { label: "Route", value: "/api/auth/me" },
+            { label: "Anmeldung", value: "Erforderlich" },
+            { label: "GitHub API Status", value: githubAuthState.status === "loading" ? "Wird geprüft" : "Gesperrt" }
+          ];
+        }
+
         return [
           { label: "Route", value: "/api/github/actions/propose" },
           { label: "Anfrage-ID", value: githubContext.expertDetails.requestId ?? "n/a" },
@@ -449,7 +570,7 @@ export default function App() {
       default:
         return [];
     }
-  }, [expertMode, githubContext.expertDetails, matrixContext.expertDetails, mode, reviewItems]);
+  }, [expertMode, githubAuthState.status, githubContext.expertDetails, githubUnlocked, matrixContext.expertDetails, mode, reviewItems]);
 
   const currentExpertChildren = useMemo(() => {
     if (mode === "github") {
@@ -485,7 +606,22 @@ export default function App() {
             <span className={`status-pill status-${backendHealthy === false ? "error" : backendHealthy === true ? "ready" : "partial"}`}>
               {backendHealthy === true ? "Backend healthy" : backendHealthy === false ? "Backend error" : "Backend pending"}
             </span>
+            <span className={`status-pill status-${githubAuthState.status === "authenticated" ? "ready" : githubAuthState.status === "loading" ? "partial" : "error"}`}>
+              {githubAuthState.status === "authenticated" ? "GitHub unlocked" : githubAuthState.status === "loading" ? "GitHub session" : "GitHub locked"}
+            </span>
             {restoredSession ? <span className="status-pill status-restored">RESTORED_SESSION</span> : null}
+            {githubUnlocked ? (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  void handleGitHubLogout();
+                }}
+                disabled={githubAuthState.busy}
+              >
+                {githubAuthState.busy ? "Abmelden…" : "Logout"}
+              </button>
+            ) : null}
             <BeginnerExpertToggle expertMode={expertMode} setExpertMode={setExpertMode} />
           </div>
 
@@ -606,7 +742,7 @@ export default function App() {
               onActiveModelAliasChange={setActiveModelAlias}
               onTelemetry={recordTelemetry}
             />
-          ) : mode === "github" ? (
+          ) : mode === "github" && githubUnlocked ? (
             <GitHubWorkspace
               backendHealthy={backendHealthy}
               backendHealthLabel={backendHealthLabel}
@@ -614,6 +750,15 @@ export default function App() {
               onTelemetry={recordTelemetry}
               onContextChange={setGitHubContext}
               onReviewItemsChange={updateGitHubReviewItems}
+            />
+          ) : mode === "github" ? (
+            <GitHubAdminLogin
+              authState={githubAuthState}
+              password={githubPassword}
+              onPasswordChange={setGitHubPassword}
+              onSubmit={() => {
+                void handleGitHubLogin();
+              }}
             />
           ) : mode === "matrix" ? (
             <MatrixWorkspace
@@ -650,7 +795,9 @@ export default function App() {
             }
             headline={
               mode === "github"
-                ? githubContext.accessLabel
+                ? githubUnlocked
+                  ? githubContext.accessLabel
+                  : "Anmeldung erforderlich"
                 : mode === "matrix"
                   ? matrixContext.approvalLabel
                   : mode === "review"

@@ -20,6 +20,10 @@ export type ModelResponse = {
   source: string;
 };
 
+export type AuthSessionResponse = {
+  authenticated: boolean;
+};
+
 export type ChatStreamHandlers = {
   onStart?: (payload: { ok: true; model: string }) => void;
   onToken?: (delta: string) => void;
@@ -52,6 +56,7 @@ async function readErrorMessage(response: Response) {
       const payload = await response.json() as {
         message?: unknown;
         error?: unknown;
+        code?: unknown;
       };
       const error = payload.error;
 
@@ -69,6 +74,10 @@ async function readErrorMessage(response: Response) {
         if (typeof errorMessage === "string" && errorMessage.length > 0) {
           return errorMessage;
         }
+      }
+
+      if (typeof payload.code === "string" && payload.code.length > 0) {
+        return payload.code;
       }
     } catch {
       return response.statusText || "Request failed";
@@ -146,7 +155,9 @@ export async function* readSseEvents(stream: ReadableStream<Uint8Array>): AsyncG
 }
 
 export async function fetchHealth(): Promise<HealthResponse> {
-  const response = await fetch(resolveApiUrl("/health"));
+  const response = await fetch(resolveApiUrl("/health"), {
+    credentials: "include"
+  });
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response));
@@ -156,7 +167,9 @@ export async function fetchHealth(): Promise<HealthResponse> {
 }
 
 export async function fetchModels(): Promise<ModelResponse> {
-  const response = await fetch(resolveApiUrl("/models"));
+  const response = await fetch(resolveApiUrl("/models"), {
+    credentials: "include"
+  });
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response));
@@ -179,6 +192,7 @@ export async function streamChatCompletion(
     headers: {
       "Content-Type": "application/json"
     },
+    credentials: "include",
     body: JSON.stringify({
       ...body,
       stream: true
@@ -300,4 +314,54 @@ export async function streamChatCompletion(
   } else if (!sawTerminal) {
     handlers.onMalformed?.("Stream ended without a terminal frame.");
   }
+}
+
+export async function fetchAuthSession(): Promise<AuthSessionResponse> {
+  const response = await fetch(resolveApiUrl("/api/auth/me"), {
+    credentials: "include"
+  });
+
+  if (response.status === 401) {
+    return {
+      authenticated: false
+    };
+  }
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return response.json() as Promise<AuthSessionResponse>;
+}
+
+export async function loginAdmin(password: string): Promise<AuthSessionResponse> {
+  const response = await fetch(resolveApiUrl("/api/auth/login"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    credentials: "include",
+    body: JSON.stringify({
+      password
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return response.json() as Promise<AuthSessionResponse>;
+}
+
+export async function logoutAdmin(): Promise<AuthSessionResponse> {
+  const response = await fetch(resolveApiUrl("/api/auth/logout"), {
+    method: "POST",
+    credentials: "include"
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return response.json() as Promise<AuthSessionResponse>;
 }

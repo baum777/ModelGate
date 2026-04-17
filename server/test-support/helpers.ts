@@ -1,4 +1,5 @@
 import type { AppEnv } from "../src/lib/env.js";
+import { createAuthConfig, createSessionCookie } from "../src/lib/auth.js";
 import { createDisabledGitHubConfig, type GitHubConfig } from "../src/lib/github-env.js";
 import type { MatrixClient } from "../src/lib/matrix-client.js";
 import { createDisabledMatrixConfig, type MatrixConfig } from "../src/lib/matrix-env.js";
@@ -32,8 +33,41 @@ export function createTestEnv(overrides: Partial<AppEnv> = {}): AppEnv {
     GITHUB_SMOKE_ENABLED: overrides.GITHUB_SMOKE_ENABLED ?? false,
     GITHUB_APP_ID: overrides.GITHUB_APP_ID ?? "",
     GITHUB_APP_PRIVATE_KEY: overrides.GITHUB_APP_PRIVATE_KEY ?? "",
-    GITHUB_APP_INSTALLATION_ID: overrides.GITHUB_APP_INSTALLATION_ID ?? ""
+    GITHUB_APP_INSTALLATION_ID: overrides.GITHUB_APP_INSTALLATION_ID ?? "",
+    MODEL_GATE_ADMIN_PASSWORD: overrides.MODEL_GATE_ADMIN_PASSWORD ?? "test-admin-password",
+    MODEL_GATE_SESSION_SECRET: overrides.MODEL_GATE_SESSION_SECRET ?? "test-session-secret",
+    MODEL_GATE_SESSION_TTL_SECONDS: overrides.MODEL_GATE_SESSION_TTL_SECONDS ?? 86_400
   };
+}
+
+export function createTestAuthConfig(overrides: Partial<AppEnv> = {}) {
+  return createAuthConfig(createTestEnv(overrides));
+}
+
+export function createTestSessionCookie(overrides: Partial<AppEnv> = {}) {
+  return createSessionCookie(createTestAuthConfig(overrides));
+}
+
+export function withTestSession<T extends { inject: (request: Parameters<T["inject"]>[0]) => ReturnType<T["inject"]> }>(
+  app: T,
+  overrides: Partial<AppEnv> = {}
+) {
+  const sessionCookie = createTestSessionCookie(overrides);
+  const originalInject = app.inject.bind(app);
+
+  app.inject = ((request: Parameters<T["inject"]>[0]) => {
+    const normalizedRequest = (request as { headers?: Record<string, string> }) ?? {};
+
+    return originalInject({
+      ...request,
+      headers: {
+        cookie: sessionCookie,
+        ...(normalizedRequest.headers ?? {})
+      }
+    });
+  }) as T["inject"];
+
+  return app;
 }
 
 export function createMockOpenRouterClient(overrides: Partial<OpenRouterClient> = {}): OpenRouterClient {

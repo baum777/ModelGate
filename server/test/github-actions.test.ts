@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { createGitHubClient } from "../src/lib/github-client.js";
-import { createTestEnv, createMockOpenRouterClient, createTestGitHubConfig } from "../test-support/helpers.js";
+import { createTestEnv, createMockOpenRouterClient, createTestGitHubConfig, createTestSessionCookie } from "../test-support/helpers.js";
 
 function makeJsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
@@ -17,6 +17,8 @@ function makeJsonResponse(body: unknown, status = 200, headers: Record<string, s
 function encodeText(text: string) {
   return Buffer.from(text, "utf8").toString("base64");
 }
+
+const TEST_SESSION_COOKIE = createTestSessionCookie();
 
 test("github proposal routes create a review-only plan scaffold and keep it readable", async (t) => {
   let currentCommitSha = "commit-sha-1";
@@ -186,6 +188,9 @@ test("github proposal routes create a review-only plan scaffold and keep it read
   const proposeResponse = await app.inject({
     method: "POST",
     url: "/api/github/actions/propose",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    },
     payload: {
       repo: {
         owner: "acme",
@@ -257,7 +262,10 @@ test("github proposal routes create a review-only plan scaffold and keep it read
 
   const readResponse = await app.inject({
     method: "GET",
-    url: `/api/github/actions/${proposeBody.plan.planId}`
+    url: `/api/github/actions/${proposeBody.plan.planId}`,
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    }
   });
 
   assert.equal(readResponse.statusCode, 409);
@@ -388,6 +396,9 @@ test("github proposal routes create a deterministic smoke plan without the LLM",
   const response = await app.inject({
     method: "POST",
     url: "/api/github/actions/propose",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    },
     payload: {
       repo: {
         owner: "acme",
@@ -533,6 +544,9 @@ test("github proposal smoke requests reject unsafe branch or file selection", as
   const invalidBranchResponse = await app.inject({
     method: "POST",
     url: "/api/github/actions/propose",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    },
     payload: {
       repo: {
         owner: "acme",
@@ -558,6 +572,9 @@ test("github proposal smoke requests reject unsafe branch or file selection", as
   const invalidSelectionResponse = await app.inject({
     method: "POST",
     url: "/api/github/actions/propose",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    },
     payload: {
       repo: {
         owner: "acme",
@@ -677,6 +694,9 @@ test("github proposal routes fail closed with a controlled timeout when the LLM 
   const response = await app.inject({
     method: "POST",
     url: "/api/github/actions/propose",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    },
     payload: {
       repo: {
         owner: "acme",
@@ -817,6 +837,9 @@ test("github proposal routes fail closed when the repository changes during prop
   const response = await app.inject({
     method: "POST",
     url: "/api/github/actions/propose",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    },
     payload: {
       repo: {
         owner: "acme",
@@ -866,6 +889,9 @@ test("github proposal routes fail closed for missing plans and invalid proposal 
   const invalidResponse = await app.inject({
     method: "POST",
     url: "/api/github/actions/propose",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    },
     payload: {
       repo: {
         owner: "acme",
@@ -887,7 +913,10 @@ test("github proposal routes fail closed for missing plans and invalid proposal 
 
   const missingPlanResponse = await app.inject({
     method: "GET",
-    url: "/api/github/actions/plan_missing"
+    url: "/api/github/actions/plan_missing",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    }
   });
 
   assert.equal(missingPlanResponse.statusCode, 404);
@@ -1009,6 +1038,9 @@ test("github proposal routes reject malformed model drafts", async (t) => {
   const response = await app.inject({
     method: "POST",
     url: "/api/github/actions/propose",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    },
     payload: {
       repo: {
         owner: "acme",

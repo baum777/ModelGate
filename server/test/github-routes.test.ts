@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { createGitHubClient } from "../src/lib/github-client.js";
-import { createTestEnv, createMockOpenRouterClient, createTestGitHubConfig } from "../test-support/helpers.js";
+import { createTestEnv, createMockOpenRouterClient, createTestGitHubConfig, createTestSessionCookie } from "../test-support/helpers.js";
 
 function makeJsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
@@ -13,6 +13,8 @@ function makeJsonResponse(body: unknown, status = 200, headers: Record<string, s
     }
   });
 }
+
+const TEST_SESSION_COOKIE = createTestSessionCookie();
 
 test("github routes return not configured when the feature is disabled", async (t) => {
   const app = createApp({
@@ -27,7 +29,10 @@ test("github routes return not configured when the feature is disabled", async (
 
   const response = await app.inject({
     method: "GET",
-    url: "/api/github/repos"
+    url: "/api/github/repos",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    }
   });
 
   assert.equal(response.statusCode, 503);
@@ -137,7 +142,10 @@ test("github routes return repository summaries and file context from the backen
 
   const reposResponse = await app.inject({
     method: "GET",
-    url: "/api/github/repos"
+    url: "/api/github/repos",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    }
   });
 
   assert.equal(reposResponse.statusCode, 200);
@@ -155,7 +163,10 @@ test("github routes return repository summaries and file context from the backen
 
   const treeResponse = await app.inject({
     method: "GET",
-    url: "/api/github/repos/acme/widget/tree?ref=main&path=src&depth=1&maxEntries=10"
+    url: "/api/github/repos/acme/widget/tree?ref=main&path=src&depth=1&maxEntries=10",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    }
   });
 
   assert.equal(treeResponse.statusCode, 200);
@@ -172,7 +183,10 @@ test("github routes return repository summaries and file context from the backen
 
   const fileResponse = await app.inject({
     method: "GET",
-    url: "/api/github/repos/acme/widget/file?path=src/index.ts&ref=main"
+    url: "/api/github/repos/acme/widget/file?path=src/index.ts&ref=main",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    }
   });
 
   assert.equal(fileResponse.statusCode, 200);
@@ -224,7 +238,10 @@ test("github routes fail closed for invalid paths and repos outside the allowlis
 
   const invalidPathResponse = await app.inject({
     method: "GET",
-    url: "/api/github/repos/acme/widget/file?path=../secret&ref=main"
+    url: "/api/github/repos/acme/widget/file?path=../secret&ref=main",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    }
   });
 
   assert.equal(invalidPathResponse.statusCode, 400);
@@ -238,7 +255,10 @@ test("github routes fail closed for invalid paths and repos outside the allowlis
 
   const treeResponse = await app.inject({
     method: "GET",
-    url: "/api/github/repos/acme/widget/tree?path=../secret"
+    url: "/api/github/repos/acme/widget/tree?path=../secret",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    }
   });
 
   assert.equal(treeResponse.statusCode, 400);
@@ -252,7 +272,10 @@ test("github routes fail closed for invalid paths and repos outside the allowlis
 
   const forbiddenResponse = await app.inject({
     method: "GET",
-    url: "/api/github/repos/other/widget/tree?ref=main"
+    url: "/api/github/repos/other/widget/tree?ref=main",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    }
   });
 
   assert.equal(forbiddenResponse.statusCode, 403);
@@ -296,7 +319,10 @@ test("github routes sanitize upstream authorization failures", async (t) => {
 
   const response = await app.inject({
     method: "GET",
-    url: "/api/github/repos/acme/widget/tree?ref=main"
+    url: "/api/github/repos/acme/widget/tree?ref=main",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    }
   });
 
   assert.equal(response.statusCode, 401);

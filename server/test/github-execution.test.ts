@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { createGitHubClient } from "../src/lib/github-client.js";
-import { createTestEnv, createMockOpenRouterClient, createTestGitHubConfig } from "../test-support/helpers.js";
+import { createTestEnv, createMockOpenRouterClient, createTestGitHubConfig, createTestSessionCookie, withTestSession } from "../test-support/helpers.js";
 
 function makeJsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
@@ -19,6 +19,32 @@ function encodeText(text: string) {
 }
 
 const TEST_ADMIN_KEY = "test-github-admin-key";
+const TEST_SESSION_COOKIE = createTestSessionCookie();
+
+function injectWithSession(
+  app: {
+    inject: (request: {
+      method: string;
+      url: string;
+      headers?: Record<string, string>;
+      payload?: unknown;
+    }) => Promise<{ statusCode: number; body: string }>;
+  },
+  request: {
+    method: string;
+    url: string;
+    headers?: Record<string, string>;
+    payload?: unknown;
+  }
+) {
+  return app.inject({
+    ...request,
+    headers: {
+      cookie: TEST_SESSION_COOKIE,
+      ...(request.headers ?? {})
+    }
+  });
+}
 
 test("github execution routes create a branch, commit, pull request, and verify the result", async (t) => {
   let currentCommitSha = "commit-sha-1";
@@ -345,13 +371,13 @@ test("github execution routes create a branch, commit, pull request, and verify 
     }
   });
 
-  const app = createApp({
+  const app = withTestSession(createApp({
     env: createTestEnv(),
     openRouter,
     githubConfig,
     githubClient,
     logger: false
-  });
+  }));
 
   t.after(async () => {
     await app.close();
@@ -774,13 +800,13 @@ test("github execution routes support deterministic smoke plans with added files
     }
   });
 
-  const app = createApp({
+  const app = withTestSession(createApp({
     env: createTestEnv(),
     openRouter,
     githubConfig,
     githubClient,
     logger: false
-  });
+  }));
 
   t.after(async () => {
     await app.close();
@@ -848,13 +874,13 @@ test("github execution routes support deterministic smoke plans with added files
   assert.equal(executeBody.result.prUrl, "https://github.com/acme/widget/pull/12");
   assert.equal(executeBody.result.targetBranch, "main");
 
-  const verificationApp = createApp({
+  const verificationApp = withTestSession(createApp({
     env: createTestEnv(),
     openRouter,
     githubConfig,
     githubClient,
     logger: false
-  });
+  }));
 
   t.after(async () => {
     await verificationApp.close();
@@ -896,12 +922,12 @@ test("github execution routes reject missing or invalid admin keys before touchi
     agentApiKey: TEST_ADMIN_KEY
   });
 
-  const app = createApp({
+  const app = withTestSession(createApp({
     env: createTestEnv(),
     openRouter: createMockOpenRouterClient(),
     githubConfig,
     logger: false
-  });
+  }));
 
   t.after(async () => {
     await app.close();
@@ -946,11 +972,11 @@ test("github execution routes reject missing or invalid admin keys before touchi
 });
 
 test("github execution routes stay fail closed when GitHub is not configured", async (t) => {
-  const app = createApp({
+  const app = withTestSession(createApp({
     env: createTestEnv(),
     openRouter: createMockOpenRouterClient(),
     logger: false
-  });
+  }));
 
   t.after(async () => {
     await app.close();
@@ -1062,7 +1088,7 @@ test("github execution routes fail closed when the repository becomes stale befo
     }
   });
 
-  const app = createApp({
+  const app = withTestSession(createApp({
     env: createTestEnv(),
     openRouter: createMockOpenRouterClient({
       createChatCompletion: async (_request, selection) => ({
@@ -1087,7 +1113,7 @@ test("github execution routes fail closed when the repository becomes stale befo
     githubConfig,
     githubClient,
     logger: false
-  });
+  }));
 
   t.after(async () => {
     await app.close();
@@ -1245,7 +1271,7 @@ test("github execution routes fail closed when the approved branch diverges", as
     }
   });
 
-  const app = createApp({
+  const app = withTestSession(createApp({
     env: createTestEnv(),
     openRouter: createMockOpenRouterClient({
       createChatCompletion: async (_request, selection) => ({
@@ -1270,7 +1296,7 @@ test("github execution routes fail closed when the approved branch diverges", as
     githubConfig,
     githubClient,
     logger: false
-  });
+  }));
 
   t.after(async () => {
     await app.close();

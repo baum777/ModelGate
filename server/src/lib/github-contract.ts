@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export type GitHubErrorCode =
+  | "auth_required"
   | "github_not_configured"
   | "github_unauthorized"
   | "github_forbidden"
@@ -290,6 +291,7 @@ export const GitHubExecuteRequestSchema = z.object({
 export const GitHubPlanIdSchema = z.string().trim().min(1);
 
 const GITHUB_ERROR_MESSAGES: Record<GitHubErrorCode, string> = {
+  auth_required: "Authentication required",
   github_not_configured: "GitHub backend is not configured",
   github_unauthorized: "GitHub credentials were rejected",
   github_forbidden: "GitHub backend denied access",
@@ -313,6 +315,7 @@ const GITHUB_ERROR_MESSAGES: Record<GitHubErrorCode, string> = {
 };
 
 const GITHUB_ERROR_STATUS: Record<GitHubErrorCode, number> = {
+  auth_required: 401,
   github_not_configured: 503,
   github_unauthorized: 401,
   github_forbidden: 403,

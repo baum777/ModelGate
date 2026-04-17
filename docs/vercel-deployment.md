@@ -11,6 +11,7 @@ ModelGate can be deployed on Vercel as a static Vite frontend plus a single serv
   - `/health`
   - `/models`
   - `/chat`
+  - `/api/auth/...`
   - `/api/github/...`
   - `/api/matrix/...`
 - Production browser API calls use relative paths by default.
@@ -58,6 +59,9 @@ GitHub stays backend-only. The remote flow remains fail-closed until the require
 | `GITHUB_TOKEN` | yes | yes | Auth token for the server-side GitHub API client. | required |
 | `GITHUB_ALLOWED_REPOS` | yes | no | Comma-separated `owner/repo` allowlist for `/api/github/*`. | required |
 | `GITHUB_AGENT_API_KEY` | yes | yes | Admin key for approval-gated GitHub execute requests. Send only in `X-ModelGate-Admin-Key`. | required for execute |
+| `MODEL_GATE_ADMIN_PASSWORD` | yes | yes | Admin password for the server-side GitHub session login. | required for auth |
+| `MODEL_GATE_SESSION_SECRET` | yes | yes | Signing secret for the HttpOnly session cookie. | required for auth |
+| `MODEL_GATE_SESSION_TTL_SECONDS` | no | no | Session cookie lifetime in seconds. Defaults to `86400`. | optional |
 | `GITHUB_API_BASE_URL` | no | no | GitHub API base URL. | optional |
 | `GITHUB_DEFAULT_OWNER` | no | no | Default owner used by GitHub routing helpers. | optional |
 | `GITHUB_BRANCH_PREFIX` | no | no | Prefix for backend-created branches. | optional |
@@ -160,8 +164,10 @@ After deployment, verify:
 1. `/health` returns a healthy backend response.
 2. `/models` returns the public alias list and does not expose provider IDs.
 3. `/chat` works for non-stream and stream requests.
-4. `/api/github/repos` and the proposal/execute/verify flow are fail-closed or live as configured.
-5. `/api/matrix/whoami` and `/api/matrix/joined-rooms` are fail-closed or live as configured.
-6. The browser uses relative paths in production and does not depend on a Vite public API host.
-7. No Matrix token or provider secret appears in browser DOM, logs, or client bundles.
-8. `npm run smoke:matrix` remains manual-only and is not part of deployment.
+4. `/api/auth/login`, `/api/auth/me`, and `/api/auth/logout` work and do not expose secrets.
+5. `/api/github/repos` and the proposal/execute/verify flow are fail-closed or live as configured.
+6. `/api/github/*` returns `401` until a valid admin session cookie is present.
+7. `/api/matrix/whoami` and `/api/matrix/joined-rooms` are fail-closed or live as configured.
+8. The browser uses relative paths in production and does not depend on a Vite public API host.
+9. No Matrix token, GitHub session secret, or provider secret appears in browser DOM, logs, or client bundles.
+10. `npm run smoke:matrix` remains manual-only and is not part of deployment.

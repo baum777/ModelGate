@@ -3,6 +3,7 @@ import type { AppEnv } from "./lib/env.js";
 import { createGitHubClient, type GitHubClient } from "./lib/github-client.js";
 import { createGitHubConfig, type GitHubConfig } from "./lib/github-env.js";
 import { createGitHubActionStore, type GitHubActionStore } from "./lib/github-action-store.js";
+import { createAuthConfig, type AuthConfig } from "./lib/auth.js";
 import { loadLlmRouterPolicy, type LlmRouterPolicy } from "./lib/llm-router.js";
 import { createDisabledMatrixConfig, type MatrixConfig } from "./lib/matrix-env.js";
 import { buildCorsHeaders } from "./lib/http.js";
@@ -11,6 +12,7 @@ import { createMatrixClient, type MatrixClient } from "./lib/matrix-client.js";
 import { createMatrixActionStore, type MatrixActionStore } from "./lib/matrix-action-store.js";
 import { createMatrixScopeStore, type MatrixScopeStore } from "./lib/matrix-scope-store.js";
 import type { OpenRouterClient } from "./lib/openrouter.js";
+import { authRoutes } from "./routes/auth.js";
 import { chatRoutes } from "./routes/chat.js";
 import { githubRoutes } from "./routes/github.js";
 import { matrixRoutes } from "./routes/matrix.js";
@@ -23,6 +25,7 @@ export type AppDependencies = {
   githubConfig?: GitHubConfig;
   githubClient?: GitHubClient;
   githubActionStore?: GitHubActionStore;
+  authConfig?: AuthConfig;
   matrixConfig?: MatrixConfig;
   matrixClient?: MatrixClient;
   matrixStore?: MatrixScopeStore;
@@ -52,6 +55,7 @@ export function createApp(deps: AppDependencies) {
   const llmRouterPolicy = deps.llmRouterPolicy ?? loadLlmRouterPolicy({
     LLM_ROUTER_ENABLED: "false"
   });
+  const authConfig = deps.authConfig ?? createAuthConfig(deps.env);
   const githubConfig = deps.githubConfig ?? createGitHubConfig(deps.env);
   const githubClient = deps.githubClient ?? createGitHubClient({ config: githubConfig });
   const githubActionStore = deps.githubActionStore ?? createGitHubActionStore(githubConfig.planTtlMs);
@@ -68,6 +72,9 @@ export function createApp(deps: AppDependencies) {
 
   healthRoutes(app, deps.env, modelRegistry);
   modelRoutes(app, modelRegistry);
+  authRoutes(app, {
+    config: authConfig
+  });
   matrixRoutes(app, {
     config: matrixConfig,
     client: matrixClient,
@@ -76,6 +83,7 @@ export function createApp(deps: AppDependencies) {
   });
   githubRoutes(app, {
     config: githubConfig,
+    authConfig,
     client: githubClient,
     openRouter: deps.openRouter,
     modelRegistry,

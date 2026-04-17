@@ -39,7 +39,10 @@ export const EnvSchema = z.object({
   GITHUB_SMOKE_ENABLED: z.string().trim().default("false"),
   GITHUB_APP_ID: z.string().trim().default(""),
   GITHUB_APP_PRIVATE_KEY: z.string().trim().default(""),
-  GITHUB_APP_INSTALLATION_ID: z.string().trim().default("")
+  GITHUB_APP_INSTALLATION_ID: z.string().trim().default(""),
+  MODEL_GATE_ADMIN_PASSWORD: z.string().trim().default(""),
+  MODEL_GATE_SESSION_SECRET: z.string().trim().default(""),
+  MODEL_GATE_SESSION_TTL_SECONDS: z.string().trim().default("86400")
 });
 
 export type AppEnv = {
@@ -70,7 +73,20 @@ export type AppEnv = {
   GITHUB_APP_ID: string;
   GITHUB_APP_PRIVATE_KEY: string;
   GITHUB_APP_INSTALLATION_ID: string;
+  MODEL_GATE_ADMIN_PASSWORD: string;
+  MODEL_GATE_SESSION_SECRET: string;
+  MODEL_GATE_SESSION_TTL_SECONDS: number;
 };
+
+function parsePositiveIntOrDefault(input: string, fallback: number) {
+  const value = Number.parseInt(input.trim(), 10);
+
+  if (!Number.isFinite(value) || Number.isNaN(value) || value < 1) {
+    return fallback;
+  }
+
+  return value;
+}
 
 function parseCsvList(input: string): string[] {
   return [...new Set(
@@ -105,7 +121,10 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     GITHUB_SMOKE_ENABLED: /^(1|true|yes|on)$/i.test(parsed.GITHUB_SMOKE_ENABLED.trim()),
     GITHUB_APP_ID: parsed.GITHUB_APP_ID.trim(),
     GITHUB_APP_PRIVATE_KEY: parsed.GITHUB_APP_PRIVATE_KEY.trim(),
-    GITHUB_APP_INSTALLATION_ID: parsed.GITHUB_APP_INSTALLATION_ID.trim()
+    GITHUB_APP_INSTALLATION_ID: parsed.GITHUB_APP_INSTALLATION_ID.trim(),
+    MODEL_GATE_ADMIN_PASSWORD: parsed.MODEL_GATE_ADMIN_PASSWORD.trim(),
+    MODEL_GATE_SESSION_SECRET: parsed.MODEL_GATE_SESSION_SECRET.trim(),
+    MODEL_GATE_SESSION_TTL_SECONDS: parsePositiveIntOrDefault(parsed.MODEL_GATE_SESSION_TTL_SECONDS, 86_400)
   };
 }
 

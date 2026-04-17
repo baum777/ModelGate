@@ -39,6 +39,10 @@ function readErrorMessage(payload: unknown) {
     return error;
   }
 
+  if (typeof payload.code === "string" && payload.code.trim().length > 0) {
+    return payload.code;
+  }
+
   return "Request failed";
 }
 
@@ -54,7 +58,8 @@ async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> 
   try {
     response = await fetch(resolveGitHubApiUrl(path), {
       ...init,
-      headers
+      headers,
+      credentials: "include"
     });
   } catch (error) {
     throw new Error(error instanceof Error && error.message.trim().length > 0 ? error.message : "GitHub request failed");

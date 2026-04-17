@@ -53,6 +53,11 @@ function createVercelEnv(source: NodeJS.ProcessEnv = process.env) {
     GITHUB_APP_ID: String(source.GITHUB_APP_ID ?? "").trim(),
     GITHUB_APP_PRIVATE_KEY: String(source.GITHUB_APP_PRIVATE_KEY ?? "").trim(),
     GITHUB_APP_INSTALLATION_ID: String(source.GITHUB_APP_INSTALLATION_ID ?? "").trim(),
+    MODEL_GATE_ADMIN_PASSWORD: String(source.MODEL_GATE_ADMIN_PASSWORD ?? "").trim(),
+    MODEL_GATE_SESSION_SECRET: String(source.MODEL_GATE_SESSION_SECRET ?? "").trim(),
+    MODEL_GATE_SESSION_TTL_SECONDS: Number.isFinite(Number.parseInt(String(source.MODEL_GATE_SESSION_TTL_SECONDS ?? "86400").trim(), 10))
+      ? Number.parseInt(String(source.MODEL_GATE_SESSION_TTL_SECONDS ?? "86400").trim(), 10)
+      : 86_400,
     CORS_ORIGINS: parseCsvList(
       String(
         source.CORS_ORIGINS
@@ -91,6 +96,7 @@ export function normalizeVercelRequestUrl(originalUrl: string) {
     normalized.pathname = "/";
   } else if (
     normalized.pathname.startsWith("/api/")
+    && !normalized.pathname.startsWith("/api/auth/")
     && !normalized.pathname.startsWith("/api/matrix/")
     && !normalized.pathname.startsWith("/api/github/")
   ) {

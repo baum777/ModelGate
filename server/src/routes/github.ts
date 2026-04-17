@@ -28,10 +28,12 @@ import type { GitHubConfig } from "../lib/github-env.js";
 import { isGitHubRepoAllowed, normalizeGitHubRepoFullName } from "../lib/github-env.js";
 import { normalizeGitHubRelativePath } from "../lib/github-paths.js";
 import { OpenRouterError, type OpenRouterClient } from "../lib/openrouter.js";
+import { verifySessionFromRequest, type AuthConfig } from "../lib/auth.js";
 import type { ModelRegistry } from "../lib/model-policy.js";
 
 type GitHubRouteDependencies = {
   config: GitHubConfig;
+  authConfig: AuthConfig;
   client: GitHubClient;
   openRouter: OpenRouterClient;
   modelRegistry: ModelRegistry;
@@ -524,6 +526,12 @@ function sendGitHubAdminKeyError(reply: FastifyReply, code: "github_unauthorized
   return sendGitHubError(reply, code);
 }
 
+function requireGitHubSession(request: FastifyRequest, reply: FastifyReply, authConfig: AuthConfig): void {
+  if (!verifySessionFromRequest(request, authConfig)) {
+    sendGitHubError(reply, "auth_required");
+  }
+}
+
 function requiresGitHubAdminKey(config: GitHubConfig) {
   return Boolean(config.agentApiKey && config.agentApiKey.trim().length > 0);
 }
@@ -587,7 +595,11 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     actionStore
   });
 
-  app.get("/api/github/repos", async (_request, reply) => {
+  app.get("/api/github/repos", {
+    preHandler: async (request, reply) => {
+      requireGitHubSession(request, reply, deps.authConfig);
+    }
+  }, async (_request, reply) => {
     if (!deps.config.ready) {
       return sendGitHubError(reply, "github_not_configured");
     }
@@ -606,7 +618,11 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
   });
 
-  app.post("/api/github/context", async (request, reply) => {
+  app.post("/api/github/context", {
+    preHandler: async (request, reply) => {
+      requireGitHubSession(request, reply, deps.authConfig);
+    }
+  }, async (request, reply) => {
     if (!deps.config.ready) {
       return sendGitHubError(reply, "github_not_configured");
     }
@@ -651,7 +667,11 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
   });
 
-  app.post("/api/github/actions/propose", async (request, reply) => {
+  app.post("/api/github/actions/propose", {
+    preHandler: async (request, reply) => {
+      requireGitHubSession(request, reply, deps.authConfig);
+    }
+  }, async (request, reply) => {
     if (!deps.config.ready) {
       return sendGitHubError(reply, "github_not_configured");
     }
@@ -794,7 +814,11 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
   });
 
-  app.get("/api/github/actions/:planId", async (request, reply) => {
+  app.get("/api/github/actions/:planId", {
+    preHandler: async (request, reply) => {
+      requireGitHubSession(request, reply, deps.authConfig);
+    }
+  }, async (request, reply) => {
     if (!deps.config.ready) {
       return sendGitHubError(reply, "github_not_configured");
     }
@@ -838,7 +862,11 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
   });
 
-  app.post("/api/github/actions/:planId/execute", async (request, reply) => {
+  app.post("/api/github/actions/:planId/execute", {
+    preHandler: async (request, reply) => {
+      requireGitHubSession(request, reply, deps.authConfig);
+    }
+  }, async (request, reply) => {
     if (!deps.config.ready) {
       return sendGitHubError(reply, "github_not_configured");
     }
@@ -887,7 +915,11 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
   });
 
-  app.get("/api/github/actions/:planId/verify", async (request, reply) => {
+  app.get("/api/github/actions/:planId/verify", {
+    preHandler: async (request, reply) => {
+      requireGitHubSession(request, reply, deps.authConfig);
+    }
+  }, async (request, reply) => {
     if (!deps.config.ready) {
       return sendGitHubError(reply, "github_not_configured");
     }
@@ -947,7 +979,11 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
   });
 
-  app.get("/api/github/repos/:owner/:repo/tree", async (request, reply) => {
+  app.get("/api/github/repos/:owner/:repo/tree", {
+    preHandler: async (request, reply) => {
+      requireGitHubSession(request, reply, deps.authConfig);
+    }
+  }, async (request, reply) => {
     if (!deps.config.ready) {
       return sendGitHubError(reply, "github_not_configured");
     }
@@ -989,7 +1025,11 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
   });
 
-  app.get("/api/github/repos/:owner/:repo/file", async (request, reply) => {
+  app.get("/api/github/repos/:owner/:repo/file", {
+    preHandler: async (request, reply) => {
+      requireGitHubSession(request, reply, deps.authConfig);
+    }
+  }, async (request, reply) => {
     if (!deps.config.ready) {
       return sendGitHubError(reply, "github_not_configured");
     }

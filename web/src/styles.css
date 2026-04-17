@@ -928,6 +928,44 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
   min-height: 52px;
 }
 
+.github-admin-login {
+  display: grid;
+  gap: 18px;
+}
+
+.github-login-card,
+.github-login-hint {
+  display: grid;
+  gap: 14px;
+}
+
+.github-login-form {
+  display: grid;
+  gap: 12px;
+}
+
+.github-login-form label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.github-login-form input {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(3, 8, 17, 0.72);
+  color: var(--text);
+  padding: 0.95rem 1rem;
+}
+
+.github-login-form input:focus {
+  outline: 2px solid rgba(139, 124, 246, 0.35);
+  outline-offset: 2px;
+}
+
 .github-repo-card {
   padding: 14px;
   display: grid;
