@@ -89,8 +89,8 @@ const formatDate = (value: string) => {
 };
 const text = (value: string | null | undefined) =>
   value && value.trim() ? value : "n/a";
-const legacyContractOnlyNotice =
-  "Contract-only surface. Backend-owned room topic updates are wired below.";
+const releaseScopeNotice =
+  "Matrix topic updates are wired end-to-end for Explore, scope summary, provenance, approval, execute, and verify.";
 
 function modeLabel(mode: MatrixMode) {
   switch (mode) {
@@ -142,7 +142,7 @@ function describeMatrixError(operation: string, error: unknown) {
 }
 export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   const persisted = readPersistedState();
-  const [mode, setMode] = useState<MatrixMode>(persisted?.mode ?? "explore");
+  const [mode, setMode] = useState<MatrixMode>("explore");
   const [status, setStatus] = useState<WorkflowStatus>("loading");
   const [whoami, setWhoami] = useState<MatrixWhoAmI | null>(null);
   const [joinedRooms, setJoinedRooms] = useState<MatrixJoinedRoom[]>([]);
@@ -270,7 +270,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       runtimeEventTrail: [
         currentScope ? "Bereich gewählt" : "Noch kein Bereich gewählt",
         scopeSummary ? "Zusammenfassung bereit" : "Zusammenfassung ausstehend",
-        reviewPlan ? "Vorschlag bereit" : "Kein Vorschlag",
+        topicPlan ? "Topic proposal ready" : "No topic proposal",
       ],
       sseLifecycle: "n/a",
       rawPayload: analysisResult ? JSON.stringify(analysisResult, null, 2) : null,
@@ -482,8 +482,11 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   async function proceedToAnalyze() {
     const resolved = await resolveCurrentScope();
     if (resolved) {
-      setMode("analyze");
-      props.onTelemetry("info", "Matrix mode changed", "Analyze mode activated.");
+      props.onTelemetry(
+        "info",
+        "Matrix scope resolved",
+        "Scope summary and provenance are ready.",
+      );
     }
   }
 
@@ -730,18 +733,19 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
           {" "}
           <p className={`status-pill status-${status}`} data-testid="matrix-status">
             {status === "ready"
-              ? "Matrix backend ready"
+              ? "Matrix topic slice ready"
               : status === "partial"
-                ? "Matrix backend partial"
+                ? "Matrix topic slice partial"
                 : status === "error"
-                  ? "Matrix backend error"
-                  : "Loading matrix backend"}
+                  ? "Matrix topic slice error"
+                  : "Loading matrix topic slice"}
           </p>{" "}
           <h1>Matrix Workspace</h1>{" "}
           <p className="hero-copy">
             {" "}
-            Backend-owned Explore, Analyze, Review, Execute, and Verify flow
-            with approval-gated execution and bounded v1 action candidates.{" "}
+            Backend-owned Explore, scope summary, provenance, room topic
+            proposal, approval, execute, and verify flow for Matrix topic
+            updates only.{" "}
           </p>{" "}
           {props.restoredSession ? (
             <div className="restored-banner" data-testid="matrix-restored-banner">
@@ -749,28 +753,25 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               freshness is not assumed.
             </div>
           ) : null}
-          <div className="chip-row">
-            {(["explore", "analyze", "review"] as MatrixMode[]).map((itemMode) => (
-              <button
-                key={itemMode}
-                type="button"
-                className={
-                  mode === itemMode
-                    ? "workspace-tab workspace-tab-active"
-                    : "workspace-tab"
-                }
-                onClick={() => {
-                  setMode(itemMode);
-                  props.onTelemetry(
-                    "info",
-                    "Matrix mode changed",
-                    `${modeLabel(itemMode)} mode activated.`,
-                  );
-                }}
-              >
-                {modeLabel(itemMode)}
-              </button>
-            ))}
+          <div className="chip-row" aria-label="Matrix release scope">
+            <span className="workflow-chip workflow-chip-complete">Explore</span>
+            <span className="workflow-chip workflow-chip-complete">Scope summary</span>
+            <span className="workflow-chip workflow-chip-complete">Provenance</span>
+            <span className={`workflow-chip ${topicPlan ? "workflow-chip-active" : "workflow-chip-idle"}`}>
+              Topic proposal
+            </span>
+            <span className={`workflow-chip ${topicPlan && !topicApprovalPending ? "workflow-chip-active" : "workflow-chip-idle"}`}>
+              Approval
+            </span>
+            <span className={`workflow-chip ${topicExecution ? "workflow-chip-complete" : "workflow-chip-idle"}`}>
+              Execute
+            </span>
+            <span className={`workflow-chip ${topicVerification ? "workflow-chip-complete" : "workflow-chip-idle"}`}>
+              Verify
+            </span>
+          </div>
+          <div className="alert-banner">
+            <p>{releaseScopeNotice}</p>
           </div>
           <div className="chip-row">
             {" "}
@@ -784,36 +785,34 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                   !scopeError,
               ],
               [
-                "Analyze",
-                analysisLoading || Boolean(analysisResult),
-                Boolean(analysisResult) && !analysisLoading,
+                "Scope summary",
+                Boolean(scopeSummary) && !scopeSummaryError && !summaryLoading,
+                Boolean(scopeSummary) && !scopeSummaryError && !summaryLoading,
               ],
               [
-                "Review",
-                promotionLoading || planRefreshLoading || Boolean(promotedPlan),
-                Boolean(promotedPlan) &&
-                  !promotionLoading &&
-                  !planRefreshLoading &&
-                  !planRefreshError &&
-                  !stalePlanDetected &&
-                  !promotedPlan?.stale,
+                "Provenance",
+                Boolean(provenance) || provenanceLoading,
+                Boolean(provenance) && !provenanceLoading,
+              ],
+              [
+                "Topic proposal",
+                Boolean(topicPlan) || topicPrepareLoading,
+                Boolean(topicPlan) && !topicPrepareLoading,
+              ],
+              [
+                "Approval",
+                Boolean(topicPlan) || topicApprovalPending,
+                Boolean(topicApprovalPending) && Boolean(topicPlan),
               ],
               [
                 "Execute",
-                executionLoading || approvalPending || Boolean(executionResult),
-                Boolean(executionResult) && !executionLoading,
+                topicExecuteLoading || Boolean(topicExecution),
+                Boolean(topicExecution) && !topicExecuteLoading,
               ],
               [
                 "Verify",
-                executionLoading ||
-                  summaryLoading ||
-                  provenanceLoading ||
-                  Boolean(executionResult) ||
-                  Boolean(provenance),
-                Boolean(executionResult) &&
-                  Boolean(provenance) &&
-                  !summaryLoading &&
-                  !provenanceLoading,
+                topicVerifyLoading || Boolean(topicVerification),
+                Boolean(topicVerification) && !topicVerifyLoading,
               ],
             ].map(([label, active, complete]) => (
               <span
@@ -840,12 +839,10 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 <span>User: {whoami?.userId ?? "unresolved"}</span>
                 <span>Homeserver: {whoami?.homeserver ?? "unresolved"}</span>
                 <span>Origin: {MATRIX_API_BASE_URL}</span>
-                <span>Mode: {modeLabel(mode)}</span>
+                <span>Slice: Topic update</span>
                 <span>Scope: {currentScope?.scopeId ?? "none"}</span>
                 <span>Rooms: {scopeSummary?.items.length ?? 0}</span>
-                <span>
-                  Candidates: {analysisResult?.actionCandidates.length ?? 0}
-                </span>
+                <span>Topic proposal: {topicPlan ? "Ready" : "None"}</span>
               </>
             ) : (
               <>
@@ -874,7 +871,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
         {" "}
         <section
           className="workspace-card"
-          hidden={mode === "analyze"}
           data-testid="matrix-topic-update-panel"
         >
           {" "}
@@ -882,7 +878,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             <div>
               <span>Room topic update</span>
               <strong>
-                Review, approve, execute, and verify a backend-owned topic change
+                Prepare, approve, execute, and verify a backend-owned topic change
               </strong>
             </div>
           </header>{" "}
@@ -958,7 +954,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                     className={`workflow-chip ${topicPlan.status === "pending_review" ? "workflow-chip-active" : "workflow-chip-complete"}`}
                   >
                     {topicPlan.status === "pending_review"
-                      ? "Review pending"
+                      ? "Approval pending"
                       : "Plan refreshed"}
                   </span>
                 </div>
@@ -1114,8 +1110,8 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
           ) : (
               <p className="empty-state">
               {props.expertMode
-                ? "Enter a room ID and proposed topic, then prepare a backend-owned review plan."
-                : "Bereich wählen, dann Review vorbereiten."}
+                ? "Enter a room ID and proposed topic, then prepare a backend-owned topic update plan."
+                : "Bereich wählen, dann Topic Update vorbereiten."}
             </p>
           )}{" "}
         </section>{" "}
@@ -1288,10 +1284,10 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 >
                   {scopeResolveLoading
                     ? "Resolving…"
-                    : "Proceed to Analyze"}
+                    : "Resolve scope"}
                 </button>
                 <span className="muted-copy">
-                  Backend resolves the scope and generates the current snapshot.
+                  Backend resolves the scope and loads the current summary.
                 </span>
               </div>{" "}
               {scopeError ? (
@@ -1398,334 +1394,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
         </section>{" "}
         <div className="matrix-column">
           {" "}
-          <section className="workspace-card" hidden={mode !== "analyze"}>
-            {" "}
-            <header className="card-header">
-              <div>
-                <span>Analyze</span>
-                <strong>Grounded review of the selected scope</strong>
-              </div>
-            </header>{" "}
-            <div className="alert-banner" data-testid="matrix-analyze-contract-only">
-              <p>{legacyContractOnlyNotice}</p>
-            </div>{" "}
-            <textarea
-              className="matrix-textarea"
-              rows={5}
-              value={analysisPrompt}
-              onChange={(event) => setAnalysisPrompt(event.target.value)}
-              placeholder="Describe what should be reviewed in the resolved scope."
-              disabled
-            />{" "}
-            <div className="action-row">
-              <button
-                type="button"
-                onClick={() => {
-                  void runAnalysis();
-                }}
-                disabled
-              >
-                Analyze (contract-only)
-              </button>
-              <span className="muted-copy">
-                Analysis remains backend-owned and is not wired for browser execution in this slice.
-              </span>
-            </div>{" "}
-            {analysisError ? (
-              <p className="error-banner">{analysisError}</p>
-            ) : null}{" "}
-            {analysisResult ? (
-              <div className="analysis-result">
-                <div className="result-block">
-                  <p className="info-label">Analysis response</p>
-                  <p className="analysis-text">
-                    {analysisResult.response.content}
-                  </p>
-                  <div className="scope-summary-meta">
-                    {props.expertMode ? <span>Snapshot: {analysisResult.snapshotId}</span> : null}
-                  </div>
-                </div>
-                <div className="result-block">
-                  <p className="info-label">Grounded references</p>
-                  <div className="chip-list">
-                    {analysisResult.references.length ? (
-                      analysisResult.references.map((reference) => (
-                        <span
-                          key={`${reference.type}:${reference.roomId}`}
-                          className="reference-chip"
-                        >
-                          {reference.label} · {reference.type}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="empty-state">
-                        No references returned.
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="result-block">
-                  <p className="info-label">Action candidates</p>
-                  <div className="candidate-list">
-                    {analysisResult.actionCandidates.length ? (
-                      analysisResult.actionCandidates.map((candidate) => {
-                        const active =
-                          candidate.candidateId === selectedCandidateId;
-                        return (
-                          <article
-                            key={candidate.candidateId}
-                            className={`candidate-card ${active ? "candidate-card-active" : ""}`}
-                            onClick={() =>
-                              setSelectedCandidateId(candidate.candidateId)
-                            }
-                          >
-                            <div className="candidate-card-header">
-                              <strong>{candidate.summary}</strong>
-                              <span>{candidate.type}</span>
-                            </div>
-                            <p>{candidate.rationale}</p>
-                            <small>Target room: {candidate.targetRoomId}</small>
-                            <div className="action-row">
-                              <button
-                                type="button"
-                                className="secondary-button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setSelectedCandidateId(candidate.candidateId);
-                                  void promote(candidate);
-                                }}
-                                disabled={promotionLoading}
-                              >
-                                {promotionLoading && active
-                                  ? "Promoting…"
-                                  : "Promote"}
-                              </button>
-                            </div>
-                          </article>
-                        );
-                      })
-                    ) : (
-                      <p className="empty-state">
-                        No bounded action candidates were returned for this
-                        scope.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="empty-state">
-                Run analysis to produce grounded references and bounded
-                candidates.
-              </p>
-            )}{" "}
-            {promotionError ? (
-              <p className="error-banner">{promotionError}</p>
-            ) : null}{" "}
-          </section>{" "}
-          <section className="workspace-card" hidden={mode !== "review"}>
-            {" "}
-            <header className="card-header">
-              <div>
-                <span>Review</span>
-                <strong>Plan card and approval gate</strong>
-              </div>
-            </header>{" "}
-            <div className="alert-banner" data-testid="matrix-review-contract-only">
-              <p>{legacyContractOnlyNotice}</p>
-            </div>{" "}
-            {promotedPlan ? (
-              <div className="plan-card">
-                {" "}
-                <div className="plan-card-header">
-                  {" "}
-                  <div>
-                    {" "}
-                    <strong>{promotedPlan.summary}</strong>{" "}
-                    <span>{promotedPlan.type}</span>{" "}
-                  </div>{" "}
-                  <div className="plan-badges">
-                    {" "}
-                    <span className="workflow-chip workflow-chip-active">
-                      Risk: {promotedPlan.riskLevel}
-                    </span>{" "}
-                    <span
-                      className={`workflow-chip ${promotedPlan.stale || stalePlanDetected ? "workflow-chip-error" : "workflow-chip-complete"}`}
-                    >
-                      {" "}
-                      {promotedPlan.stale || stalePlanDetected
-                        ? "Stale"
-                        : "Fresh"}{" "}
-                    </span>{" "}
-                    {planRefreshError ? (
-                      <span className="workflow-chip workflow-chip-error">
-                        Canonical refresh failed
-                      </span>
-                    ) : null}{" "}
-                    {planRefreshLoading ? (
-                      <span className="workflow-chip workflow-chip-idle">
-                        Refreshing canonical plan
-                      </span>
-                    ) : null}{" "}
-                  </div>{" "}
-                </div>{" "}
-                <p>{promotedPlan.rationale}</p>{" "}
-                {props.expertMode ? (
-                  <>
-                    <div className="delta-grid">
-                      {" "}
-                      <div>
-                        {" "}
-                        <p className="info-label">Before</p>{" "}
-                        <pre>
-                          {JSON.stringify(
-                            promotedPlan.payloadDelta.before,
-                            null,
-                            2,
-                          )}
-                        </pre>{" "}
-                      </div>{" "}
-                      <div>
-                        {" "}
-                        <p className="info-label">After</p>{" "}
-                        <pre>
-                          {JSON.stringify(promotedPlan.payloadDelta.after, null, 2)}
-                        </pre>{" "}
-                      </div>{" "}
-                    </div>{" "}
-                    <div className="detail-grid">
-                      {" "}
-                      <div>
-                        <span>Plan ID</span>
-                        <strong>{promotedPlan.planId}</strong>
-                      </div>{" "}
-                      <div>
-                        <span>Scope ID</span>
-                        <strong>{promotedPlan.scopeId}</strong>
-                      </div>{" "}
-                      <div>
-                        <span>Snapshot ID</span>
-                        <strong>{promotedPlan.snapshotId}</strong>
-                      </div>{" "}
-                      <div>
-                        <span>Target room</span>
-                        <strong>{promotedPlan.targetRoomId}</strong>
-                      </div>{" "}
-                      <div>
-                        <span>Preflight</span>
-                        <strong>{promotedPlan.preflightStatus}</strong>
-                      </div>{" "}
-                      <div>
-                        <span>Required approval</span>
-                        <strong>{String(promotedPlan.requiredApproval)}</strong>
-                      </div>{" "}
-                    </div>{" "}
-                  </>
-                ) : (
-                  <p className="muted-copy">Vorschlag bereit. Technische Details im Expert Mode.</p>
-                )}{" "}
-                <div className="list-block">
-                  {" "}
-                  <p className="info-label">Expected permissions</p>{" "}
-                  <div className="chip-list">
-                    {promotedPlan.expectedPermissions.map((permission) => (
-                      <span key={permission} className="reference-chip">
-                        {permission}
-                      </span>
-                    ))}
-                  </div>{" "}
-                </div>{" "}
-                <div className="list-block">
-                  {" "}
-                  <p className="info-label">Authorization requirements</p>{" "}
-                  <div className="chip-list">
-                    {promotedPlan.authorizationRequirements.map((item) => (
-                      <span key={item} className="reference-chip">
-                        {item}
-                      </span>
-                    ))}
-                  </div>{" "}
-                </div>{" "}
-                <div className="list-block">
-                  {" "}
-                  <p className="info-label">Impact summary</p>{" "}
-                  <ul className="plain-list">
-                    {promotedPlan.impactSummary.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>{" "}
-                </div>{" "}
-                {planRefreshError ? (
-                  <div className="alert-banner">
-                    <p>{planRefreshError}</p>
-                  </div>
-                ) : null}{" "}
-                <div className="approval-panel">
-                  {" "}
-                  <label className="approval-check">
-                    {" "}
-                    <input
-                      type="checkbox"
-                      checked={approvalPending}
-                      onChange={(event) =>
-                        setApprovalPending(event.target.checked)
-                      }
-                      disabled
-                    />{" "}
-                    <span>I approve backend execution of this plan (contract-only).</span>{" "}
-                  </label>{" "}
-                  <div className="action-row">
-                    {" "}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void execute();
-                      }}
-                      disabled
-                    >
-                      {" "}
-                      Approve and execute (contract-only){" "}
-                    </button>{" "}
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => {
-                        void refreshCanonicalPlan(promotedPlan.planId);
-                      }}
-                      disabled
-                    >
-                      {" "}
-                      Refresh plan (contract-only){" "}
-                    </button>{" "}
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      onClick={dismissReview}
-                      disabled
-                    >
-                      Dismiss (contract-only)
-                    </button>{" "}
-                  </div>{" "}
-                </div>{" "}
-              </div>
-            ) : (
-              <p className="empty-state">
-                Promote a candidate to create a bounded review plan. The legacy review controls remain contract-only.
-              </p>
-            )}{" "}
-            {stalePlanDetected ? (
-              <div className="alert-banner">
-                <p>
-                  The current plan is stale. Re-run analysis and promote again
-                  before executing.
-                </p>
-              </div>
-            ) : null}{" "}
-            {executionError ? (
-              <p className="error-banner">{executionError}</p>
-            ) : null}{" "}
-          </section>{" "}
-          <section className="workspace-card" hidden={mode !== "review"}>
+          <section className="workspace-card">
             {" "}
             <header className="card-header">
               <div>

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title>ModelGate</title>
+  <desc>Dark geometric mark for the ModelGate console.</desc>
+  <defs>
+    <linearGradient id="mg-bg" x1="64" y1="32" x2="448" y2="480" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0b1427" />
+      <stop offset="1" stop-color="#07111f" />
+    </linearGradient>
+    <linearGradient id="mg-accent" x1="128" y1="96" x2="384" y2="416" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffb05c" />
+      <stop offset="1" stop-color="#ff8b3d" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="120" fill="url(#mg-bg)" />
+  <rect x="100" y="100" width="312" height="312" rx="78" fill="none" stroke="#ffffff14" stroke-width="10" />
+  <path d="M160 172h86c38 0 58 18 58 52 0 18-7 32-21 41 18 8 28 24 28 48 0 41-25 61-74 61h-77V172Zm70 86c14 0 22-6 22-19 0-12-8-18-22-18h-28v37h28Zm8 116c18 0 28-7 28-22 0-16-10-24-29-24h-35v46h36Z" fill="url(#mg-accent)" />
+  <path d="M312 176h40l52 160h-36l-10-33h-52l-10 33h-36l52-160Zm27 98-17-55-17 55h34Z" fill="#e8eefc" />
+</svg>

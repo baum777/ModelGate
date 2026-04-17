@@ -406,8 +406,24 @@ async function loadConsole(page: Page) {
 }
 
 async function waitForMatrixWorkspace(page: Page) {
-  await expect(page.getByTestId("matrix-status")).toHaveText("Matrix backend ready");
+  await expect(page.getByTestId("matrix-status")).toHaveText("Matrix topic slice ready");
+  await expect(page.getByTestId("matrix-topic-update-panel")).toBeVisible();
   await expect(page.getByTestId("matrix-rooms")).toBeVisible();
+}
+
+async function waitForPwaRegistration(page: Page) {
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute("href", "/manifest.webmanifest");
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/icon.svg");
+  await expect.poll(async () =>
+    page.evaluate(async () => {
+      if (!("serviceWorker" in navigator)) {
+        return 0;
+      }
+
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      return registrations.length;
+    })
+  ).toBeGreaterThan(0);
 }
 
 function submitChord() {
@@ -446,6 +462,24 @@ test("app shell renders, tabs open, header shows backend truth, and secrets stay
   await expect(body).not.toContainText("sk-test-openrouter-key");
   await expect(body).not.toContainText("sk-test-matrix-token");
   expect(requestUrls.every((url) => !url.includes("api.github.com") && !url.includes("matrix.org"))).toBe(true);
+});
+
+test("PWA manifest and service worker registration are wired", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await loadConsole(page);
+  await waitForPwaRegistration(page);
+
+  const manifest = await page.evaluate(async () => {
+    const response = await fetch("/manifest.webmanifest");
+    return response.json();
+  });
+
+  expect(manifest).toMatchObject({
+    name: "ModelGate",
+    short_name: "ModelGate",
+    display: "standalone",
+    theme_color: "#07111f"
+  });
 });
 
 test("beginner hides technical GitHub fields while expert details reveal them", async ({ page }) => {
@@ -1069,15 +1103,27 @@ test("Matrix provenance loads from the read-only backend route", async ({ page }
   await page.getByTestId("tab-matrix").click();
   await waitForMatrixWorkspace(page);
   await page.getByTestId("matrix-rooms").getByText("Room name", { exact: true }).click();
-  await page.getByRole("button", { name: "Proceed to Analyze" }).click();
-  await page.locator("button.workspace-tab").filter({ hasText: /^Review$/ }).click();
+  await page.getByRole("button", { name: "Resolve scope" }).click();
 
   await expect.poll(() => scopeResolveCount).toBe(1);
   await expect.poll(() => scopeSummaryCount).toBe(1);
   await expect.poll(() => provenanceCount).toBe(1);
-  await expect(page.getByText("Provenance", { exact: true })).toBeVisible();
+  await expect(page.locator(".provenance-card")).toBeVisible();
   await expect(page.getByText("Read-only room metadata derived from joined rooms.")).toBeVisible();
   await expect(provenanceRequests[0] ?? "").toContain("/api/matrix/rooms/!room%3Amatrix.example/provenance");
+});
+
+test("Matrix tab stays on the topic-update slice and hides legacy contract-only controls", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await loadConsole(page);
+  await page.getByTestId("tab-matrix").click();
+  await waitForMatrixWorkspace(page);
+
+  await expect(page.getByTestId("matrix-topic-update-panel")).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("Analyze (contract-only)");
+  await expect(page.locator("body")).not.toContainText("Approve and execute (contract-only)");
+  await expect(page.locator("body")).not.toContainText("Dismiss (contract-only)");
+  await expect(page.locator("body")).not.toContainText("Grounded review of the selected scope");
 });
 
 test("Matrix fail-closed rendering surfaces malformed Matrix responses", async ({ page }) => {
@@ -1085,7 +1131,7 @@ test("Matrix fail-closed rendering surfaces malformed Matrix responses", async (
   await loadConsole(page);
 
   await page.getByTestId("tab-matrix").click();
-  await expect(page.getByTestId("matrix-status")).toContainText("Matrix backend error");
+  await expect(page.getByTestId("matrix-status")).toContainText("Matrix topic slice error");
   await expect(page.getByTestId("matrix-rooms")).toBeVisible();
   await expect(page.getByTestId("matrix-identity-error")).toContainText("Matrix whoami");
   await expect(page.getByTestId("matrix-rooms-error")).toContainText("Matrix joined rooms");
@@ -1182,8 +1228,6 @@ test("Matrix room topic update success flows from prepare to verified execute", 
   await loadConsole(page);
   await page.getByTestId("tab-matrix").click();
   await waitForMatrixWorkspace(page);
-  await page.getByRole("button", { name: "Review" }).click();
-
   const roomId = page.getByTestId("matrix-topic-room-id");
   const topicText = page.getByTestId("matrix-topic-text");
   const planCard = page.getByTestId("matrix-topic-plan");
@@ -1287,8 +1331,6 @@ test("Matrix room topic update refresh reloads the canonical plan details", asyn
   await loadConsole(page);
   await page.getByTestId("tab-matrix").click();
   await waitForMatrixWorkspace(page);
-  await page.getByRole("button", { name: "Review" }).click();
-
   await page.getByTestId("matrix-topic-room-id").fill("!room:matrix.example");
   await page.getByTestId("matrix-topic-text").fill("New topic");
   await page.getByRole("button", { name: "Prepare topic update" }).click();
@@ -1376,8 +1418,6 @@ test("Matrix room topic update refresh fails closed for expired plans", async ({
   await loadConsole(page);
   await page.getByTestId("tab-matrix").click();
   await waitForMatrixWorkspace(page);
-  await page.getByRole("button", { name: "Review" }).click();
-
   await page.getByTestId("matrix-topic-room-id").fill("!room:matrix.example");
   await page.getByTestId("matrix-topic-text").fill("New topic");
   await page.getByRole("button", { name: "Prepare topic update" }).click();
@@ -1444,8 +1484,6 @@ test("Matrix room topic update refresh fails closed for missing plans", async ({
   await loadConsole(page);
   await page.getByTestId("tab-matrix").click();
   await waitForMatrixWorkspace(page);
-  await page.getByRole("button", { name: "Review" }).click();
-
   await page.getByTestId("matrix-topic-room-id").fill("!room:matrix.example");
   await page.getByTestId("matrix-topic-text").fill("New topic");
   await page.getByRole("button", { name: "Prepare topic update" }).click();
@@ -1537,8 +1575,6 @@ test("Matrix room topic update stale-plan failure is surfaced and does not fake 
   await loadConsole(page);
   await page.getByTestId("tab-matrix").click();
   await waitForMatrixWorkspace(page);
-  await page.getByRole("button", { name: "Review" }).click();
-
   await page.getByTestId("matrix-topic-room-id").fill("!room:matrix.example");
   await page.getByTestId("matrix-topic-text").fill("New topic");
   await page.getByRole("button", { name: "Prepare topic update" }).click();

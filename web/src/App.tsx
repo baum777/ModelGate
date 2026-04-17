@@ -554,7 +554,7 @@ export default function App() {
               <WorkspaceIcon mode="matrix" />
               <span>
                 <strong>Matrix Workspace</strong>
-                <small>Governance und Freigabe</small>
+                <small>Scope, Provenienz und Topic Updates</small>
               </span>
             </button>
 
