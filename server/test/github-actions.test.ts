@@ -283,6 +283,305 @@ test("github proposal routes create a review-only plan scaffold and keep it read
   ]);
 });
 
+test("github proposal routes create a deterministic smoke plan without the LLM", async (t) => {
+  let llmInvoked = false;
+  const githubConfig = createTestGitHubConfig({
+    allowedRepos: ["acme/widget"],
+    allowedRepoSet: new Set(["acme/widget"]),
+    planTtlMs: 60_000
+  });
+
+  const githubClient = createGitHubClient({
+    config: githubConfig,
+    fetchImpl: async (input, init) => {
+      const url = new URL(String(input));
+      assert.equal(new Headers(init?.headers).get("Authorization"), "Bearer test-github-token");
+
+      if (url.pathname === "/repos/acme/widget") {
+        return makeJsonResponse({
+          full_name: "acme/widget",
+          name: "widget",
+          default_branch: "main",
+          description: "Widget repo",
+          private: false,
+          archived: false,
+          disabled: false,
+          permissions: {
+            push: true
+          },
+          owner: {
+            login: "acme"
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/commits/main") {
+        return makeJsonResponse({
+          sha: "commit-sha-smoke",
+          commit: {
+            tree: {
+              sha: "tree-sha-smoke"
+            }
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/git/trees/tree-sha-smoke") {
+        return makeJsonResponse({
+          sha: "tree-sha-smoke",
+          truncated: false,
+          tree: [
+            {
+              path: "README.md",
+              type: "blob",
+              sha: "blob-readme",
+              size: 70,
+              mode: "100644"
+            }
+          ]
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/contents/README.md") {
+        return makeJsonResponse({
+          type: "file",
+          path: "README.md",
+          sha: "blob-readme",
+          size: 70,
+          encoding: "base64",
+          content: encodeText("widget repo\n")
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/contents/docs/modelgate-smoke.md") {
+        return new Response("not found", {
+          status: 404,
+          headers: {
+            "Content-Type": "text/plain"
+          }
+        });
+      }
+
+      throw new Error(`unexpected path: ${url.pathname}${url.search}`);
+    }
+  });
+
+  const openRouter = createMockOpenRouterClient({
+    createChatCompletion: async () => {
+      llmInvoked = true;
+      throw new Error("LLM should not be called for smoke proposals");
+    }
+  });
+
+  const app = createApp({
+    env: createTestEnv(),
+    openRouter,
+    githubConfig,
+    githubClient,
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/github/actions/propose",
+    payload: {
+      repo: {
+        owner: "acme",
+        repo: "widget"
+      },
+      objective: "Smoke the GitHub proposal flow",
+      baseBranch: "main",
+      targetBranch: "modelgate/github-smoke",
+      mode: "smoke",
+      intent: "create or update docs/modelgate-smoke.md with a harmless timestamp"
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(llmInvoked, false);
+
+  const body = JSON.parse(response.body) as {
+    ok: true;
+    plan: {
+      planId: string;
+      branchName: string;
+      targetBranch: string;
+      summary: string;
+      rationale: string;
+      diff: Array<{
+        path: string;
+        changeType: string;
+        patch: string;
+      }>;
+    };
+  };
+
+  assert.match(body.plan.planId, /^plan_[0-9a-f-]{36}$/);
+  assert.equal(body.plan.branchName, `modelgate/github-smoke/${body.plan.planId}`);
+  assert.equal(body.plan.targetBranch, "main");
+  assert.equal(body.plan.summary, "Smoke proposal for acme/widget");
+  assert.match(body.plan.rationale, /Deterministic smoke proposal for acme\/widget/i);
+  assert.deepEqual(body.plan.diff.map((file) => file.path), [
+    "docs/modelgate-smoke.md"
+  ]);
+  assert.equal(body.plan.diff[0]?.changeType, "added");
+  assert.match(body.plan.diff[0]?.patch ?? "", /@@ reviewable addition @@/);
+  assert.match(body.plan.diff[0]?.patch ?? "", /\+Generated at:/);
+  assert.match(
+    body.plan.diff[0]?.patch ?? "",
+    /\+Intent: create or update docs\/modelgate-smoke\.md with a harmless timestamp/
+  );
+});
+
+test("github proposal smoke requests reject unsafe branch or file selection", async (t) => {
+  const githubConfig = createTestGitHubConfig({
+    allowedRepos: ["acme/widget"],
+    allowedRepoSet: new Set(["acme/widget"]),
+    planTtlMs: 60_000
+  });
+
+  const githubClient = createGitHubClient({
+    config: githubConfig,
+    fetchImpl: async (input) => {
+      const url = new URL(String(input));
+
+      if (url.pathname === "/repos/acme/widget") {
+        return makeJsonResponse({
+          full_name: "acme/widget",
+          name: "widget",
+          default_branch: "main",
+          description: "Widget repo",
+          private: false,
+          archived: false,
+          disabled: false,
+          permissions: {
+            push: true
+          },
+          owner: {
+            login: "acme"
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/commits/main") {
+        return makeJsonResponse({
+          sha: "commit-sha-smoke",
+          commit: {
+            tree: {
+              sha: "tree-sha-smoke"
+            }
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/git/trees/tree-sha-smoke") {
+        return makeJsonResponse({
+          sha: "tree-sha-smoke",
+          truncated: false,
+          tree: [
+            {
+              path: "README.md",
+              type: "blob",
+              sha: "blob-readme",
+              size: 70,
+              mode: "100644"
+            }
+          ]
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/contents/README.md") {
+        return makeJsonResponse({
+          type: "file",
+          path: "README.md",
+          sha: "blob-readme",
+          size: 70,
+          encoding: "base64",
+          content: encodeText("widget repo\n")
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/contents/docs/modelgate-smoke.md") {
+        return new Response("not found", {
+          status: 404,
+          headers: {
+            "Content-Type": "text/plain"
+          }
+        });
+      }
+
+      throw new Error(`unexpected path: ${url.pathname}${url.search}`);
+    }
+  });
+
+  const app = createApp({
+    env: createTestEnv(),
+    openRouter: createMockOpenRouterClient(),
+    githubConfig,
+    githubClient,
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const invalidBranchResponse = await app.inject({
+    method: "POST",
+    url: "/api/github/actions/propose",
+    payload: {
+      repo: {
+        owner: "acme",
+        repo: "widget"
+      },
+      objective: "Smoke the GitHub proposal flow",
+      baseBranch: "main",
+      targetBranch: "main",
+      mode: "smoke",
+      intent: "create or update docs/modelgate-smoke.md with a harmless timestamp"
+    }
+  });
+
+  assert.equal(invalidBranchResponse.statusCode, 400);
+  assert.deepEqual(JSON.parse(invalidBranchResponse.body), {
+    ok: false,
+    error: {
+      code: "invalid_request",
+      message: "Invalid GitHub request"
+    }
+  });
+
+  const invalidSelectionResponse = await app.inject({
+    method: "POST",
+    url: "/api/github/actions/propose",
+    payload: {
+      repo: {
+        owner: "acme",
+        repo: "widget"
+      },
+      objective: "Smoke the GitHub proposal flow",
+      baseBranch: "main",
+      targetBranch: "modelgate/github-smoke",
+      mode: "smoke",
+      selectedPaths: ["package.json"],
+      intent: "create or update docs/modelgate-smoke.md with a harmless timestamp"
+    }
+  });
+
+  assert.equal(invalidSelectionResponse.statusCode, 400);
+  assert.deepEqual(JSON.parse(invalidSelectionResponse.body), {
+    ok: false,
+    error: {
+      code: "invalid_request",
+      message: "Invalid GitHub request"
+    }
+  });
+});
+
 test("github proposal routes fail closed with a controlled timeout when the LLM stalls", async (t) => {
   const githubConfig = createTestGitHubConfig({
     allowedRepos: ["acme/widget"],

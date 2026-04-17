@@ -8,6 +8,7 @@ import {
   type GitHubProposalDraft,
 } from "./github-contract.js";
 import type { GitHubConfig } from "./github-env.js";
+import { isGitHubRepoAllowed } from "./github-env.js";
 import type { ModelRegistry } from "./model-policy.js";
 import type { OpenRouterClient } from "./openrouter.js";
 
@@ -32,6 +33,9 @@ type LoadedProposalFile = {
   binary: boolean;
   truncated: boolean;
 };
+
+const SMOKE_FILE_PATH = "docs/modelgate-smoke.md";
+const DEFAULT_SMOKE_BRANCH_PREFIX = "modelgate/github-smoke";
 
 function normalizeLineEndings(value: string) {
   return value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -72,6 +76,18 @@ function buildReviewableReplacementPatch(path: string, beforeContent: string, af
     `+++ b/${path}`,
     "@@ reviewable replacement @@",
     beforeBlock,
+    afterBlock
+  ].join("\n");
+}
+
+function buildReviewableAdditionPatch(path: string, afterContent: string) {
+  const afterLines = splitContentLines(afterContent);
+  const afterBlock = renderPatchLines("+", afterLines);
+
+  return [
+    "--- /dev/null",
+    `+++ b/${path}`,
+    "@@ reviewable addition @@",
     afterBlock
   ].join("\n");
 }
@@ -358,9 +374,221 @@ function buildProposalRationale(draft: GitHubProposalDraft, context: GitHubConte
   ].join(" ");
 }
 
+function createSmokeRequestError(message: string) {
+  return new GitHubClientError({
+    code: "invalid_request",
+    status: 400,
+    operation: "GitHub proposal generation",
+    path: "/api/github/actions/propose",
+    baseUrl: "unavailable",
+    message
+  });
+}
+
+function normalizeSmokeBranchPrefix(value: string | undefined, fallback: string) {
+  const trimmed = value?.trim() ?? "";
+  const candidate = trimmed.length > 0 ? trimmed : fallback;
+  const normalized = candidate.replace(/\/+$/g, "");
+
+  if (!normalized || normalized.startsWith("/") || normalized.includes("..") || normalized.includes("\\") || normalized.endsWith("/")) {
+    throw createSmokeRequestError("GitHub smoke target branch is invalid");
+  }
+
+  return normalized;
+}
+
+function buildSmokeFileContent(options: {
+  repoFullName: string;
+  baseBranch: string;
+  smokeBranchPrefix: string;
+  intent: string;
+  createdAt: string;
+}) {
+  return [
+    "# ModelGate smoke",
+    "",
+    `Generated at: ${options.createdAt}`,
+    `Repo: ${options.repoFullName}`,
+    `Base branch: ${options.baseBranch}`,
+    `Smoke branch: ${options.smokeBranchPrefix}`,
+    `Intent: ${options.intent}`
+  ].join("\n") + "\n";
+}
+
+function buildSmokePlanRationale(repoFullName: string, smokeBranchPrefix: string) {
+  return [
+    `Deterministic smoke proposal for ${repoFullName}.`,
+    `It only creates or updates ${SMOKE_FILE_PATH} on the dedicated smoke branch prefix ${smokeBranchPrefix}.`,
+    "The change is documentation-only and requires approval before execution."
+  ].join(" ");
+}
+
+function buildSmokeDiffFile(
+  path: string,
+  currentFile: LoadedProposalFile | null,
+  afterContent: string
+): GitHubChangePlan["diff"][number] {
+  const afterLines = splitContentLines(afterContent);
+
+  if (!currentFile) {
+    return {
+      path,
+      changeType: "added",
+      beforeSha: null,
+      afterSha: null,
+      additions: afterLines.length,
+      deletions: 0,
+      patch: buildReviewableAdditionPatch(path, afterContent),
+      citations: []
+    };
+  }
+
+  const beforeLines = splitContentLines(currentFile.content);
+
+  return {
+    path,
+    changeType: "modified",
+    beforeSha: currentFile.sha,
+    afterSha: null,
+    additions: afterLines.length,
+    deletions: beforeLines.length,
+    patch: buildReviewableReplacementPatch(path, currentFile.content, afterContent),
+    citations: []
+  };
+}
+
+async function buildDeterministicSmokePlan(
+  options: GitHubProposalPlannerOptions,
+  buildOptions: BuildGitHubProposalPlanOptions
+): Promise<GitHubChangePlan> {
+  const repoSummary = await options.client.readRepositorySummary(
+    buildOptions.request.repo.owner,
+    buildOptions.request.repo.repo
+  );
+
+  if (!isGitHubRepoAllowed(options.config, repoSummary.owner, repoSummary.repo)) {
+    throw createSmokeRequestError("GitHub smoke repository is not allowlisted");
+  }
+
+  const smokeRepo = options.config.smokeRepo?.trim() || repoSummary.fullName;
+
+  if (options.config.smokeRepo && options.config.smokeRepo.trim() !== repoSummary.fullName) {
+    throw createSmokeRequestError("GitHub smoke repository did not match the configured smoke repository");
+  }
+
+  const allowedBaseBranch = options.config.smokeBaseBranch?.trim() || repoSummary.defaultBranch;
+  const requestedBaseBranch = buildOptions.request.baseBranch?.trim() || allowedBaseBranch;
+
+  if (requestedBaseBranch !== allowedBaseBranch) {
+    throw createSmokeRequestError("GitHub smoke base branch is invalid");
+  }
+
+  const allowedSmokeBranchPrefix = options.config.smokeTargetBranch?.trim() || DEFAULT_SMOKE_BRANCH_PREFIX;
+  const requestedSmokeBranchPrefix = buildOptions.request.targetBranch?.trim();
+
+  if (!requestedSmokeBranchPrefix) {
+    throw createSmokeRequestError("GitHub smoke target branch is required");
+  }
+
+  const smokeBranchPrefix = normalizeSmokeBranchPrefix(requestedSmokeBranchPrefix, allowedSmokeBranchPrefix);
+
+  if (smokeBranchPrefix !== allowedSmokeBranchPrefix) {
+    throw createSmokeRequestError("GitHub smoke target branch is not allowed");
+  }
+
+  if (!buildOptions.request.mode || buildOptions.request.mode !== "smoke") {
+    throw createSmokeRequestError("GitHub smoke mode is required");
+  }
+
+  if (!buildOptions.request.intent || buildOptions.request.intent.trim().length === 0) {
+    throw createSmokeRequestError("GitHub smoke intent is required");
+  }
+
+  if (buildOptions.request.selectedPaths && buildOptions.request.selectedPaths.length > 0) {
+    throw createSmokeRequestError("GitHub smoke proposal does not accept selected paths");
+  }
+
+  if (buildOptions.request.constraints && buildOptions.request.constraints.length > 0) {
+    throw createSmokeRequestError("GitHub smoke proposal does not accept constraints");
+  }
+
+  const currentCommit = await options.client.readRepositoryCommit(
+    repoSummary.owner,
+    repoSummary.repo,
+    requestedBaseBranch
+  );
+
+  let smokeFile: LoadedProposalFile | null = null;
+
+  try {
+    const file = await options.client.readRepositoryFile(repoSummary.owner, repoSummary.repo, {
+      ref: requestedBaseBranch,
+      path: SMOKE_FILE_PATH
+    });
+
+    if (file.binary || file.truncated) {
+      throw new GitHubClientError({
+        code: "github_patch_invalid",
+        status: 422,
+        operation: "GitHub proposal generation",
+        path: "/api/github/actions/propose",
+        baseUrl: "unavailable",
+        message: `GitHub smoke file content was not fully readable: ${SMOKE_FILE_PATH}`
+      });
+    }
+
+    smokeFile = {
+      path: file.path,
+      content: file.content.replace(/\r\n/g, "\n").replace(/\r/g, "\n"),
+      sha: file.sha,
+      binary: file.binary,
+      truncated: file.truncated
+    };
+  } catch (error) {
+    if (!(error instanceof GitHubClientError && error.code === "github_file_not_found")) {
+      throw error;
+    }
+  }
+
+  const createdAt = buildOptions.createdAt;
+  const intent = buildOptions.request.intent.trim();
+  const afterContent = buildSmokeFileContent({
+    repoFullName: smokeRepo,
+    baseBranch: requestedBaseBranch,
+    smokeBranchPrefix,
+    intent,
+    createdAt
+  });
+  const diff = [
+    buildSmokeDiffFile(SMOKE_FILE_PATH, smokeFile, afterContent)
+  ];
+  return {
+    planId: buildOptions.planId,
+    repo: repoSummary,
+    baseRef: requestedBaseBranch,
+    baseSha: currentCommit.sha,
+    branchName: `${smokeBranchPrefix}/${buildOptions.planId}`,
+    targetBranch: repoSummary.defaultBranch,
+    status: "pending_review",
+    stale: false,
+    requiresApproval: true,
+    summary: `Smoke proposal for ${repoSummary.fullName}`,
+    rationale: buildSmokePlanRationale(repoSummary.fullName, smokeBranchPrefix),
+    riskLevel: "low_surface",
+    citations: [],
+    diff,
+    generatedAt: createdAt,
+    expiresAt: new Date(Date.parse(createdAt) + options.config.planTtlMs).toISOString()
+  };
+}
+
 export function createGitHubProposalPlanner(options: GitHubProposalPlannerOptions) {
   return {
     async buildPlan(buildOptions: BuildGitHubProposalPlanOptions): Promise<GitHubChangePlan> {
+      if (buildOptions.request.mode === "smoke") {
+        return buildDeterministicSmokePlan(options, buildOptions);
+      }
+
       const files = await loadProposalFiles(options.client, buildOptions.context);
       const draft = await generateProposalDraft(options, buildOptions.request, buildOptions.context, files);
       const diff = buildGitHubDiffFiles(draft, buildOptions.context, files);

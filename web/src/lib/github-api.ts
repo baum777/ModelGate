@@ -222,6 +222,9 @@ export type GitHubChangeProposalRequest = {
   selectedPaths?: string[];
   constraints?: string[];
   baseBranch?: string;
+  targetBranch?: string;
+  mode?: "smoke";
+  intent?: string;
 };
 
 export type GitHubExecuteRequest = {

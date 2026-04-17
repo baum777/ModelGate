@@ -141,11 +141,14 @@ export type GitHubChangeProposalRequest = {
   selectedPaths?: string[];
   constraints?: string[];
   baseBranch?: string;
+  targetBranch?: string;
+  mode?: "smoke";
+  intent?: string;
 };
 
 export type GitHubProposalFileDraft = {
   path: string;
-  changeType: "modified";
+  changeType: "modified" | "added";
   afterContent: string;
 };
 
@@ -261,12 +264,15 @@ export const GitHubChangeProposalRequestSchema = z.object({
   ref: z.string().trim().min(1).optional(),
   selectedPaths: z.array(z.string().trim().min(1)).optional(),
   constraints: z.array(z.string().trim().min(1)).optional(),
-  baseBranch: z.string().trim().min(1).optional()
+  baseBranch: z.string().trim().min(1).optional(),
+  targetBranch: z.string().trim().min(1).optional(),
+  mode: z.enum(["smoke"]).optional(),
+  intent: z.string().trim().min(1).optional()
 }).strict();
 
 export const GitHubProposalFileDraftSchema = z.object({
   path: z.string().trim().min(1),
-  changeType: z.literal("modified"),
+  changeType: z.enum(["modified", "added"]),
   afterContent: z.string().min(1)
 }).strict();
 

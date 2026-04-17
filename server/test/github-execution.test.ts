@@ -167,8 +167,8 @@ test("github execution routes create a branch, commit, pull request, and verify 
         });
       }
 
-      if (url.pathname === `/repos/acme/widget/git/ref/${encodeURIComponent(`heads/${plannedBranchName}`)}`) {
-        if (!branchExists) {
+      if (url.pathname.startsWith("/repos/acme/widget/git/ref/heads%2F")) {
+        if (!branchExists || url.pathname !== `/repos/acme/widget/git/ref/${encodeURIComponent(`heads/${plannedBranchName}`)}`) {
           return new Response("not found", {
             status: 404,
             headers: {
@@ -259,10 +259,22 @@ test("github execution routes create a branch, commit, pull request, and verify 
         });
       }
 
+      if (url.pathname.startsWith("/repos/acme/widget/git/ref/heads%2Fmodelgate%2Fgithub%2F") && (init?.method ?? "GET") === "GET") {
+        return new Response("not found", {
+          status: 404,
+          headers: {
+            "Content-Type": "text/plain"
+          }
+        });
+      }
+
       if (url.pathname === "/repos/acme/widget/pulls" && (init?.method ?? "GET") === "GET") {
         assert.equal(url.searchParams.get("state"), "all");
-        assert.equal(url.searchParams.get("head"), `acme:${plannedBranchName}`);
         assert.equal(url.searchParams.get("base"), "main");
+
+        if (url.searchParams.get("head") !== `acme:${plannedBranchName}`) {
+          return makeJsonResponse([]);
+        }
 
         if (!pullRequestCreated) {
           return makeJsonResponse([]);
@@ -324,7 +336,12 @@ test("github execution routes create a branch, commit, pull request, and verify 
         });
       }
 
-      throw new Error(`unexpected path: ${url.pathname}${url.search}`);
+      return new Response("not found", {
+        status: 404,
+        headers: {
+          "Content-Type": "text/plain"
+        }
+      });
     }
   });
 
@@ -487,6 +504,389 @@ test("github execution routes create a branch, commit, pull request, and verify 
 
   assert.ok(fetchCalls.some((call) => call.startsWith("/repos/acme/widget/git/trees")));
   assert.ok(fetchCalls.includes("/repos/acme/widget/git/commits"));
+});
+
+test("github execution routes support deterministic smoke plans with added files", async (t) => {
+  let branchExists = false;
+  let pullRequestCreated = false;
+  let plannedBranchName = "";
+  const fetchCalls: string[] = [];
+
+  const openRouter = createMockOpenRouterClient({
+    createChatCompletion: async () => {
+      throw new Error("LLM should not be called for smoke plans");
+    }
+  });
+
+  const githubConfig = createTestGitHubConfig({
+    allowedRepos: ["acme/widget"],
+    allowedRepoSet: new Set(["acme/widget"]),
+    planTtlMs: 60_000,
+    agentApiKey: TEST_ADMIN_KEY
+  });
+
+  const githubClient = createGitHubClient({
+    config: githubConfig,
+    fetchImpl: async (input, init) => {
+      const url = new URL(String(input));
+      fetchCalls.push(`${url.pathname}${url.search}`);
+      assert.equal(new Headers(init?.headers).get("Authorization"), "Bearer test-github-token");
+
+      if (url.pathname === "/repos/acme/widget") {
+        return makeJsonResponse({
+          full_name: "acme/widget",
+          name: "widget",
+          default_branch: "main",
+          description: "Widget repo",
+          private: false,
+          archived: false,
+          disabled: false,
+          permissions: {
+            push: true
+          },
+          owner: {
+            login: "acme"
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/commits/main") {
+        return makeJsonResponse({
+          sha: "commit-sha-smoke",
+          commit: {
+            tree: {
+              sha: "tree-sha-smoke"
+            }
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/commits/commit-sha-smoke") {
+        return makeJsonResponse({
+          sha: "commit-sha-smoke",
+          commit: {
+            tree: {
+              sha: "tree-sha-smoke"
+            }
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/git/trees/tree-sha-smoke") {
+        return makeJsonResponse({
+          sha: "tree-sha-smoke",
+          truncated: false,
+          tree: [
+            {
+              path: "README.md",
+              type: "blob",
+              sha: "blob-readme",
+              size: 70,
+              mode: "100644"
+            }
+          ]
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/contents/README.md") {
+        return makeJsonResponse({
+          type: "file",
+          path: "README.md",
+          sha: "blob-readme",
+          size: 70,
+          encoding: "base64",
+          content: encodeText("widget repo\n")
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/contents/docs/modelgate-smoke.md") {
+        return new Response("not found", {
+          status: 404,
+          headers: {
+            "Content-Type": "text/plain"
+          }
+        });
+      }
+
+      if (url.pathname === `/repos/acme/widget/git/ref/${encodeURIComponent(`heads/${plannedBranchName}`)}`) {
+        if (!branchExists) {
+          return new Response("not found", {
+            status: 404,
+            headers: {
+              "Content-Type": "text/plain"
+            }
+          });
+        }
+
+        return makeJsonResponse({
+          ref: `heads/${plannedBranchName}`,
+          url: `https://api.github.com/repos/acme/widget/git/refs/heads/${plannedBranchName}`,
+          object: {
+            sha: "commit-sha-exec",
+            type: "commit"
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/git/trees" && (init?.method ?? "GET") === "POST") {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          base_tree: string;
+          tree: Array<{ path: string; mode: string; type: string; content: string }>;
+        };
+
+        assert.equal(body.base_tree, "tree-sha-smoke");
+        assert.deepEqual(body.tree.map((entry) => entry.path), [
+          "docs/modelgate-smoke.md"
+        ]);
+        assert.equal(body.tree[0]?.mode, "100644");
+        assert.match(body.tree[0]?.content ?? "", /# ModelGate smoke/);
+        assert.match(body.tree[0]?.content ?? "", /Intent: smoke execute against a dedicated target branch/);
+
+        return makeJsonResponse({
+          sha: "tree-sha-exec"
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/git/commits" && (init?.method ?? "GET") === "POST") {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          message: string;
+          tree: string;
+          parents: string[];
+        };
+
+        assert.match(body.message, /^ModelGate plan /);
+        assert.equal(body.tree, "tree-sha-exec");
+        assert.deepEqual(body.parents, ["commit-sha-smoke"]);
+
+        return makeJsonResponse({
+          sha: "commit-sha-exec",
+          tree: {
+            sha: "tree-sha-exec"
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/git/refs" && (init?.method ?? "GET") === "POST") {
+        const body = JSON.parse(String(init?.body ?? "{}")) as { ref: string; sha: string };
+
+        assert.equal(body.ref, `refs/heads/${plannedBranchName}`);
+        assert.equal(body.sha, "commit-sha-exec");
+        branchExists = true;
+
+        return makeJsonResponse({
+          ref: `heads/${plannedBranchName}`,
+          url: `https://api.github.com/repos/acme/widget/git/refs/heads/${plannedBranchName}`,
+          object: {
+            sha: "commit-sha-exec",
+            type: "commit"
+          }
+        });
+      }
+
+      if (url.pathname.startsWith("/repos/acme/widget/git/refs/heads%2F") && (init?.method ?? "GET") === "PATCH") {
+        const body = JSON.parse(String(init?.body ?? "{}")) as { sha: string; force: boolean };
+
+        assert.equal(body.sha, "commit-sha-exec");
+        assert.equal(body.force, false);
+        branchExists = true;
+
+        return makeJsonResponse({
+          ref: `heads/${plannedBranchName}`,
+          url: `https://api.github.com/repos/acme/widget/git/refs/heads/${plannedBranchName}`,
+          object: {
+            sha: "commit-sha-exec",
+            type: "commit"
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/pulls" && (init?.method ?? "GET") === "GET") {
+        assert.equal(url.searchParams.get("state"), "all");
+        assert.equal(url.searchParams.get("head"), `acme:${plannedBranchName}`);
+        assert.equal(url.searchParams.get("base"), "main");
+
+        if (!pullRequestCreated) {
+          return makeJsonResponse([]);
+        }
+
+        return makeJsonResponse([
+          {
+            number: 12,
+            html_url: "https://github.com/acme/widget/pull/12",
+            state: "open",
+            head: {
+              ref: plannedBranchName,
+              sha: "commit-sha-exec"
+            },
+            base: {
+              ref: "main",
+              sha: "commit-sha-smoke"
+            },
+            mergeable: true,
+            draft: false,
+            title: `ModelGate plan ${plannedBranchName.slice(plannedBranchName.lastIndexOf("/") + 1)}`,
+            body: "ModelGate approval-gated proposal"
+          }
+        ]);
+      }
+
+      if (url.pathname === "/repos/acme/widget/pulls" && (init?.method ?? "GET") === "POST") {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          title: string;
+          head: string;
+          base: string;
+          body: string;
+          draft: boolean;
+          maintainer_can_modify: boolean;
+        };
+
+        assert.equal(body.head, plannedBranchName);
+        assert.equal(body.base, "main");
+        assert.equal(body.draft, false);
+        assert.equal(body.maintainer_can_modify, false);
+        pullRequestCreated = true;
+
+        return makeJsonResponse({
+          number: 12,
+          html_url: "https://github.com/acme/widget/pull/12",
+          state: "open",
+          head: {
+            ref: plannedBranchName,
+            sha: "commit-sha-exec"
+          },
+          base: {
+            ref: "main",
+            sha: "commit-sha-smoke"
+          },
+          mergeable: true,
+          draft: false,
+          title: body.title,
+          body: body.body
+        });
+      }
+
+      return new Response("not found", {
+        status: 404,
+        headers: {
+          "Content-Type": "text/plain"
+        }
+      });
+    }
+  });
+
+  const app = createApp({
+    env: createTestEnv(),
+    openRouter,
+    githubConfig,
+    githubClient,
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const proposeResponse = await app.inject({
+    method: "POST",
+    url: "/api/github/actions/propose",
+    payload: {
+      repo: {
+        owner: "acme",
+        repo: "widget"
+      },
+      objective: "Smoke the GitHub proposal flow",
+      baseBranch: "main",
+      targetBranch: "modelgate/github-smoke",
+      mode: "smoke",
+      intent: "smoke execute against a dedicated target branch"
+    }
+  });
+
+  assert.equal(proposeResponse.statusCode, 200);
+  const proposeBody = JSON.parse(proposeResponse.body) as {
+    ok: true;
+    plan: {
+      planId: string;
+      branchName: string;
+      targetBranch: string;
+      diff: Array<{ path: string; changeType: string; patch: string }>;
+    };
+  };
+  plannedBranchName = `modelgate/github-smoke/${proposeBody.plan.planId}`;
+
+  const executeResponse = await app.inject({
+    method: "POST",
+    url: `/api/github/actions/${proposeBody.plan.planId}/execute`,
+    headers: {
+      "x-modelgate-admin-key": TEST_ADMIN_KEY
+    },
+    payload: {
+      approval: true
+    }
+  });
+
+  assert.equal(executeResponse.statusCode, 200);
+  const executeBody = JSON.parse(executeResponse.body) as {
+    ok: true;
+    result: {
+      planId: string;
+      branchName: string;
+      baseSha: string;
+      headSha: string;
+      commitSha: string;
+      prNumber: number;
+      prUrl: string;
+      targetBranch: string;
+    };
+  };
+  assert.equal(executeBody.result.planId, proposeBody.plan.planId);
+  assert.equal(executeBody.result.branchName, plannedBranchName);
+  assert.equal(executeBody.result.baseSha, "commit-sha-smoke");
+  assert.equal(executeBody.result.headSha, "commit-sha-exec");
+  assert.equal(executeBody.result.commitSha, "commit-sha-exec");
+  assert.equal(executeBody.result.prNumber, 12);
+  assert.equal(executeBody.result.prUrl, "https://github.com/acme/widget/pull/12");
+  assert.equal(executeBody.result.targetBranch, "main");
+
+  const verificationApp = createApp({
+    env: createTestEnv(),
+    openRouter,
+    githubConfig,
+    githubClient,
+    logger: false
+  });
+
+  t.after(async () => {
+    await verificationApp.close();
+  });
+
+  const verifyResponse = await verificationApp.inject({
+    method: "GET",
+    url: `/api/github/actions/${proposeBody.plan.planId}/verify`
+  });
+
+  assert.equal(verifyResponse.statusCode, 200);
+  const verifyBody = JSON.parse(verifyResponse.body) as {
+    ok: true;
+    verification: {
+      status: string;
+      branchName: string;
+      targetBranch: string;
+      prNumber: number;
+    };
+  };
+  assert.equal(verifyBody.verification.status, "verified");
+  assert.equal(verifyBody.verification.branchName, plannedBranchName);
+  assert.equal(verifyBody.verification.targetBranch, "main");
+  assert.equal(verifyBody.verification.prNumber, 12);
+
+  assert.deepEqual(proposeBody.plan.diff.map((file) => file.path), [
+    "docs/modelgate-smoke.md"
+  ]);
+  assert.equal(proposeBody.plan.diff[0]?.changeType, "added");
+  assert.match(proposeBody.plan.diff[0]?.patch ?? "", /@@ reviewable addition @@/);
+  assert.ok(fetchCalls.some((call) => call.startsWith("/repos/acme/widget/git/trees")));
+  assert.ok(fetchCalls.some((call) => call.startsWith("/repos/acme/widget/pulls")));
 });
 
 test("github execution routes reject missing or invalid admin keys before touching plan state", async (t) => {

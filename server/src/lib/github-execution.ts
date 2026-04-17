@@ -63,9 +63,12 @@ function isMissingReferenceError(error: unknown) {
   );
 }
 
-function extractReplacementPatchContents(patch: string) {
+function extractReviewablePatchContents(patch: string) {
   const lines = normalizeLineEndings(patch).split("\n");
-  const markerIndex = lines.findIndex((line) => line.trim() === "@@ reviewable replacement @@");
+  const markerIndex = lines.findIndex((line) => {
+    const marker = line.trim();
+    return marker === "@@ reviewable replacement @@" || marker === "@@ reviewable addition @@";
+  });
 
   if (markerIndex === -1) {
     throw new GitHubClientError({
@@ -78,6 +81,7 @@ function extractReplacementPatchContents(patch: string) {
     });
   }
 
+  const marker = lines[markerIndex]?.trim() ?? "";
   const beforeLines: string[] = [];
   const afterLines: string[] = [];
 
@@ -106,6 +110,25 @@ function extractReplacementPatchContents(patch: string) {
     });
   }
 
+  if (marker === "@@ reviewable addition @@" ) {
+    if (beforeLines.length > 0 || afterLines.length === 0) {
+      throw new GitHubClientError({
+        code: "github_patch_invalid",
+        status: 422,
+        operation: "GitHub execution",
+        path: "/api/github/actions/execute",
+        baseUrl: "unavailable",
+        message: "GitHub addition patch was malformed"
+      });
+    }
+
+    return {
+      beforeContent: "",
+      afterContent: afterLines.join("\n"),
+      changeType: "added" as const
+    };
+  }
+
   if (beforeLines.length === 0 || afterLines.length === 0) {
     throw new GitHubClientError({
       code: "github_patch_invalid",
@@ -119,7 +142,8 @@ function extractReplacementPatchContents(patch: string) {
 
   return {
     beforeContent: beforeLines.join("\n"),
-    afterContent: afterLines.join("\n")
+    afterContent: afterLines.join("\n"),
+    changeType: "modified" as const
   };
 }
 
@@ -128,7 +152,19 @@ function getPlannedFileMode(plan: GitHubActionStoreEntry, path: string) {
 }
 
 function getPlannedFileContent(plan: GitHubActionStoreEntry, diffFile: GitHubDiffFile) {
-  const extracted = extractReplacementPatchContents(diffFile.patch);
+  const extracted = extractReviewablePatchContents(diffFile.patch);
+
+  if (diffFile.changeType === "added") {
+    return {
+      beforeContent: "",
+      afterContent: extracted.afterContent,
+      mode: getPlannedFileMode(plan, diffFile.path),
+      path: diffFile.path,
+      beforeSha: null,
+      currentSha: null
+    };
+  }
+
   const currentFile = plan.context.files.find((entry) => entry.path === diffFile.path);
 
   if (!currentFile) {
@@ -160,6 +196,46 @@ async function loadPlannedTreeEntries(
 
   for (const diffFile of plan.diff) {
     const planned = getPlannedFileContent(plan, diffFile);
+    if (diffFile.changeType === "added") {
+      try {
+        const currentFile = await client.readRepositoryFile(plan.repo.owner, plan.repo.repo, {
+          ref: plan.baseSha,
+          path: planned.path
+        });
+
+        if (!currentFile.binary && !currentFile.truncated) {
+          throw new GitHubClientError({
+            code: "github_patch_invalid",
+            status: 422,
+            operation: "GitHub execution",
+            path: "/api/github/actions/execute",
+            baseUrl: "unavailable",
+            message: `GitHub file already exists: ${planned.path}`
+          });
+        }
+
+        throw new GitHubClientError({
+          code: "github_patch_invalid",
+          status: 422,
+          operation: "GitHub execution",
+          path: "/api/github/actions/execute",
+          baseUrl: "unavailable",
+          message: `GitHub file was not fully readable: ${planned.path}`
+        });
+      } catch (error) {
+        if (!(error instanceof GitHubClientError && error.code === "github_file_not_found")) {
+          throw error;
+        }
+      }
+
+      loadedFiles.push({
+        path: planned.path,
+        mode: planned.mode,
+        content: planned.afterContent
+      });
+      continue;
+    }
+
     const currentFile = await client.readRepositoryFile(plan.repo.owner, plan.repo.repo, {
       ref: plan.baseSha,
       path: planned.path
@@ -305,7 +381,7 @@ function buildVerificationVerified(
   plan: GitHubActionStoreEntry,
   summary: GitHubRepoSummary,
   actualCommitSha: string,
-  pr: GitHubPullRequestSummary
+  pr: GitHubPullRequestSummary | null
 ): GitHubVerifyResult {
   return {
     planId: plan.planId,
@@ -317,8 +393,8 @@ function buildVerificationVerified(
     actualBaseSha: summary.defaultBranchSha,
     expectedCommitSha: plan.execution?.commitSha ?? actualCommitSha,
     actualCommitSha,
-    prNumber: pr.number,
-    prUrl: pr.htmlUrl,
+    prNumber: pr?.number ?? null,
+    prUrl: pr?.htmlUrl ?? null,
     mismatchReasons: []
   };
 }
@@ -497,6 +573,15 @@ export function createGitHubActionExecutionService(options: GitHubActionExecutio
       }
 
       if (!branchReference) {
+        if (pullRequest && pullRequest.headSha === plan.execution.commitSha) {
+          const result = buildVerificationVerified(plan, summary, pullRequest.headSha, pullRequest);
+          options.actionStore.updatePlan(plan.planId, (current) => ({
+            ...current,
+            verification: result
+          }));
+          return result;
+        }
+
         const result = buildVerificationPending(plan, summary, actualCommitSha, pullRequest);
         options.actionStore.updatePlan(plan.planId, (current) => ({
           ...current,
@@ -517,7 +602,7 @@ export function createGitHubActionExecutionService(options: GitHubActionExecutio
       }
 
       if (!pullRequest) {
-        const result = buildVerificationPending(plan, summary, branchReference.sha, null);
+        const result = buildVerificationVerified(plan, summary, branchReference.sha, null);
         options.actionStore.updatePlan(plan.planId, (current) => ({
           ...current,
           verification: result
