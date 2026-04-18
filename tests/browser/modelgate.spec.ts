@@ -474,6 +474,34 @@ test("app shell renders, tabs open, header shows backend truth, and secrets stay
   expect(requestUrls.every((url) => !url.includes("api.github.com") && !url.includes("matrix.org"))).toBe(true);
 });
 
+test("workspace navigation is keyboard reachable and status regions are labeled", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await loadConsole(page);
+
+  await expect(page.locator("nav.sidebar-nav")).toHaveAttribute("aria-label", "Primary workspace navigation");
+  await expect(page.locator('[data-testid="workspace-session-list"]')).toHaveAttribute("aria-label", "Chat session list");
+  await expect(page.locator("section.status-panel-card").first()).toHaveAttribute("aria-label", "Chatstatus");
+
+  const chatTab = page.getByTestId("tab-chat");
+  const githubTab = page.getByTestId("tab-github");
+  const matrixTab = page.getByTestId("tab-matrix");
+
+  await chatTab.focus();
+  await expect(chatTab).toBeFocused();
+
+  await page.keyboard.press("Tab");
+  await expect(githubTab).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("github-workspace")).toBeVisible();
+  await expect(githubTab).toHaveAttribute("aria-current", "page");
+
+  await page.keyboard.press("Tab");
+  await expect(matrixTab).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("matrix-workspace")).toBeVisible();
+  await expect(matrixTab).toHaveAttribute("aria-current", "page");
+});
+
 test("workspace sessions survive workspace switches and can be reopened from the session list", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
   await loadConsole(page);
@@ -922,12 +950,12 @@ test("chat keyboard submit is wired, requests the backend, and keeps focus usabl
   await loadConsole(page);
 
   const composer = page.getByRole("textbox", { name: "Chat composer" });
-  const sendButton = page.getByRole("button", { name: "Send" });
+  const sendButton = page.getByTestId("chat-send");
   const connectionState = page.getByTestId("chat-connection-state");
 
   await expect(composer).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Chat" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Matrix Workspace" })).toBeVisible();
+  await expect(page.getByTestId("tab-chat")).toBeVisible();
+  await expect(page.getByTestId("tab-matrix")).toBeVisible();
   await expect(page.getByRole("button", { name: "Jump to latest" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Stopp" })).toBeVisible();
   await expect(page.locator(".message-list")).toHaveAttribute("aria-live", "polite");
@@ -1042,6 +1070,15 @@ test("Matrix composer exposes explicit actions and fails closed on submit", asyn
 
   await page.getByTestId("matrix-composer-room-id").fill("!room:matrix.example");
   await page.getByTestId("matrix-new-post").click();
+  await expect(page.getByTestId("matrix-composer-mode-label")).toContainText("post");
+
+  await page.getByTestId("matrix-composer-post-id").fill("evt-thread-root");
+  await page.getByTestId("matrix-thread-open").click();
+  await expect(page.getByTestId("matrix-thread-context")).toContainText("Thread zu Beitrag evt-thread-root");
+  await expect(page.getByTestId("matrix-composer-mode-label")).toContainText("thread");
+
+  await page.getByTestId("matrix-thread-leave").click();
+  await expect(page.getByTestId("matrix-thread-context")).toContainText("Noch kein Thread geöffnet");
   await expect(page.getByTestId("matrix-composer-mode-label")).toContainText("post");
 
   await page.getByTestId("matrix-composer-draft").fill("Hello Matrix");

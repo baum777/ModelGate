@@ -223,9 +223,7 @@ button:disabled {
 
 .model-card p, .hint, .muted-copy, .info-note, .empty-state { margin: 0; color: var(--muted); font-size: 0.92rem; }
 
-.chat-card { padding: 20px; }
-
-.chat-card-header, .composer-footer, .action-row, .verification-actions {
+.composer-footer, .action-row, .verification-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -233,13 +231,7 @@ button:disabled {
   flex-wrap: wrap;
 }
 
-.chat-card-header {
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 16px;
-}
-
-.chat-card-header strong, .card-header strong, .workspace-summary-card strong {
+.card-header strong, .workspace-summary-card strong {
   display: block;
   margin-top: 0.12rem;
   font-size: 1.05rem;
@@ -273,9 +265,7 @@ button:disabled {
 
 .message p, .analysis-text, .plan-card p, .provenance-card p { margin: 0; white-space: pre-wrap; word-break: break-word; }
 
-.composer { margin-top: 18px; display: grid; gap: 14px; }
-
-.composer textarea { resize: vertical; min-height: 116px; max-height: 280px; }
+.composer { display: grid; gap: 14px; }
 .error-banner { margin: 14px 0 0; color: var(--danger); font-size: 0.95rem; }
 
 .matrix-hero { align-items: start; }
@@ -320,7 +310,6 @@ button:disabled {
 }
 
 .matrix-column { display: grid; gap: 20px; }
-.workspace-card { padding: 20px; }
 .card-header {
   padding-bottom: 16px;
   margin-bottom: 16px;
@@ -737,17 +726,6 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 
 .matrix-workspace .workspace-tab {
   min-width: 0;
-}
-
-.matrix-workspace .workspace-summary-card, .matrix-workspace .workspace-card, .chat-card {
-  background: linear-gradient(180deg, var(--panel), var(--panel-strong));
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow);
-  border-radius: 0;
-}
-
-.matrix-workspace .workspace-card, .chat-card {
-  padding: 20px;
 }
 
 .matrix-workspace .hero-copy, .chat-workspace .hero-copy {
@@ -1323,4 +1301,660 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
   .telemetry-actions {
     width: 100%;
   }
+}
+
+.app-shell-console {
+  max-width: 1680px;
+}
+
+.console-layout {
+  grid-template-columns: minmax(296px, 316px) minmax(0, 1fr) minmax(320px, 360px);
+  gap: 20px;
+  align-items: start;
+}
+
+.workspace-sidebar,
+.workspace-context {
+  position: sticky;
+  top: 20px;
+  align-self: start;
+}
+
+.workspace-sidebar {
+  display: grid;
+  gap: 14px;
+}
+
+.workspace-context {
+  min-width: 0;
+}
+
+.sidebar-card,
+.session-list-card,
+.status-panel-card,
+.chat-card,
+.workspace-card {
+  border-radius: 22px;
+}
+
+.sidebar-card {
+  padding: 18px;
+}
+
+.sidebar-card p + p {
+  margin-top: 0.15rem;
+}
+
+.session-list-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--panel), var(--panel-strong));
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.session-list-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.session-list-header strong {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 1.04rem;
+}
+
+.session-list-note {
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.session-list-items {
+  display: grid;
+  gap: 10px;
+}
+
+.session-list-item {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+
+.session-list-item:hover,
+.session-list-item:focus-within {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.session-list-item-active {
+  border-color: rgba(255, 176, 92, 0.34);
+  background: rgba(255, 176, 92, 0.08);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.22);
+}
+
+.session-list-item-archived {
+  opacity: 0.8;
+}
+
+.session-list-select {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border-radius: 0;
+  text-align: left;
+  background: transparent;
+  color: var(--text);
+  box-shadow: none;
+}
+
+.session-list-select-active {
+  color: var(--text);
+}
+
+.session-list-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.session-list-title-row {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.session-list-title-row strong {
+  line-height: 1.15;
+  font-size: 0.98rem;
+}
+
+.session-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.22rem 0.58rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.session-status-badge.session-status-ready {
+  color: var(--success);
+}
+
+.session-status-badge.session-status-partial {
+  color: var(--accent);
+}
+
+.session-status-badge.session-status-error {
+  color: var(--danger);
+}
+
+.session-list-subtitle,
+.session-list-meta {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.session-list-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.session-list-actions button {
+  padding-inline: 0.85rem;
+  padding-block: 0.66rem;
+}
+
+.chat-workspace .chat-card {
+  display: grid;
+  gap: 16px;
+}
+
+.chat-session-banner,
+.matrix-composer-banner {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.matrix-thread-context-card {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 16px 18px;
+  border: 1px solid rgba(98, 214, 255, 0.12);
+  border-radius: 20px;
+  background: rgba(98, 214, 255, 0.05);
+}
+
+.matrix-thread-context-copy,
+.matrix-thread-context-meta,
+.matrix-thread-context-actions {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.matrix-thread-context-copy strong {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 1.02rem;
+}
+
+.matrix-thread-context-meta .reference-chip {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.matrix-thread-context-actions {
+  align-items: center;
+}
+
+.chat-session-banner strong,
+.matrix-composer-banner strong {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 1.02rem;
+}
+
+.chat-session-banner p,
+.matrix-composer-banner p {
+  margin-top: 0.3rem;
+}
+
+.chat-session-banner .status-pill {
+  margin: 0;
+}
+
+.message-list {
+  min-height: 52vh;
+  max-height: 62vh;
+}
+
+.composer {
+  margin-top: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.composer textarea {
+  min-height: 150px;
+  border-color: rgba(255, 176, 92, 0.18);
+  background: rgba(3, 8, 17, 0.82);
+}
+
+.composer textarea:focus,
+.matrix-textarea:focus,
+.mini-panel select:focus,
+.input-row input:focus,
+.github-login-form input:focus {
+  outline: 2px solid rgba(255, 176, 92, 0.25);
+  outline-offset: 2px;
+}
+
+.composer-footer {
+  align-items: center;
+}
+
+.matrix-composer-banner {
+  margin-bottom: 14px;
+  background: rgba(98, 214, 255, 0.07);
+  border-color: rgba(98, 214, 255, 0.16);
+}
+
+.matrix-composer-banner-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.matrix-composer-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 10px 0 0;
+}
+
+.matrix-composer-actions button {
+  width: 100%;
+}
+
+.matrix-composer-primary-action {
+  grid-column: 1 / -1;
+}
+
+.matrix-composer-actions .ghost-button {
+  color: var(--muted);
+}
+
+.matrix-composer-actions .secondary-button {
+  justify-content: center;
+}
+
+.matrix-composer-actions .secondary-button:disabled {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.matrix-thread-context-card .secondary-button,
+.matrix-thread-context-card .ghost-button {
+  padding-inline: 0.92rem;
+  padding-block: 0.74rem;
+}
+
+.workspace-card {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.card-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.info-block {
+  display: grid;
+  gap: 10px;
+}
+
+.action-row {
+  align-items: center;
+}
+
+@media (max-width: 1280px) {
+  .console-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-sidebar,
+  .workspace-context {
+    position: static;
+  }
+}
+
+@media (max-width: 900px) {
+  .chat-session-banner,
+  .matrix-thread-context-card,
+  .matrix-composer-banner,
+  .card-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .matrix-thread-context-actions,
+  .matrix-thread-context-meta {
+    width: 100%;
+  }
+
+  .matrix-composer-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .matrix-composer-primary-action {
+    grid-column: auto;
+  }
+
+  .session-list-header,
+  .session-list-title-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* Content-first cleanup pass: quieter surfaces, better wrapping, fewer rigid boxes. */
+.app-shell-console {
+  max-width: 1760px;
+}
+
+.console-layout {
+  grid-template-columns: minmax(286px, 316px) minmax(0, 1fr) minmax(320px, 360px);
+  gap: 18px;
+}
+
+.workspace-sidebar,
+.workspace-context {
+  top: 18px;
+}
+
+:where(.sidebar-card, .session-list-card, .status-panel-card, .chat-card, .workspace-card, .empty-state-card, .github-review-card, .github-action-card, .github-repo-card, .github-plan-summary, .github-expert-details, .context-summary-card, .review-item-card, .safety-tip-card) {
+  border-radius: 18px;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(12px);
+}
+
+.matrix-workspace .workspace-summary-card,
+.matrix-workspace .workspace-card,
+.chat-card {
+  border-radius: 18px;
+}
+
+.workspace-card {
+  padding: 18px;
+  gap: 14px;
+}
+
+.card-header {
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+}
+
+.chat-card {
+  padding: 18px;
+  gap: 14px;
+}
+
+.session-list-card {
+  padding: 16px;
+  gap: 10px;
+}
+
+.session-list-item {
+  padding: 11px 12px;
+}
+
+.session-list-select {
+  min-width: 0;
+}
+
+.session-list-title-row,
+.github-repo-card-header,
+.github-plan-header,
+.context-summary-header,
+.candidate-card-header,
+.plan-card-header {
+  align-items: start;
+}
+
+.session-list-title-row strong,
+.session-list-meta,
+.session-list-subtitle,
+.chat-session-banner strong,
+.matrix-composer-banner strong,
+.matrix-thread-context-copy strong,
+.github-repo-card strong,
+.github-next-step strong,
+.github-plan-file-card strong,
+.review-item-card strong,
+.status-panel-card strong,
+.workspace-card strong,
+.empty-state-card h2 {
+  overflow-wrap: anywhere;
+}
+
+.session-list-meta,
+.session-list-subtitle,
+.github-repo-meta,
+.github-next-step p,
+.github-action-card p,
+.github-review-card p,
+.github-plan-summary p,
+.github-plan-file-card p,
+.chat-session-banner p,
+.matrix-composer-banner p,
+.matrix-thread-context-copy p,
+.message p,
+.analysis-text,
+.plan-card p,
+.provenance-card p,
+.empty-state-card p,
+.review-item-card p {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.model-card select,
+.composer textarea,
+.matrix-textarea,
+.input-row input,
+.github-login-form input,
+.mini-panel select {
+  min-height: 48px;
+  line-height: 1.45;
+}
+
+.composer textarea,
+.matrix-textarea {
+  min-height: 168px;
+  padding: 1rem 1.05rem;
+  resize: vertical;
+}
+
+.composer {
+  padding: 18px;
+  gap: 12px;
+}
+
+.composer-footer,
+.action-row,
+.verification-actions {
+  align-items: center;
+}
+
+.composer-footer .hint,
+.action-row .muted-copy {
+  max-width: 56ch;
+}
+
+.detail-grid,
+.delta-grid,
+.github-expert-grid,
+.github-context-grid,
+.github-plan-file-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.delta-grid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.github-action-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.github-plan-file-grid {
+  gap: 12px;
+}
+
+.expert-details-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.detail-grid div,
+.delta-grid pre,
+.github-expert-grid div,
+.github-context-grid div,
+.github-plan-file-card,
+.scope-summary-item,
+.candidate-card,
+.plan-card,
+.provenance-card,
+.status-panel-grid div,
+.empty-state-card,
+.safety-tip-card {
+  min-width: 0;
+}
+
+.github-diff-preview {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.chat-session-banner,
+.matrix-composer-banner,
+.matrix-thread-context-card,
+.github-next-step,
+.github-safety-strip {
+  align-items: stretch;
+}
+
+@media (max-width: 1280px) {
+  .console-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-sidebar,
+  .workspace-context {
+    position: static;
+  }
+}
+
+@media (max-width: 900px) {
+  .chat-session-banner,
+  .matrix-thread-context-card,
+  .matrix-composer-banner,
+  .card-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .matrix-thread-context-actions,
+  .matrix-thread-context-meta {
+    width: 100%;
+  }
+
+  .matrix-composer-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .matrix-composer-primary-action {
+    grid-column: auto;
+  }
+
+  .session-list-header,
+  .session-list-title-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .detail-grid,
+  .delta-grid,
+  .github-action-grid,
+  .github-plan-file-grid,
+  .github-expert-grid,
+  .expert-details-grid,
+  .settings-grid,
+  .status-panel-grid,
+  .github-context-grid,
+  .input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .github-safety-strip,
+  .mode-toggle,
+  .global-safety-bar,
+  .telemetry-actions {
+    width: 100%;
+  }
+}
+
+:where(button, input, textarea, select):focus-visible {
+  outline: 2px solid rgba(98, 214, 255, 0.32);
+  outline-offset: 2px;
+}
+
+:where(.workspace-tab, .session-list-item, .github-action-card, .github-review-card, .github-repo-card, .github-plan-summary, .review-item-card, .empty-state-card, .candidate-card, .plan-card, .scope-summary-item):hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+:where(.workspace-tab-active, .session-list-item-active, .candidate-card-active, .scope-summary-item-active) {
+  border-color: rgba(98, 214, 255, 0.34);
+  background: rgba(98, 214, 255, 0.1);
+}
+
+:where(button, input, textarea, select):disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
 }

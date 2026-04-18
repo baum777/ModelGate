@@ -35,6 +35,7 @@ import type { ReviewItem } from "./ReviewWorkspace.js";
 import {
   deriveSessionStatus,
   deriveSessionTitle,
+  type MatrixComposerMode,
   type MatrixComposerTarget,
   type MatrixSession,
 } from "../lib/workspace-state.js";
@@ -61,6 +62,11 @@ export type MatrixWorkspaceStatus = {
     runtimeEventTrail: string[];
     sseLifecycle: string;
     rawPayload: string | null;
+    composerMode: MatrixComposerMode;
+    composerRoomId: string | null;
+    composerEventId: string | null;
+    composerThreadRootId: string | null;
+    composerTargetLabel: string;
   };
   reviewItems: ReviewItem[];
 };
@@ -249,6 +255,9 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
 
     return items;
   }, [promotedPlan, stalePlanDetected, topicPlan]);
+  const activeComposerRoomId = roomId?.trim() || topicRoomId.trim() || selectedRoomIds[0]?.trim() || null;
+  const threadOpenSourceId = selectedThreadRootId?.trim() || selectedEventId?.trim() || null;
+  const activeThreadRootId = selectedThreadRootId?.trim() || null;
   const matrixExpertDetails = useMemo(
     () => ({
       route: "/api/matrix/*",
@@ -267,6 +276,11 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       ],
       sseLifecycle: "n/a",
       rawPayload: topicPlan ? JSON.stringify(topicPlan, null, 2) : analysisResult ? JSON.stringify(analysisResult, null, 2) : null,
+      composerMode,
+      composerRoomId: activeComposerRoomId,
+      composerEventId: selectedEventId,
+      composerThreadRootId: activeThreadRootId,
+      composerTargetLabel: describeComposerTarget(composerTarget),
     }),
     [
       analysisResult,
@@ -278,6 +292,11 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       status,
       topicPlan,
       topicRoomId,
+      composerMode,
+      activeComposerRoomId,
+      selectedEventId,
+      activeThreadRootId,
+      composerTarget,
     ],
   );
   const matrixContextPayload = useMemo<MatrixWorkspaceStatus>(
@@ -559,6 +578,17 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     }
   }
 
+  function describeComposerMode(mode: MatrixComposerMode) {
+    switch (mode) {
+      case "reply":
+        return "Antwort auf einen Beitrag";
+      case "thread":
+        return "Thread-Kontext";
+      default:
+        return "Neuer Post";
+    }
+  }
+
   function startNewPost(nextRoomId?: string) {
     const room = (nextRoomId ?? getComposerRoomId()).trim();
     if (!room) {
@@ -645,6 +675,55 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
         : `Antwort im Thread ${threadRootId}`,
     });
     setLastActionResult(`Composer bereit: Antwort im Thread ${threadRootId}.`);
+  }
+
+  function openThreadContext(nextRoomId?: string) {
+    const room = (nextRoomId ?? getComposerRoomId()).trim();
+    const threadRootId = selectedThreadRootId?.trim() || selectedEventId?.trim() || "";
+
+    if (!room || !threadRootId) {
+      setLastActionResult("Thread öffnen blockiert: Raum und Beitrag oder Thread-Root sind erforderlich.");
+      return;
+    }
+
+    setRoomId(room);
+    setComposerMode("thread");
+    setComposerTarget({
+      kind: "thread",
+      roomId: room,
+      postId: null,
+      threadRootId,
+      previewLabel: `Thread geöffnet zu Beitrag ${threadRootId}`,
+    });
+    setSelectedThreadRootId(threadRootId);
+    setLastActionResult(`Thread-Kontext geöffnet: Beitrag ${threadRootId} im Raum ${room}.`);
+  }
+
+  function leaveThreadContext() {
+    const room = getComposerRoomId().trim();
+
+    setSelectedThreadRootId(null);
+    setComposerMode("post");
+
+    if (room) {
+      setRoomId(room);
+      setComposerTarget({
+        kind: "post",
+        roomId: room,
+        postId: null,
+        threadRootId: null,
+        previewLabel: `Neuer Post in Raum ${room}`,
+      });
+      setLastActionResult(`Thread-Kontext verlassen: zurück im Raum ${room}.`);
+      return;
+    }
+
+    setComposerTarget({
+      kind: "none",
+      roomId: null,
+      previewLabel: null,
+    });
+    setLastActionResult("Thread-Kontext verlassen.");
   }
 
   function cancelComposerTarget() {
@@ -1007,7 +1086,11 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     }
   }
   return (
-    <section className="workspace-panel matrix-workspace" data-testid="matrix-workspace">
+    <section
+      className="workspace-panel matrix-workspace"
+      data-testid="matrix-workspace"
+      aria-busy={status !== "ready" || analysisLoading || scopeResolveLoading || spaceHierarchyLoading || promotionLoading || planRefreshLoading || provenanceLoading || topicPrepareLoading || topicExecuteLoading || topicVerifyLoading || executionLoading}
+    >
       {" "}
       <section className="hero matrix-hero">
         {" "}
@@ -1138,7 +1221,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
         </aside>{" "}
       </section>{" "}
       {status !== "ready" || identityError || roomsError ? (
-        <section className="alert-banner">
+        <section className="alert-banner" role="status" aria-live="polite">
           {" "}
           <p>
             {props.expertMode
@@ -1706,6 +1789,65 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             </div>
           </header>
 
+          <div className="matrix-thread-context-card" data-testid="matrix-thread-context">
+            <div className="matrix-thread-context-copy">
+              <p className="info-label">Thread-Kontext</p>
+              <strong>
+                {activeThreadRootId
+                  ? `Thread zu Beitrag ${activeThreadRootId}`
+                  : "Noch kein Thread geöffnet"}
+              </strong>
+              <p className="muted-copy">
+                {activeThreadRootId
+                  ? "Der Composer schreibt in den geöffneten Thread. Mit Thread verlassen kehrst du in den Raumkontext zurück."
+                  : "Wähle einen Beitrag oder Root, um explizit in einen Thread-Kontext zu wechseln."}
+              </p>
+            </div>
+            <div className="matrix-thread-context-meta">
+              <span className="reference-chip">Raum: {activeComposerRoomId ?? "n/a"}</span>
+              <span className="reference-chip">Beitrag: {selectedEventId?.trim() || "n/a"}</span>
+              <span className="reference-chip">Root: {activeThreadRootId ?? "n/a"}</span>
+            </div>
+            <div className="matrix-thread-context-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  openThreadContext();
+                }}
+                disabled={!threadOpenSourceId}
+                data-testid="matrix-thread-open"
+              >
+                Thread öffnen
+              </button>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={leaveThreadContext}
+                disabled={!selectedThreadRootId}
+                data-testid="matrix-thread-leave"
+              >
+                Thread verlassen
+              </button>
+            </div>
+          </div>
+
+          <div className="matrix-composer-banner">
+            <div>
+              <p className="info-label">Composer-Kontext</p>
+              <strong>{describeComposerMode(composerMode)}</strong>
+              <p className="muted-copy">{describeComposerTarget(composerTarget)}</p>
+            </div>
+            <div className="matrix-composer-banner-meta">
+              <span className={`status-pill status-${composerTarget.kind === "none" ? "partial" : "ready"}`}>
+                {composerTarget.kind === "none" ? "Ziel fehlt" : "Ziel gesetzt"}
+              </span>
+              <span className="reference-chip">
+                Raum: {roomName ?? roomId ?? topicRoomId ?? selectedRoomIds[0] ?? "n/a"}
+              </span>
+            </div>
+          </div>
+
           <div className="info-block">
             <p className="info-label">Composer mode</p>
             <div className="chip-list" data-testid="matrix-composer-mode">
@@ -1716,10 +1858,10 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             </div>
           </div>
 
-          <div className="action-row">
+          <div className="matrix-composer-actions">
             <button
               type="button"
-              className="secondary-button"
+              className="matrix-composer-primary-action"
               onClick={() => startNewPost()}
               data-testid="matrix-new-post"
             >
@@ -1732,7 +1874,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               disabled={!selectedEventId}
               data-testid="matrix-reply"
             >
-              Auf Post antworten
+              Antworten
             </button>
             <button
               type="button"
@@ -1812,7 +1954,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             <p className="info-label">Draft</p>
             <textarea
               className="matrix-textarea"
-              rows={4}
+              rows={5}
               value={draftContent}
               onChange={(event) => setDraftContent(event.target.value)}
               placeholder="Composer draft content"
@@ -1823,7 +1965,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
 
           <div className="action-row">
             <button type="button" onClick={submitMatrixComposer} data-testid="matrix-composer-submit">
-              Submit composer
+              Submit (fail-closed)
             </button>
             <span className="muted-copy">
               {composerTarget.kind === "none"

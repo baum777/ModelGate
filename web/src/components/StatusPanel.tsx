@@ -32,7 +32,7 @@ export function StatusPanel({
   expertChildren,
 }: StatusPanelProps) {
   return (
-    <section className="status-panel-card">
+    <section className="status-panel-card" role="region" aria-label={title}>
       <div className="context-summary-header">
         <div>
           <span>{title}</span>

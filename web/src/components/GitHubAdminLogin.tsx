@@ -57,6 +57,7 @@ export function GitHubAdminLogin({
             id="github-admin-password"
             type="password"
             autoComplete="current-password"
+            required
             value={password}
             onChange={(event) => onPasswordChange(event.target.value)}
             disabled={authState.busy}

@@ -105,6 +105,11 @@ const DEFAULT_MATRIX_CONTEXT: MatrixWorkspaceStatus = {
     runtimeEventTrail: [],
     sseLifecycle: "idle",
     rawPayload: null,
+    composerMode: "post",
+    composerRoomId: null,
+    composerEventId: null,
+    composerThreadRootId: null,
+    composerTargetLabel: "Neuer Post",
   },
   reviewItems: [],
 };
@@ -599,6 +604,10 @@ export default function App() {
 
   const matrixRows: StatusPanelRow[] = [
     { label: "Bereich", value: matrixContext.scopeLabel },
+    { label: "Raum", value: matrixContext.expertDetails.composerRoomId ?? "Noch nicht gesetzt" },
+    { label: "Beitrag", value: matrixContext.expertDetails.composerEventId ?? "Keiner ausgewählt" },
+    { label: "Thread", value: matrixContext.expertDetails.composerThreadRootId ?? "Kein Thread offen" },
+    { label: "Composer", value: matrixContext.expertDetails.composerTargetLabel },
     { label: "Zusammenfassung", value: matrixContext.summaryLabel },
     { label: "Freigabe", value: matrixContext.approvalLabel },
     { label: "Sicherheit", value: "Nur Lesen aktiv" },
@@ -685,6 +694,11 @@ export default function App() {
       case "matrix":
         return [
           { label: "Route", value: matrixContext.expertDetails.route },
+          { label: "Composer mode", value: matrixContext.expertDetails.composerMode },
+          { label: "Composer room", value: matrixContext.expertDetails.composerRoomId ?? "n/a" },
+          { label: "Composer event", value: matrixContext.expertDetails.composerEventId ?? "n/a" },
+          { label: "Composer thread", value: matrixContext.expertDetails.composerThreadRootId ?? "n/a" },
+          { label: "Composer target", value: matrixContext.expertDetails.composerTargetLabel },
           { label: "Request ID", value: matrixContext.expertDetails.requestId ?? "n/a" },
           { label: "Plan ID", value: matrixContext.expertDetails.planId ?? "n/a" },
           { label: "Room ID", value: matrixContext.expertDetails.roomId ?? "n/a" },
@@ -785,16 +799,16 @@ export default function App() {
           <div className="sidebar-card sidebar-card-brand">
             <p className="app-kicker">GUIDED WORKSPACE</p>
             <strong>Arbeitsbereich wählen</strong>
+            <p>Sessions bleiben pro Workspace erhalten und können hier jederzeit wieder geöffnet werden.</p>
             <p>Beginner first. Technik bleibt im Hintergrund, bis du Expert Mode aktivierst.</p>
           </div>
 
-          <nav className="sidebar-nav" role="tablist" aria-label="Primary console tabs">
+          <nav className="sidebar-nav" aria-label="Primary workspace navigation">
             <button
               type="button"
               className={mode === "chat" ? "workspace-tab workspace-tab-active workspace-tab-vertical" : "workspace-tab workspace-tab-vertical"}
               onClick={() => handleWorkspaceTabSelect("chat")}
-              role="tab"
-              aria-selected={mode === "chat"}
+              aria-current={mode === "chat" ? "page" : undefined}
               data-testid="tab-chat"
             >
               <WorkspaceIcon mode="chat" />
@@ -808,8 +822,7 @@ export default function App() {
               type="button"
               className={mode === "github" ? "workspace-tab workspace-tab-active workspace-tab-vertical" : "workspace-tab workspace-tab-vertical"}
               onClick={() => handleWorkspaceTabSelect("github")}
-              role="tab"
-              aria-selected={mode === "github"}
+              aria-current={mode === "github" ? "page" : undefined}
               data-testid="tab-github"
             >
               <WorkspaceIcon mode="github" />
@@ -823,8 +836,7 @@ export default function App() {
               type="button"
               className={mode === "matrix" ? "workspace-tab workspace-tab-active workspace-tab-vertical" : "workspace-tab workspace-tab-vertical"}
               onClick={() => handleWorkspaceTabSelect("matrix")}
-              role="tab"
-              aria-selected={mode === "matrix"}
+              aria-current={mode === "matrix" ? "page" : undefined}
               data-testid="tab-matrix"
             >
               <WorkspaceIcon mode="matrix" />
@@ -838,8 +850,7 @@ export default function App() {
               type="button"
               className={mode === "review" ? "workspace-tab workspace-tab-active workspace-tab-vertical" : "workspace-tab workspace-tab-vertical"}
               onClick={() => handleWorkspaceTabSelect("review")}
-              role="tab"
-              aria-selected={mode === "review"}
+              aria-current={mode === "review" ? "page" : undefined}
               data-testid="tab-review"
             >
               <WorkspaceIcon mode="review" />
@@ -853,8 +864,7 @@ export default function App() {
               type="button"
               className={mode === "settings" ? "workspace-tab workspace-tab-active workspace-tab-vertical" : "workspace-tab workspace-tab-vertical"}
               onClick={() => handleWorkspaceTabSelect("settings")}
-              role="tab"
-              aria-selected={mode === "settings"}
+              aria-current={mode === "settings" ? "page" : undefined}
               data-testid="tab-settings"
             >
               <WorkspaceIcon mode="settings" />
@@ -873,7 +883,7 @@ export default function App() {
             onSelect={(sessionId) => handleWorkspaceSessionSelect(sessionWorkspace, sessionId)}
             onArchive={(sessionId) => handleWorkspaceSessionArchive(sessionWorkspace, sessionId)}
             onDelete={(sessionId) => handleWorkspaceSessionDelete(sessionWorkspace, sessionId)}
-            headerNote={`Aktiver Workspace: ${tabLabel(sessionWorkspace)} · Aktive Session: ${activeSession?.title ?? "n/a"}`}
+            headerNote={`Wiederaufnehmbare Sessions · Aktiver Workspace: ${tabLabel(sessionWorkspace)} · Aktive Session: ${activeSession?.title ?? "n/a"}`}
           />
 
           <div className="sidebar-card sidebar-card-safety">

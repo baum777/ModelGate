@@ -247,7 +247,11 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const draft = chatState.currentAssistantDraft;
 
   return (
-    <section className="workspace-panel chat-workspace" data-testid="chat-workspace">
+    <section
+      className="workspace-panel chat-workspace"
+      data-testid="chat-workspace"
+      aria-busy={chatState.connectionState === "submitting" || chatState.connectionState === "streaming"}
+    >
       <section className="workspace-hero chat-hero">
         <div>
           <p className={`status-pill status-${props.backendHealthy === false ? "error" : props.backendHealthy === true ? "ready" : "partial"}`}>
@@ -304,8 +308,25 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           </div>
         </header>
 
+        <div className="chat-session-banner">
+          <div>
+            <p className="info-label">Persistente Session</p>
+            <strong>{props.session.title}</strong>
+            <p className="muted-copy">
+              Diese Chat-Session bleibt erhalten, wenn du Workspaces wechselst, und kann aus der Session-Liste wieder geöffnet werden.
+            </p>
+          </div>
+          <span className={`status-pill status-${props.backendHealthy === false ? "error" : props.backendHealthy === true ? "ready" : "partial"}`}>
+            {props.backendHealthy === true ? "Backend bereit" : props.backendHealthy === false ? "Backend gestört" : "Backend wird geprüft"}
+          </span>
+        </div>
+
         <div className="message-list" aria-live="polite" ref={messageListRef} onScroll={updateScrollState}>
-          {chatState.messages.length === 0 ? <p className="empty-state">No messages yet. Submit intent to start a stream.</p> : null}
+          {chatState.messages.length === 0 ? (
+            <p className="empty-state" role="status">
+              Noch keine Nachrichten. Sende eine Anfrage, um den Verlauf zu starten.
+            </p>
+          ) : null}
           {chatState.messages.map((message) => (
             <article key={message.id} className={`message message-${message.role}`}>
               <span className="message-role">{message.role}</span>
@@ -349,8 +370,8 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
                   void submitCurrentPrompt();
                 }
               }}
-              placeholder="Ask the backend-managed model something..."
-              rows={4}
+              placeholder="Frag das backend-verwaltete Modell etwas..."
+              rows={5}
               disabled={chatState.connectionState === "submitting" || chatState.connectionState === "streaming"}
             />
 
@@ -363,7 +384,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               data-testid="chat-send"
               disabled={chatState.connectionState === "submitting" || chatState.connectionState === "streaming" || chatState.input.trim().length === 0}
             >
-              {chatState.connectionState === "submitting" || chatState.connectionState === "streaming" ? "Streaming…" : "Send"}
+              {chatState.connectionState === "submitting" || chatState.connectionState === "streaming" ? "Streaming…" : "Nachricht senden"}
             </button>
           </div>
         </form>

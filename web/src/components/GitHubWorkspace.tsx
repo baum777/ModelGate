@@ -662,7 +662,11 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       : "Die Analyse ist nur lesend. Es werden keine Dateien geändert.";
 
   return (
-    <section className="workspace-panel github-workspace" data-testid="github-workspace">
+    <section
+      className="workspace-panel github-workspace"
+      data-testid="github-workspace"
+      aria-busy={reposLoading || analysisLoading || proposalLoading || executing || verifying}
+    >
       <section className="workspace-hero github-hero">
         <div>
           <p className={`status-pill ${hasSelection ? "status-ready" : "status-partial"}`}>
