@@ -23,6 +23,22 @@ export const EnvSchema = z.object({
     .string()
     .trim()
     .default("http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173"),
+  CHAT_MODEL: z.string().trim().default(""),
+  CODE_AGENT_MODEL: z.string().trim().default(""),
+  STRUCTURED_PLAN_MODEL: z.string().trim().default(""),
+  MATRIX_ANALYZE_MODEL: z.string().trim().default(""),
+  FAST_FALLBACK_MODEL: z.string().trim().default(""),
+  DIALOG_FALLBACK_MODEL: z.string().trim().default(""),
+  MODEL_ROUTING_MODE: z.string().trim().default("policy"),
+  ALLOW_MODEL_FALLBACK: z.string().trim().default("true"),
+  MODEL_ROUTING_FAIL_CLOSED: z.string().trim().default("true"),
+  MODEL_ROUTING_LOG_ENABLED: z.string().trim().default("false"),
+  MODEL_ROUTING_LOG_PATH: z.string().trim().default(".local-ai/logs/WORKFLOW_MODEL_ROUTING.log.md"),
+  MATRIX_ANALYZE_LLM_ENABLED: z.string().trim().default("false"),
+  MATRIX_EXECUTE_APPROVAL_REQUIRED: z.string().trim().default("true"),
+  MATRIX_VERIFY_AFTER_EXECUTE: z.string().trim().default("true"),
+  MATRIX_ALLOWED_ACTION_TYPES: z.string().trim().default("set_room_topic"),
+  MATRIX_FAIL_CLOSED: z.string().trim().default("true"),
   GITHUB_TOKEN: z.string().trim().default(""),
   GITHUB_ALLOWED_REPOS: z.string().trim().default(""),
   GITHUB_AGENT_API_KEY: z.string().trim().default(""),
@@ -56,6 +72,22 @@ export type AppEnv = {
   APP_NAME: string;
   DEFAULT_SYSTEM_PROMPT: string;
   CORS_ORIGINS: string[];
+  CHAT_MODEL: string;
+  CODE_AGENT_MODEL: string;
+  STRUCTURED_PLAN_MODEL: string;
+  MATRIX_ANALYZE_MODEL: string;
+  FAST_FALLBACK_MODEL: string;
+  DIALOG_FALLBACK_MODEL: string;
+  MODEL_ROUTING_MODE: string;
+  ALLOW_MODEL_FALLBACK: boolean;
+  MODEL_ROUTING_FAIL_CLOSED: boolean;
+  MODEL_ROUTING_LOG_ENABLED: boolean;
+  MODEL_ROUTING_LOG_PATH: string;
+  MATRIX_ANALYZE_LLM_ENABLED: boolean;
+  MATRIX_EXECUTE_APPROVAL_REQUIRED: boolean;
+  MATRIX_VERIFY_AFTER_EXECUTE: boolean;
+  MATRIX_ALLOWED_ACTION_TYPES: string[];
+  MATRIX_FAIL_CLOSED: boolean;
   GITHUB_TOKEN: string;
   GITHUB_ALLOWED_REPOS: string[];
   GITHUB_AGENT_API_KEY: string;
@@ -105,6 +137,22 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     OPENROUTER_MODELS: parseCsvList(parsed.OPENROUTER_MODELS),
     OPENROUTER_REQUEST_TIMEOUT_MS: Number.parseInt(parsed.OPENROUTER_REQUEST_TIMEOUT_MS.trim(), 10),
     CORS_ORIGINS: parseCsvList(parsed.CORS_ORIGINS),
+    CHAT_MODEL: parsed.CHAT_MODEL.trim(),
+    CODE_AGENT_MODEL: parsed.CODE_AGENT_MODEL.trim(),
+    STRUCTURED_PLAN_MODEL: parsed.STRUCTURED_PLAN_MODEL.trim(),
+    MATRIX_ANALYZE_MODEL: parsed.MATRIX_ANALYZE_MODEL.trim(),
+    FAST_FALLBACK_MODEL: parsed.FAST_FALLBACK_MODEL.trim(),
+    DIALOG_FALLBACK_MODEL: parsed.DIALOG_FALLBACK_MODEL.trim(),
+    MODEL_ROUTING_MODE: parsed.MODEL_ROUTING_MODE.trim() || "policy",
+    ALLOW_MODEL_FALLBACK: /^(1|true|yes|on)$/i.test(parsed.ALLOW_MODEL_FALLBACK.trim()),
+    MODEL_ROUTING_FAIL_CLOSED: /^(1|true|yes|on)$/i.test(parsed.MODEL_ROUTING_FAIL_CLOSED.trim()),
+    MODEL_ROUTING_LOG_ENABLED: /^(1|true|yes|on)$/i.test(parsed.MODEL_ROUTING_LOG_ENABLED.trim()),
+    MODEL_ROUTING_LOG_PATH: parsed.MODEL_ROUTING_LOG_PATH.trim() || ".local-ai/logs/WORKFLOW_MODEL_ROUTING.log.md",
+    MATRIX_ANALYZE_LLM_ENABLED: /^(1|true|yes|on)$/i.test(parsed.MATRIX_ANALYZE_LLM_ENABLED.trim()),
+    MATRIX_EXECUTE_APPROVAL_REQUIRED: /^(1|true|yes|on)$/i.test(parsed.MATRIX_EXECUTE_APPROVAL_REQUIRED.trim()),
+    MATRIX_VERIFY_AFTER_EXECUTE: /^(1|true|yes|on)$/i.test(parsed.MATRIX_VERIFY_AFTER_EXECUTE.trim()),
+    MATRIX_ALLOWED_ACTION_TYPES: parseCsvList(parsed.MATRIX_ALLOWED_ACTION_TYPES),
+    MATRIX_FAIL_CLOSED: /^(1|true|yes|on)$/i.test(parsed.MATRIX_FAIL_CLOSED.trim()),
     GITHUB_TOKEN: parsed.GITHUB_TOKEN.trim(),
     GITHUB_ALLOWED_REPOS: parseCsvList(parsed.GITHUB_ALLOWED_REPOS),
     GITHUB_AGENT_API_KEY: parsed.GITHUB_AGENT_API_KEY.trim(),

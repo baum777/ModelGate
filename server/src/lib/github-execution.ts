@@ -8,6 +8,7 @@ import type {
   GitHubVerifyResult
 } from "./github-contract.js";
 import type { GitHubConfig } from "./github-env.js";
+import { assertExecuteFallbackBlocked } from "./workflow-model-router.js";
 
 type GitHubActionExecutionOptions = {
   config: GitHubConfig;
@@ -449,6 +450,12 @@ export function createGitHubActionExecutionService(options: GitHubActionExecutio
           message: "GitHub execution requires approval"
         });
       }
+
+      assertExecuteFallbackBlocked({
+        workflow: "github_code_agent",
+        fallbackUsed: false,
+        allowFallbackOnExecute: false
+      });
 
       const treeEntries = await loadPlannedTreeEntries(options.client, plan);
       const baseCommit = await options.client.readRepositoryCommit(plan.repo.owner, plan.repo.repo, plan.baseSha);

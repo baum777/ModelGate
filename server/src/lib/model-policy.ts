@@ -1,4 +1,5 @@
 import type { AppEnv } from "./env.js";
+import { normalizeConfiguredModelId } from "./model-id.js";
 
 export const PUBLIC_MODEL_ALIAS = "default";
 export const INTERNAL_LOGICAL_MODEL_ID = "stable-free-default";
@@ -32,15 +33,16 @@ export type ModelRegistry = {
   resolveModel(requestedModel?: string): ModelResolution;
 };
 
-function dedupeStrings(values: string[]) {
-  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+function dedupeStrings(values: Array<string | null | undefined>) {
+  return [...new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)))];
 }
 
 function buildProviderTargets(env: AppEnv) {
   return dedupeStrings([
-    env.OPENROUTER_MODEL,
-    ...env.OPENROUTER_MODELS
-  ]);
+    normalizeConfiguredModelId(env.CHAT_MODEL) ?? null,
+    normalizeConfiguredModelId(env.OPENROUTER_MODEL) ?? null,
+    ...env.OPENROUTER_MODELS.map((value) => normalizeConfiguredModelId(value) ?? value)
+  ]).filter((value) => value.toLowerCase() !== "default");
 }
 
 export function buildModelRegistry(env: AppEnv): ModelRegistry {

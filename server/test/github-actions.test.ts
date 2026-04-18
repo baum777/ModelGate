@@ -27,7 +27,10 @@ test("github proposal routes create a review-only plan scaffold and keep it read
     createChatCompletion: async (request, selection) => {
       assert.equal(request.stream, false);
       assert.equal(selection.publicModelId, "default");
-      assert.deepEqual(selection.providerTargets, ["openrouter/auto"]);
+      assert.deepEqual(selection.providerTargets, [
+        "qwen/qwen3-coder:free",
+        "qwen/qwen3-next-80b-a3b-instruct:free"
+      ]);
       assert.equal(request.messages.length, 1);
       assert.equal(request.messages[0]?.role, "user");
 

@@ -28,6 +28,7 @@ import {
   type MatrixScopeSnapshot,
   type MatrixScopeStore
 } from "../lib/matrix-scope-store.js";
+import { assertExecuteFallbackBlocked } from "../lib/workflow-model-router.js";
 
 type MatrixRouteDependencies = {
   config: MatrixConfig;
@@ -646,6 +647,12 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
     if (plan.status === "executed" || plan.execution) {
       return sendMatrixError(reply, "matrix_plan_already_executed");
     }
+
+    assertExecuteFallbackBlocked({
+      workflow: "matrix_analyze",
+      fallbackUsed: false,
+      allowFallbackOnExecute: false
+    });
 
     try {
       await assertMatrixRoomTopicUpdateReady(deps, plan.roomId);

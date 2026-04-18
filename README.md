@@ -9,6 +9,7 @@ The browser is a thin PWA shell. It renders backend-owned results, keeps local U
 - PWA / web frontend: `web/` is a Vite + React app with local-only UI state and PWA assets.
 - Backend API: `server/` is the Fastify authority layer for chat, GitHub, Matrix, and Vercel serverless reuse through `api/[...path].ts`.
 - OpenRouter / LLM routing: the backend exposes only the public alias `default` through `GET /models` and maps it to hidden provider targets from `OPENROUTER_MODEL` and `OPENROUTER_MODELS`.
+- Workflow routing contract: `config/model-capabilities.yml` is runtime-loaded, and the routing rules are documented in [docs/model-routing.md](docs/model-routing.md).
 - GitHub workspace: the backend owns repo reads, proposal generation, execution, and verification. The browser is review-first and approval-gated.
 - Matrix workspace: the backend owns identity, scope, provenance, topic-access, analyze, and approval-gated room topic plan/execute/verify flows.
 - Approval-gated writes: GitHub and Matrix writes are created and executed server-side. The browser can only submit review and approval intent.
@@ -125,6 +126,26 @@ Secrets stay backend-only. Do not put tokens in Vite public env vars.
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | backend only | Required for OpenRouter chat calls. |
 
+### Workflow routing vars
+
+These are backend-owned workflow model inputs. They are resolved server-side and are not provider selection controls in the browser.
+
+The example files use `default` as a backend-owned sentinel in some compatibility slots. The runtime resolves actual provider targets server-side.
+
+| Variable | Where | Purpose |
+| --- | --- | --- |
+| `CHAT_MODEL` | backend only | Explicit chat workflow model. |
+| `CODE_AGENT_MODEL` | backend only | GitHub proposal planning model. |
+| `STRUCTURED_PLAN_MODEL` | backend only | Structured proposal object model. |
+| `MATRIX_ANALYZE_MODEL` | backend only | Parsed Matrix analyze policy input. |
+| `FAST_FALLBACK_MODEL` | backend only | Non-execute fallback model. |
+| `DIALOG_FALLBACK_MODEL` | backend only | Safe dialogue fallback model. |
+| `MODEL_ROUTING_MODE` | backend only | Workflow routing mode. Only `policy` is supported. |
+| `ALLOW_MODEL_FALLBACK` | backend only | Enables fallback on non-execute phases. |
+| `MODEL_ROUTING_FAIL_CLOSED` | backend only | Keeps workflow routing fail-closed. |
+| `MODEL_ROUTING_LOG_ENABLED` | backend only | Enables local workflow routing evidence logging. |
+| `MODEL_ROUTING_LOG_PATH` | backend only | Local workflow routing evidence path. |
+
 ### Optional backend vars
 
 | Variable | Where | Purpose |
@@ -184,6 +205,8 @@ Secrets stay backend-only. Do not put tokens in Vite public env vars.
 | `MATRIX_REQUEST_TIMEOUT_MS` | backend only | Matrix request timeout. |
 | `MATRIX_SMOKE_ROOM_ID` | backend only | Dedicated room for manual Matrix smoke. |
 | `MATRIX_SMOKE_TOPIC_PREFIX` | backend only | Manual Matrix smoke topic prefix. |
+
+The Matrix workflow policy keys are parsed from the environment and documented in [docs/model-routing.md](docs/model-routing.md). The current analyze path remains deterministic in this repo slice.
 
 ### Optional browser overrides
 

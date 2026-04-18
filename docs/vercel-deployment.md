@@ -50,6 +50,24 @@ Set these in Vercel project settings. Keep all secrets in server-side env settin
 | `DEFAULT_SYSTEM_PROMPT` | no | no | Server-side system prompt. |
 | `CORS_ORIGINS` | no | no | Allowlist for browser origins and preview URLs. |
 
+### Workflow routing
+
+The backend loads `config/model-capabilities.yml` at runtime. The routing contract is documented in [../docs/model-routing.md](../docs/model-routing.md).
+
+| Name | Required | Secret | Purpose | Status |
+| --- | --- | --- | --- | --- |
+| `CHAT_MODEL` | no | no | Explicit chat workflow model. | backend-owned |
+| `CODE_AGENT_MODEL` | no | no | GitHub proposal planning model. | backend-owned |
+| `STRUCTURED_PLAN_MODEL` | no | no | Structured-output plan model. | backend-owned |
+| `MATRIX_ANALYZE_MODEL` | no | no | Parsed Matrix analyze policy input. | parsed; current Matrix analyze stays deterministic |
+| `FAST_FALLBACK_MODEL` | no | no | Non-execute fallback model. | backend-owned |
+| `DIALOG_FALLBACK_MODEL` | no | no | Safe dialogue fallback model. | backend-owned |
+| `MODEL_ROUTING_MODE` | no | no | Workflow routing mode. | only `policy` is supported |
+| `ALLOW_MODEL_FALLBACK` | no | no | Enables fallback on non-execute phases. | backend-owned |
+| `MODEL_ROUTING_FAIL_CLOSED` | no | no | Keeps workflow routing fail-closed. | backend-owned |
+| `MODEL_ROUTING_LOG_ENABLED` | no | no | Enables local workflow routing evidence logging. | local/advisory |
+| `MODEL_ROUTING_LOG_PATH` | no | no | Workflow routing log path. | local/advisory |
+
 ### GitHub backend authority
 
 GitHub stays backend-only. The remote flow remains fail-closed until the required server-side variables are present.
@@ -103,6 +121,18 @@ GitHub stays backend-only. The remote flow remains fail-closed until the require
 | `LLM_MODEL_LONG_CONTEXT` | no | Backend-internal long-context model target. |
 | `LLM_MODEL_UI_REVIEW` | no | Backend-internal UI review model target. |
 | `LLM_MODEL_DAILY` | no | Backend-internal default daily model target. |
+
+### Matrix workflow policy
+
+These keys are parsed by the backend even though Matrix analyze remains deterministic in the current repo slice.
+
+| Name | Required | Secret | Purpose | Status |
+| --- | --- | --- | --- | --- |
+| `MATRIX_ANALYZE_LLM_ENABLED` | no | no | Parsed Matrix workflow flag. | parsed, not yet wired to model-driven analyze |
+| `MATRIX_EXECUTE_APPROVAL_REQUIRED` | no | no | Parsed Matrix workflow flag. | parsed, approval gating remains backend-owned |
+| `MATRIX_VERIFY_AFTER_EXECUTE` | no | no | Parsed Matrix workflow flag. | parsed, verify route remains backend-owned |
+| `MATRIX_ALLOWED_ACTION_TYPES` | no | no | Parsed Matrix workflow allowlist. | parsed, current route surface stays deterministic |
+| `MATRIX_FAIL_CLOSED` | no | no | Parsed Matrix workflow fail-closed flag. | parsed, current routes already fail closed |
 
 ### Matrix backend authority
 

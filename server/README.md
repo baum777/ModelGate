@@ -14,6 +14,10 @@ Fastify-based backend authority for OpenRouter chat, GitHub workspace review, an
 
 Copy the repo-root `.env.example` to `.env` and set `OPENROUTER_API_KEY`.
 
+The workflow-routing contract is documented in [../docs/model-routing.md](../docs/model-routing.md) and backed by `config/model-capabilities.yml` at runtime.
+
+The example env files use `default` as a backend-owned sentinel in some compatibility slots. Actual provider targets remain server-side.
+
 Required environment variables:
 
 - `OPENROUTER_API_KEY`
@@ -38,6 +42,17 @@ Optional environment variables:
 - `APP_NAME` - defaults to `local-openrouter-chat`
 - `DEFAULT_SYSTEM_PROMPT` - injected server-side before forwarding to OpenRouter
 - `CORS_ORIGINS` - comma-separated list of allowed frontend origins
+- `CHAT_MODEL` - explicit backend-owned chat workflow model
+- `CODE_AGENT_MODEL` - backend-owned GitHub proposal planning model
+- `STRUCTURED_PLAN_MODEL` - backend-owned structured-output model for schema-critical plan objects
+- `MATRIX_ANALYZE_MODEL` - parsed Matrix analyze policy input
+- `FAST_FALLBACK_MODEL` - backend-owned non-execute fallback model
+- `DIALOG_FALLBACK_MODEL` - backend-owned dialogue fallback model
+- `MODEL_ROUTING_MODE` - workflow routing mode, currently only `policy`
+- `ALLOW_MODEL_FALLBACK` - allows fallback on non-execute workflow phases
+- `MODEL_ROUTING_FAIL_CLOSED` - keeps workflow routing fail-closed
+- `MODEL_ROUTING_LOG_ENABLED` - enables local workflow routing evidence logging
+- `MODEL_ROUTING_LOG_PATH` - repository-local workflow routing log path
 - `LLM_ROUTER_ENABLED` - defaults to `false`; enables the deterministic rules-first router policy
 - `LLM_ROUTER_MODE` - currently only `rules_first`
 - `LLM_REQUIRE_FREE_MODELS` - defaults to `true`; filters router candidates to free models
@@ -54,6 +69,11 @@ Optional environment variables:
 - `LLM_ROUTER_LOG_PATH` - repository-local router decision log path, defaults to `.local-ai/logs/ROUTER_DECISIONS.log.md`
 - `LLM_MODEL_RUN_LOG_PATH` - repository-local model run log path
 - `LLM_PROMPT_EVIDENCE_LOG_PATH` - repository-local prompt evidence log path
+- `MATRIX_ANALYZE_LLM_ENABLED` - parsed Matrix workflow policy flag
+- `MATRIX_EXECUTE_APPROVAL_REQUIRED` - parsed Matrix workflow policy flag
+- `MATRIX_VERIFY_AFTER_EXECUTE` - parsed Matrix workflow policy flag
+- `MATRIX_ALLOWED_ACTION_TYPES` - parsed Matrix workflow action allowlist
+- `MATRIX_FAIL_CLOSED` - parsed Matrix workflow policy flag
 - `MATRIX_ENABLED` - defaults to `false`; enables the server-owned Matrix read-only routes when `true`
 - `MATRIX_REQUIRED` - defaults to `false`; fails startup closed if Matrix is enabled but invalid
 - `MATRIX_BASE_URL` - absolute Matrix homeserver origin used by the server when Matrix is enabled

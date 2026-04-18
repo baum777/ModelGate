@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 import type { ChatRequest } from "./chat-contract.js";
+import { normalizeConfiguredModelId } from "./model-id.js";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -371,8 +372,8 @@ function defaultPolicyFromRules(rules: LlmRouterRule[], overrides?: Partial<LlmR
     requireFreeModels: overrides?.requireFreeModels ?? true,
     maxFallbacks: overrides?.maxFallbacks ?? 2,
     failClosed: overrides?.failClosed ?? true,
-    defaultModel: overrides?.defaultModel ?? "openrouter/free",
-    fallbackModel: overrides?.fallbackModel ?? "openai/gpt-oss-120b:free",
+    defaultModel: normalizeConfiguredModelId(overrides?.defaultModel) ?? "openrouter/free",
+    fallbackModel: normalizeConfiguredModelId(overrides?.fallbackModel) ?? "openai/gpt-oss-120b:free",
     rules,
     logging
   };
@@ -507,13 +508,13 @@ function buildPolicyFromFiles(repoRoot: string, env: LlmRouterEnv) {
         ?? 2
     ),
     failClosed: parseBoolean(env.LLM_ROUTER_FAIL_CLOSED, true),
-    defaultModel: normalizeModelId(env.LLM_DEFAULT_MODEL)
-      ?? normalizeModelId(fallbackConfig.defaultModel)
-      ?? normalizeModelId(baseFragment.defaultModel)
+    defaultModel: normalizeConfiguredModelId(env.LLM_DEFAULT_MODEL)
+      ?? normalizeConfiguredModelId(fallbackConfig.defaultModel)
+      ?? normalizeConfiguredModelId(baseFragment.defaultModel)
       ?? "openrouter/free",
-    fallbackModel: normalizeModelId(env.LLM_FALLBACK_MODEL)
-      ?? normalizeModelId(fallbackConfig.fallbackModel)
-      ?? normalizeModelId(baseFragment.fallbackModel)
+    fallbackModel: normalizeConfiguredModelId(env.LLM_FALLBACK_MODEL)
+      ?? normalizeConfiguredModelId(fallbackConfig.fallbackModel)
+      ?? normalizeConfiguredModelId(baseFragment.fallbackModel)
       ?? "openai/gpt-oss-120b:free",
     rules: nextRules,
     logging: {
@@ -543,8 +544,8 @@ export function loadLlmRouterPolicy(
       requireFreeModels: parseBoolean(source.LLM_REQUIRE_FREE_MODELS, true),
       maxFallbacks: parseInteger(source.LLM_MAX_FALLBACKS, 2),
       failClosed: parseBoolean(source.LLM_ROUTER_FAIL_CLOSED, true),
-      defaultModel: normalizeModelId(source.LLM_DEFAULT_MODEL) ?? "openrouter/free",
-      fallbackModel: normalizeModelId(source.LLM_FALLBACK_MODEL) ?? "openai/gpt-oss-120b:free"
+      defaultModel: normalizeConfiguredModelId(source.LLM_DEFAULT_MODEL) ?? "openrouter/free",
+      fallbackModel: normalizeConfiguredModelId(source.LLM_FALLBACK_MODEL) ?? "openai/gpt-oss-120b:free"
     });
 
     return {

@@ -11,12 +11,21 @@ import type { GitHubConfig } from "./github-env.js";
 import { isGitHubRepoAllowed } from "./github-env.js";
 import type { ModelRegistry } from "./model-policy.js";
 import type { OpenRouterClient } from "./openrouter.js";
+import type { AppEnv } from "./env.js";
+import type { ModelCapabilitiesConfig } from "./workflow-model-router.js";
+import {
+  assertStructuredOutputIfRequired,
+  recordWorkflowModelDecision,
+  resolveGitHubProposalModel
+} from "./workflow-model-router.js";
 
 type GitHubProposalPlannerOptions = {
+  env: AppEnv;
   config: GitHubConfig;
   client: GitHubClient;
   openRouter: OpenRouterClient;
   modelRegistry: ModelRegistry;
+  modelCapabilities: ModelCapabilitiesConfig;
 };
 
 type BuildGitHubProposalPlanOptions = {
@@ -217,8 +226,9 @@ async function generateProposalDraft(
   files: LoadedProposalFile[]
 ): Promise<GitHubProposalDraft> {
   const selection = options.modelRegistry.resolveModel();
+  const workflowPolicy = resolveGitHubProposalModel(options.env, options.modelCapabilities);
 
-  if (!selection.ok) {
+  if (!selection.ok && selection.reason !== "no_eligible_provider_targets") {
     throw new GitHubClientError({
       code: "github_not_configured",
       status: 503,
@@ -229,10 +239,24 @@ async function generateProposalDraft(
     });
   }
 
+  const publicSelection = selection.ok
+    ? selection.selection
+    : {
+      publicModelId: options.modelRegistry.defaultModelId,
+      logicalModelId: "stable-free-default",
+      providerTargets: []
+    };
+
   const proposalSelection = {
-    ...selection.selection,
-    providerTargets: selection.selection.providerTargets.slice(0, 1)
+    ...publicSelection,
+    providerTargets: workflowPolicy.candidateModels
   };
+
+  try {
+    await recordWorkflowModelDecision(workflowPolicy, "GitHub proposal generation");
+  } catch {
+    // Logging is advisory-only.
+  }
 
   const response = await options.openRouter.createChatCompletion(
     {
@@ -261,6 +285,7 @@ async function generateProposalDraft(
   try {
     const jsonText = extractJsonObject(response.text);
     const parsed = JSON.parse(jsonText) as unknown;
+    assertStructuredOutputIfRequired(workflowPolicy, parsed);
     return GitHubProposalDraftSchema.parse(parsed) as GitHubProposalDraft;
   } catch {
     throw new GitHubClientError({

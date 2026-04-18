@@ -1,5 +1,6 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { AppEnv } from "../lib/env.js";
 import {
   GitHubChangeProposalRequestSchema,
   buildGitHubErrorResponse,
@@ -30,13 +31,16 @@ import { normalizeGitHubRelativePath } from "../lib/github-paths.js";
 import { OpenRouterError, type OpenRouterClient } from "../lib/openrouter.js";
 import { verifySessionFromRequest, type AuthConfig } from "../lib/auth.js";
 import type { ModelRegistry } from "../lib/model-policy.js";
+import type { ModelCapabilitiesConfig } from "../lib/workflow-model-router.js";
 
 type GitHubRouteDependencies = {
+  env: AppEnv;
   config: GitHubConfig;
   authConfig: AuthConfig;
   client: GitHubClient;
   openRouter: OpenRouterClient;
   modelRegistry: ModelRegistry;
+  modelCapabilitiesConfig: ModelCapabilitiesConfig;
   actionStore?: GitHubActionStore;
 };
 
@@ -583,10 +587,12 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     client: deps.client
   });
   const proposalPlanner = createGitHubProposalPlanner({
+    env: deps.env,
     config: deps.config,
     client: deps.client,
     openRouter: deps.openRouter,
-    modelRegistry: deps.modelRegistry
+    modelRegistry: deps.modelRegistry,
+    modelCapabilities: deps.modelCapabilitiesConfig
   });
   const actionStore = deps.actionStore ?? createGitHubActionStore(deps.config.planTtlMs);
   const actionExecutor = createGitHubActionExecutionService({

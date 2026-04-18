@@ -6,6 +6,7 @@ import { resolveLlmRouterSelection, type LlmRouterPolicy } from "../lib/llm-rout
 import { recordRouterDecision } from "../lib/local-evidence-log.js";
 import type { ModelRegistry } from "../lib/model-policy.js";
 import { type OpenRouterClient, OpenRouterError } from "../lib/openrouter.js";
+import { assertNoFrontendProviderModelOverride } from "../lib/workflow-model-router.js";
 
 type ChatRouteDependencies = {
   env: AppEnv;
@@ -80,6 +81,12 @@ async function logRouterDecision(
 
 export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
   app.post("/chat", async (request, reply) => {
+    try {
+      assertNoFrontendProviderModelOverride(request.body);
+    } catch {
+      return reply.status(400).send(buildInvalidRequestResponse());
+    }
+
     const parsed = ChatRequestSchema.safeParse(request.body);
 
     if (!parsed.success) {

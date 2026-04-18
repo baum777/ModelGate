@@ -12,6 +12,7 @@ import { createMatrixClient, type MatrixClient } from "./lib/matrix-client.js";
 import { createMatrixActionStore, type MatrixActionStore } from "./lib/matrix-action-store.js";
 import { createMatrixScopeStore, type MatrixScopeStore } from "./lib/matrix-scope-store.js";
 import type { OpenRouterClient } from "./lib/openrouter.js";
+import { loadModelCapabilitiesConfig, type ModelCapabilitiesConfig } from "./lib/workflow-model-router.js";
 import { authRoutes } from "./routes/auth.js";
 import { chatRoutes } from "./routes/chat.js";
 import { githubRoutes } from "./routes/github.js";
@@ -31,6 +32,7 @@ export type AppDependencies = {
   matrixStore?: MatrixScopeStore;
   matrixActionStore?: MatrixActionStore;
   modelRegistry?: ModelRegistry;
+  modelCapabilitiesConfig?: ModelCapabilitiesConfig;
   llmRouterPolicy?: LlmRouterPolicy;
   logger?: boolean;
 };
@@ -52,6 +54,7 @@ function registerCors(app: ReturnType<typeof Fastify>, env: AppEnv) {
 
 export function createApp(deps: AppDependencies) {
   const modelRegistry = deps.modelRegistry ?? buildModelRegistry(deps.env);
+  const modelCapabilitiesConfig = deps.modelCapabilitiesConfig ?? loadModelCapabilitiesConfig();
   const llmRouterPolicy = deps.llmRouterPolicy ?? loadLlmRouterPolicy({
     LLM_ROUTER_ENABLED: "false"
   });
@@ -87,6 +90,8 @@ export function createApp(deps: AppDependencies) {
     client: githubClient,
     openRouter: deps.openRouter,
     modelRegistry,
+    modelCapabilitiesConfig,
+    env: deps.env,
     actionStore: githubActionStore
   });
   chatRoutes(app, {
