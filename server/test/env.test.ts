@@ -6,6 +6,10 @@ test("env parsing allows Matrix-only startup without an OpenRouter key", () => {
   const env = createEnv({
     PORT: "8787",
     HOST: "127.0.0.1",
+    OPENROUTER_API_KEY: "",
+    OPENROUTER_API_KEY_QWEN3_CODER: "qwen-key",
+    OPENROUTER_API_KEY_GPT_OSS_120B_PLANNER: "planner-key",
+    OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B: "nemotron-key",
     OPENROUTER_BASE_URL: "https://openrouter.ai/api/v1",
     OPENROUTER_MODEL: "openrouter/auto",
     OPENROUTER_MODELS: "",
@@ -34,6 +38,9 @@ test("env parsing allows Matrix-only startup without an OpenRouter key", () => {
   });
 
   assert.equal(env.OPENROUTER_API_KEY, "");
+  assert.equal(env.OPENROUTER_API_KEY_QWEN3_CODER, "qwen-key");
+  assert.equal(env.OPENROUTER_API_KEY_GPT_OSS_120B_PLANNER, "planner-key");
+  assert.equal(env.OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B, "nemotron-key");
   assert.equal(env.PORT, 8787);
   assert.equal(env.HOST, "127.0.0.1");
   assert.equal(env.APP_NAME, "modelgate-test");

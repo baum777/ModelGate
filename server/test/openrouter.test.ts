@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { OpenRouterError, createOpenRouterClient } from "../src/lib/openrouter.js";
+import { OpenRouterError, createOpenRouterClient, resolveOpenRouterApiKey } from "../src/lib/openrouter.js";
 import { createTestEnv } from "../test-support/helpers.js";
 
 function parseRequestBody(init: RequestInit | undefined) {
@@ -14,6 +14,59 @@ function parseRequestBody(init: RequestInit | undefined) {
 
   return {};
 }
+
+function readAuthorizationHeader(init: RequestInit | undefined) {
+  return new Headers(init?.headers).get("authorization");
+}
+
+test("openrouter key resolver uses the qwen-specific key for qwen models", () => {
+  const env = createTestEnv({
+    OPENROUTER_API_KEY: "default-key",
+    OPENROUTER_API_KEY_QWEN3_CODER: "qwen-key"
+  });
+
+  assert.equal(resolveOpenRouterApiKey(env, "qwen/qwen3-coder:free"), "qwen-key");
+});
+
+test("openrouter key resolver uses the planner-specific key for gpt-oss planner models", () => {
+  const env = createTestEnv({
+    OPENROUTER_API_KEY: "default-key",
+    OPENROUTER_API_KEY_GPT_OSS_120B_PLANNER: "planner-key"
+  });
+
+  assert.equal(resolveOpenRouterApiKey(env, "openai/gpt-oss-120b:free"), "planner-key");
+});
+
+test("openrouter key resolver uses the nemotron-specific key for nemotron models", () => {
+  const env = createTestEnv({
+    OPENROUTER_API_KEY: "default-key",
+    OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B: "nemotron-key"
+  });
+
+  assert.equal(resolveOpenRouterApiKey(env, "nvidia/nemotron-3-super-120b-a12b:free"), "nemotron-key");
+});
+
+test("openrouter key resolver uses the default key for standard models", () => {
+  const env = createTestEnv({
+    OPENROUTER_API_KEY: "default-key"
+  });
+
+  assert.equal(resolveOpenRouterApiKey(env, "anthropic/claude-3.5-sonnet"), "default-key");
+});
+
+test("openrouter key resolver fails closed when a specialized key is missing", () => {
+  const env = createTestEnv({
+    OPENROUTER_API_KEY: "default-key",
+    OPENROUTER_API_KEY_QWEN3_CODER: ""
+  });
+
+  assert.throws(
+    () => resolveOpenRouterApiKey(env, "qwen/qwen3-coder:free"),
+    (error) => error instanceof OpenRouterError
+      && error.status === 503
+      && error.message === "OpenRouter API key OPENROUTER_API_KEY_QWEN3_CODER is not configured for qwen/qwen3-coder"
+  );
+});
 
 test("openrouter client retries hidden provider targets and returns the public model alias", async () => {
   const env = createTestEnv({
@@ -195,6 +248,99 @@ test("openrouter client fails closed when the api key is missing", async () => {
       }
     ),
     (error) => error instanceof OpenRouterError && error.status === 503 && error.message === "OpenRouter API key is not configured"
+  );
+
+  assert.equal(fetchCalls, 0);
+});
+
+test("openrouter client sends the qwen-specific key to upstream requests", async () => {
+  const env = createTestEnv({
+    OPENROUTER_API_KEY: "default-key",
+    OPENROUTER_API_KEY_QWEN3_CODER: "qwen-key"
+  });
+
+  const seenHeaders: Array<string | null> = [];
+
+  const client = createOpenRouterClient({
+    env,
+    fetchImpl: async (_url, init) => {
+      seenHeaders.push(readAuthorizationHeader(init));
+
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: "ok"
+              }
+            }
+          ]
+        }),
+        {
+          headers: {
+            "Content-Type": "application/json"
+          }
+        }
+      );
+    }
+  });
+
+  const result = await client.createChatCompletion(
+    {
+      messages: [
+        {
+          role: "user",
+          content: "Hello"
+        }
+      ],
+      stream: false
+    },
+    {
+      publicModelId: "default",
+      logicalModelId: "stable-free-default",
+      providerTargets: ["qwen/qwen3-coder:free"]
+    }
+  );
+
+  assert.equal(result.text, "ok");
+  assert.deepEqual(seenHeaders, ["Bearer qwen-key"]);
+});
+
+test("openrouter client does not fall back to the default key for specialized models", async () => {
+  const env = createTestEnv({
+    OPENROUTER_API_KEY: "default-key",
+    OPENROUTER_API_KEY_QWEN3_CODER: ""
+  });
+
+  let fetchCalls = 0;
+  const client = createOpenRouterClient({
+    env,
+    fetchImpl: async () => {
+      fetchCalls += 1;
+      throw new Error("fetch should not be called when a specialized key is missing");
+    }
+  });
+
+  await assert.rejects(
+    client.createChatCompletion(
+      {
+        messages: [
+          {
+            role: "user",
+            content: "Hello"
+          }
+        ],
+        stream: false
+      },
+      {
+        publicModelId: "default",
+        logicalModelId: "stable-free-default",
+        providerTargets: ["qwen/qwen3-coder:free", "openrouter/auto"]
+      }
+    ),
+    (error) => error instanceof OpenRouterError
+      && error.status === 503
+      && error.message === "OpenRouter API key OPENROUTER_API_KEY_QWEN3_CODER is not configured for qwen/qwen3-coder"
   );
 
   assert.equal(fetchCalls, 0);

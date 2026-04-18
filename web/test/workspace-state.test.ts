@@ -97,3 +97,57 @@ test("loadWorkspaceState fails closed when persisted data is malformed", () => {
   assert.equal(normalized.sessionsByWorkspace.github.length, 1);
   assert.equal(normalized.sessionsByWorkspace.matrix.length, 1);
 });
+
+test("loadWorkspaceState ignores legacy Matrix analysis compatibility fields", () => {
+  const storage = new Map<string, string>();
+  const baseState = createDefaultWorkspaceState();
+  const matrixSession = baseState.sessionsByWorkspace.matrix[0];
+
+  assert.ok(matrixSession);
+
+  storage.set("modelgate.console.workspaces.v1", JSON.stringify({
+    ...baseState,
+    activeWorkspace: "matrix",
+    sessionsByWorkspace: {
+      ...baseState.sessionsByWorkspace,
+      matrix: [
+        {
+          ...matrixSession,
+          metadata: {
+            ...matrixSession.metadata,
+            analysisPrompt: "Legacy prompt",
+            analysisResult: { snapshotId: "snapshot-legacy" },
+            analysisError: "Legacy error",
+            analysisLoading: true,
+            selectedCandidateId: "candidate-legacy"
+          }
+        }
+      ]
+    }
+  }));
+
+  const fakeWindow = {
+    localStorage: {
+      getItem(key: string) {
+        return storage.get(key) ?? null;
+      },
+      setItem(key: string, value: string) {
+        storage.set(key, value);
+      },
+      removeItem(key: string) {
+        storage.delete(key);
+      }
+    }
+  } as Partial<Window>;
+
+  const state = withWindow(fakeWindow, () => loadWorkspaceState());
+  const metadata = state.sessionsByWorkspace.matrix[0]?.metadata as Record<string, unknown> | undefined;
+
+  assert.ok(metadata);
+  assert.equal(metadata.analysisPrompt, undefined);
+  assert.equal(metadata.analysisResult, undefined);
+  assert.equal(metadata.analysisError, undefined);
+  assert.equal(metadata.analysisLoading, undefined);
+  assert.equal(metadata.selectedCandidateId, undefined);
+  assert.equal(state.sessionsByWorkspace.matrix[0]?.metadata.topicText, "");
+});

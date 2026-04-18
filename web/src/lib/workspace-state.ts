@@ -6,7 +6,6 @@ import type {
   GitHubVerifyResult
 } from "./github-api.js";
 import type {
-  MatrixAnalysisResponse,
   MatrixExecutionResult,
   MatrixPlan,
   MatrixProvenance,
@@ -90,7 +89,6 @@ export type MatrixSessionMetadata = {
   mode: string;
   selectedRoomIds: string[];
   selectedSpaceIds: string[];
-  analysisPrompt: string;
   currentScope: MatrixScope | null;
   scopeSummary: MatrixScopeSummary | null;
   scopeSummaryStatus: "idle" | "loading" | "ready" | "error";
@@ -101,10 +99,6 @@ export type MatrixSessionMetadata = {
   spaceHierarchySpace: string | null;
   spaceHierarchyLoading: boolean;
   spaceHierarchyError: string | null;
-  analysisResult: MatrixAnalysisResponse | null;
-  analysisError: string | null;
-  analysisLoading: boolean;
-  selectedCandidateId: string | null;
   promotedPlan: MatrixPlan | null;
   promotionLoading: boolean;
   promotionError: string | null;
@@ -419,7 +413,6 @@ function normalizeMatrixSessionMetadata(value: unknown): MatrixSessionMetadata |
     mode: typeof value.mode === "string" ? value.mode : "explore",
     selectedRoomIds,
     selectedSpaceIds,
-    analysisPrompt: typeof value.analysisPrompt === "string" ? value.analysisPrompt : "",
     currentScope: value.currentScope === null || isRecord(value.currentScope) ? value.currentScope as MatrixScope | null : null,
     scopeSummary: value.scopeSummary === null || isRecord(value.scopeSummary) ? value.scopeSummary as MatrixScopeSummary | null : null,
     scopeSummaryStatus,
@@ -430,10 +423,6 @@ function normalizeMatrixSessionMetadata(value: unknown): MatrixSessionMetadata |
     spaceHierarchySpace: value.spaceHierarchySpace === null || typeof value.spaceHierarchySpace === "string" ? value.spaceHierarchySpace : null,
     spaceHierarchyLoading: Boolean(value.spaceHierarchyLoading),
     spaceHierarchyError: value.spaceHierarchyError === null || typeof value.spaceHierarchyError === "string" ? value.spaceHierarchyError : null,
-    analysisResult: value.analysisResult === null || isRecord(value.analysisResult) ? value.analysisResult as MatrixAnalysisResponse | null : null,
-    analysisError: value.analysisError === null || typeof value.analysisError === "string" ? value.analysisError : null,
-    analysisLoading: Boolean(value.analysisLoading),
-    selectedCandidateId: value.selectedCandidateId === null || typeof value.selectedCandidateId === "string" ? value.selectedCandidateId : null,
     promotedPlan: value.promotedPlan === null || isRecord(value.promotedPlan) ? value.promotedPlan as MatrixPlan | null : null,
     promotionLoading: Boolean(value.promotionLoading),
     promotionError: value.promotionError === null || typeof value.promotionError === "string" ? value.promotionError : null,
@@ -556,7 +545,6 @@ export function createMatrixSessionMetadata(): MatrixSessionMetadata {
     mode: "explore",
     selectedRoomIds: [],
     selectedSpaceIds: [],
-    analysisPrompt: "Review the selected scope and identify bounded workspace actions.",
     currentScope: null,
     scopeSummary: null,
     scopeSummaryStatus: "idle",
@@ -567,10 +555,6 @@ export function createMatrixSessionMetadata(): MatrixSessionMetadata {
     spaceHierarchySpace: null,
     spaceHierarchyLoading: false,
     spaceHierarchyError: null,
-    analysisResult: null,
-    analysisError: null,
-    analysisLoading: false,
-    selectedCandidateId: null,
     promotedPlan: null,
     promotionLoading: false,
     promotionError: null,
@@ -871,7 +855,7 @@ export function deriveSessionStatus<TMetadata>(session: WorkspaceSession<TMetada
   }
 
   const metadata = session.metadata as MatrixSessionMetadata;
-  if (metadata.executionError || metadata.topicExecuteError || metadata.topicVerifyError || metadata.analysisError || metadata.promotionError) {
+  if (metadata.executionError || metadata.topicExecuteError || metadata.topicVerifyError || metadata.promotionError) {
     return "failed";
   }
   if (metadata.topicExecution || metadata.executionResult || metadata.topicVerification?.status === "verified") {
@@ -1039,11 +1023,9 @@ function readLegacyWorkspaceState(): WorkspaceState | null {
     const matrixMetadata = createMatrixSessionMetadata();
     const selectedRoomIds = readArray(parsed.selectedRoomIds);
     const selectedSpaceIds = readArray(parsed.selectedSpaceIds);
-    const analysisPrompt = typeof parsed.analysisPrompt === "string" ? parsed.analysisPrompt : matrixMetadata.analysisPrompt;
 
     matrixMetadata.selectedRoomIds = selectedRoomIds?.filter((value): value is string => typeof value === "string") ?? [];
     matrixMetadata.selectedSpaceIds = selectedSpaceIds?.filter((value): value is string => typeof value === "string") ?? [];
-    matrixMetadata.analysisPrompt = analysisPrompt;
 
     const sessionsByWorkspace = createDefaultSessions();
     sessionsByWorkspace.matrix = [

@@ -160,15 +160,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   const [spaceHierarchyError, setSpaceHierarchyError] = useState<string | null>(
     persisted.spaceHierarchyError,
   );
-  const [analysisPrompt, setAnalysisPrompt] = useState(persisted.analysisPrompt);
-  const [analysisResult, setAnalysisResult] = useState<MatrixAnalysisResponse | null>(
-    persisted.analysisResult,
-  );
-  const [analysisError, setAnalysisError] = useState<string | null>(persisted.analysisError);
-  const [analysisLoading, setAnalysisLoading] = useState(persisted.analysisLoading);
-  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(
-    persisted.selectedCandidateId,
-  );
+  const [analysisResult, setAnalysisResult] = useState<MatrixAnalysisResponse | null>(null);
   const [promotedPlan, setPromotedPlan] = useState<MatrixPlan | null>(persisted.promotedPlan);
   const [promotionLoading, setPromotionLoading] = useState(persisted.promotionLoading);
   const [promotionError, setPromotionError] = useState<string | null>(persisted.promotionError);
@@ -274,7 +266,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
         topicPlan ? "Topic plan ready" : "No topic plan",
       ],
       sseLifecycle: "n/a",
-      rawPayload: topicPlan ? JSON.stringify(topicPlan, null, 2) : analysisResult ? JSON.stringify(analysisResult, null, 2) : null,
+      rawPayload: topicPlan ? JSON.stringify(topicPlan, null, 2) : null,
       composerMode,
       composerRoomId: activeComposerRoomId,
       composerEventId: selectedEventId,
@@ -282,7 +274,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       composerTargetLabel: describeComposerTarget(composerTarget),
     }),
     [
-      analysisResult,
       currentScope,
       promotedPlan?.planId,
       promotedPlan?.targetRoomId,
@@ -324,7 +315,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       mode,
       selectedRoomIds,
       selectedSpaceIds,
-      analysisPrompt,
       currentScope,
       scopeSummary,
       scopeSummaryStatus,
@@ -335,10 +325,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       spaceHierarchySpace,
       spaceHierarchyLoading,
       spaceHierarchyError,
-      analysisResult,
-      analysisError,
-      analysisLoading,
-      selectedCandidateId,
       promotedPlan,
       promotionLoading,
       promotionError,
@@ -394,10 +380,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
 
     props.onSessionChange(nextSession);
   }, [
-    analysisError,
-    analysisLoading,
-    analysisPrompt,
-    analysisResult,
     approvalPending,
     composerMode,
     composerTarget,
@@ -426,7 +408,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     scopeSummary,
     scopeSummaryError,
     scopeSummaryStatus,
-    selectedCandidateId,
     selectedEventId,
     selectedRoomIds,
     selectedSpaceIds,
@@ -521,9 +502,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   }
   function resetWorkflowState() {
     setAnalysisResult(null);
-    setAnalysisError(null);
-    setAnalysisLoading(false);
-    setSelectedCandidateId(null);
     setPromotedPlan(null);
     setApprovalPending(false);
     setExecutionResult(null);
@@ -1062,7 +1040,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     <section
       className="workspace-panel matrix-workspace"
       data-testid="matrix-workspace"
-      aria-busy={status !== "ready" || analysisLoading || scopeResolveLoading || spaceHierarchyLoading || promotionLoading || planRefreshLoading || provenanceLoading || topicPrepareLoading || topicExecuteLoading || topicVerifyLoading || executionLoading}
+      aria-busy={status !== "ready" || scopeResolveLoading || spaceHierarchyLoading || promotionLoading || planRefreshLoading || provenanceLoading || topicPrepareLoading || topicExecuteLoading || topicVerifyLoading || executionLoading}
     >
       {" "}
       <section className="hero matrix-hero">
