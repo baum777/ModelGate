@@ -77,7 +77,7 @@ The backend loads `config/model-capabilities.yml` at runtime. It is not docs-onl
 ### Matrix analyze
 
 - The `MATRIX_ANALYZE_MODEL` env is parsed and policy-resolved.
-- The current Matrix analyze route still behaves deterministically.
+- The current Matrix topic-update analyze route still behaves deterministically.
 - Matrix execute and verify remain backend-owned and approval-gated.
 
 ## Frontend Boundary

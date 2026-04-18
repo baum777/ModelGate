@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { ExpertDetails } from "./ExpertDetails.js";
 import {
   MATRIX_API_BASE_URL,
-  analyzeScope,
   analyzeRoomTopicUpdate,
   executePlan,
   executeRoomTopicUpdate,
@@ -96,7 +95,7 @@ const formatDate = (value: string) => {
 const text = (value: string | null | undefined) =>
   value && value.trim() ? value : "n/a";
 const releaseScopeNotice =
-  "Matrix topic updates are wired end-to-end for Explore, scope summary, provenance, analyze, review, execute, and verify.";
+  "Backend-owned Matrix topic updates are available for Explore, scope summary, read-only provenance, analyze, review, approval, execute, and verify.";
 
 function modeLabel(mode: MatrixMode) {
   switch (mode) {
@@ -307,7 +306,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
         (promotedPlan && !promotedPlan.stale) || topicPlan?.status === "pending_review"
           ? "Freigabe erforderlich"
           : "Nicht erforderlich",
-      safetyText: "Die App kann Informationen ansehen, aber nichts verändern.",
+      safetyText: "Der Browser kann Daten ansehen und Freigabeabsichten senden; backend-owned writes bleiben approval-gated.",
       expertDetails: matrixExpertDetails,
       reviewItems: matrixReviewItems,
     }),
@@ -848,32 +847,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
         "Matrix scope resolved",
         "Scope summary and provenance are ready.",
       );
-    }
-  }
-
-  async function runAnalysis() {
-    if (!currentScope)
-      return setAnalysisError("Resolve a scope before analyzing.");
-    if (!analysisPrompt.trim())
-      return setAnalysisError("Enter an analysis prompt.");
-    setAnalysisLoading(true);
-    setAnalysisError(null);
-    try {
-      const response = await analyzeScope({
-        scopeId: currentScope.scopeId,
-        prompt: analysisPrompt.trim(),
-      });
-      setAnalysisResult(response);
-      setSelectedCandidateId(response.actionCandidates[0]?.candidateId ?? null);
-      setProvenanceRoomId(
-        response.actionCandidates[0]?.targetRoomId ??
-          response.references[0]?.roomId ??
-          "",
-      );
-    } catch (error) {
-      setAnalysisError(describeMatrixError("Matrix analysis", error));
-    } finally {
-      setAnalysisLoading(false);
     }
   }
   async function promote(candidate: MatrixActionCandidate) {
@@ -2101,7 +2074,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                       <strong>{provenance.authChainIndex}</strong>
                     </div>
                     <div>
-                      <span>Integrity</span>
+                      <span>Derived provenance</span>
                       <strong>{provenance.integrityNotice}</strong>
                     </div>
                   </div>
@@ -2109,7 +2082,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                   <p className="muted-copy">{provenance.integrityNotice}</p>
                 )}
                 <div className="list-block">
-                  <p className="info-label">Signatures</p>
+                  <p className="info-label">Evidence markers</p>
                   <div className="chip-list">
                     {provenance.signatures.map((signature) => (
                       <span

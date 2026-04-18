@@ -206,7 +206,7 @@ The example files use `default` as a backend-owned sentinel in some compatibilit
 | `MATRIX_SMOKE_ROOM_ID` | backend only | Dedicated room for manual Matrix smoke. |
 | `MATRIX_SMOKE_TOPIC_PREFIX` | backend only | Manual Matrix smoke topic prefix. |
 
-The Matrix workflow policy keys are parsed from the environment and documented in [docs/model-routing.md](docs/model-routing.md). The current analyze path remains deterministic in this repo slice.
+The Matrix workflow policy keys are parsed from the environment and documented in [docs/model-routing.md](docs/model-routing.md). The current Matrix topic-update analyze path remains deterministic in this repo slice.
 
 ### Optional browser overrides
 

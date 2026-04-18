@@ -455,7 +455,7 @@ test("matrix room provenance returns normalized read-only room metadata", async 
   assert.equal(parsed.originServer, "https://matrix.example");
   assert.equal(parsed.authChainIndex, 0);
   assert.equal(parsed.signatures[0]?.signer, "@user:matrix.example");
-  assert.equal(parsed.signatures[0]?.status, "verified");
+  assert.equal(parsed.signatures[0]?.status, "derived");
   assert.equal(parsed.integrityNotice, "Read-only room metadata derived from joined rooms.");
   assert.equal(parsed.provenance.source, "matrix");
   assert.equal(parsed.provenance.kind, "room_metadata");

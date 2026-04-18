@@ -147,7 +147,7 @@ test("matrix promote creates a reviewable topic plan", async (t) => {
   assert.equal(fetched.plan.diff.before, "Old room topic");
 });
 
-test("matrix analyze creates a structured topic plan and execute/verify use it", async (t) => {
+test("matrix analyze creates a deterministic topic plan and execute/verify use it", async (t) => {
   const topicClient = createMatrixActionClient({
     roomTopic: "Old room topic",
     writeTransactionId: "event-456"

@@ -991,13 +991,6 @@ export async function fetchProvenance(roomId: string) {
   return requestJson<MatrixProvenance>("Matrix provenance", `/api/matrix/rooms/${encodeURIComponent(roomId)}/provenance`, {}, validateProvenanceResponse);
 }
 
-export async function analyzeScope(body: { scopeId: string; prompt: string; model?: string }) {
-  return requestJson<MatrixAnalysisResponse>("Matrix analysis", "/api/matrix/chat", {
-    method: "POST",
-    body: JSON.stringify(body)
-  }, validateAnalysisResponse);
-}
-
 export async function analyzeRoomTopicUpdate(body: { roomId: string; proposedValue: string; scopeId?: string | null }) {
   const payload = await requestJson<{ ok: true; plan: MatrixRoomTopicAgentPlan }>("Matrix room topic analyze", "/api/matrix/analyze", {
     method: "POST",

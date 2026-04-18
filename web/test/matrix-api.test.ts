@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  analyzeScope,
   analyzeRoomTopicUpdate,
   fetchProvenance,
   fetchRoomTopicAnalysisPlan,
@@ -43,59 +42,6 @@ test("matrix whoami rejects malformed 200 payloads", async () => {
         && error.kind === "parse"
         && error.operation === "Matrix whoami"
         && error.message.includes("userId")
-    );
-  } finally {
-    restoreFetch();
-  }
-});
-
-test("matrix analysis rejects malformed nested candidate payloads", async () => {
-  const restoreFetch = installFetchMock(async () =>
-    new Response(
-      JSON.stringify({
-        ok: true,
-        snapshotId: "snapshot-1",
-        response: {
-          role: "assistant",
-          content: "Analysis response"
-        },
-        references: [
-          {
-            type: "room",
-            roomId: "!room:example",
-            label: "Referenced room"
-          }
-        ],
-        actionCandidates: [
-          {
-            type: "set_room_name",
-            targetRoomId: "!room:example",
-            summary: "Rename room",
-            rationale: "Bounded rename candidate",
-            requiresPromotion: true
-          }
-        ]
-      }),
-      {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json"
-        }
-      }
-    )
-  );
-
-  try {
-    await assert.rejects(
-      analyzeScope({
-        scopeId: "scope-1",
-        prompt: "Review the scope"
-      }),
-      (error) =>
-        error instanceof MatrixRequestError
-        && error.kind === "parse"
-        && error.operation === "Matrix analysis"
-        && error.message.includes("candidateId")
     );
   } finally {
     restoreFetch();
@@ -221,7 +167,7 @@ test("matrix provenance requests the encoded room route and validates the read-o
         signatures: [
           {
             signer: "@user:matrix.example",
-            status: "verified"
+            status: "derived"
           }
         ],
         integrityNotice: "Read-only room metadata derived from joined rooms."
@@ -243,6 +189,7 @@ test("matrix provenance requests the encoded room route and validates the read-o
     assert.equal(response.roomId, "!room:matrix.example");
     assert.equal(response.originServer, "https://matrix.example");
     assert.equal(response.integrityNotice, "Read-only room metadata derived from joined rooms.");
+    assert.equal(response.signatures[0]?.status, "derived");
     assert.deepEqual(seenRequests.map((request) => request.method), ["GET"]);
     assert.equal(parsedUrl.pathname, "/api/matrix/rooms/!room%3Amatrix.example/provenance");
   } finally {

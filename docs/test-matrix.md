@@ -161,7 +161,7 @@ Security note:
 
 ## 11. Matrix Topic / Write Tests
 
-Backend-owned room topic analyze, plan refresh, execute, and verify are locally wired, and the Matrix Workspace room-topic review flow is browser-tested. Provenance is now a backend-owned read-only route with browser coverage. Hierarchy preview remains separate because the server route is still unwired here.
+Backend-owned room topic analyze, plan refresh, execute, and verify are locally wired, and the Matrix Workspace room-topic review flow is browser-tested. Provenance is a backend-owned read-only route with derived metadata and browser coverage. Hierarchy preview remains separate because the server route is still unwired here.
 
 | Test ID | Description | Current status | Verification method | Notes / owner |
 | --- | --- | --- | --- | --- |
@@ -184,8 +184,8 @@ Backend-owned room topic analyze, plan refresh, execute, and verify are locally 
 
 | Test ID | Description | Current status | Verification method | Notes / owner |
 | --- | --- | --- | --- | --- |
-| A1 | Analyze with scope returns grounded output | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) and [web/test/matrix-api.test.ts](../web/test/matrix-api.test.ts) | Matrix analyze is backend-owned and client-validated; owner: backend + web |
-| A2 | Provenance chips are backend-issued only | automated | [server/test/matrix-routes.test.ts](../server/test/matrix-routes.test.ts) and [tests/browser/modelgate.spec.ts](../tests/browser/modelgate.spec.ts) | Read-only provenance is backend-owned and browser-rendered; owner: backend + web |
+| A1 | Analyze with scope returns a deterministic topic plan | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) and [web/test/matrix-api.test.ts](../web/test/matrix-api.test.ts) | Matrix analyze is backend-owned, deterministic, and client-validated; owner: backend + web |
+| A2 | Provenance markers are backend-issued only | automated | [server/test/matrix-routes.test.ts](../server/test/matrix-routes.test.ts) and [tests/browser/modelgate.spec.ts](../tests/browser/modelgate.spec.ts) | Read-only provenance is backend-owned, derived, and browser-rendered; owner: backend + web |
 | A3 | Promote candidate creates a plan-based transition | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Backend plan promotion is now real; owner: backend |
 | R1 | Review plan shows a structured diff | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Diff is returned by the backend plan fetch route; owner: backend |
 | R2 | Approve sends approval intent only | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Execute requires an explicit approval intent; owner: backend + web |

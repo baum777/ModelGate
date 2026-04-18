@@ -1178,7 +1178,7 @@ test("Matrix provenance loads from the read-only backend route", async ({ page }
         signatures: [
           {
             signer: "@user:matrix.example",
-            status: "verified",
+            status: "derived",
           },
         ],
         integrityNotice: "Read-only room metadata derived from joined rooms.",

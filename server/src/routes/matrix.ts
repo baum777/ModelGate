@@ -496,7 +496,7 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
         signatures: [
           {
             signer: identity.userId,
-            status: "verified"
+            status: "derived"
           }
         ],
         integrityNotice: "Read-only room metadata derived from joined rooms.",

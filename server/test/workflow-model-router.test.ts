@@ -28,6 +28,17 @@ test("model capabilities config loads the runtime contract", () => {
   assert.equal(config.global_policy.require_approval_before_execute, true);
 });
 
+test("model capabilities config fails closed when the config file is missing", () => {
+  const repoRoot = createTempRepo();
+
+  assert.throws(
+    () => loadModelCapabilitiesConfig({ repoRoot }),
+    /Model capabilities config file not found/
+  );
+
+  rmSync(repoRoot, { recursive: true, force: true });
+});
+
 test("model capabilities config fails clearly when required sections are invalid", () => {
   const repoRoot = createTempRepo();
   const configDir = path.join(repoRoot, "config");
