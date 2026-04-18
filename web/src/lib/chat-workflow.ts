@@ -35,15 +35,15 @@ export type ChatAction =
   | { type: "stream_malformed"; message: string }
   | { type: "reset_stream_warning" };
 
-export function createInitialChatState(): ChatState {
+export function createInitialChatState(snapshot?: Partial<ChatState>): ChatState {
   return {
-    messages: [],
-    input: "",
-    connectionState: "idle",
-    currentAssistantDraft: null,
-    lastError: null,
-    lastStreamWarning: null,
-    autoScrollEnabled: true
+    messages: snapshot?.messages ?? [],
+    input: snapshot?.input ?? "",
+    connectionState: snapshot?.connectionState ?? "idle",
+    currentAssistantDraft: snapshot?.currentAssistantDraft ?? null,
+    lastError: snapshot?.lastError ?? null,
+    lastStreamWarning: snapshot?.lastStreamWarning ?? null,
+    autoScrollEnabled: snapshot?.autoScrollEnabled ?? true
   };
 }
 

@@ -17,6 +17,7 @@ import {
   SettingsWorkspace,
   type DiagnosticEntry,
 } from "./components/SettingsWorkspace.js";
+import { SessionList } from "./components/SessionList.js";
 import { StatusPanel, type StatusPanelRow } from "./components/StatusPanel.js";
 import {
   fetchAuthSession,
@@ -31,6 +32,24 @@ import {
   githubAuthReducer,
   type GitHubAuthState
 } from "./lib/github-auth.js";
+import {
+  appendSession,
+  createChatSessionMetadata,
+  createGitHubSessionMetadata,
+  createMatrixSessionMetadata,
+  createSession,
+  deleteSession,
+  getActiveSession,
+  loadWorkspaceState,
+  saveWorkspaceState,
+  selectSession,
+  updateSession,
+  type WorkspaceKind,
+  type WorkspaceSession,
+  type ChatSession,
+  type GitHubSession,
+  type MatrixSession
+} from "./lib/workspace-state.js";
 
 type WorkspaceMode = "chat" | "github" | "matrix" | "review" | "settings";
 
@@ -218,17 +237,32 @@ function mergeReviewItems(current: ReviewItem[], next: ReviewItem[]) {
   return [...remaining, ...next];
 }
 
+function isSessionWorkspace(mode: WorkspaceMode): mode is WorkspaceKind {
+  return mode === "chat" || mode === "github" || mode === "matrix";
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
 export default function App() {
   const persisted = readPersistedShellState();
   const [mode, setMode] = useState<WorkspaceMode>(persisted?.activeTab ?? "chat");
   const [expertMode, setExpertMode] = useState(persisted?.expertMode ?? false);
+  const [workspaceState, setWorkspaceState] = useState(() => loadWorkspaceState());
   const [githubAuthState, dispatchGitHubAuth] = useReducer(githubAuthReducer, undefined, createInitialGitHubAuthState);
   const [githubPassword, setGitHubPassword] = useState("");
   const [backendHealthy, setBackendHealthy] = useState<boolean | null>(null);
   const [backendHealthLabel, setBackendHealthLabel] = useState<string | null>(null);
   const [activeModelAlias, setActiveModelAlias] = useState<string | null>(null);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
-  const [restoredSession] = useState(Boolean(persisted));
+  const [restoredSession] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return window.localStorage.getItem("modelgate.console.workspaces.v1") !== null;
+  });
   const [telemetry, setTelemetry] = useState<TelemetryEntry[]>([]);
   const [githubContext, setGitHubContext] = useState<GitHubWorkspaceStatus>(DEFAULT_GITHUB_CONTEXT);
   const [matrixContext, setMatrixContext] = useState<MatrixWorkspaceStatus>(DEFAULT_MATRIX_CONTEXT);
@@ -360,6 +394,10 @@ export default function App() {
   }, [expertMode, mode]);
 
   useEffect(() => {
+    saveWorkspaceState(workspaceState);
+  }, [workspaceState]);
+
+  useEffect(() => {
     if (!githubUnlocked) {
       setGitHubContext(DEFAULT_GITHUB_CONTEXT);
       setReviewItems((current) => current.filter((item) => item.source !== "github"));
@@ -391,6 +429,106 @@ export default function App() {
   const removeModeReviewItems = useCallback((source: ReviewItem["source"]) => {
     setReviewItems((current) => current.filter((item) => item.source !== source));
   }, []);
+
+  const handleWorkspaceTabSelect = useCallback((nextMode: WorkspaceMode) => {
+    setMode(nextMode);
+
+    if (isSessionWorkspace(nextMode)) {
+      setWorkspaceState((current) => {
+        const activeSessionId = current.activeSessionIdByWorkspace[nextMode];
+        return selectSession(current, nextMode, activeSessionId);
+      });
+    }
+  }, []);
+
+  const handleWorkspaceSessionCreate = useCallback((workspace: WorkspaceKind) => {
+    const now = nowIso();
+
+    setMode(workspace);
+    setWorkspaceState((current) => {
+      switch (workspace) {
+        case "github":
+          return appendSession(
+            current,
+            "github",
+            createSession("github", createGitHubSessionMetadata(), {
+              createdAt: now,
+              updatedAt: now,
+              lastOpenedAt: now,
+            }),
+          );
+        case "matrix":
+          return appendSession(
+            current,
+            "matrix",
+            createSession("matrix", createMatrixSessionMetadata(), {
+              createdAt: now,
+              updatedAt: now,
+              lastOpenedAt: now,
+            }),
+          );
+        case "chat":
+        default:
+          return appendSession(
+            current,
+            "chat",
+            createSession(
+              "chat",
+              {
+                ...createChatSessionMetadata(),
+                selectedModelAlias: activeModelAlias,
+              },
+              {
+                createdAt: now,
+                updatedAt: now,
+                lastOpenedAt: now,
+              },
+            ),
+          );
+      }
+    });
+  }, [activeModelAlias]);
+
+  const handleWorkspaceSessionSelect = useCallback((workspace: WorkspaceKind, sessionId: string) => {
+    setMode(workspace);
+    setWorkspaceState((current) => selectSession(current, workspace, sessionId));
+  }, []);
+
+  const handleWorkspaceSessionArchive = useCallback((workspace: WorkspaceKind, sessionId: string) => {
+    setWorkspaceState((current) =>
+      updateSession(current, workspace, sessionId, (session) => ({
+        ...session,
+        archived: true,
+        resumable: false,
+        updatedAt: nowIso(),
+        lastOpenedAt: nowIso(),
+      })),
+    );
+  }, []);
+
+  const handleWorkspaceSessionDelete = useCallback((workspace: WorkspaceKind, sessionId: string) => {
+    setWorkspaceState((current) => deleteSession(current, workspace, sessionId));
+  }, []);
+
+  const handleChatSessionChange = useCallback((session: ChatSession) => {
+    setWorkspaceState((current) => updateSession(current, "chat", session.id, () => session));
+  }, []);
+
+  const handleGitHubSessionChange = useCallback((session: GitHubSession) => {
+    setWorkspaceState((current) => updateSession(current, "github", session.id, () => session));
+  }, []);
+
+  const handleMatrixSessionChange = useCallback((session: MatrixSession) => {
+    setWorkspaceState((current) => updateSession(current, "matrix", session.id, () => session));
+  }, []);
+
+  const sessionWorkspace = isSessionWorkspace(mode) ? mode : workspaceState.activeWorkspace;
+  const sessionWorkspaceSessions = workspaceState.sessionsByWorkspace[sessionWorkspace] as WorkspaceSession<unknown>[];
+  const sessionWorkspaceActiveId = workspaceState.activeSessionIdByWorkspace[sessionWorkspace];
+  const activeSession = sessionWorkspaceSessions.find((session) => session.id === sessionWorkspaceActiveId) ?? sessionWorkspaceSessions[0] ?? null;
+  const chatSession = (workspaceState.sessionsByWorkspace.chat.find((session) => session.id === workspaceState.activeSessionIdByWorkspace.chat) ?? workspaceState.sessionsByWorkspace.chat[0]) as ChatSession;
+  const githubSession = (workspaceState.sessionsByWorkspace.github.find((session) => session.id === workspaceState.activeSessionIdByWorkspace.github) ?? workspaceState.sessionsByWorkspace.github[0]) as GitHubSession;
+  const matrixSession = (workspaceState.sessionsByWorkspace.matrix.find((session) => session.id === workspaceState.activeSessionIdByWorkspace.matrix) ?? workspaceState.sessionsByWorkspace.matrix[0]) as MatrixSession;
 
   const handleGitHubLogin = useCallback(async () => {
     const password = githubPassword;
@@ -627,6 +765,8 @@ export default function App() {
 
           <div className="status-stack">
             <span>Active tab: {tabLabel(mode)}</span>
+            <span>Active workspace: {tabLabel(sessionWorkspace)}</span>
+            <span>Active session: {activeSession?.title ?? "n/a"}</span>
             <span>Public model alias: {activeModelAlias ?? "unresolved"}</span>
             <span>Backend context: {backendHealthLabel ?? "loading"}</span>
           </div>
@@ -652,7 +792,7 @@ export default function App() {
             <button
               type="button"
               className={mode === "chat" ? "workspace-tab workspace-tab-active workspace-tab-vertical" : "workspace-tab workspace-tab-vertical"}
-              onClick={() => setMode("chat")}
+              onClick={() => handleWorkspaceTabSelect("chat")}
               role="tab"
               aria-selected={mode === "chat"}
               data-testid="tab-chat"
@@ -667,7 +807,7 @@ export default function App() {
             <button
               type="button"
               className={mode === "github" ? "workspace-tab workspace-tab-active workspace-tab-vertical" : "workspace-tab workspace-tab-vertical"}
-              onClick={() => setMode("github")}
+              onClick={() => handleWorkspaceTabSelect("github")}
               role="tab"
               aria-selected={mode === "github"}
               data-testid="tab-github"
@@ -682,7 +822,7 @@ export default function App() {
             <button
               type="button"
               className={mode === "matrix" ? "workspace-tab workspace-tab-active workspace-tab-vertical" : "workspace-tab workspace-tab-vertical"}
-              onClick={() => setMode("matrix")}
+              onClick={() => handleWorkspaceTabSelect("matrix")}
               role="tab"
               aria-selected={mode === "matrix"}
               data-testid="tab-matrix"
@@ -697,7 +837,7 @@ export default function App() {
             <button
               type="button"
               className={mode === "review" ? "workspace-tab workspace-tab-active workspace-tab-vertical" : "workspace-tab workspace-tab-vertical"}
-              onClick={() => setMode("review")}
+              onClick={() => handleWorkspaceTabSelect("review")}
               role="tab"
               aria-selected={mode === "review"}
               data-testid="tab-review"
@@ -712,7 +852,7 @@ export default function App() {
             <button
               type="button"
               className={mode === "settings" ? "workspace-tab workspace-tab-active workspace-tab-vertical" : "workspace-tab workspace-tab-vertical"}
-              onClick={() => setMode("settings")}
+              onClick={() => handleWorkspaceTabSelect("settings")}
               role="tab"
               aria-selected={mode === "settings"}
               data-testid="tab-settings"
@@ -725,6 +865,17 @@ export default function App() {
             </button>
           </nav>
 
+          <SessionList
+            workspace={sessionWorkspace}
+            sessions={sessionWorkspaceSessions}
+            activeSessionId={sessionWorkspaceActiveId}
+            onCreate={() => handleWorkspaceSessionCreate(sessionWorkspace)}
+            onSelect={(sessionId) => handleWorkspaceSessionSelect(sessionWorkspace, sessionId)}
+            onArchive={(sessionId) => handleWorkspaceSessionArchive(sessionWorkspace, sessionId)}
+            onDelete={(sessionId) => handleWorkspaceSessionDelete(sessionWorkspace, sessionId)}
+            headerNote={`Aktiver Workspace: ${tabLabel(sessionWorkspace)} · Aktive Session: ${activeSession?.title ?? "n/a"}`}
+          />
+
           <div className="sidebar-card sidebar-card-safety">
             <span className="info-label">Safety</span>
             <strong>Nur Lesen aktiv</strong>
@@ -735,21 +886,27 @@ export default function App() {
         <section className="console-main">
           {mode === "chat" ? (
             <ChatWorkspace
+              key={chatSession?.id ?? "chat-session"}
+              session={chatSession}
               backendHealthy={backendHealthy}
               backendHealthLabel={backendHealthLabel}
               activeModelAlias={activeModelAlias}
               availableModels={availableModels}
               onActiveModelAliasChange={setActiveModelAlias}
               onTelemetry={recordTelemetry}
+              onSessionChange={handleChatSessionChange}
             />
           ) : mode === "github" && githubUnlocked ? (
             <GitHubWorkspace
+              key={githubSession?.id ?? "github-session"}
+              session={githubSession}
               backendHealthy={backendHealthy}
               backendHealthLabel={backendHealthLabel}
               expertMode={expertMode}
               onTelemetry={recordTelemetry}
               onContextChange={setGitHubContext}
               onReviewItemsChange={updateGitHubReviewItems}
+              onSessionChange={handleGitHubSessionChange}
             />
           ) : mode === "github" ? (
             <GitHubAdminLogin
@@ -762,11 +919,14 @@ export default function App() {
             />
           ) : mode === "matrix" ? (
             <MatrixWorkspace
+              key={matrixSession?.id ?? "matrix-session"}
+              session={matrixSession}
               restoredSession={restoredSession}
               expertMode={expertMode}
               onTelemetry={recordTelemetry}
               onContextChange={setMatrixContext}
               onReviewItemsChange={updateMatrixReviewItems}
+              onSessionChange={handleMatrixSessionChange}
             />
           ) : mode === "review" ? (
             <ReviewWorkspace items={reviewItems} expertMode={expertMode} />

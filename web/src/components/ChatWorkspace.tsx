@@ -6,14 +6,21 @@ import {
   type ChatMessage,
   type ConnectionState
 } from "../lib/chat-workflow.js";
+import {
+  deriveSessionStatus,
+  deriveSessionTitle,
+  type ChatSession
+} from "../lib/workspace-state.js";
 
 type ChatWorkspaceProps = {
+  session: ChatSession;
   backendHealthy: boolean | null;
   backendHealthLabel: string | null;
   activeModelAlias: string | null;
   availableModels: string[];
   onActiveModelAliasChange: (alias: string) => void;
   onTelemetry: (kind: "info" | "warning" | "error", label: string, detail?: string) => void;
+  onSessionChange: (session: ChatSession) => void;
 };
 
 function createId() {
@@ -36,9 +43,14 @@ function statusLabel(state: ConnectionState) {
 }
 
 export function ChatWorkspace(props: ChatWorkspaceProps) {
-  const [chatState, dispatch] = useReducer(chatReducer, undefined, createInitialChatState);
-  const [selectedModel, setSelectedModel] = useState(props.activeModelAlias ?? "");
-  const [composerValue, setComposerValue] = useState("");
+  const [chatState, dispatch] = useReducer(
+    chatReducer,
+    props.session.metadata.chatState,
+    createInitialChatState,
+  );
+  const [selectedModel, setSelectedModel] = useState(
+    props.session.metadata.selectedModelAlias ?? props.activeModelAlias ?? "",
+  );
   const [streamActive, setStreamActive] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const messageListRef = useRef<HTMLDivElement | null>(null);
@@ -58,6 +70,37 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       props.onActiveModelAliasChange(nextModel);
     }
   }, [props.availableModels, props.onActiveModelAliasChange, selectedModel]);
+
+  useEffect(() => {
+    const nextSession: ChatSession = {
+      ...props.session,
+      title: deriveSessionTitle({
+        ...props.session,
+        metadata: {
+          ...props.session.metadata,
+          chatState,
+          selectedModelAlias: selectedModel || null,
+        },
+      }),
+      updatedAt: new Date().toISOString(),
+      status: deriveSessionStatus({
+        ...props.session,
+        metadata: {
+          ...props.session.metadata,
+          chatState,
+          selectedModelAlias: selectedModel || null,
+        },
+      }),
+      resumable: true,
+      metadata: {
+        ...props.session.metadata,
+        chatState,
+        selectedModelAlias: selectedModel || null,
+      },
+    };
+
+    props.onSessionChange(nextSession);
+  }, [chatState, props.onSessionChange, props.session.id, selectedModel]);
 
   useEffect(() => {
     if (chatState.autoScrollEnabled) {
@@ -92,7 +135,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   }
 
   async function submitCurrentPrompt() {
-    const trimmed = composerValue.trim();
+    const trimmed = chatState.input.trim();
 
     if (!trimmed || chatState.connectionState === "submitting" || chatState.connectionState === "streaming") {
       return;
@@ -109,7 +152,6 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       type: "submit_message",
       message: userMessage
     });
-    setComposerValue("");
     props.onTelemetry("info", "Chat submit", "User message submitted to backend chat.");
 
     const controller = new AbortController();
@@ -299,8 +341,8 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           <textarea
               data-testid="chat-composer"
               aria-label="Chat composer"
-              value={composerValue}
-              onChange={(event) => setComposerValue(event.target.value)}
+              value={chatState.input}
+              onChange={(event) => dispatch({ type: "set_input", input: event.target.value })}
               onKeyDown={(event) => {
                 if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
                   event.preventDefault();
@@ -319,7 +361,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             <button
               type="submit"
               data-testid="chat-send"
-              disabled={chatState.connectionState === "submitting" || chatState.connectionState === "streaming" || composerValue.trim().length === 0}
+              disabled={chatState.connectionState === "submitting" || chatState.connectionState === "streaming" || chatState.input.trim().length === 0}
             >
               {chatState.connectionState === "submitting" || chatState.connectionState === "streaming" ? "Streaming…" : "Send"}
             </button>

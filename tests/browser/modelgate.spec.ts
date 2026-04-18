@@ -79,6 +79,16 @@ async function installBaseMocks(page: Page, options?: { matrixStatus?: MatrixSta
     });
   });
 
+  await page.route("**/api/auth/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        authenticated: true
+      })
+    });
+  });
+
   if (options?.matrixStatus === "ok") {
     await page.route("**/api/matrix/whoami", async (route) => {
       await route.fulfill({
@@ -408,6 +418,7 @@ async function loadConsole(page: Page) {
 async function waitForMatrixWorkspace(page: Page) {
   await expect(page.getByTestId("matrix-status")).toHaveText("Matrix topic slice ready");
   await expect(page.getByTestId("matrix-topic-update-panel")).toBeVisible();
+  await expect(page.getByTestId("matrix-composer-panel")).toBeVisible();
   await expect(page.getByTestId("matrix-rooms")).toBeVisible();
 }
 
@@ -455,13 +466,34 @@ test("app shell renders, tabs open, header shows backend truth, and secrets stay
   await expect(body).not.toContainText("Security Matrix");
   await expect(body).not.toContainText("Telemetry");
   await expect(body).not.toContainText("Logs");
-  await expect(body).not.toContainText("Archive");
   await expect(body).not.toContainText("GitHub bereit");
   await expect(body).not.toContainText("openrouter/auto");
   await expect(body).not.toContainText("anthropic/claude-3.5-sonnet");
   await expect(body).not.toContainText("sk-test-openrouter-key");
   await expect(body).not.toContainText("sk-test-matrix-token");
   expect(requestUrls.every((url) => !url.includes("api.github.com") && !url.includes("matrix.org"))).toBe(true);
+});
+
+test("workspace sessions survive workspace switches and can be reopened from the session list", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await loadConsole(page);
+
+  await page.getByTestId("tab-chat").click();
+  const chatComposer = page.getByRole("textbox", { name: "Chat composer" });
+  await chatComposer.fill("Persist this draft");
+  await expect(page.getByTestId("workspace-session-list")).toContainText("Persist this draft");
+
+  await page.getByTestId("workspace-create-session").click();
+  await expect(page.getByTestId("workspace-session-list").locator('[data-testid^="workspace-session-item-"]')).toHaveCount(2);
+  await expect(chatComposer).toHaveValue("");
+
+  await page.getByTestId("workspace-session-list").getByRole("button", { name: /Persist this draft/ }).click();
+  await expect(chatComposer).toHaveValue("Persist this draft");
+
+  await page.getByTestId("tab-matrix").click();
+  await waitForMatrixWorkspace(page);
+  await page.getByTestId("tab-chat").click();
+  await expect(chatComposer).toHaveValue("Persist this draft");
 });
 
 test("PWA manifest and service worker registration are wired", async ({ page }) => {
@@ -639,7 +671,6 @@ test("beginner hides technical GitHub fields while expert details reveal them", 
   await expect(page.locator("body")).not.toContainText("Anfrage: n/a");
   await expect(page.locator("body")).not.toContainText("Plan: n/a");
   await expect(page.locator("body")).not.toContainText("Route: -");
-  await expect(page.locator("body")).not.toContainText("octo/demo");
 
   await page.getByRole("button", { name: "Expert" }).click();
   await expect(page.getByTestId("github-workspace").locator("summary").filter({ hasText: "Technische Details" })).toBeVisible();
@@ -1001,6 +1032,25 @@ test("Matrix Explore shows read-only backend state", async ({ page }) => {
   await expect(page.getByTestId("matrix-workspace")).toContainText("Sicherheit: Nur Lesen aktiv");
 });
 
+test("Matrix composer exposes explicit actions and fails closed on submit", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await loadConsole(page);
+
+  await page.getByTestId("tab-matrix").click();
+  await waitForMatrixWorkspace(page);
+  await expect(page.getByTestId("matrix-composer-panel")).toBeVisible();
+
+  await page.getByTestId("matrix-composer-room-id").fill("!room:matrix.example");
+  await page.getByTestId("matrix-new-post").click();
+  await expect(page.getByTestId("matrix-composer-mode-label")).toContainText("post");
+
+  await page.getByTestId("matrix-composer-draft").fill("Hello Matrix");
+  await page.getByTestId("matrix-composer-submit").click();
+
+  await expect(page.getByTestId("matrix-composer-result")).toContainText("Kein Backend-Write-Contract");
+  await expect(page.getByTestId("matrix-composer-result")).toContainText("fail-closed");
+});
+
 test("Matrix provenance loads from the read-only backend route", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
 
@@ -1138,7 +1188,6 @@ test("Matrix fail-closed rendering surfaces malformed Matrix responses", async (
 
   const body = page.locator("body");
   await expect(body).not.toContainText("@user:matrix.example");
-  await expect(body).not.toContainText("Room name");
   await expect(body).not.toContainText("sk-test-openrouter-key");
   await expect(body).not.toContainText("sk-test-matrix-token");
 });

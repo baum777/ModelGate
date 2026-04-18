@@ -13,6 +13,11 @@ import {
   type GitHubVerifyResult,
 } from "../lib/github-api.js";
 import type { ReviewItem } from "./ReviewWorkspace.js";
+import {
+  deriveSessionStatus,
+  deriveSessionTitle,
+  type GitHubSession
+} from "../lib/workspace-state.js";
 
 export type GitHubWorkspaceStatus = {
   repositoryLabel: string;
@@ -35,6 +40,7 @@ export type GitHubWorkspaceStatus = {
 };
 
 type GitHubWorkspaceProps = {
+  session: GitHubSession;
   backendHealthy: boolean | null;
   backendHealthLabel: string | null;
   expertMode: boolean;
@@ -45,6 +51,7 @@ type GitHubWorkspaceProps = {
   ) => void;
   onContextChange: (status: GitHubWorkspaceStatus) => void;
   onReviewItemsChange?: (items: ReviewItem[]) => void;
+  onSessionChange: (session: GitHubSession) => void;
 };
 
 const ANALYSIS_QUESTION =
@@ -177,23 +184,83 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
   const [repos, setRepos] = useState<GitHubRepoSummary[]>([]);
   const [reposLoading, setReposLoading] = useState(true);
   const [reposError, setReposError] = useState<string | null>(null);
-  const [selectedRepoFullName, setSelectedRepoFullName] = useState("");
-  const [analysisBundle, setAnalysisBundle] = useState<GitHubContextBundle | null>(null);
+  const [selectedRepoFullName, setSelectedRepoFullName] = useState(
+    props.session.metadata.selectedRepoFullName,
+  );
+  const [analysisBundle, setAnalysisBundle] = useState<GitHubContextBundle | null>(
+    props.session.metadata.analysisBundle,
+  );
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const [proposalPlan, setProposalPlan] = useState<GitHubChangePlan | null>(null);
+  const [proposalPlan, setProposalPlan] = useState<GitHubChangePlan | null>(
+    props.session.metadata.proposalPlan,
+  );
   const [proposalLoading, setProposalLoading] = useState(false);
   const [proposalError, setProposalError] = useState<string | null>(null);
-  const [requestId, setRequestId] = useState<string | null>(null);
-  const [eventTrail, setEventTrail] = useState<string[]>([]);
-  const [approvalChecked, setApprovalChecked] = useState(false);
+  const [requestId, setRequestId] = useState<string | null>(props.session.metadata.requestId);
+  const [eventTrail, setEventTrail] = useState<string[]>(props.session.metadata.eventTrail);
+  const [approvalChecked, setApprovalChecked] = useState(props.session.metadata.approvalChecked);
   const [executing, setExecuting] = useState(false);
-  const [executionResult, setExecutionResult] = useState<GitHubExecuteResult | null>(null);
+  const [executionResult, setExecutionResult] = useState<GitHubExecuteResult | null>(
+    props.session.metadata.executionResult,
+  );
   const [verifying, setVerifying] = useState(false);
-  const [verificationResult, setVerificationResult] = useState<GitHubVerifyResult | null>(null);
-  const [executionError, setExecutionError] = useState<string | null>(null);
-  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [verificationResult, setVerificationResult] = useState<GitHubVerifyResult | null>(
+    props.session.metadata.verificationResult,
+  );
+  const [executionError, setExecutionError] = useState<string | null>(
+    props.session.metadata.executionError,
+  );
+  const [verificationError, setVerificationError] = useState<string | null>(
+    props.session.metadata.verificationError,
+  );
   const repoSelectRef = useRef<HTMLSelectElement | null>(null);
+
+  useEffect(() => {
+    const snapshotMetadata = {
+      ...props.session.metadata,
+      selectedRepoFullName,
+      analysisBundle,
+      proposalPlan,
+      requestId,
+      eventTrail,
+      approvalChecked,
+      executionResult,
+      verificationResult,
+      executionError,
+      verificationError,
+    };
+
+    const nextSession: GitHubSession = {
+      ...props.session,
+      title: deriveSessionTitle({
+        ...props.session,
+        metadata: snapshotMetadata,
+      }),
+      updatedAt: new Date().toISOString(),
+      status: deriveSessionStatus({
+        ...props.session,
+        metadata: snapshotMetadata,
+      }),
+      resumable: true,
+      metadata: snapshotMetadata,
+    };
+
+    props.onSessionChange(nextSession);
+  }, [
+    analysisBundle,
+    approvalChecked,
+    eventTrail,
+    executionError,
+    executionResult,
+    proposalPlan,
+    props.onSessionChange,
+    props.session.id,
+    requestId,
+    selectedRepoFullName,
+    verificationError,
+    verificationResult,
+  ]);
 
   useEffect(() => {
     let cancelled = false;

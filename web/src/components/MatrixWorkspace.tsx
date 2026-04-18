@@ -17,6 +17,7 @@ import {
   resolveScope,
   MatrixRequestError,
   type MatrixActionCandidate,
+  type MatrixAnalysisResponse,
   type MatrixExecutionResult,
   type MatrixJoinedRoom,
   type MatrixPlan,
@@ -31,6 +32,12 @@ import {
   verifyRoomTopicUpdate,
 } from "../lib/matrix-api.js";
 import type { ReviewItem } from "./ReviewWorkspace.js";
+import {
+  deriveSessionStatus,
+  deriveSessionTitle,
+  type MatrixComposerTarget,
+  type MatrixSession,
+} from "../lib/workspace-state.js";
 
 type MatrixMode = "explore" | "analyze" | "review";
 type WorkflowStatus = "loading" | "partial" | "ready" | "error";
@@ -59,6 +66,7 @@ export type MatrixWorkspaceStatus = {
 };
 
 type MatrixWorkspaceProps = {
+  session: MatrixSession;
   restoredSession: boolean;
   expertMode: boolean;
   onTelemetry: (
@@ -68,16 +76,8 @@ type MatrixWorkspaceProps = {
   ) => void;
   onContextChange: (status: MatrixWorkspaceStatus) => void;
   onReviewItemsChange?: (items: ReviewItem[]) => void;
+  onSessionChange: (session: MatrixSession) => void;
 };
-
-type PersistedMatrixState = {
-  mode?: MatrixMode;
-  selectedRoomIds?: string[];
-  selectedSpaceIds?: string[];
-  analysisPrompt?: string;
-};
-
-const STORAGE_KEY = "modelgate.console.matrix.v1";
 const formatDate = (value: string) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
@@ -103,26 +103,6 @@ function modeLabel(mode: MatrixMode) {
   }
 }
 
-function readPersistedState(): PersistedMatrixState | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as PersistedMatrixState) : null;
-  } catch {
-    return null;
-  }
-}
-
-function persistState(state: PersistedMatrixState) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
 function describeMatrixError(operation: string, error: unknown) {
   if (error instanceof MatrixRequestError) {
     if (error.kind === "network") {
@@ -141,97 +121,99 @@ function describeMatrixError(operation: string, error: unknown) {
   return `${operation} failed`;
 }
 export function MatrixWorkspace(props: MatrixWorkspaceProps) {
-  const persisted = readPersistedState();
-  const [mode, setMode] = useState<MatrixMode>("explore");
+  const persisted = props.session.metadata;
+  const [mode, setMode] = useState<MatrixMode>(persisted.mode as MatrixMode);
   const [status, setStatus] = useState<WorkflowStatus>("loading");
   const [whoami, setWhoami] = useState<MatrixWhoAmI | null>(null);
   const [joinedRooms, setJoinedRooms] = useState<MatrixJoinedRoom[]>([]);
   const [identityError, setIdentityError] = useState<string | null>(null);
   const [roomsError, setRoomsError] = useState<string | null>(null);
   const [selectedRoomIds, setSelectedRoomIds] = useState<string[]>(
-    persisted?.selectedRoomIds ?? [],
+    persisted.selectedRoomIds,
   );
   const [selectedSpaceIds, setSelectedSpaceIds] = useState<string[]>(
-    persisted?.selectedSpaceIds ?? [],
+    persisted.selectedSpaceIds,
   );
   const [spaceInput, setSpaceInput] = useState("");
-  const [currentScope, setCurrentScope] = useState<MatrixScope | null>(null);
+  const [currentScope, setCurrentScope] = useState<MatrixScope | null>(persisted.currentScope);
   const [scopeSummary, setScopeSummary] = useState<MatrixScopeSummary | null>(
-    null,
+    persisted.scopeSummary,
   );
   const [scopeSummaryStatus, setScopeSummaryStatus] =
-    useState<LoadStatus>("idle");
+    useState<LoadStatus>(persisted.scopeSummaryStatus);
   const [scopeSummaryError, setScopeSummaryError] = useState<string | null>(
-    null,
+    persisted.scopeSummaryError,
   );
-  const [scopeResolveLoading, setScopeResolveLoading] = useState(false);
-  const [scopeError, setScopeError] = useState<string | null>(null);
+  const [scopeResolveLoading, setScopeResolveLoading] = useState(persisted.scopeResolveLoading);
+  const [scopeError, setScopeError] = useState<string | null>(persisted.scopeError);
   const [spaceHierarchy, setSpaceHierarchy] =
-    useState<MatrixSpaceHierarchy | null>(null);
+    useState<MatrixSpaceHierarchy | null>(persisted.spaceHierarchy);
   const [spaceHierarchySpace, setSpaceHierarchySpace] = useState<string | null>(
-    null,
+    persisted.spaceHierarchySpace,
   );
-  const [spaceHierarchyLoading, setSpaceHierarchyLoading] = useState(false);
+  const [spaceHierarchyLoading, setSpaceHierarchyLoading] = useState(persisted.spaceHierarchyLoading);
   const [spaceHierarchyError, setSpaceHierarchyError] = useState<string | null>(
-    null,
+    persisted.spaceHierarchyError,
   );
-  const [analysisPrompt, setAnalysisPrompt] = useState(
-    persisted?.analysisPrompt ??
-      "Review the selected scope and identify bounded workspace actions.",
+  const [analysisPrompt, setAnalysisPrompt] = useState(persisted.analysisPrompt);
+  const [analysisResult, setAnalysisResult] = useState<MatrixAnalysisResponse | null>(
+    persisted.analysisResult,
   );
-  const [analysisResult, setAnalysisResult] = useState<{
-    snapshotId: string;
-    response: { role: "assistant"; content: string };
-    references: Array<{ type: string; roomId: string; label: string }>;
-    actionCandidates: MatrixActionCandidate[];
-  } | null>(null);
-  const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(persisted.analysisError);
+  const [analysisLoading, setAnalysisLoading] = useState(persisted.analysisLoading);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(
-    null,
+    persisted.selectedCandidateId,
   );
-  const [promotedPlan, setPromotedPlan] = useState<MatrixPlan | null>(null);
-  const [promotionLoading, setPromotionLoading] = useState(false);
-  const [promotionError, setPromotionError] = useState<string | null>(null);
-  const [planRefreshError, setPlanRefreshError] = useState<string | null>(null);
-  const [planRefreshLoading, setPlanRefreshLoading] = useState(false);
-  const [approvalPending, setApprovalPending] = useState(false);
+  const [promotedPlan, setPromotedPlan] = useState<MatrixPlan | null>(persisted.promotedPlan);
+  const [promotionLoading, setPromotionLoading] = useState(persisted.promotionLoading);
+  const [promotionError, setPromotionError] = useState<string | null>(persisted.promotionError);
+  const [planRefreshError, setPlanRefreshError] = useState<string | null>(persisted.planRefreshError);
+  const [planRefreshLoading, setPlanRefreshLoading] = useState(persisted.planRefreshLoading);
+  const [approvalPending, setApprovalPending] = useState(persisted.approvalPending);
   const [executionResult, setExecutionResult] =
-    useState<MatrixExecutionResult | null>(null);
-  const [executionLoading, setExecutionLoading] = useState(false);
-  const [executionError, setExecutionError] = useState<string | null>(null);
-  const [stalePlanDetected, setStalePlanDetected] = useState(false);
-  const [provenanceRoomId, setProvenanceRoomId] = useState("");
-  const [provenance, setProvenance] = useState<MatrixProvenance | null>(null);
-  const [provenanceError, setProvenanceError] = useState<string | null>(null);
-  const [provenanceLoading, setProvenanceLoading] = useState(false);
+    useState<MatrixExecutionResult | null>(persisted.executionResult);
+  const [executionLoading, setExecutionLoading] = useState(persisted.executionLoading);
+  const [executionError, setExecutionError] = useState<string | null>(persisted.executionError);
+  const [stalePlanDetected, setStalePlanDetected] = useState(persisted.stalePlanDetected);
+  const [provenanceRoomId, setProvenanceRoomId] = useState(persisted.provenanceRoomId);
+  const [provenance, setProvenance] = useState<MatrixProvenance | null>(persisted.provenance);
+  const [provenanceError, setProvenanceError] = useState<string | null>(persisted.provenanceError);
+  const [provenanceLoading, setProvenanceLoading] = useState(persisted.provenanceLoading);
   const [topicRoomId, setTopicRoomId] = useState(
-    persisted?.selectedRoomIds?.[0] ?? "",
+    persisted.topicRoomId,
   );
-  const [topicText, setTopicText] = useState("");
-  const [topicPlan, setTopicPlan] = useState<MatrixRoomTopicAgentPlan | null>(null);
-  const [topicApprovalPending, setTopicApprovalPending] = useState(false);
+  const [topicText, setTopicText] = useState(persisted.topicText);
+  const [topicPlan, setTopicPlan] = useState<MatrixRoomTopicAgentPlan | null>(persisted.topicPlan);
+  const [topicApprovalPending, setTopicApprovalPending] = useState(persisted.topicApprovalPending);
   const [topicExecution, setTopicExecution] =
-    useState<MatrixRoomTopicExecutionResult | null>(null);
+    useState<MatrixRoomTopicExecutionResult | null>(persisted.topicExecution);
   const [topicVerification, setTopicVerification] =
-    useState<MatrixRoomTopicVerificationResult | null>(null);
-  const [topicPrepareLoading, setTopicPrepareLoading] = useState(false);
+    useState<MatrixRoomTopicVerificationResult | null>(persisted.topicVerification);
+  const [topicPrepareLoading, setTopicPrepareLoading] = useState(persisted.topicPrepareLoading);
   const [topicPrepareError, setTopicPrepareError] = useState<string | null>(
-    null,
+    persisted.topicPrepareError,
   );
-  const [topicExecuteLoading, setTopicExecuteLoading] = useState(false);
+  const [topicExecuteLoading, setTopicExecuteLoading] = useState(persisted.topicExecuteLoading);
   const [topicExecuteError, setTopicExecuteError] = useState<string | null>(
-    null,
+    persisted.topicExecuteError,
   );
-  const [topicVerifyLoading, setTopicVerifyLoading] = useState(false);
+  const [topicVerifyLoading, setTopicVerifyLoading] = useState(persisted.topicVerifyLoading);
   const [topicVerifyError, setTopicVerifyError] = useState<string | null>(
-    null,
+    persisted.topicVerifyError,
   );
   const [topicPlanRefreshLoading, setTopicPlanRefreshLoading] =
-    useState(false);
+    useState(persisted.topicPlanRefreshLoading);
   const [topicPlanRefreshError, setTopicPlanRefreshError] = useState<
     string | null
-  >(null);
+  >(persisted.topicPlanRefreshError);
+  const [roomId, setRoomId] = useState<string | null>(persisted.roomId);
+  const [roomName, setRoomName] = useState<string | null>(persisted.roomName);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(persisted.selectedEventId);
+  const [selectedThreadRootId, setSelectedThreadRootId] = useState<string | null>(persisted.selectedThreadRootId);
+  const [composerMode, setComposerMode] = useState<"post" | "reply" | "thread">(persisted.composerMode);
+  const [composerTarget, setComposerTarget] = useState<MatrixComposerTarget>(persisted.composerTarget);
+  const [draftContent, setDraftContent] = useState<string>(persisted.draftContent);
+  const [lastActionResult, setLastActionResult] = useState<string | null>(persisted.lastActionResult);
   const summaryLoading = scopeSummaryStatus === "loading";
   const selectedSpaces = useMemo(
     () => selectedSpaceIds.filter((value) => value.trim().length > 0),
@@ -319,13 +301,139 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   }, [matrixContextPayload, matrixReviewItems, props.onContextChange, props.onReviewItemsChange]);
 
   useEffect(() => {
-    persistState({
+    const snapshotMetadata = {
+      ...props.session.metadata,
       mode,
       selectedRoomIds,
       selectedSpaceIds,
       analysisPrompt,
-    });
-  }, [analysisPrompt, mode, selectedRoomIds, selectedSpaceIds]);
+      currentScope,
+      scopeSummary,
+      scopeSummaryStatus,
+      scopeSummaryError,
+      scopeResolveLoading,
+      scopeError,
+      spaceHierarchy,
+      spaceHierarchySpace,
+      spaceHierarchyLoading,
+      spaceHierarchyError,
+      analysisResult,
+      analysisError,
+      analysisLoading,
+      selectedCandidateId,
+      promotedPlan,
+      promotionLoading,
+      promotionError,
+      planRefreshError,
+      planRefreshLoading,
+      stalePlanDetected,
+      approvalPending,
+      executionResult,
+      executionLoading,
+      executionError,
+      provenanceRoomId,
+      provenance,
+      provenanceError,
+      provenanceLoading,
+      topicRoomId,
+      topicText,
+      topicPlan,
+      topicApprovalPending,
+      topicExecution,
+      topicVerification,
+      topicPrepareLoading,
+      topicPrepareError,
+      topicExecuteLoading,
+      topicExecuteError,
+      topicVerifyLoading,
+      topicVerifyError,
+      topicPlanRefreshLoading,
+      topicPlanRefreshError,
+      roomId,
+      roomName,
+      selectedEventId,
+      selectedThreadRootId,
+      composerMode,
+      composerTarget,
+      draftContent,
+      lastActionResult,
+    };
+
+    const nextSession: MatrixSession = {
+      ...props.session,
+      title: deriveSessionTitle({
+        ...props.session,
+        metadata: snapshotMetadata,
+      }),
+      updatedAt: new Date().toISOString(),
+      status: deriveSessionStatus({
+        ...props.session,
+        metadata: snapshotMetadata,
+      }),
+      resumable: true,
+      metadata: snapshotMetadata,
+    };
+
+    props.onSessionChange(nextSession);
+  }, [
+    analysisError,
+    analysisLoading,
+    analysisPrompt,
+    analysisResult,
+    approvalPending,
+    composerMode,
+    composerTarget,
+    currentScope,
+    draftContent,
+    executionError,
+    executionLoading,
+    executionResult,
+    lastActionResult,
+    mode,
+    planRefreshError,
+    planRefreshLoading,
+    promotedPlan,
+    provenance,
+    provenanceError,
+    provenanceLoading,
+    provenanceRoomId,
+    props.onSessionChange,
+    props.session.id,
+    promotionError,
+    promotionLoading,
+    roomId,
+    roomName,
+    scopeError,
+    scopeResolveLoading,
+    scopeSummary,
+    scopeSummaryError,
+    scopeSummaryStatus,
+    selectedCandidateId,
+    selectedEventId,
+    selectedRoomIds,
+    selectedSpaceIds,
+    selectedThreadRootId,
+    spaceHierarchy,
+    spaceHierarchyError,
+    spaceHierarchyLoading,
+    spaceHierarchySpace,
+    stalePlanDetected,
+    topicApprovalPending,
+    topicExecuteError,
+    topicExecuteLoading,
+    topicExecution,
+    topicPlan,
+    topicPlanRefreshError,
+    topicPlanRefreshLoading,
+    topicPrepareError,
+    topicPrepareLoading,
+    topicRoomId,
+    topicText,
+    topicVerification,
+    topicVerifyError,
+    topicVerifyLoading,
+  ]);
+
   useEffect(() => {
     let cancelled = false;
     async function bootstrap() {
@@ -431,6 +539,166 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     setTopicVerifyLoading(false);
     setTopicPlanRefreshLoading(false);
     setTopicPlanRefreshError(null);
+  }
+
+  function getComposerRoomId() {
+    const nextRoomId = roomId?.trim() || topicRoomId.trim() || selectedRoomIds[0]?.trim() || "";
+    return nextRoomId;
+  }
+
+  function describeComposerTarget(target: MatrixComposerTarget) {
+    switch (target.kind) {
+      case "post":
+        return target.previewLabel ?? `Neuer Post in Raum ${target.roomId}`;
+      case "reply":
+        return target.previewLabel ?? `Antwort auf Beitrag ${target.postId}`;
+      case "thread":
+        return target.previewLabel ?? `Antwort im Thread ${target.threadRootId}`;
+      default:
+        return target.previewLabel ?? "Neuer Post";
+    }
+  }
+
+  function startNewPost(nextRoomId?: string) {
+    const room = (nextRoomId ?? getComposerRoomId()).trim();
+    if (!room) {
+      setLastActionResult("Composer blockiert: kein Raum für einen neuen Post ausgewählt.");
+      return;
+    }
+
+    setRoomId(room);
+    const nextRoomName = roomName ?? (topicRoomId.trim().length > 0 ? topicRoomId.trim() : null);
+    setRoomName(nextRoomName);
+    setSelectedEventId(null);
+    setSelectedThreadRootId(null);
+    setComposerMode("post");
+    setComposerTarget({
+      kind: "post",
+      roomId: room,
+      postId: null,
+      threadRootId: null,
+      previewLabel: `Neuer Post in Raum ${room}`,
+    });
+    setLastActionResult(`Composer bereit: Neuer Post in Raum ${room}.`);
+  }
+
+  function startReplyToPost(postId: string, nextRoomId?: string) {
+    const room = (nextRoomId ?? getComposerRoomId()).trim();
+    if (!room || !postId.trim()) {
+      setLastActionResult("Composer blockiert: Raum und Beitrag-ID sind für eine Antwort erforderlich.");
+      return;
+    }
+
+    setRoomId(room);
+    setSelectedEventId(postId);
+    setSelectedThreadRootId(null);
+    setComposerMode("reply");
+    setComposerTarget({
+      kind: "reply",
+      roomId: room,
+      postId,
+      threadRootId: null,
+      previewLabel: `Antwort auf Beitrag ${postId}`,
+    });
+    setLastActionResult(`Composer bereit: Antwort auf Beitrag ${postId}.`);
+  }
+
+  function startThreadFromPost(postId: string, nextRoomId?: string) {
+    const room = (nextRoomId ?? getComposerRoomId()).trim();
+    if (!room || !postId.trim()) {
+      setLastActionResult("Composer blockiert: Raum und Beitrag-ID sind für einen Thread erforderlich.");
+      return;
+    }
+
+    setRoomId(room);
+    setSelectedEventId(postId);
+    setSelectedThreadRootId(postId);
+    setComposerMode("thread");
+    setComposerTarget({
+      kind: "thread",
+      roomId: room,
+      postId: null,
+      threadRootId: postId,
+      previewLabel: `Neuer Thread zu Beitrag ${postId}`,
+    });
+    setLastActionResult(`Composer bereit: Neuer Thread zu Beitrag ${postId}.`);
+  }
+
+  function startReplyInThread(threadRootId: string, eventId?: string, nextRoomId?: string) {
+    const room = (nextRoomId ?? getComposerRoomId()).trim();
+    if (!room || !threadRootId.trim()) {
+      setLastActionResult("Composer blockiert: Raum und Thread-Root sind für eine Thread-Antwort erforderlich.");
+      return;
+    }
+
+    setRoomId(room);
+    setSelectedEventId(eventId?.trim() || null);
+    setSelectedThreadRootId(threadRootId);
+    setComposerMode("thread");
+    setComposerTarget({
+      kind: "thread",
+      roomId: room,
+      postId: null,
+      threadRootId,
+      previewLabel: eventId?.trim()
+        ? `Antwort im Thread ${threadRootId} auf Ereignis ${eventId}`
+        : `Antwort im Thread ${threadRootId}`,
+    });
+    setLastActionResult(`Composer bereit: Antwort im Thread ${threadRootId}.`);
+  }
+
+  function cancelComposerTarget() {
+    setComposerMode("post");
+    setComposerTarget({
+      kind: "none",
+      roomId: null,
+      previewLabel: null,
+    });
+    setRoomId(null);
+    setRoomName(null);
+    setSelectedEventId(null);
+    setSelectedThreadRootId(null);
+    setLastActionResult("Composer-Ziel zurückgesetzt.");
+  }
+
+  function buildComposerPayload() {
+    const targetRoomId = composerTarget.kind === "none" ? getComposerRoomId() : composerTarget.roomId;
+    return {
+      composerMode,
+      targetContext: composerTarget,
+      roomId: targetRoomId || null,
+      selectedEventId,
+      selectedThreadRootId,
+      draftContent: draftContent.trim(),
+    };
+  }
+
+  function submitMatrixComposer() {
+    const payload = buildComposerPayload();
+    if (composerTarget.kind === "none") {
+      setLastActionResult("Composer blockiert: Kein explizites Ziel gesetzt.");
+      return false;
+    }
+
+    if (!payload.roomId) {
+      setLastActionResult("Composer blockiert: Kein Raum für den Submit verfügbar.");
+      return false;
+    }
+
+    if (!payload.draftContent) {
+      setLastActionResult("Composer blockiert: Inhalt fehlt.");
+      return false;
+    }
+
+    setLastActionResult(
+      `Composer-Submit blockiert: Kein Backend-Write-Contract für ${payload.composerMode} ist verdrahtet. fail-closed. Payload: ${JSON.stringify(payload)}`,
+    );
+    props.onTelemetry(
+      "warning",
+      "Matrix composer blocked",
+      `Submit für ${payload.composerMode} bleibt fail-closed, bis ein Write-Contract existiert.`,
+    );
+    return false;
   }
   async function loadSummary(scopeId: string, preferredRoomId?: string) {
     setScopeSummaryStatus("loading");
@@ -1429,6 +1697,146 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               )}{" "}
             </div>{" "}
           </div>{" "}
+        </section>{" "}
+        <section className="workspace-card" data-testid="matrix-composer-panel">
+          <header className="card-header">
+            <div>
+              <span>Composer</span>
+              <strong>Matrix post, reply, thread, or thread reply</strong>
+            </div>
+          </header>
+
+          <div className="info-block">
+            <p className="info-label">Composer mode</p>
+            <div className="chip-list" data-testid="matrix-composer-mode">
+              <span className="workflow-chip workflow-chip-active" data-testid="matrix-composer-mode-label">
+                {composerMode}
+              </span>
+              <span className="reference-chip">{describeComposerTarget(composerTarget)}</span>
+            </div>
+          </div>
+
+          <div className="action-row">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => startNewPost()}
+              data-testid="matrix-new-post"
+            >
+              Neuer Post
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => startReplyToPost(selectedEventId ?? "")}
+              disabled={!selectedEventId}
+              data-testid="matrix-reply"
+            >
+              Auf Post antworten
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => startThreadFromPost(selectedEventId ?? selectedThreadRootId ?? "")}
+              disabled={!(selectedEventId || selectedThreadRootId)}
+              data-testid="matrix-thread"
+            >
+              Thread starten
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => startReplyInThread(selectedThreadRootId ?? "", selectedEventId ?? undefined)}
+              disabled={!selectedThreadRootId}
+              data-testid="matrix-reply-in-thread"
+            >
+              Im Thread antworten
+            </button>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={cancelComposerTarget}
+              data-testid="matrix-composer-cancel"
+            >
+              Ziel löschen
+            </button>
+          </div>
+
+          <div className="info-block">
+            <p className="info-label">Target context</p>
+            <div className="detail-grid">
+              <div>
+                <span>Room ID</span>
+                <input
+                  type="text"
+                  value={roomId ?? ""}
+                  onChange={(event) => setRoomId(event.target.value.trim().length > 0 ? event.target.value : null)}
+                  placeholder="!room:matrix.example"
+                  data-testid="matrix-composer-room-id"
+                />
+              </div>
+              <div>
+                <span>Room name</span>
+                <input
+                  type="text"
+                  value={roomName ?? ""}
+                  onChange={(event) => setRoomName(event.target.value.trim().length > 0 ? event.target.value : null)}
+                  placeholder="Room name"
+                  data-testid="matrix-composer-room-name"
+                />
+              </div>
+              <div>
+                <span>Post ID</span>
+                <input
+                  type="text"
+                  value={selectedEventId ?? ""}
+                  onChange={(event) => setSelectedEventId(event.target.value.trim().length > 0 ? event.target.value : null)}
+                  placeholder="event id"
+                  data-testid="matrix-composer-post-id"
+                />
+              </div>
+              <div>
+                <span>Thread root ID</span>
+                <input
+                  type="text"
+                  value={selectedThreadRootId ?? ""}
+                  onChange={(event) => setSelectedThreadRootId(event.target.value.trim().length > 0 ? event.target.value : null)}
+                  placeholder="thread root id"
+                  data-testid="matrix-composer-thread-root-id"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="info-block">
+            <p className="info-label">Draft</p>
+            <textarea
+              className="matrix-textarea"
+              rows={4}
+              value={draftContent}
+              onChange={(event) => setDraftContent(event.target.value)}
+              placeholder="Composer draft content"
+              aria-label="Matrix composer draft"
+              data-testid="matrix-composer-draft"
+            />
+          </div>
+
+          <div className="action-row">
+            <button type="button" onClick={submitMatrixComposer} data-testid="matrix-composer-submit">
+              Submit composer
+            </button>
+            <span className="muted-copy">
+              {composerTarget.kind === "none"
+                ? "Der Submit bleibt blockiert, bis ein Ziel explizit gesetzt ist."
+                : "Der Submit ist derzeit fail-closed, weil kein Write-Contract im Backend verdrahtet ist."}
+            </span>
+          </div>
+
+          {lastActionResult ? (
+            <p className="info-note" data-testid="matrix-composer-result">
+              {lastActionResult}
+            </p>
+          ) : null}
         </section>{" "}
         <div className="matrix-column">
           {" "}
