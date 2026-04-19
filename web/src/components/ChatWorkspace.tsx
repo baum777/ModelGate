@@ -15,7 +15,6 @@ import {
 type ChatWorkspaceProps = {
   session: ChatSession;
   backendHealthy: boolean | null;
-  backendHealthLabel: string | null;
   activeModelAlias: string | null;
   availableModels: string[];
   onActiveModelAliasChange: (alias: string) => void;
@@ -40,6 +39,17 @@ function statusLabel(state: ConnectionState) {
     default:
       return "Bereit";
   }
+}
+
+function normalizeNotice(message: string | null, fallback: string) {
+  if (!message || message.trim().length === 0) {
+    return fallback;
+  }
+
+  return message
+    .replace(/\bhttps?:\/\/\S+/g, "the backend")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function ChatWorkspace(props: ChatWorkspaceProps) {
@@ -254,13 +264,11 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     >
       <section className="workspace-hero chat-hero">
         <div>
-          <p className={`status-pill status-${props.backendHealthy === false ? "error" : props.backendHealthy === true ? "ready" : "partial"}`}>
-            {props.backendHealthy === true ? "Backend healthy" : props.backendHealthy === false ? "Backend error" : "Backend pending"}
-          </p>
           <h1>Chat</h1>
           <p className="hero-copy">
             Antworten werden im Backend erzeugt. Der Browser zeigt nur den Verlauf.
           </p>
+          <p className="workspace-session-title">{props.session.title}</p>
         </div>
 
         <aside className="mini-panel">
@@ -286,7 +294,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               ))
             )}
           </select>
-          <p>{props.backendHealthLabel ?? "Backend status pending."}</p>
+          <p>Only the public alias is shown here. Provider targets stay server-side.</p>
         </aside>
       </section>
 
@@ -307,19 +315,6 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             </button>
           </div>
         </header>
-
-        <div className="chat-session-banner">
-          <div>
-            <p className="info-label">Persistente Session</p>
-            <strong>{props.session.title}</strong>
-            <p className="muted-copy">
-              Diese Chat-Session bleibt erhalten, wenn du Workspaces wechselst, und kann aus der Session-Liste wieder geöffnet werden.
-            </p>
-          </div>
-          <span className={`status-pill status-${props.backendHealthy === false ? "error" : props.backendHealthy === true ? "ready" : "partial"}`}>
-            {props.backendHealthy === true ? "Backend bereit" : props.backendHealthy === false ? "Backend gestört" : "Backend wird geprüft"}
-          </span>
-        </div>
 
         <div className="message-list" aria-live="polite" ref={messageListRef} onScroll={updateScrollState}>
           {chatState.messages.length === 0 ? (
@@ -348,13 +343,13 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
 
         {warning ? (
           <p className="warning-banner" role="status">
-            {warning}
+            {normalizeNotice(warning, "The chat stream reported a warning.")}
           </p>
         ) : null}
 
         {error ? (
           <p className="error-banner" role="alert">
-            {error}
+            {normalizeNotice(error, "The chat request failed.")}
           </p>
         ) : null}
 

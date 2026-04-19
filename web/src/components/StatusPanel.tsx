@@ -1,9 +1,24 @@
 import type { ReactNode } from "react";
-import { ExpertDetails, type ExpertDetailRow } from "./ExpertDetails.js";
+import { DiagnosticsDrawer, type DiagnosticsDetailRow } from "./ExpertDetails.js";
 
 export type StatusPanelRow = {
   label: string;
   value: string;
+};
+
+export type GlobalStatusTone = "blocker" | "warning" | "info" | "hidden";
+
+type SystemSummaryCardProps = {
+  title: string;
+  headline: string;
+  badge: string;
+  badgeTone?: "ready" | "partial" | "error";
+  rows: StatusPanelRow[];
+  helperText?: string;
+  detailsLabel?: string;
+  onOpenDiagnostics?: () => void;
+  diagnosticsDisabled?: boolean;
+  testId?: string;
 };
 
 type StatusPanelProps = {
@@ -15,24 +30,25 @@ type StatusPanelProps = {
   safetyTitle: string;
   safetyText?: string;
   expertMode: boolean;
-  expertRows?: ExpertDetailRow[];
+  expertRows?: DiagnosticsDetailRow[];
   expertChildren?: ReactNode;
+  testId?: string;
 };
 
-export function StatusPanel({
+export function SystemSummaryCard({
   title,
   headline,
   badge,
   badgeTone = "ready",
   rows,
-  safetyTitle,
-  safetyText,
-  expertMode,
-  expertRows = [],
-  expertChildren,
-}: StatusPanelProps) {
+  helperText,
+  detailsLabel = "Diagnostics",
+  onOpenDiagnostics,
+  diagnosticsDisabled = false,
+  testId,
+}: SystemSummaryCardProps) {
   return (
-    <section className="status-panel-card" role="region" aria-label={title}>
+    <section className="status-panel-card system-summary-card" role="region" aria-label={title} data-testid={testId}>
       <div className="context-summary-header">
         <div>
           <span>{title}</span>
@@ -50,16 +66,66 @@ export function StatusPanel({
         ))}
       </div>
 
-      {safetyText && safetyText.trim().length > 0 ? (
-        <div className="safety-tip-card">
-          <p className="info-label">{safetyTitle}</p>
-          <p>{safetyText}</p>
+      {helperText ? <p className="system-summary-helper">{helperText}</p> : null}
+
+      {onOpenDiagnostics ? (
+        <div className="system-summary-actions">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={onOpenDiagnostics}
+            disabled={diagnosticsDisabled}
+          >
+            {detailsLabel}
+          </button>
         </div>
       ) : null}
+    </section>
+  );
+}
 
-      <ExpertDetails expertMode={expertMode} rows={expertRows} className="status-panel-expert">
+export function StatusPanel({
+  title,
+  headline,
+  badge,
+  badgeTone = "ready",
+  rows,
+  safetyTitle,
+  safetyText,
+  expertMode,
+  expertRows = [],
+  expertChildren,
+  testId,
+}: StatusPanelProps) {
+  return (
+    <section className="status-panel-card status-panel-compact" role="region" aria-label={title} data-testid={testId}>
+      <div className="context-summary-header">
+        <div>
+          <span>{title}</span>
+          <strong>{headline}</strong>
+        </div>
+        <span className={`status-pill status-${badgeTone}`}>{badge}</span>
+      </div>
+
+      <div className="status-panel-grid status-panel-grid-compact">
+        {rows.map((row) => (
+          <div key={row.label}>
+            <span>{row.label}</span>
+            <strong>{row.value}</strong>
+          </div>
+        ))}
+      </div>
+
+      {safetyText && safetyText.trim().length > 0 ? (
+        <p className="status-panel-note">
+          <span className="info-label">{safetyTitle}</span>
+          <span>{safetyText}</span>
+        </p>
+      ) : null}
+
+      <DiagnosticsDrawer expertMode={expertMode} rows={expertRows} className="status-panel-expert">
         {expertChildren}
-      </ExpertDetails>
+      </DiagnosticsDrawer>
     </section>
   );
 }

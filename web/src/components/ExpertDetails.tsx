@@ -1,35 +1,43 @@
 import type { ReactNode } from "react";
 
-export type ExpertDetailRow = {
+export type DiagnosticsDetailRow = {
   label: string;
   value: ReactNode;
 };
 
-type ExpertDetailsProps = {
+type DiagnosticsDrawerProps = {
   expertMode: boolean;
   title?: string;
-  rows?: ExpertDetailRow[];
+  rows?: DiagnosticsDetailRow[];
   children?: ReactNode;
   className?: string;
+  open?: boolean;
+  onToggle?: (open: boolean) => void;
 };
 
 function joinClassNames(...classNames: Array<string | false | null | undefined>) {
   return classNames.filter(Boolean).join(" ");
 }
 
-export function ExpertDetails({
+export function DiagnosticsDrawer({
   expertMode,
-  title = "Technische Details",
+  title = "Diagnostics",
   rows = [],
   children,
   className,
-}: ExpertDetailsProps) {
+  open = true,
+  onToggle,
+}: DiagnosticsDrawerProps) {
   if (!expertMode) {
     return null;
   }
 
   return (
-    <details className={joinClassNames("expert-details", className)} open>
+    <details
+      className={joinClassNames("expert-details expert-details-secondary diagnostics-drawer", className)}
+      open={open}
+      onToggle={(event) => onToggle?.(event.currentTarget.open)}
+    >
       <summary>{title}</summary>
       {rows.length > 0 ? (
         <div className="expert-details-grid">
@@ -44,4 +52,8 @@ export function ExpertDetails({
       {children}
     </details>
   );
+}
+
+export function ExpertDetails(props: DiagnosticsDrawerProps) {
+  return <DiagnosticsDrawer {...props} />;
 }

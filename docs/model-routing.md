@@ -14,7 +14,7 @@ This document describes the current backend-owned model routing surface in Model
 - `GET /models` exposes only the public alias list. It does not expose provider IDs.
 - Chat continues to use backend-owned routing and the existing OpenRouter policy layer.
 - GitHub proposal planning is backend-owned and now resolves its model through workflow policy.
-- Matrix analyze remains deterministic in this slice. The workflow model env is parsed and policy-resolved, but Matrix execute/write behavior is still not model-driven.
+- Matrix analyze remains deterministic in this slice. The workflow model env is parsed and policy-resolved, but Matrix execute/write behavior is still not model-driven and the Matrix policy flags are not runtime-authoritative.
 - Approval-gated GitHub and Matrix writes stay server-side.
 
 ## Configuration Contract
@@ -28,14 +28,14 @@ The server reads backend-only env vars for both legacy OpenRouter compatibility 
 - `CHAT_MODEL` is the explicit backend-owned chat workflow model.
 - `CODE_AGENT_MODEL` is the proposal-planning model for GitHub workflows.
 - `STRUCTURED_PLAN_MODEL` is the structured-output model for schema-critical plan objects.
-- `MATRIX_ANALYZE_MODEL` is parsed for Matrix analysis policy, but Matrix analyze remains deterministic in this slice.
+- `MATRIX_ANALYZE_MODEL` is parsed for Matrix analysis policy, but Matrix analyze remains deterministic in this slice and the Matrix policy flags remain deferred from live runtime authority.
 - `FAST_FALLBACK_MODEL` and `DIALOG_FALLBACK_MODEL` are backend-owned fallback slots.
 - `MODEL_ROUTING_MODE=policy` is the only supported workflow routing mode.
 - `ALLOW_MODEL_FALLBACK=true` allows fallback on non-execute phases only.
 - `MODEL_ROUTING_FAIL_CLOSED=true` keeps missing or malformed routing closed.
 - `MODEL_ROUTING_LOG_ENABLED` and `MODEL_ROUTING_LOG_PATH` enable local workflow routing evidence logs.
 
-Matrix workflow booleans are parsed as contract inputs:
+Matrix workflow booleans are parsed as contract inputs only:
 
 - `MATRIX_ANALYZE_LLM_ENABLED`
 - `MATRIX_EXECUTE_APPROVAL_REQUIRED`
@@ -76,9 +76,9 @@ The backend loads `config/model-capabilities.yml` at runtime. It is not docs-onl
 
 ### Matrix analyze
 
-- The `MATRIX_ANALYZE_MODEL` env is parsed and policy-resolved.
+- The `MATRIX_ANALYZE_MODEL` env is parsed and policy-resolved, but it does not yet make Matrix analyze model-driven.
 - The current Matrix topic-update analyze route still behaves deterministically.
-- Matrix execute and verify remain backend-owned and approval-gated.
+- Matrix execute and verify remain backend-owned and approval-gated; the parsed policy booleans do not supersede those backend-owned gates.
 
 ## Frontend Boundary
 

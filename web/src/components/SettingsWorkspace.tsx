@@ -1,5 +1,3 @@
-import { StatusPanel } from "./StatusPanel.js";
-
 export type DiagnosticEntry = {
   kind: "info" | "warning" | "error";
   label: string;
@@ -12,10 +10,6 @@ type SettingsWorkspaceProps = {
   diagnostics: DiagnosticEntry[];
   onClearDiagnostics: () => void;
 };
-
-function modeCopy(expertMode: boolean) {
-  return expertMode ? "Expert Mode aktiv" : "Beginner Mode aktiv";
-}
 
 export function SettingsWorkspace({
   expertMode,
@@ -43,7 +37,6 @@ export function SettingsWorkspace({
               <strong>Beginner / Expert</strong>
             </div>
           </header>
-          <p>{modeCopy(expertMode)}</p>
           <div className="action-row">
             <button type="button" className={expertMode ? "secondary-button" : ""} onClick={() => onExpertModeChange(false)}>
               Beginner
@@ -86,25 +79,6 @@ export function SettingsWorkspace({
         </article>
       </div>
 
-      <StatusPanel
-        title="Systemstatus"
-        headline="Einstellungen"
-        badge={expertMode ? "Expert Mode" : "Beginner Mode"}
-        badgeTone="partial"
-        rows={[
-          { label: "Ansicht", value: expertMode ? "Expert" : "Beginner" },
-          { label: "Diagnose", value: expertMode ? "Sichtbar" : "Verborgen" },
-          { label: "Freigabe", value: "Nicht erforderlich" },
-          { label: "Sicherheit", value: "Keine Schreibrechte" },
-        ]}
-        safetyTitle="Sicherheit"
-        safetyText=""
-        expertMode={expertMode}
-        expertRows={[
-          { label: "Route", value: "Settings / Diagnose" },
-          { label: "Backend route status", value: expertMode ? "sichtbar" : "verborgen" },
-        ]}
-      />
     </section>
   );
 }

@@ -48,14 +48,13 @@ The browser is a thin PWA shell. It renders backend-owned results, keeps local U
 | `GET /api/matrix/rooms/:roomId/provenance` | implemented when configured | Returns normalized read-only room provenance from joined rooms. |
 | `GET /api/matrix/rooms/:roomId/topic-access` | implemented when configured | Returns room topic power-level access details. |
 | `POST /api/matrix/analyze` | implemented when configured | Creates a backend-owned room topic analysis plan. |
-| `POST /api/matrix/actions/promote` | implemented when configured | Creates a backend-owned room topic update plan with before/after diff. |
 | `GET /api/matrix/actions/:planId` | implemented when configured | Returns the stored Matrix plan while active. |
 | `POST /api/matrix/actions/:planId/execute` | implemented when configured | Executes only with explicit approval intent and re-checks freshness before write. |
 | `GET /api/matrix/actions/:planId/verify` | implemented when configured | Re-reads Matrix state and reports verified, mismatch, pending, or failed. |
 
 ## Current Caveats
 
-- Matrix hierarchy preview is still unwired in the server route layer. The browser UI has a preview affordance, but the backend path is not implemented here.
+- Matrix hierarchy preview is browser-side advisory/mock-only in this repo. It is not backend-verified or write-authoritative.
 - Matrix and GitHub routes fail closed until their backend env is present and valid. They do not auto-enable.
 - `GITHUB_APP_*` fields are reserved placeholders and are not wired into the current runtime path.
 - `npm run smoke:matrix` is manual-only and depends on a dedicated Matrix room.
@@ -137,7 +136,7 @@ The example files use `default` as a backend-owned sentinel in some compatibilit
 | `CHAT_MODEL` | backend only | Explicit chat workflow model. |
 | `CODE_AGENT_MODEL` | backend only | GitHub proposal planning model. |
 | `STRUCTURED_PLAN_MODEL` | backend only | Structured proposal object model. |
-| `MATRIX_ANALYZE_MODEL` | backend only | Parsed Matrix analyze policy input. |
+| `MATRIX_ANALYZE_MODEL` | backend only | Parsed Matrix analyze policy input; still deferred from live Matrix policy authority in this repo slice. |
 | `FAST_FALLBACK_MODEL` | backend only | Non-execute fallback model. |
 | `DIALOG_FALLBACK_MODEL` | backend only | Safe dialogue fallback model. |
 | `MODEL_ROUTING_MODE` | backend only | Workflow routing mode. Only `policy` is supported. |
@@ -206,7 +205,7 @@ The example files use `default` as a backend-owned sentinel in some compatibilit
 | `MATRIX_SMOKE_ROOM_ID` | backend only | Dedicated room for manual Matrix smoke. |
 | `MATRIX_SMOKE_TOPIC_PREFIX` | backend only | Manual Matrix smoke topic prefix. |
 
-The Matrix workflow policy keys are parsed from the environment and documented in [docs/model-routing.md](docs/model-routing.md). The current Matrix topic-update analyze path remains deterministic in this repo slice.
+The Matrix workflow policy keys are parsed from the environment and documented in [docs/model-routing.md](docs/model-routing.md). They remain parsed-only / deferred in this repo slice and do not override the live backend-owned Matrix flow.
 
 ### Optional browser overrides
 

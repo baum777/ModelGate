@@ -524,8 +524,8 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 
 .status-panel-card {
   display: grid;
-  gap: 16px;
-  padding: 18px;
+  gap: 12px;
+  padding: 16px;
   border: 1px solid var(--line);
   border-radius: 22px;
   background: linear-gradient(180deg, var(--panel), var(--panel-strong));
@@ -538,7 +538,29 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
   gap: 10px;
 }
 
+.status-panel-primary-row {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.status-panel-primary-row span,
+.status-panel-helper .info-label {
+  color: var(--muted);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.status-panel-primary-row strong {
+  font-size: 1rem;
+}
+
 .status-panel-grid div,
+.expert-detail-section-grid div,
 .expert-details-grid div {
   display: grid;
   gap: 4px;
@@ -549,6 +571,7 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 }
 
 .status-panel-grid span,
+.expert-detail-section-grid span,
 .expert-details-grid span {
   color: var(--muted);
   font-size: 0.76rem;
@@ -557,8 +580,42 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 }
 
 .status-panel-grid strong,
+.expert-detail-section-grid strong,
 .expert-details-grid strong {
   font-size: 0.96rem;
+}
+
+.status-panel-helper {
+  display: grid;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.status-panel-helper p {
+  margin: 0;
+}
+
+.expert-detail-sections {
+  display: grid;
+  gap: 14px;
+}
+
+.expert-detail-section {
+  display: grid;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.expert-detail-section:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.expert-detail-section-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
 }
 
 .expert-details {
@@ -1957,4 +2014,120 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 :where(button, input, textarea, select):disabled {
   opacity: 0.62;
   cursor: not-allowed;
+}
+
+.status-panel-card {
+  padding: 14px 15px;
+  gap: 10px;
+  border-radius: 18px;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.18);
+}
+
+.status-panel-grid {
+  gap: 8px;
+}
+
+.status-panel-grid div,
+.expert-detail-section-grid div,
+.expert-details-grid div {
+  padding: 10px 12px;
+}
+
+.status-panel-compact .status-panel-grid {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.status-panel-note {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+}
+
+.status-panel-note .info-label {
+  margin: 0;
+}
+
+.system-summary-card .system-summary-helper {
+  margin: 0;
+  padding-top: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.expert-details-secondary {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  box-shadow: none;
+}
+
+.expert-details-secondary summary {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.expert-details-secondary .expert-details-grid {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.github-hero-note {
+  display: grid;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.github-hero-note p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.github-hero-note .warning-banner,
+.github-hero-note .error-banner {
+  margin-top: 4px;
+}
+
+.workspace-summary-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.matrix-workspace .workspace-summary-card {
+  padding: 14px 16px;
+  gap: 10px;
+}
+
+.matrix-workspace .workspace-summary-card .summary-stack {
+  gap: 3px;
+}
+
+.matrix-workspace .workspace-summary-card .summary-stack span {
+  font-size: 0.88rem;
+}
+
+.matrix-workspace .workspace-summary-note {
+  margin-top: 2px;
+}
+
+.review-workspace .status-panel-card {
+  max-width: 100%;
+}
+
+.settings-workspace .workspace-card {
+  gap: 12px;
+}
+
+.settings-workspace .workspace-card .action-row {
+  justify-content: flex-start;
 }

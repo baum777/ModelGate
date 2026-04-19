@@ -42,7 +42,6 @@ export type GitHubWorkspaceStatus = {
 type GitHubWorkspaceProps = {
   session: GitHubSession;
   backendHealthy: boolean | null;
-  backendHealthLabel: string | null;
   expertMode: boolean;
   onTelemetry: (
     kind: "info" | "warning" | "error",
@@ -661,6 +660,20 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       ? "Änderungen werden erst nach deiner Freigabe vorbereitet oder ausgeführt."
       : "Die Analyse ist nur lesend. Es werden keine Dateien geändert.";
 
+  const workspaceNotice = proposalPlan && stalePlanBlocked
+    ? "Der Vorschlag ist veraltet und muss neu erstellt werden."
+    : executionError && !stalePlanBlocked
+      ? "Die Ausführung konnte nicht abgeschlossen werden."
+      : verificationError
+        ? "Die Prüfung konnte nicht abgeschlossen werden."
+        : analysisError
+          ? "Die Analyse konnte nicht abgeschlossen werden."
+          : proposalError
+            ? "Der Vorschlag konnte nicht erstellt werden."
+            : reposError
+              ? "Die Repo-Liste konnte nicht geladen werden."
+              : null;
+
   return (
     <section
       className="workspace-panel github-workspace"
@@ -714,32 +727,27 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                 <span>Status: {formatRepoStatus(selectedRepo.status)}</span>
               </div>
               <p>{selectedRepo.description ?? "Keine Beschreibung vorhanden."}</p>
-              <p className="muted-copy">{props.backendHealthLabel ?? "Backendstatus wird geladen."}</p>
             </article>
           ) : (
             <p>{reposLoading ? "Erlaubte Repos werden geladen." : "Nur erlaubte Repos werden angezeigt."}</p>
           )}
+
+          <div className="github-hero-note">
+            <p className="info-label">Nächster Schritt</p>
+            <strong>{nextStepTitle}</strong>
+            <p>{nextStepDescription}</p>
+            {workspaceNotice ? (
+              <p
+                className={proposalPlan && stalePlanBlocked ? "warning-banner" : "error-banner"}
+                role={proposalPlan && stalePlanBlocked ? "status" : "alert"}
+                data-testid="github-workspace-notice"
+              >
+                {workspaceNotice}
+              </p>
+            ) : null}
+          </div>
         </aside>
       </section>
-
-      <div className="github-safety-strip">
-        <span className="status-pill status-ready">Nur Lesen aktiv</span>
-        <p>Keine Änderungen. Nur nach Freigabe.</p>
-        <span className="status-pill status-partial">Nur nach Freigabe</span>
-      </div>
-
-      <article className={`github-next-step ${hasSelection ? "github-next-step-ready" : "github-next-step-empty"}`}>
-        <div>
-          <p className="info-label">Nächster Schritt</p>
-          <strong>{nextStepTitle}</strong>
-          <p>{nextStepDescription}</p>
-        </div>
-        <span className={`status-pill ${proposalPlan ? "status-partial" : "status-ready"}`}>
-          {proposalPlan ? "Freigabe nötig" : "Nur Lesen"}
-        </span>
-      </article>
-
-      {reposError ? <p className="error-banner" role="alert">{reposError}</p> : null}
 
       {!hasSelection ? (
         <article className="empty-state-card">
@@ -818,9 +826,6 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
               </div>
             </article>
           </div>
-
-          {analysisError ? <p className="error-banner" role="alert">{analysisError}</p> : null}
-          {proposalError ? <p className="error-banner" role="alert">{proposalError}</p> : null}
 
           <article className="workspace-card github-review-card">
             <header className="card-header">
@@ -927,24 +932,6 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
               </div>
             )}
           </article>
-
-          {proposalPlan && stalePlanBlocked ? (
-            <p className="warning-banner" role="alert" data-testid="github-stale-plan-warning">
-              Der Vorschlag ist veraltet und muss neu erstellt werden.
-            </p>
-          ) : null}
-
-          {executionError && !stalePlanBlocked ? (
-            <p className="error-banner" role="alert" data-testid="github-execution-error">
-              {executionError}
-            </p>
-          ) : null}
-
-          {verificationError ? (
-            <p className="error-banner" role="alert" data-testid="github-verification-error">
-              {verificationError}
-            </p>
-          ) : null}
 
           {proposalPlan && executionResult ? (
             <article className="workspace-card github-plan-summary github-pr-result-card" data-testid="github-pr-result">

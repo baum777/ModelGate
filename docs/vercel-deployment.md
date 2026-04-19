@@ -59,7 +59,7 @@ The backend loads `config/model-capabilities.yml` at runtime. The routing contra
 | `CHAT_MODEL` | no | no | Explicit chat workflow model. | backend-owned |
 | `CODE_AGENT_MODEL` | no | no | GitHub proposal planning model. | backend-owned |
 | `STRUCTURED_PLAN_MODEL` | no | no | Structured-output plan model. | backend-owned |
-| `MATRIX_ANALYZE_MODEL` | no | no | Parsed Matrix analyze policy input. | parsed; current Matrix analyze stays deterministic |
+| `MATRIX_ANALYZE_MODEL` | no | no | Parsed Matrix analyze policy input; deferred from live Matrix policy authority in this slice. | parsed-only; current Matrix analyze stays deterministic |
 | `FAST_FALLBACK_MODEL` | no | no | Non-execute fallback model. | backend-owned |
 | `DIALOG_FALLBACK_MODEL` | no | no | Safe dialogue fallback model. | backend-owned |
 | `MODEL_ROUTING_MODE` | no | no | Workflow routing mode. | only `policy` is supported |
@@ -128,11 +128,11 @@ These keys are parsed by the backend even though Matrix analyze remains determin
 
 | Name | Required | Secret | Purpose | Status |
 | --- | --- | --- | --- | --- |
-| `MATRIX_ANALYZE_LLM_ENABLED` | no | no | Parsed Matrix workflow flag. | parsed, not yet wired to model-driven analyze |
-| `MATRIX_EXECUTE_APPROVAL_REQUIRED` | no | no | Parsed Matrix workflow flag. | parsed, approval gating remains backend-owned |
-| `MATRIX_VERIFY_AFTER_EXECUTE` | no | no | Parsed Matrix workflow flag. | parsed, verify route remains backend-owned |
-| `MATRIX_ALLOWED_ACTION_TYPES` | no | no | Parsed Matrix workflow allowlist. | parsed, current route surface stays deterministic |
-| `MATRIX_FAIL_CLOSED` | no | no | Parsed Matrix workflow fail-closed flag. | parsed, current routes already fail closed |
+| `MATRIX_ANALYZE_LLM_ENABLED` | no | no | Parsed Matrix workflow flag. | parsed-only; deferred from live Matrix policy authority |
+| `MATRIX_EXECUTE_APPROVAL_REQUIRED` | no | no | Parsed Matrix workflow flag. | parsed-only; approval gating remains backend-owned |
+| `MATRIX_VERIFY_AFTER_EXECUTE` | no | no | Parsed Matrix workflow flag. | parsed-only; verify route remains backend-owned |
+| `MATRIX_ALLOWED_ACTION_TYPES` | no | no | Parsed Matrix workflow allowlist. | parsed-only; current route surface stays deterministic |
+| `MATRIX_FAIL_CLOSED` | no | no | Parsed Matrix workflow fail-closed flag. | parsed-only; current routes already fail closed |
 
 ### Matrix backend authority
 

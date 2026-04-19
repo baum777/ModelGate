@@ -193,6 +193,31 @@ test("matrix analyze rejects missing room ids", async (t) => {
   });
 });
 
+test("matrix promote route is no longer available", async (t) => {
+  const app = createApp({
+    env: createTestEnv(),
+    openRouter: createMockOpenRouterClient(),
+    matrixConfig: createTestMatrixConfig(),
+    matrixClient: createMockMatrixClient(),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/matrix/actions/promote",
+    payload: {
+      roomId: "!room:matrix.example",
+      topic: "New topic"
+    }
+  });
+
+  assert.equal(response.statusCode, 404);
+});
+
 test("matrix topic access reports joined room power details", async (t) => {
   const app = createApp({
     env: createTestEnv(),

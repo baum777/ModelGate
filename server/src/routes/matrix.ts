@@ -544,44 +544,6 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
     }
   });
 
-  app.post("/api/matrix/actions/promote", async (request, reply) => {
-    if (!deps.config.ready) {
-      return sendMatrixError(reply, "matrix_not_configured");
-    }
-
-    const parsed = MatrixUpdateRoomTopicRequestSchema.safeParse(request.body);
-
-    if (!parsed.success) {
-      return sendMatrixError(reply, "invalid_request");
-    }
-
-    try {
-      await assertMatrixRoomTopicUpdateReady(deps, parsed.data.roomId);
-      const before = await deps.client.readRoomTopic(parsed.data.roomId);
-      const plan = actionStore.createPlan({
-        planId: `plan_${randomUUID()}`,
-        type: "update_room_topic",
-        roomId: parsed.data.roomId,
-        status: "pending_review",
-        createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + actionStore.ttlMs).toISOString(),
-        diff: {
-          field: "topic",
-          before,
-          after: parsed.data.topic
-        },
-        requiresApproval: true
-      });
-
-      return reply.status(200).send({
-        ok: true,
-        plan: serializeActionPlan(plan)
-      });
-    } catch (error) {
-      return handleMatrixError(reply, error);
-    }
-  });
-
   app.get("/api/matrix/actions/:planId", async (request, reply) => {
     if (!deps.config.ready) {
       return sendMatrixError(reply, "matrix_not_configured");

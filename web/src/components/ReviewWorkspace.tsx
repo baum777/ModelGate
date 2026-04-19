@@ -53,20 +53,28 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
       </section>
 
       <StatusPanel
-        title="Reviewstatus"
+        title="Offene Prüfungen"
         headline={countLabel}
         badge={items.length === 0 ? "Leer" : "Aktiv"}
         badgeTone={items.length === 0 ? "partial" : "ready"}
         rows={[
           { label: "Offen", value: String(items.length) },
-          { label: "Stand", value: items.length === 0 ? "Noch nichts vorbereitet" : statusLabel(items[0]?.status ?? "pending_review") },
-          { label: "Freigabe", value: items.some((item) => item.status === "pending_review") ? "Erforderlich" : "Nicht erforderlich" },
-          { label: "Ausführung", value: items.some((item) => item.status === "stale") ? "Blockiert" : "Nicht gestartet" },
+          {
+            label: "Nächster Schritt",
+            value:
+              items.length === 0
+                ? "Keine offenen Prüfungen"
+                : items.some((item) => item.status === "stale")
+                  ? "Veraltete Prüfung erneuern"
+                  : items.some((item) => item.status === "pending_review")
+                    ? "Freigabe prüfen"
+                    : "Bereit",
+          },
         ]}
         safetyTitle="Sicherheit"
         safetyText="Freigaben laufen nur hier. Veraltete Vorschläge werden nicht ausgeführt."
         expertMode={expertMode}
-        expertRows={[
+      expertRows={[
           { label: "Runtime event trail", value: items.map((item) => `${item.source}:${item.id}`).join(" · ") || "n/a" },
           { label: "Backend route status", value: items.length === 0 ? "keine offenen Routen" : "offene Vorschläge vorhanden" },
         ]}

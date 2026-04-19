@@ -3,7 +3,7 @@
 ## Status Ledger
 
 - Locally verified: backend health, public model alias, SSE chat consumption, PWA shell, thin nav tabs, reducer-driven chat state, restored-session badge, beginner/expert shell toggle, GitHub repos/context/proposal/execute/verify, Matrix whoami, joined rooms, scope resolve, scope summary, provenance, topic-access, analyze, room topic plan/execute/verify, Matrix malformed-200 fail-closed behavior
-- Partially covered: Matrix hierarchy preview still depends on a browser-side mock in this repo because the server route is not wired here
+- Partially covered: Matrix hierarchy preview is browser-side mock-only in this repo and is not backend-verified or write-authoritative
 - Deferred: live Matrix E2E verification against a real Matrix origin, Undo, cross-device sync, bulk review queue, advanced observability
 
 ## UI Boundaries
@@ -13,6 +13,7 @@
 - `Chat` is a consumer surface for backend-owned SSE and renders public model aliases only
 - `GitHub Workspace` reads allowed repos, prepares proposals, and stays review-first and approval-gated
 - `Matrix Workspace` covers Explore, Analyze, Review, and Verify; backend-owned write flows stay approval-gated
+- Matrix hierarchy preview is an advisory browser-side mock only; it is not part of the authoritative write flow
 - `Review` is the only approval surface
 - `Settings` hosts beginner/expert mode and Expert-only diagnostics
 - restored local state is visible, but it is never backend truth
@@ -43,5 +44,4 @@
 - provider routing in the browser
 - direct Matrix writes from the frontend
 - silent repair of malformed streams
-- treating Matrix hierarchy preview as wired backend truth
-
+- treating Matrix hierarchy preview as wired backend truth or backend-verified authority

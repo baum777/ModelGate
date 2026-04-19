@@ -49,8 +49,15 @@ test("matrix whoami rejects malformed 200 payloads", async () => {
 });
 
 test("matrix room topic analysis validates structured plan payloads", async () => {
-  const restoreFetch = installFetchMock(async () =>
-    new Response(
+  const seenRequests: Array<{ url: string; method: string }> = [];
+  const restoreFetch = installFetchMock(async (input, init) => {
+    const requestUrl = typeof input === "string" ? input : input.url;
+    seenRequests.push({
+      url: requestUrl,
+      method: init?.method ?? "GET"
+    });
+
+    return new Response(
       JSON.stringify({
         ok: true,
         plan: {
@@ -81,8 +88,8 @@ test("matrix room topic analysis validates structured plan payloads", async () =
           "Content-Type": "application/json"
         }
       }
-    )
-  );
+    );
+  });
 
   try {
     const plan = await analyzeRoomTopicUpdate({
@@ -93,6 +100,8 @@ test("matrix room topic analysis validates structured plan payloads", async () =
     assert.equal(plan.roomId, "!room:example");
     assert.equal(plan.actions[0]?.type, "set_room_topic");
     assert.equal(plan.proposedValue, "New topic");
+    assert.equal(new URL(seenRequests[0]?.url ?? "http://127.0.0.1").pathname, "/api/matrix/analyze");
+    assert.deepEqual(seenRequests.map((request) => request.method), ["POST"]);
   } finally {
     restoreFetch();
   }

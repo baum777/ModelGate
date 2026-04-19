@@ -7,7 +7,6 @@ import type {
 } from "./github-api.js";
 import type {
   MatrixExecutionResult,
-  MatrixPlan,
   MatrixProvenance,
   MatrixRoomTopicAgentPlan,
   MatrixRoomTopicExecutionResult,
@@ -99,9 +98,6 @@ export type MatrixSessionMetadata = {
   spaceHierarchySpace: string | null;
   spaceHierarchyLoading: boolean;
   spaceHierarchyError: string | null;
-  promotedPlan: MatrixPlan | null;
-  promotionLoading: boolean;
-  promotionError: string | null;
   planRefreshError: string | null;
   planRefreshLoading: boolean;
   stalePlanDetected: boolean;
@@ -385,6 +381,76 @@ function normalizeMatrixComposerTarget(value: unknown): MatrixComposerTarget {
   };
 }
 
+function readLegacyTopicValue(value: unknown): string | null {
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value;
+  }
+
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const candidates = [value.topic, value.value, value.text, value.content];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function normalizeLegacyMatrixRisk(value: unknown): MatrixRoomTopicAgentPlan["risk"] {
+  switch (value) {
+    case "low_surface":
+      return "low";
+    case "high_surface":
+      return "high";
+    case "medium_surface":
+    default:
+      return "medium";
+  }
+}
+
+function normalizeLegacyMatrixTopicPlan(value: unknown): MatrixRoomTopicAgentPlan | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const planId = readString(value.planId);
+  const roomId = readString(value.roomId) ?? readString(value.targetRoomId);
+  const payloadDelta = isRecord(value.payloadDelta) ? value.payloadDelta : null;
+  const currentValue = payloadDelta ? readLegacyTopicValue(payloadDelta.before) : null;
+  const proposedValue = payloadDelta ? readLegacyTopicValue(payloadDelta.after) : null;
+
+  if (!planId || !roomId || !proposedValue) {
+    return null;
+  }
+
+  return {
+    planId,
+    roomId,
+    scopeId: readNullableString(value.scopeId),
+    snapshotId: readNullableString(value.snapshotId),
+    status: "pending_review",
+    actions: [
+      {
+        type: "set_room_topic",
+        roomId,
+        currentValue,
+        proposedValue
+      }
+    ],
+    currentValue,
+    proposedValue,
+    risk: normalizeLegacyMatrixRisk(value.riskLevel),
+    requiresApproval: true,
+    createdAt: nowIso(),
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString()
+  };
+}
+
 function normalizeMatrixSessionMetadata(value: unknown): MatrixSessionMetadata | null {
   if (!isRecord(value)) {
     return null;
@@ -403,6 +469,9 @@ function normalizeMatrixSessionMetadata(value: unknown): MatrixSessionMetadata |
 
   const scopeSummaryStatus = value.scopeSummaryStatus === "idle" || value.scopeSummaryStatus === "loading" || value.scopeSummaryStatus === "ready" || value.scopeSummaryStatus === "error"
     ? value.scopeSummaryStatus
+    : null;
+  const currentTopicPlan = value.topicPlan !== null && value.topicPlan !== undefined && isRecord(value.topicPlan)
+    ? value.topicPlan as MatrixRoomTopicAgentPlan
     : null;
 
   if (!scopeSummaryStatus) {
@@ -423,9 +492,6 @@ function normalizeMatrixSessionMetadata(value: unknown): MatrixSessionMetadata |
     spaceHierarchySpace: value.spaceHierarchySpace === null || typeof value.spaceHierarchySpace === "string" ? value.spaceHierarchySpace : null,
     spaceHierarchyLoading: Boolean(value.spaceHierarchyLoading),
     spaceHierarchyError: value.spaceHierarchyError === null || typeof value.spaceHierarchyError === "string" ? value.spaceHierarchyError : null,
-    promotedPlan: value.promotedPlan === null || isRecord(value.promotedPlan) ? value.promotedPlan as MatrixPlan | null : null,
-    promotionLoading: Boolean(value.promotionLoading),
-    promotionError: value.promotionError === null || typeof value.promotionError === "string" ? value.promotionError : null,
     planRefreshError: value.planRefreshError === null || typeof value.planRefreshError === "string" ? value.planRefreshError : null,
     planRefreshLoading: Boolean(value.planRefreshLoading),
     stalePlanDetected: Boolean(value.stalePlanDetected),
@@ -439,7 +505,7 @@ function normalizeMatrixSessionMetadata(value: unknown): MatrixSessionMetadata |
     provenanceLoading: Boolean(value.provenanceLoading),
     topicRoomId: typeof value.topicRoomId === "string" ? value.topicRoomId : "",
     topicText: typeof value.topicText === "string" ? value.topicText : "",
-    topicPlan: value.topicPlan === null || isRecord(value.topicPlan) ? value.topicPlan as MatrixRoomTopicAgentPlan | null : null,
+    topicPlan: currentTopicPlan ?? normalizeLegacyMatrixTopicPlan(value.promotedPlan),
     topicApprovalPending: Boolean(value.topicApprovalPending),
     topicExecution: value.topicExecution === null || isRecord(value.topicExecution) ? value.topicExecution as MatrixRoomTopicExecutionResult | null : null,
     topicVerification: value.topicVerification === null || isRecord(value.topicVerification) ? value.topicVerification as MatrixRoomTopicVerificationResult | null : null,
@@ -555,9 +621,6 @@ export function createMatrixSessionMetadata(): MatrixSessionMetadata {
     spaceHierarchySpace: null,
     spaceHierarchyLoading: false,
     spaceHierarchyError: null,
-    promotedPlan: null,
-    promotionLoading: false,
-    promotionError: null,
     planRefreshError: null,
     planRefreshLoading: false,
     stalePlanDetected: false,
@@ -641,12 +704,67 @@ function createBaseSession<TMetadata>(workspace: WorkspaceKind, metadata: TMetad
 function normalizeSessionForSave<TMetadata>(session: WorkspaceSession<TMetadata>): WorkspaceSession<TMetadata> {
   const title = deriveSessionTitle(session);
   const status = deriveSessionStatus(session);
+  const metadata = session.workspace === "matrix"
+    ? normalizeMatrixSessionMetadataForSave(session.metadata as MatrixSessionMetadata)
+    : session.metadata;
 
   return {
     ...session,
+    metadata: metadata as TMetadata,
     title,
     status,
     resumable: !session.archived
+  };
+}
+
+function normalizeMatrixSessionMetadataForSave(metadata: MatrixSessionMetadata): MatrixSessionMetadata {
+  return {
+    mode: metadata.mode,
+    selectedRoomIds: [...metadata.selectedRoomIds],
+    selectedSpaceIds: [...metadata.selectedSpaceIds],
+    currentScope: metadata.currentScope,
+    scopeSummary: metadata.scopeSummary,
+    scopeSummaryStatus: metadata.scopeSummaryStatus,
+    scopeSummaryError: metadata.scopeSummaryError,
+    scopeResolveLoading: metadata.scopeResolveLoading,
+    scopeError: metadata.scopeError,
+    spaceHierarchy: metadata.spaceHierarchy,
+    spaceHierarchySpace: metadata.spaceHierarchySpace,
+    spaceHierarchyLoading: metadata.spaceHierarchyLoading,
+    spaceHierarchyError: metadata.spaceHierarchyError,
+    planRefreshError: metadata.planRefreshError,
+    planRefreshLoading: metadata.planRefreshLoading,
+    stalePlanDetected: metadata.stalePlanDetected,
+    approvalPending: metadata.approvalPending,
+    executionResult: metadata.executionResult,
+    executionLoading: metadata.executionLoading,
+    executionError: metadata.executionError,
+    provenanceRoomId: metadata.provenanceRoomId,
+    provenance: metadata.provenance,
+    provenanceError: metadata.provenanceError,
+    provenanceLoading: metadata.provenanceLoading,
+    topicRoomId: metadata.topicRoomId,
+    topicText: metadata.topicText,
+    topicPlan: metadata.topicPlan,
+    topicApprovalPending: metadata.topicApprovalPending,
+    topicExecution: metadata.topicExecution,
+    topicVerification: metadata.topicVerification,
+    topicPrepareLoading: metadata.topicPrepareLoading,
+    topicPrepareError: metadata.topicPrepareError,
+    topicExecuteLoading: metadata.topicExecuteLoading,
+    topicExecuteError: metadata.topicExecuteError,
+    topicVerifyLoading: metadata.topicVerifyLoading,
+    topicVerifyError: metadata.topicVerifyError,
+    topicPlanRefreshLoading: metadata.topicPlanRefreshLoading,
+    topicPlanRefreshError: metadata.topicPlanRefreshError,
+    roomId: metadata.roomId,
+    roomName: metadata.roomName,
+    selectedEventId: metadata.selectedEventId,
+    selectedThreadRootId: metadata.selectedThreadRootId,
+    composerMode: metadata.composerMode,
+    composerTarget: metadata.composerTarget,
+    draftContent: metadata.draftContent,
+    lastActionResult: metadata.lastActionResult
   };
 }
 
@@ -855,13 +973,13 @@ export function deriveSessionStatus<TMetadata>(session: WorkspaceSession<TMetada
   }
 
   const metadata = session.metadata as MatrixSessionMetadata;
-  if (metadata.executionError || metadata.topicExecuteError || metadata.topicVerifyError || metadata.promotionError) {
+  if (metadata.executionError || metadata.topicExecuteError || metadata.topicVerifyError) {
     return "failed";
   }
   if (metadata.topicExecution || metadata.executionResult || metadata.topicVerification?.status === "verified") {
     return "done";
   }
-  if (metadata.promotedPlan || metadata.topicPlan) {
+  if (metadata.topicPlan) {
     return "review_required";
   }
   if (metadata.draftContent.trim().length > 0 || metadata.composerTarget.kind !== "none") {

@@ -45,7 +45,7 @@ Optional environment variables:
 - `CHAT_MODEL` - explicit backend-owned chat workflow model
 - `CODE_AGENT_MODEL` - backend-owned GitHub proposal planning model
 - `STRUCTURED_PLAN_MODEL` - backend-owned structured-output model for schema-critical plan objects
-- `MATRIX_ANALYZE_MODEL` - parsed Matrix analyze policy input
+- `MATRIX_ANALYZE_MODEL` - parsed Matrix analyze policy input; deferred, not runtime-authoritative
 - `FAST_FALLBACK_MODEL` - backend-owned non-execute fallback model
 - `DIALOG_FALLBACK_MODEL` - backend-owned dialogue fallback model
 - `MODEL_ROUTING_MODE` - workflow routing mode, currently only `policy`
@@ -69,11 +69,11 @@ Optional environment variables:
 - `LLM_ROUTER_LOG_PATH` - repository-local router decision log path, defaults to `.local-ai/logs/ROUTER_DECISIONS.log.md`
 - `LLM_MODEL_RUN_LOG_PATH` - repository-local model run log path
 - `LLM_PROMPT_EVIDENCE_LOG_PATH` - repository-local prompt evidence log path
-- `MATRIX_ANALYZE_LLM_ENABLED` - parsed Matrix workflow policy flag
-- `MATRIX_EXECUTE_APPROVAL_REQUIRED` - parsed Matrix workflow policy flag
-- `MATRIX_VERIFY_AFTER_EXECUTE` - parsed Matrix workflow policy flag
-- `MATRIX_ALLOWED_ACTION_TYPES` - parsed Matrix workflow action allowlist
-- `MATRIX_FAIL_CLOSED` - parsed Matrix workflow policy flag
+- `MATRIX_ANALYZE_LLM_ENABLED` - parsed Matrix workflow policy flag; deferred, not runtime-authoritative
+- `MATRIX_EXECUTE_APPROVAL_REQUIRED` - parsed Matrix workflow policy flag; deferred, not runtime-authoritative
+- `MATRIX_VERIFY_AFTER_EXECUTE` - parsed Matrix workflow policy flag; deferred, not runtime-authoritative
+- `MATRIX_ALLOWED_ACTION_TYPES` - parsed Matrix workflow action allowlist; deferred, not runtime-authoritative
+- `MATRIX_FAIL_CLOSED` - parsed Matrix workflow policy flag; deferred, not runtime-authoritative
 - `MATRIX_ENABLED` - defaults to `false`; enables the server-owned Matrix read-only routes when `true`
 - `MATRIX_REQUIRED` - defaults to `false`; fails startup closed if Matrix is enabled but invalid
 - `MATRIX_BASE_URL` - absolute Matrix homeserver origin used by the server when Matrix is enabled
@@ -385,7 +385,7 @@ These routes are backend-owned and approval-gated. The browser may submit only a
 
 Plans are stored in memory with a short TTL and are not persisted across restarts.
 
-### `POST /api/matrix/actions/promote`
+### `POST /api/matrix/analyze`
 
 Request:
 
@@ -523,7 +523,7 @@ Supported write error codes:
 
 Use this only with a dedicated Matrix test room that is safe to retarget temporarily.
 The smoke script updates the room topic, verifies the change through the backend-owned
-`promote -> fetch -> execute -> verify` lifecycle, and then tries to restore the
+`analyze -> fetch -> execute -> verify` lifecycle, and then tries to restore the
 previous topic when possible.
 
 Required live smoke environment:

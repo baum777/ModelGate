@@ -449,9 +449,8 @@ test("app shell renders, tabs open, header shows backend truth, and secrets stay
   });
   await loadConsole(page);
 
-  await expect(page.locator("header.global-header").getByText("Backend healthy")).toBeVisible();
-  await expect(page.locator("header.global-header").getByText("Public model alias: default")).toBeVisible();
-  await expect(page.locator("header.global-header").getByText("modelgate-test · local · openrouter")).toBeVisible();
+  await expect(page.getByTestId("shell-summary-card")).toBeVisible();
+  await expect(page.locator(".global-status-banner")).toHaveCount(0);
 
   await page.getByTestId("tab-chat").click();
   await expect(page.getByRole("heading", { name: "Chat" })).toBeVisible();
@@ -522,6 +521,95 @@ test("workspace sessions survive workspace switches and can be reopened from the
   await waitForMatrixWorkspace(page);
   await page.getByTestId("tab-chat").click();
   await expect(chatComposer).toHaveValue("Persist this draft");
+});
+
+test("legacy Matrix state is re-saved in canonical topic-update form", async ({ page }) => {
+  const storageKey = "modelgate.console.workspaces.v1";
+
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await loadConsole(page);
+
+  const persistedState = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? "{}"), storageKey);
+  const matrixSession = persistedState.sessionsByWorkspace.matrix[0];
+
+  expect(matrixSession).toBeTruthy();
+
+  matrixSession.metadata = {
+    ...matrixSession.metadata,
+    topicText: "New topic",
+    topicPlan: {
+      planId: "plan_topic_state",
+      roomId: "!room:matrix.example",
+      scopeId: "scope-state",
+      snapshotId: "snapshot-state",
+      status: "pending_review",
+      actions: [
+        {
+          type: "set_room_topic",
+          roomId: "!room:matrix.example",
+          currentValue: "Old topic",
+          proposedValue: "New topic"
+        }
+      ],
+      currentValue: "Old topic",
+      proposedValue: "New topic",
+      risk: "low",
+      requiresApproval: true,
+      createdAt: "2026-04-16T08:00:00.000Z",
+      expiresAt: "2026-04-16T09:00:00.000Z"
+    },
+    promotedPlan: {
+      planId: "legacy-plan",
+      targetRoomId: "!room:matrix.example",
+      summary: "Legacy summary",
+      rationale: "Legacy rationale",
+      requiredApproval: true,
+      stale: false,
+      payloadDelta: {
+        before: { topic: "Old topic" },
+        after: { topic: "New topic" }
+      },
+      impactSummary: [],
+      riskLevel: "low_surface",
+      expectedPermissions: [],
+      authorizationRequirements: [],
+      preflightStatus: "unknown",
+      snapshotId: "snapshot-legacy",
+      scopeId: "scope-legacy"
+    },
+    analysisPrompt: "Legacy prompt",
+    analysisResult: { snapshotId: "snapshot-legacy" },
+    analysisError: "Legacy error",
+    analysisLoading: true,
+    selectedCandidateId: "candidate-legacy",
+    promotionLoading: true,
+    promotionError: "Legacy promote error"
+  };
+
+  await page.evaluate(
+    ({ key, state }) => {
+      localStorage.setItem(key, JSON.stringify(state));
+    },
+    { key: storageKey, state: persistedState },
+  );
+
+  await loadConsole(page);
+  await page.getByTestId("tab-matrix").click();
+  await waitForMatrixWorkspace(page);
+  await expect(page.getByTestId("workspace-session-list")).toContainText("Review nötig");
+
+  const reloadedState = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? "{}"), storageKey);
+  const reloadedMatrixMetadata = reloadedState.sessionsByWorkspace.matrix[0]?.metadata ?? {};
+
+  expect(reloadedMatrixMetadata.topicPlan?.planId).toBe("plan_topic_state");
+  expect(reloadedMatrixMetadata.promotedPlan).toBeUndefined();
+  expect(reloadedMatrixMetadata.analysisPrompt).toBeUndefined();
+  expect(reloadedMatrixMetadata.analysisResult).toBeUndefined();
+  expect(reloadedMatrixMetadata.analysisError).toBeUndefined();
+  expect(reloadedMatrixMetadata.analysisLoading).toBeUndefined();
+  expect(reloadedMatrixMetadata.selectedCandidateId).toBeUndefined();
+  expect(reloadedMatrixMetadata.promotionLoading).toBeUndefined();
+  expect(reloadedMatrixMetadata.promotionError).toBeUndefined();
 });
 
 test("PWA manifest and service worker registration are wired", async ({ page }) => {
@@ -701,7 +789,7 @@ test("beginner hides technical GitHub fields while expert details reveal them", 
   await expect(page.locator("body")).not.toContainText("Route: -");
 
   await page.getByRole("button", { name: "Expert" }).click();
-  await expect(page.getByTestId("github-workspace").locator("summary").filter({ hasText: "Technische Details" })).toBeVisible();
+  await expect(page.getByTestId("github-workspace").locator(".expert-details").locator("summary")).toHaveText("Diagnostics");
   await expect(page.getByTestId("github-workspace").locator(".expert-details").getByText("Anfrage-ID", { exact: true })).toBeVisible();
   await expect(page.getByTestId("github-workspace").locator(".expert-details").getByText("Plan-ID", { exact: true })).toBeVisible();
   await expect(page.getByTestId("github-workspace").locator(".expert-details").getByText("Route")).toBeVisible();
@@ -766,7 +854,7 @@ test("stale GitHub plans block execution and clear approval", async ({ page }) =
   await approval.check();
   await executeButton.click();
 
-  await expect(page.getByTestId("github-stale-plan-warning")).toBeVisible();
+  await expect(page.getByTestId("github-workspace-notice")).toHaveText("Der Vorschlag ist veraltet und muss neu erstellt werden.");
   await expect(approval).not.toBeChecked();
   await expect(executeButton).toBeDisabled();
   await expect(page.getByTestId("github-pr-result")).toHaveCount(0);
@@ -916,13 +1004,29 @@ test("beginner hides Matrix identifiers while expert details reveal them", async
 
   await page.getByRole("button", { name: "Expert" }).click();
   const expertDetails = page.locator(".workspace-context").locator(".expert-details");
-  await expect(expertDetails.locator("summary")).toHaveText("Technische Details");
-  await expect(expertDetails.getByText("Route", { exact: true })).toBeVisible();
-  await expect(expertDetails.getByText("Request ID", { exact: true })).toBeVisible();
-  await expect(expertDetails.getByText("Room ID", { exact: true })).toBeVisible();
-  await expect(expertDetails.getByText("Space ID", { exact: true })).toBeVisible();
+  await expect(expertDetails.locator("summary")).toHaveText("Matrix diagnostics");
+  await expertDetails.locator("summary").click();
+  await expect(expertDetails.getByText("Plan-ID", { exact: true })).toBeVisible();
+  await expect(expertDetails.getByText("Composer mode", { exact: true })).toBeVisible();
+  await expect(expertDetails.getByText("Composer room", { exact: true })).toBeVisible();
+  await expect(expertDetails.getByText("Backend route", { exact: true })).toBeVisible();
+  await expect(expertDetails.getByText("HTTP", { exact: true })).toBeVisible();
   await expect(expertDetails.getByText("SSE lifecycle", { exact: true })).toBeVisible();
   expect(requestUrls.every((url) => !url.includes("matrix.org"))).toBe(true);
+});
+
+test("Settings keeps diagnostics secondary and removes duplicate system status copy", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await loadConsole(page);
+
+  await page.getByTestId("tab-settings").click();
+  await expect(page.getByTestId("settings-workspace")).toBeVisible();
+  await expect(page.getByTestId("settings-workspace")).not.toContainText("Systemstatus");
+  await expect(page.getByTestId("settings-workspace")).not.toContainText("Diagnose leeren");
+  await expect(page.getByTestId("settings-workspace")).not.toContainText("Route");
+
+  await page.getByTestId("settings-workspace").getByRole("button", { name: "Expert" }).click();
+  await expect(page.getByTestId("settings-workspace").getByRole("button", { name: "Diagnose leeren" })).toBeVisible();
 });
 
 test("chat keyboard submit is wired, requests the backend, and keeps focus usable", async ({ page }) => {
@@ -1195,8 +1299,7 @@ test("Matrix provenance loads from the read-only backend route", async ({ page }
   await expect.poll(() => scopeResolveCount).toBe(1);
   await expect.poll(() => scopeSummaryCount).toBe(1);
   await expect.poll(() => provenanceCount).toBe(1);
-  await expect(page.locator(".provenance-card")).toBeVisible();
-  await expect(page.getByText("Read-only room metadata derived from joined rooms.")).toBeVisible();
+  await expect(page.locator(".scope-summary-item-active")).toContainText("ModelGate Test");
   await expect(provenanceRequests[0] ?? "").toContain("/api/matrix/rooms/!room%3Amatrix.example/provenance");
 });
 
@@ -1207,10 +1310,16 @@ test("Matrix tab stays on the topic-update slice and hides legacy contract-only 
   await waitForMatrixWorkspace(page);
 
   await expect(page.getByTestId("matrix-topic-update-panel")).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("Browser-Vorschau");
+  await expect(page.locator("body")).not.toContainText("Hierarchy preview (advisory)");
   await expect(page.locator("body")).not.toContainText("Analyze (contract-only)");
   await expect(page.locator("body")).not.toContainText("Approve and execute (contract-only)");
   await expect(page.locator("body")).not.toContainText("Dismiss (contract-only)");
   await expect(page.locator("body")).not.toContainText("Grounded review of the selected scope");
+
+  await page.getByRole("button", { name: "Expert" }).click();
+  await expect(page.getByText("Hierarchy preview (advisory)")).toBeVisible();
+  await expect(page.getByText("Browser-side mock only. Not backend-verified or write-authoritative.")).toBeVisible();
 });
 
 test("Matrix fail-closed rendering surfaces malformed Matrix responses", async ({ page }) => {
@@ -1232,9 +1341,13 @@ test("Matrix fail-closed rendering surfaces malformed Matrix responses", async (
 test("Matrix room topic update success flows from prepare to verified execute", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
 
-  let promoteCount = 0;
+  let analysisCount = 0;
   let executeCount = 0;
   let verifyCount = 0;
+
+  await page.route("**/api/matrix/actions/promote", async () => {
+    throw new Error("legacy Matrix promote route must not be called");
+  });
 
   await page.route("**/api/matrix/analyze", async (route) => {
     if (route.request().method() !== "POST") {
@@ -1242,7 +1355,7 @@ test("Matrix room topic update success flows from prepare to verified execute", 
       return;
     }
 
-    promoteCount += 1;
+    analysisCount += 1;
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -1347,7 +1460,7 @@ test("Matrix room topic update success flows from prepare to verified execute", 
   await expect(page.getByTestId("matrix-topic-verification")).toContainText("verified");
   await expect(page.getByTestId("matrix-topic-verification")).toContainText("New topic");
 
-  expect(promoteCount).toBe(1);
+  expect(analysisCount).toBe(1);
   expect(executeCount).toBe(1);
   expect(verifyCount).toBe(1);
 });

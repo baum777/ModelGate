@@ -54,7 +54,7 @@ function makeApp(overrides: {
   });
 }
 
-test("matrix promote rejects invalid requests", async (t) => {
+test("matrix analyze rejects invalid requests", async (t) => {
   const app = makeApp();
 
   t.after(async () => {
@@ -63,7 +63,7 @@ test("matrix promote rejects invalid requests", async (t) => {
 
   const response = await app.inject({
     method: "POST",
-    url: "/api/matrix/actions/promote",
+    url: "/api/matrix/analyze",
     payload: {
       roomId: "!room:matrix.example",
       topic: "New room topic"
@@ -78,73 +78,6 @@ test("matrix promote rejects invalid requests", async (t) => {
       message: "Invalid Matrix request"
     }
   });
-});
-
-test("matrix promote creates a reviewable topic plan", async (t) => {
-  const topicClient = createMatrixActionClient({
-    roomTopic: "Old room topic"
-  });
-  const app = makeApp({
-    matrixClient: topicClient.client
-  });
-
-  t.after(async () => {
-    await app.close();
-  });
-
-  const promoteResponse = await app.inject({
-    method: "POST",
-    url: "/api/matrix/actions/promote",
-    payload: {
-      type: "update_room_topic",
-      roomId: "!room:matrix.example",
-      topic: "New room topic"
-    }
-  });
-
-  assert.equal(promoteResponse.statusCode, 200);
-  const promoted = JSON.parse(promoteResponse.body) as {
-    ok: true;
-    plan: {
-      planId: string;
-      type: "update_room_topic";
-      roomId: string;
-      status: "pending_review";
-      createdAt: string;
-      expiresAt: string;
-      diff: {
-        field: "topic";
-        before: string | null;
-        after: string;
-      };
-      requiresApproval: true;
-    };
-  };
-
-  assert.equal(promoted.ok, true);
-  assert.match(promoted.plan.planId, /^plan_/);
-  assert.equal(promoted.plan.type, "update_room_topic");
-  assert.equal(promoted.plan.roomId, "!room:matrix.example");
-  assert.equal(promoted.plan.status, "pending_review");
-  assert.equal(promoted.plan.diff.field, "topic");
-  assert.equal(promoted.plan.diff.before, "Old room topic");
-  assert.equal(promoted.plan.diff.after, "New room topic");
-  assert.equal(promoted.plan.requiresApproval, true);
-  assert.match(promoted.plan.createdAt, /^\d{4}-\d{2}-\d{2}T/);
-  assert.match(promoted.plan.expiresAt, /^\d{4}-\d{2}-\d{2}T/);
-  assert.equal(topicClient.getReadCalls(), 1);
-  assert.equal(topicClient.getWriteCalls(), 0);
-
-  const planResponse = await app.inject({
-    method: "GET",
-    url: `/api/matrix/actions/${promoted.plan.planId}`
-  });
-
-  assert.equal(planResponse.statusCode, 200);
-  const fetched = JSON.parse(planResponse.body) as typeof promoted;
-  assert.equal(fetched.plan.planId, promoted.plan.planId);
-  assert.equal(fetched.plan.status, "pending_review");
-  assert.equal(fetched.plan.diff.before, "Old room topic");
 });
 
 test("matrix analyze creates a deterministic topic plan and execute/verify use it", async (t) => {
@@ -287,21 +220,21 @@ test("matrix execute rejects requests without approval", async (t) => {
     await app.close();
   });
 
-  const promoteResponse = await app.inject({
+  const analyzeResponse = await app.inject({
     method: "POST",
-    url: "/api/matrix/actions/promote",
+    url: "/api/matrix/analyze",
     payload: {
       type: "update_room_topic",
       roomId: "!room:matrix.example",
-      topic: "New room topic"
+      proposedValue: "New room topic"
     }
   });
 
-  const promoted = JSON.parse(promoteResponse.body) as { plan: { planId: string } };
+  const analyzed = JSON.parse(analyzeResponse.body) as { plan: { planId: string } };
 
   const executeResponse = await app.inject({
     method: "POST",
-    url: `/api/matrix/actions/${promoted.plan.planId}/execute`,
+    url: `/api/matrix/actions/${analyzed.plan.planId}/execute`,
     payload: {
       approval: false
     }
@@ -330,22 +263,22 @@ test("matrix execute fails closed for expired plans", async (t) => {
     await app.close();
   });
 
-  const promoteResponse = await app.inject({
+  const analyzeResponse = await app.inject({
     method: "POST",
-    url: "/api/matrix/actions/promote",
+    url: "/api/matrix/analyze",
     payload: {
       type: "update_room_topic",
       roomId: "!room:matrix.example",
-      topic: "New room topic"
+      proposedValue: "New room topic"
     }
   });
 
-  const promoted = JSON.parse(promoteResponse.body) as { plan: { planId: string } };
+  const analyzed = JSON.parse(analyzeResponse.body) as { plan: { planId: string } };
   now += 10_000;
 
   const executeResponse = await app.inject({
     method: "POST",
-    url: `/api/matrix/actions/${promoted.plan.planId}/execute`,
+    url: `/api/matrix/actions/${analyzed.plan.planId}/execute`,
     payload: {
       approval: true
     }
@@ -373,22 +306,22 @@ test("matrix execute rejects stale plans when the topic changed out of band", as
     await app.close();
   });
 
-  const promoteResponse = await app.inject({
+  const analyzeResponse = await app.inject({
     method: "POST",
-    url: "/api/matrix/actions/promote",
+    url: "/api/matrix/analyze",
     payload: {
       type: "update_room_topic",
       roomId: "!room:matrix.example",
-      topic: "New room topic"
+      proposedValue: "New room topic"
     }
   });
 
-  const promoted = JSON.parse(promoteResponse.body) as { plan: { planId: string } };
+  const analyzed = JSON.parse(analyzeResponse.body) as { plan: { planId: string } };
   topicClient.setCurrentTopic("External topic change");
 
   const executeResponse = await app.inject({
     method: "POST",
-    url: `/api/matrix/actions/${promoted.plan.planId}/execute`,
+    url: `/api/matrix/actions/${analyzed.plan.planId}/execute`,
     payload: {
       approval: true
     }
@@ -418,21 +351,21 @@ test("matrix execute writes the room topic and plan fetch shows the executed sta
     await app.close();
   });
 
-  const promoteResponse = await app.inject({
+  const analyzeResponse = await app.inject({
     method: "POST",
-    url: "/api/matrix/actions/promote",
+    url: "/api/matrix/analyze",
     payload: {
       type: "update_room_topic",
       roomId: "!room:matrix.example",
-      topic: "New room topic"
+      proposedValue: "New room topic"
     }
   });
 
-  const promoted = JSON.parse(promoteResponse.body) as { plan: { planId: string } };
+  const analyzed = JSON.parse(analyzeResponse.body) as { plan: { planId: string } };
 
   const executeResponse = await app.inject({
     method: "POST",
-    url: `/api/matrix/actions/${promoted.plan.planId}/execute`,
+    url: `/api/matrix/actions/${analyzed.plan.planId}/execute`,
     payload: {
       approval: true
     }
@@ -450,7 +383,7 @@ test("matrix execute writes the room topic and plan fetch shows the executed sta
   };
 
   assert.equal(executed.ok, true);
-  assert.equal(executed.result.planId, promoted.plan.planId);
+  assert.equal(executed.result.planId, analyzed.plan.planId);
   assert.equal(executed.result.status, "executed");
   assert.equal(executed.result.transactionId, "event-123");
   assert.match(executed.result.executedAt, /^\d{4}-\d{2}-\d{2}T/);
@@ -459,7 +392,7 @@ test("matrix execute writes the room topic and plan fetch shows the executed sta
 
   const planResponse = await app.inject({
     method: "GET",
-    url: `/api/matrix/actions/${promoted.plan.planId}`
+    url: `/api/matrix/actions/${analyzed.plan.planId}`
   });
 
   assert.equal(planResponse.statusCode, 200);
@@ -472,7 +405,7 @@ test("matrix execute writes the room topic and plan fetch shows the executed sta
 
   const secondExecuteResponse = await app.inject({
     method: "POST",
-    url: `/api/matrix/actions/${promoted.plan.planId}/execute`,
+    url: `/api/matrix/actions/${analyzed.plan.planId}/execute`,
     payload: {
       approval: true
     }
@@ -500,20 +433,20 @@ test("matrix verify returns verified, mismatch, and pending states", async (t) =
     await app.close();
   });
 
-  const promoteResponse = await app.inject({
+  const analyzeResponse = await app.inject({
     method: "POST",
-    url: "/api/matrix/actions/promote",
+    url: "/api/matrix/analyze",
     payload: {
       type: "update_room_topic",
       roomId: "!room:matrix.example",
-      topic: "New room topic"
+      proposedValue: "New room topic"
     }
   });
-  const promoted = JSON.parse(promoteResponse.body) as { plan: { planId: string } };
+  const analyzed = JSON.parse(analyzeResponse.body) as { plan: { planId: string } };
 
   const pendingVerifyResponse = await app.inject({
     method: "GET",
-    url: `/api/matrix/actions/${promoted.plan.planId}/verify`
+    url: `/api/matrix/actions/${analyzed.plan.planId}/verify`
   });
 
   assert.equal(pendingVerifyResponse.statusCode, 200);
@@ -534,7 +467,7 @@ test("matrix verify returns verified, mismatch, and pending states", async (t) =
 
   const executeResponse = await app.inject({
     method: "POST",
-    url: `/api/matrix/actions/${promoted.plan.planId}/execute`,
+    url: `/api/matrix/actions/${analyzed.plan.planId}/execute`,
     payload: {
       approval: true
     }
@@ -543,7 +476,7 @@ test("matrix verify returns verified, mismatch, and pending states", async (t) =
 
   const verifiedResponse = await app.inject({
     method: "GET",
-    url: `/api/matrix/actions/${promoted.plan.planId}/verify`
+    url: `/api/matrix/actions/${analyzed.plan.planId}/verify`
   });
 
   assert.equal(verifiedResponse.statusCode, 200);
@@ -565,7 +498,7 @@ test("matrix verify returns verified, mismatch, and pending states", async (t) =
 
   const mismatchResponse = await app.inject({
     method: "GET",
-    url: `/api/matrix/actions/${promoted.plan.planId}/verify`
+    url: `/api/matrix/actions/${analyzed.plan.planId}/verify`
   });
 
   assert.equal(mismatchResponse.statusCode, 200);
@@ -586,7 +519,7 @@ test("matrix verify returns verified, mismatch, and pending states", async (t) =
 test("matrix writer routes normalize authorization and timeout failures without leaking tokens", async (t) => {
   const secretToken = "sk-test-secret-token";
 
-  await t.test("unauthorized promote is normalized", async () => {
+  await t.test("unauthorized analyze is normalized", async () => {
     const app = createApp({
       env: createTestEnv({
         MATRIX_ACCESS_TOKEN: secretToken
@@ -613,11 +546,11 @@ test("matrix writer routes normalize authorization and timeout failures without 
     try {
       const response = await app.inject({
         method: "POST",
-        url: "/api/matrix/actions/promote",
+        url: "/api/matrix/analyze",
         payload: {
           type: "update_room_topic",
           roomId: "!room:matrix.example",
-          topic: "New room topic"
+          proposedValue: "New room topic"
         }
       });
 
@@ -661,21 +594,21 @@ test("matrix writer routes normalize authorization and timeout failures without 
     });
 
     try {
-      const promoteResponse = await app.inject({
+      const analyzeResponse = await app.inject({
         method: "POST",
-        url: "/api/matrix/actions/promote",
+        url: "/api/matrix/analyze",
         payload: {
           type: "update_room_topic",
           roomId: "!room:matrix.example",
-          topic: "New room topic"
+          proposedValue: "New room topic"
         }
       });
 
-      const promoted = JSON.parse(promoteResponse.body) as { plan: { planId: string } };
+      const analyzed = JSON.parse(analyzeResponse.body) as { plan: { planId: string } };
 
       const response = await app.inject({
         method: "POST",
-        url: `/api/matrix/actions/${promoted.plan.planId}/execute`,
+        url: `/api/matrix/actions/${analyzed.plan.planId}/execute`,
         payload: {
           approval: true
         }
@@ -727,21 +660,21 @@ test("matrix writer routes normalize authorization and timeout failures without 
     });
 
     try {
-      const promoteResponse = await app.inject({
+      const analyzeResponse = await app.inject({
         method: "POST",
-        url: "/api/matrix/actions/promote",
+        url: "/api/matrix/analyze",
         payload: {
           type: "update_room_topic",
           roomId: "!room:matrix.example",
-          topic: "New room topic"
+          proposedValue: "New room topic"
         }
       });
 
-      const promoted = JSON.parse(promoteResponse.body) as { plan: { planId: string } };
+      const analyzed = JSON.parse(analyzeResponse.body) as { plan: { planId: string } };
 
       const response = await app.inject({
         method: "GET",
-        url: `/api/matrix/actions/${promoted.plan.planId}/verify`
+        url: `/api/matrix/actions/${analyzed.plan.planId}/verify`
       });
 
       assert.equal(response.statusCode, 504);
@@ -758,7 +691,7 @@ test("matrix writer routes normalize authorization and timeout failures without 
     }
   });
 
-  await t.test("room not found promote is normalized", async () => {
+  await t.test("room not found analyze is normalized", async () => {
     const app = createApp({
       env: createTestEnv({
         MATRIX_ACCESS_TOKEN: secretToken
@@ -785,11 +718,11 @@ test("matrix writer routes normalize authorization and timeout failures without 
     try {
       const response = await app.inject({
         method: "POST",
-        url: "/api/matrix/actions/promote",
+        url: "/api/matrix/analyze",
         payload: {
           type: "update_room_topic",
           roomId: "!missing:matrix.example",
-          topic: "New room topic"
+          proposedValue: "New room topic"
         }
       });
 
@@ -807,3 +740,4 @@ test("matrix writer routes normalize authorization and timeout failures without 
     }
   });
 });
+

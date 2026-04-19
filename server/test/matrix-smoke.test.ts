@@ -48,7 +48,7 @@ test("matrix smoke calls the backend routes in order and redacts token values", 
   const expectedRoomId = "!smoke:matrix.example";
   const expectedPreviousTopic = "Previous dedicated topic";
   let temporaryTopic: string | null = null;
-  let promoteCount = 0;
+  let analyzeCount = 0;
 
   const result = await runMatrixSmoke({
     env: {
@@ -76,11 +76,11 @@ test("matrix smoke calls the backend routes in order and redacts token values", 
         body
       });
 
-      if (requestUrl.pathname === "/api/matrix/actions/promote" && method === "POST") {
-        promoteCount += 1;
-        temporaryTopic = typeof body?.topic === "string" ? body.topic : null;
+      if (requestUrl.pathname === "/api/matrix/analyze" && method === "POST") {
+        analyzeCount += 1;
+        temporaryTopic = typeof body?.proposedValue === "string" ? body.proposedValue : null;
 
-        if (promoteCount === 1) {
+        if (analyzeCount === 1) {
           return createJsonResponse({
             ok: true,
             plan: {
@@ -264,14 +264,14 @@ test("matrix smoke calls the backend routes in order and redacts token values", 
       "GET /api/matrix/whoami",
       "GET /api/matrix/joined-rooms",
       `GET /api/matrix/rooms/${encodeURIComponent(expectedRoomId)}/topic-access`,
-      "POST /api/matrix/actions/promote",
+      "POST /api/matrix/analyze",
       "GET /api/matrix/actions/plan-forward",
       "POST /api/matrix/actions/plan-forward/execute",
       "GET /api/matrix/actions/plan-forward/verify",
       "GET /api/matrix/whoami",
       "GET /api/matrix/joined-rooms",
       `GET /api/matrix/rooms/${encodeURIComponent(expectedRoomId)}/topic-access`,
-      "POST /api/matrix/actions/promote",
+      "POST /api/matrix/analyze",
       "GET /api/matrix/actions/plan-restore",
       "POST /api/matrix/actions/plan-restore/execute",
       "GET /api/matrix/actions/plan-restore/verify"
@@ -338,7 +338,7 @@ test("matrix smoke surfaces cleanup failure with room and topic details", async 
         });
       }
 
-      if (requestUrl.pathname === "/api/matrix/actions/promote" && method === "POST" && body?.topic?.startsWith("Cleanup smoke")) {
+      if (requestUrl.pathname === "/api/matrix/analyze" && method === "POST" && body?.proposedValue?.startsWith("Cleanup smoke")) {
         return createJsonResponse({
           ok: true,
           plan: {
@@ -351,7 +351,7 @@ test("matrix smoke surfaces cleanup failure with room and topic details", async 
             diff: {
               field: "topic",
               before: "Original cleanup topic",
-              after: body.topic
+              after: body.proposedValue
             },
             requiresApproval: true
           }
@@ -371,7 +371,7 @@ test("matrix smoke surfaces cleanup failure with room and topic details", async 
             diff: {
               field: "topic",
               before: "Original cleanup topic",
-              after: body?.topic ?? "Cleanup smoke 2026-04-15T11-11-12-000Z deadbeef"
+              after: body?.proposedValue ?? "Cleanup smoke 2026-04-15T11-11-12-000Z deadbeef"
             },
             requiresApproval: true
           }
@@ -403,7 +403,7 @@ test("matrix smoke surfaces cleanup failure with room and topic details", async 
         });
       }
 
-      if (requestUrl.pathname === "/api/matrix/actions/promote" && method === "POST" && body?.topic === "Original cleanup topic") {
+      if (requestUrl.pathname === "/api/matrix/analyze" && method === "POST" && body?.proposedValue === "Original cleanup topic") {
         return createJsonResponse({
           ok: true,
           plan: {
@@ -478,3 +478,4 @@ test("matrix smoke surfaces cleanup failure with room and topic details", async 
   assert.equal(result.cleanup.temporaryTopic, "Cleanup smoke 2026-04-15T11-11-12-000Z deadbeef");
   assert.equal(result.error.code, "matrix_stale_plan");
 });
+

@@ -246,11 +246,11 @@ async function fetchTopicAccess(fetchImpl, backendBaseUrl, roomId) {
   return callBackendJson(fetchImpl, backendBaseUrl, "GET", `/api/matrix/rooms/${encodeURIComponent(roomId)}/topic-access`);
 }
 
-async function promoteTopic(fetchImpl, backendBaseUrl, roomId, topic) {
-  return callBackendJson(fetchImpl, backendBaseUrl, "POST", "/api/matrix/actions/promote", {
+async function analyzeTopic(fetchImpl, backendBaseUrl, roomId, topic) {
+  return callBackendJson(fetchImpl, backendBaseUrl, "POST", "/api/matrix/analyze", {
     type: "update_room_topic",
     roomId,
-    topic
+    proposedValue: topic
   });
 }
 
@@ -281,6 +281,20 @@ function normalizePlanResponse(payload, expectedTopic) {
 
   if (plan.status !== "pending_review" && plan.status !== "executed") {
     return null;
+  }
+
+  if (Array.isArray(plan.actions) && plan.actions.length > 0) {
+    const action = plan.actions[0];
+
+    if (!action || typeof action !== "object" || action.type !== "set_room_topic") {
+      return null;
+    }
+
+    if (expectedTopic && action.proposedValue !== expectedTopic) {
+      return null;
+    }
+
+    return plan;
   }
 
   if (!plan.diff || typeof plan.diff !== "object" || plan.diff.field !== "topic") {
@@ -372,20 +386,20 @@ async function runUpdateLifecycle(fetchImpl, backendBaseUrl, roomId, topic, opti
     );
   }
 
-  const promoteResult = await promoteTopic(fetchImpl, backendBaseUrl, roomId, topic);
+  const analyzeResult = await analyzeTopic(fetchImpl, backendBaseUrl, roomId, topic);
 
-  if (!promoteResult.ok) {
+  if (!analyzeResult.ok) {
     return {
       ok: false,
-      phase: "promote",
-      error: promoteResult.error
+      phase: "analyze",
+      error: analyzeResult.error
     };
   }
 
-  const plan = normalizePlanResponse(promoteResult.body, topic);
+  const plan = normalizePlanResponse(analyzeResult.body, topic);
 
   if (!plan) {
-    return createSmokeError("smoke_backend_error", "Backend returned an invalid plan", "promote");
+    return createSmokeError("smoke_backend_error", "Backend returned an invalid plan", "analyze");
   }
 
   const fetchedPlanResult = await fetchPlan(fetchImpl, backendBaseUrl, plan.planId);
@@ -585,3 +599,4 @@ if (isMain) {
     process.exitCode = 1;
   });
 }
+

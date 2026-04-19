@@ -3,23 +3,16 @@ import { ExpertDetails } from "./ExpertDetails.js";
 import {
   MATRIX_API_BASE_URL,
   analyzeRoomTopicUpdate,
-  executePlan,
   executeRoomTopicUpdate,
   fetchJoinedRooms,
   fetchMatrixWhoAmI,
-  fetchPlan,
   fetchProvenance,
   fetchRoomHierarchy,
   fetchScopeSummary,
-  promoteCandidate,
   fetchRoomTopicAnalysisPlan,
   resolveScope,
   MatrixRequestError,
-  type MatrixActionCandidate,
-  type MatrixAnalysisResponse,
-  type MatrixExecutionResult,
   type MatrixJoinedRoom,
-  type MatrixPlan,
   type MatrixProvenance,
   type MatrixRoomTopicAgentPlan,
   type MatrixRoomTopicExecutionResult,
@@ -39,7 +32,6 @@ import {
   type MatrixSession,
 } from "../lib/workspace-state.js";
 
-type MatrixMode = "explore" | "analyze" | "review";
 type WorkflowStatus = "loading" | "partial" | "ready" | "error";
 type LoadStatus = "idle" | "loading" | "ready" | "error";
 
@@ -97,17 +89,6 @@ const text = (value: string | null | undefined) =>
 const releaseScopeNotice =
   "Backend-owned Matrix topic updates are available for Explore, scope summary, read-only provenance, analyze, review, approval, execute, and verify.";
 
-function modeLabel(mode: MatrixMode) {
-  switch (mode) {
-    case "analyze":
-      return "Analyze";
-    case "review":
-      return "Review";
-    default:
-      return "Explore";
-  }
-}
-
 function describeMatrixError(operation: string, error: unknown) {
   if (error instanceof MatrixRequestError) {
     if (error.kind === "network") {
@@ -127,7 +108,6 @@ function describeMatrixError(operation: string, error: unknown) {
 }
 export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   const persisted = props.session.metadata;
-  const [mode, setMode] = useState<MatrixMode>(persisted.mode as MatrixMode);
   const [status, setStatus] = useState<WorkflowStatus>("loading");
   const [whoami, setWhoami] = useState<MatrixWhoAmI | null>(null);
   const [joinedRooms, setJoinedRooms] = useState<MatrixJoinedRoom[]>([]);
@@ -160,18 +140,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   const [spaceHierarchyError, setSpaceHierarchyError] = useState<string | null>(
     persisted.spaceHierarchyError,
   );
-  const [analysisResult, setAnalysisResult] = useState<MatrixAnalysisResponse | null>(null);
-  const [promotedPlan, setPromotedPlan] = useState<MatrixPlan | null>(persisted.promotedPlan);
-  const [promotionLoading, setPromotionLoading] = useState(persisted.promotionLoading);
-  const [promotionError, setPromotionError] = useState<string | null>(persisted.promotionError);
-  const [planRefreshError, setPlanRefreshError] = useState<string | null>(persisted.planRefreshError);
-  const [planRefreshLoading, setPlanRefreshLoading] = useState(persisted.planRefreshLoading);
-  const [approvalPending, setApprovalPending] = useState(persisted.approvalPending);
-  const [executionResult, setExecutionResult] =
-    useState<MatrixExecutionResult | null>(persisted.executionResult);
-  const [executionLoading, setExecutionLoading] = useState(persisted.executionLoading);
-  const [executionError, setExecutionError] = useState<string | null>(persisted.executionError);
-  const [stalePlanDetected, setStalePlanDetected] = useState(persisted.stalePlanDetected);
   const [provenanceRoomId, setProvenanceRoomId] = useState(persisted.provenanceRoomId);
   const [provenance, setProvenance] = useState<MatrixProvenance | null>(persisted.provenance);
   const [provenanceError, setProvenanceError] = useState<string | null>(persisted.provenanceError);
@@ -219,19 +187,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   const matrixReviewItems = useMemo<ReviewItem[]>(() => {
     const items: ReviewItem[] = [];
 
-    if (promotedPlan) {
-      const stale = Boolean(promotedPlan.stale || stalePlanDetected);
-      items.push({
-        id: promotedPlan.planId,
-        source: "matrix" as const,
-        title: promotedPlan.summary ?? "Matrix Vorschlag",
-        summary: promotedPlan.rationale ?? "Freigabe erforderlich.",
-        status: stale ? "stale" : "pending_review",
-        stale,
-        sourceLabel: "Matrix Workspace",
-      });
-    }
-
     if (topicPlan) {
       items.push({
         id: topicPlan.planId,
@@ -245,7 +200,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     }
 
     return items;
-  }, [promotedPlan, stalePlanDetected, topicPlan]);
+  }, [topicPlan]);
   const activeComposerRoomId = roomId?.trim() || topicRoomId.trim() || selectedRoomIds[0]?.trim() || null;
   const threadOpenSourceId = selectedThreadRootId?.trim() || selectedEventId?.trim() || null;
   const activeThreadRootId = selectedThreadRootId?.trim() || null;
@@ -253,8 +208,8 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     () => ({
       route: "/api/matrix/*",
       requestId: null,
-      planId: promotedPlan?.planId ?? topicPlan?.planId ?? null,
-      roomId: promotedPlan?.targetRoomId ?? topicPlan?.roomId ?? (topicRoomId || null),
+      planId: topicPlan?.planId ?? null,
+      roomId: topicPlan?.roomId ?? (topicRoomId || null),
       spaceId: selectedSpaces[0] ?? null,
       eventId: null,
       httpStatus: null,
@@ -275,8 +230,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     }),
     [
       currentScope,
-      promotedPlan?.planId,
-      promotedPlan?.targetRoomId,
       scopeSummary,
       selectedSpaces,
       status,
@@ -293,15 +246,12 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     () => ({
       scopeLabel: currentScope ? "Bereich gewählt" : "Noch kein Bereich gewählt",
       summaryLabel: scopeSummary ? "Zusammenfassung bereit" : "Noch keine Zusammenfassung",
-      approvalLabel:
-        (promotedPlan && !promotedPlan.stale) || topicPlan?.status === "pending_review"
-          ? "Freigabe erforderlich"
-          : "Nicht erforderlich",
+      approvalLabel: topicPlan?.status === "pending_review" ? "Freigabe erforderlich" : "Nicht erforderlich",
       safetyText: "Der Browser kann Daten ansehen und Freigabeabsichten senden; backend-owned writes bleiben approval-gated.",
       expertDetails: matrixExpertDetails,
       reviewItems: matrixReviewItems,
     }),
-    [currentScope, matrixExpertDetails, matrixReviewItems, promotedPlan, scopeSummary, topicPlan],
+    [currentScope, matrixExpertDetails, matrixReviewItems, scopeSummary, topicPlan],
   );
 
   useEffect(() => {
@@ -312,7 +262,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   useEffect(() => {
     const snapshotMetadata = {
       ...props.session.metadata,
-      mode,
       selectedRoomIds,
       selectedSpaceIds,
       currentScope,
@@ -325,16 +274,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       spaceHierarchySpace,
       spaceHierarchyLoading,
       spaceHierarchyError,
-      promotedPlan,
-      promotionLoading,
-      promotionError,
-      planRefreshError,
-      planRefreshLoading,
-      stalePlanDetected,
-      approvalPending,
-      executionResult,
-      executionLoading,
-      executionError,
       provenanceRoomId,
       provenance,
       provenanceError,
@@ -380,27 +319,17 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
 
     props.onSessionChange(nextSession);
   }, [
-    approvalPending,
     composerMode,
     composerTarget,
     currentScope,
     draftContent,
-    executionError,
-    executionLoading,
-    executionResult,
     lastActionResult,
-    mode,
-    planRefreshError,
-    planRefreshLoading,
-    promotedPlan,
     provenance,
     provenanceError,
     provenanceLoading,
     provenanceRoomId,
     props.onSessionChange,
     props.session.id,
-    promotionError,
-    promotionLoading,
     roomId,
     roomName,
     scopeError,
@@ -416,7 +345,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     spaceHierarchyError,
     spaceHierarchyLoading,
     spaceHierarchySpace,
-    stalePlanDetected,
     topicApprovalPending,
     topicExecuteError,
     topicExecuteLoading,
@@ -501,15 +429,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     }
   }
   function resetWorkflowState() {
-    setAnalysisResult(null);
-    setPromotedPlan(null);
-    setApprovalPending(false);
-    setExecutionResult(null);
-    setExecutionError(null);
-    setPromotionError(null);
-    setPlanRefreshError(null);
-    setPlanRefreshLoading(false);
-    setStalePlanDetected(false);
     setScopeSummary(null);
     setScopeSummaryStatus("idle");
     setScopeSummaryError(null);
@@ -774,22 +693,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       setScopeSummaryError(describeMatrixError("Matrix scope summary", error));
     }
   }
-  async function refreshCanonicalPlan(planId: string) {
-    setPlanRefreshLoading(true);
-    setPlanRefreshError(null);
-    try {
-      const refreshed = await fetchPlan(planId);
-      setPromotedPlan(refreshed);
-      setStalePlanDetected(refreshed.stale);
-      await loadProvenance(refreshed.targetRoomId);
-      return refreshed;
-    } catch (error) {
-      setPlanRefreshError(describeMatrixError("Matrix plan fetch", error));
-      return null;
-    } finally {
-      setPlanRefreshLoading(false);
-    }
-  }
   async function resolveCurrentScope() {
     if (
       scopeResolveLoading ||
@@ -817,7 +720,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     }
   }
 
-  async function proceedToAnalyze() {
+  async function handleResolveScope() {
     const resolved = await resolveCurrentScope();
     if (resolved) {
       props.onTelemetry(
@@ -825,84 +728,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
         "Matrix scope resolved",
         "Scope summary and provenance are ready.",
       );
-    }
-  }
-  async function promote(candidate: MatrixActionCandidate) {
-    if (!currentScope || !analysisResult)
-      return setPromotionError("Analyze a scope before promoting.");
-    setPromotionLoading(true);
-    setPromotionError(null);
-    setPlanRefreshError(null);
-    try {
-      const plan = await promoteCandidate({
-        candidateId: candidate.candidateId,
-        scopeId: currentScope.scopeId,
-        snapshotId: analysisResult.snapshotId,
-      });
-      setPromotedPlan(plan);
-      setApprovalPending(false);
-      setExecutionResult(null);
-      setStalePlanDetected(plan.stale);
-      await refreshCanonicalPlan(plan.planId);
-      setMode("review");
-      props.onTelemetry("info", "Matrix mode changed", "Review mode activated.");
-    } catch (error) {
-      setPromotionError(describeMatrixError("Matrix promote", error));
-    } finally {
-      setPromotionLoading(false);
-    }
-  }
-
-  function dismissReview() {
-    setPromotedPlan(null);
-    setApprovalPending(false);
-    setExecutionResult(null);
-    setExecutionError(null);
-    setPlanRefreshError(null);
-    setMode("analyze");
-    props.onTelemetry("info", "Matrix review dismissed", "Returned to Analyze mode without executing.");
-  }
-
-  async function execute() {
-    if (!promotedPlan)
-      return setExecutionError("Promote a plan before execution.");
-    if (!approvalPending)
-      return setExecutionError(
-        "Explicit approval is required before execution.",
-      );
-    if (planRefreshError)
-      return setExecutionError("Refresh the canonical plan before execution.");
-    if (planRefreshLoading)
-      return setExecutionError(
-        "Wait for the canonical plan refresh to finish before execution.",
-      );
-    if (promotedPlan.stale || stalePlanDetected)
-      return setExecutionError(
-        "The current plan is stale. Re-run analysis and promote again.",
-      );
-    if (executionResult)
-      return setExecutionError(
-        "This plan has already been executed. Promote a fresh plan before executing again.",
-      );
-    setExecutionLoading(true);
-    setExecutionError(null);
-    try {
-      const response = await executePlan({
-        planId: promotedPlan.planId,
-        approval: true,
-      });
-      setExecutionResult(response.result);
-      setApprovalPending(false);
-      await loadSummary(promotedPlan.scopeId, promotedPlan.targetRoomId);
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message.toLowerCase().includes("stale")
-      )
-        setStalePlanDetected(true);
-      setExecutionError(describeMatrixError("Matrix execute", error));
-    } finally {
-      setExecutionLoading(false);
     }
   }
   async function verifyTopicUpdate(planId: string) {
@@ -1040,7 +865,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     <section
       className="workspace-panel matrix-workspace"
       data-testid="matrix-workspace"
-      aria-busy={status !== "ready" || scopeResolveLoading || spaceHierarchyLoading || promotionLoading || planRefreshLoading || provenanceLoading || topicPrepareLoading || topicExecuteLoading || topicVerifyLoading || executionLoading}
+      aria-busy={status !== "ready" || scopeResolveLoading || spaceHierarchyLoading || provenanceLoading || topicPrepareLoading || topicExecuteLoading || topicVerifyLoading}
     >
       {" "}
       <section className="hero matrix-hero">
@@ -1073,7 +898,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             <span className="workflow-chip workflow-chip-complete">Explore</span>
             <span className="workflow-chip workflow-chip-complete">Scope summary</span>
             <span className="workflow-chip workflow-chip-complete">Provenance</span>
-              <span className={`workflow-chip ${topicPlan ? "workflow-chip-active" : "workflow-chip-idle"}`}>
+            <span className={`workflow-chip ${topicPlan ? "workflow-chip-active" : "workflow-chip-idle"}`}>
               Topic plan
             </span>
             <span className={`workflow-chip ${topicPlan && !topicApprovalPending ? "workflow-chip-active" : "workflow-chip-idle"}`}>
@@ -1086,59 +911,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               Verify
             </span>
           </div>
-          <div className="alert-banner">
-            <p>{releaseScopeNotice}</p>
-          </div>
-          <div className="chip-row">
-            {" "}
-            {[
-              [
-                "Explore",
-                scopeResolveLoading || summaryLoading || Boolean(currentScope),
-                Boolean(scopeSummary) &&
-                  !scopeResolveLoading &&
-                  !summaryLoading &&
-                  !scopeError,
-              ],
-              [
-                "Scope summary",
-                Boolean(scopeSummary) && !scopeSummaryError && !summaryLoading,
-                Boolean(scopeSummary) && !scopeSummaryError && !summaryLoading,
-              ],
-              [
-                "Provenance",
-                Boolean(provenance) || provenanceLoading,
-                Boolean(provenance) && !provenanceLoading,
-              ],
-              [
-                "Topic plan",
-                Boolean(topicPlan) || topicPrepareLoading,
-                topicPlan?.status === "executed",
-              ],
-              [
-                "Approval",
-                Boolean(topicPlan) || topicApprovalPending,
-                topicPlan?.status === "executed",
-              ],
-              [
-                "Execute",
-                topicExecuteLoading || Boolean(topicExecution),
-                Boolean(topicExecution) && !topicExecuteLoading,
-              ],
-              [
-                "Verify",
-                topicVerifyLoading || Boolean(topicVerification),
-                Boolean(topicVerification) && !topicVerifyLoading,
-              ],
-            ].map(([label, active, complete]) => (
-              <span
-                key={label as string}
-                className={`workflow-chip workflow-chip-${complete ? "complete" : active ? "active" : "idle"}`}
-              >
-                {label as string}
-              </span>
-            ))}{" "}
-          </div>{" "}
         </div>{" "}
         <aside className="workspace-summary-card">
           {" "}
@@ -1164,23 +936,24 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               <>
                 <span>Bereichstatus: {currentScope ? "Bereit" : "Wartet"}</span>
                 <span>Zusammenfassung: {scopeSummary ? "Vorhanden" : "Noch nicht geladen"}</span>
-                <span>Freigabe: {promotedPlan || topicPlan ? "Nötig" : "Nicht erforderlich"}</span>
+                <span>Freigabe: {topicPlan ? "Nötig" : "Nicht erforderlich"}</span>
                 <span>Sicherheit: Nur Lesen aktiv</span>
               </>
             )}
           </div>{" "}
+          <p className="workspace-summary-note">{releaseScopeNotice}</p>
         </aside>{" "}
       </section>{" "}
       {status !== "ready" || identityError || roomsError ? (
         <section className="alert-banner" role="status" aria-live="polite">
-          {" "}
           <p>
             {props.expertMode
-              ? `Matrix bootstrap ${status}. Origin: ${MATRIX_API_BASE_URL}`
+              ? `Matrix bootstrap ${status}. Origin: ${MATRIX_API_BASE_URL}.`
               : `Matrix bootstrap ${status}.`}
-          </p>{" "}
-          {identityError ? <p>{identityError}</p> : null}{" "}
-          {roomsError ? <p>{roomsError}</p> : null}{" "}
+            {identityError || roomsError
+              ? ` ${identityError ? "Identity check failed." : ""}${identityError && roomsError ? " " : ""}${roomsError ? "Joined rooms could not be loaded." : ""}`
+              : ""}
+          </p>
         </section>
       ) : null}{" "}
       <section className="matrix-grid">
@@ -1455,7 +1228,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             </p>
           )}{" "}
         </section>{" "}
-        <section className="workspace-card" hidden={mode !== "explore"}>
+        <section className="workspace-card">
           {" "}
           <header className="card-header">
             <div>
@@ -1589,13 +1362,15 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 {selectedSpaces.map((spaceId, index) => (
                   <span key={spaceId} className="scope-chip">
                     <span>{props.expertMode ? `Space: ${spaceId}` : `Bereich ${index + 1}`}</span>
-                    <button
-                      type="button"
-                      className="chip-action"
-                      onClick={() => void loadHierarchy(spaceId)}
-                    >
-                      Preview hierarchy
-                    </button>
+                    {props.expertMode ? (
+                      <button
+                        type="button"
+                        className="chip-action"
+                        onClick={() => void loadHierarchy(spaceId)}
+                      >
+                        Browser-Vorschau
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="chip-action"
@@ -1614,7 +1389,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 <button
                   type="button"
                   onClick={() => {
-                    void proceedToAnalyze();
+                    void handleResolveScope();
                   }}
                   disabled={
                     scopeResolveLoading ||
@@ -1684,52 +1459,55 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 <p className="error-banner">{scopeSummaryError}</p>
               ) : null}{" "}
             </div>{" "}
-            <div className="info-block">
-              {" "}
-              <p className="info-label">Hierarchy preview</p>{" "}
-              {spaceHierarchySpace ? (
-                <div className="scope-summary">
-                  {" "}
-                  <div className="scope-summary-meta">
-                    {props.expertMode ? <span>Space ID: {spaceHierarchySpace}</span> : <span>Bereich aktiv</span>}
-                  </div>{" "}
-                  {spaceHierarchyLoading ? (
-                    <p className="muted-copy">Loading hierarchy…</p>
-                  ) : null}{" "}
-                  {spaceHierarchyError ? (
-                    <p className="error-banner">{spaceHierarchyError}</p>
-                  ) : null}{" "}
-                  {spaceHierarchy?.rooms?.length ? (
-                    <div className="scope-summary-list">
-                      {spaceHierarchy.rooms.map((room, index) => (
-                        <article
-                          key={room.room_id ?? room.name ?? String(index)}
-                          className="scope-summary-item"
-                        >
-                          <div>
-                            <strong>{text(room.name ?? null)}</strong>
-                            <span>{props.expertMode ? text(room.canonical_alias ?? null) : "Bereich verbunden"}</span>
-                          </div>
-                          <small>
-                            {props.expertMode
-                              ? `${text(room.room_type ?? null)} · ${room.room_id ?? "unknown room"}`
-                              : "Übersicht bereit"}
-                          </small>
-                        </article>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="empty-state">
-                      No hierarchy rooms returned yet.
-                    </p>
-                  )}{" "}
-                </div>
-              ) : (
-                <p className="empty-state">
-                  {props.expertMode ? "Add or preview a space ID to inspect hierarchy." : "Bereich wählen, um die Übersicht zu laden."}
-                </p>
-              )}{" "}
-            </div>{" "}
+            {props.expertMode ? (
+              <div className="info-block">
+                {" "}
+                <p className="info-label">Hierarchy preview (advisory)</p>{" "}
+                <p className="muted-copy">
+                  Browser-side mock only. Not backend-verified or write-authoritative.
+                </p>{" "}
+                {spaceHierarchySpace ? (
+                  <div className="scope-summary">
+                    {" "}
+                    <div className="scope-summary-meta">
+                      <span>Space ID: {spaceHierarchySpace}</span>
+                    </div>{" "}
+                    {spaceHierarchyLoading ? (
+                      <p className="muted-copy">Loading hierarchy…</p>
+                    ) : null}{" "}
+                    {spaceHierarchyError ? (
+                      <p className="error-banner">{spaceHierarchyError}</p>
+                    ) : null}{" "}
+                    {spaceHierarchy?.rooms?.length ? (
+                      <div className="scope-summary-list">
+                        {spaceHierarchy.rooms.map((room, index) => (
+                          <article
+                            key={room.room_id ?? room.name ?? String(index)}
+                            className="scope-summary-item"
+                          >
+                            <div>
+                              <strong>{text(room.name ?? null)}</strong>
+                              <span>{text(room.canonical_alias ?? null)}</span>
+                            </div>
+                            <small>
+                              {`${text(room.room_type ?? null)} · ${room.room_id ?? "unknown room"}`}
+                            </small>
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="empty-state">
+                        No preview rooms returned yet.
+                      </p>
+                    )}{" "}
+                  </div>
+                ) : (
+                  <p className="empty-state">
+                    Add or preview a space ID to inspect the browser-side hierarchy mock.
+                  </p>
+                )}{" "}
+              </div>
+            ) : null}{" "}
           </div>{" "}
         </section>{" "}
         <section className="workspace-card" data-testid="matrix-composer-panel">
@@ -1931,158 +1709,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             </p>
           ) : null}
         </section>{" "}
-        <div className="matrix-column">
-          {" "}
-          <section className="workspace-card">
-            {" "}
-            <header className="card-header">
-              <div>
-                <span>Verify</span>
-                <strong>Execution result, provenance, and refresh</strong>
-              </div>
-            </header>{" "}
-            {executionResult ? (
-              <div className="verification-card">
-                {props.expertMode ? (
-                  <div className="detail-grid">
-                    <div>
-                      <span>Execution ID</span>
-                      <strong>{executionResult.executionId}</strong>
-                    </div>
-                    <div>
-                      <span>Plan ID</span>
-                      <strong>{executionResult.planId}</strong>
-                    </div>
-                    <div>
-                      <span>Status</span>
-                      <strong>{executionResult.status}</strong>
-                    </div>
-                    <div>
-                      <span>Verified</span>
-                      <strong>{String(executionResult.verified)}</strong>
-                    </div>
-                  </div>
-                ) : null}
-                <p className="analysis-text">
-                  {executionResult.verificationSummary}
-                </p>
-                {props.expertMode ? (
-                  <div className="delta-grid">
-                    <div>
-                      <p className="info-label">Before</p>
-                      <pre>{JSON.stringify(executionResult.before, null, 2)}</pre>
-                    </div>
-                    <div>
-                      <p className="info-label">After</p>
-                      <pre>{JSON.stringify(executionResult.after, null, 2)}</pre>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <p className="empty-state">
-                Execution results will appear here after approval-gated
-                execution.
-              </p>
-            )}{" "}
-            <div className="verification-actions">
-              {" "}
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => {
-                  if (currentScope)
-                    void loadSummary(
-                      currentScope.scopeId,
-                      promotedPlan?.targetRoomId,
-                    );
-                }}
-                disabled={!currentScope || summaryLoading}
-              >
-                Refresh scope summary
-              </button>{" "}
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => {
-                  if (provenanceRoomId) void loadProvenance(provenanceRoomId);
-                }}
-                disabled={!provenanceRoomId || provenanceLoading}
-              >
-                Refresh provenance
-              </button>{" "}
-            </div>{" "}
-            {executionResult && (summaryLoading || provenanceLoading) ? (
-              <div className="alert-banner">
-                <p>Verification is pending backend readback.</p>
-              </div>
-            ) : null}{" "}
-            {scopeSummaryError ? (
-              <p className="error-banner">{scopeSummaryError}</p>
-            ) : null}{" "}
-            {summaryLoading ? (
-              <p className="muted-copy">Refreshing scope summary…</p>
-            ) : null}{" "}
-            {provenanceError ? (
-              <p className="error-banner">{provenanceError}</p>
-            ) : null}{" "}
-            {provenance ? (
-              <div className="provenance-card">
-                <p className="info-label">Provenance</p>
-                {props.expertMode ? (
-                  <div className="detail-grid">
-                    <div>
-                      <span>Room ID</span>
-                      <strong>{provenance.roomId}</strong>
-                    </div>
-                    <div>
-                      <span>Snapshot</span>
-                      <strong>{text(provenance.snapshotId)}</strong>
-                    </div>
-                    <div>
-                      <span>State event</span>
-                      <strong>{text(provenance.stateEventId)}</strong>
-                    </div>
-                    <div>
-                      <span>Origin server</span>
-                      <strong>{provenance.originServer}</strong>
-                    </div>
-                    <div>
-                      <span>Auth chain index</span>
-                      <strong>{provenance.authChainIndex}</strong>
-                    </div>
-                    <div>
-                      <span>Derived provenance</span>
-                      <strong>{provenance.integrityNotice}</strong>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="muted-copy">{provenance.integrityNotice}</p>
-                )}
-                <div className="list-block">
-                  <p className="info-label">Evidence markers</p>
-                  <div className="chip-list">
-                    {provenance.signatures.map((signature) => (
-                      <span
-                        key={`${signature.signer}:${signature.status}`}
-                        className="reference-chip"
-                      >
-                        {signature.signer} · {signature.status}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="empty-state">
-                Load provenance from the Explore or Verify stage.
-              </p>
-            )}{" "}
-            {provenanceLoading ? (
-              <p className="muted-copy">Loading provenance…</p>
-            ) : null}{" "}
-          </section>{" "}
-        </div>{" "}
       </section>{" "}
     </section>
   );

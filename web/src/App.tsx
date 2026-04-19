@@ -18,7 +18,11 @@ import {
   type DiagnosticEntry,
 } from "./components/SettingsWorkspace.js";
 import { SessionList } from "./components/SessionList.js";
-import { StatusPanel, type StatusPanelRow } from "./components/StatusPanel.js";
+import {
+  SystemSummaryCard,
+  type StatusPanelRow,
+} from "./components/StatusPanel.js";
+import { DiagnosticsDrawer } from "./components/ExpertDetails.js";
 import {
   fetchAuthSession,
   fetchHealth,
@@ -39,7 +43,6 @@ import {
   createMatrixSessionMetadata,
   createSession,
   deleteSession,
-  getActiveSession,
   loadWorkspaceState,
   saveWorkspaceState,
   selectSession,
@@ -258,7 +261,6 @@ export default function App() {
   const [githubAuthState, dispatchGitHubAuth] = useReducer(githubAuthReducer, undefined, createInitialGitHubAuthState);
   const [githubPassword, setGitHubPassword] = useState("");
   const [backendHealthy, setBackendHealthy] = useState<boolean | null>(null);
-  const [backendHealthLabel, setBackendHealthLabel] = useState<string | null>(null);
   const [activeModelAlias, setActiveModelAlias] = useState<string | null>(null);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [restoredSession] = useState(() => {
@@ -272,6 +274,7 @@ export default function App() {
   const [githubContext, setGitHubContext] = useState<GitHubWorkspaceStatus>(DEFAULT_GITHUB_CONTEXT);
   const [matrixContext, setMatrixContext] = useState<MatrixWorkspaceStatus>(DEFAULT_MATRIX_CONTEXT);
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const githubUnlocked = githubAuthState.status === "authenticated";
 
   useEffect(() => {
@@ -290,7 +293,6 @@ export default function App() {
       if (healthResult.status === "fulfilled") {
         const health = healthResult.value;
         setBackendHealthy(true);
-        setBackendHealthLabel(`${health.service} · ${health.mode} · ${health.upstream}`);
         setTelemetry((current) =>
           appendTelemetry(current, {
             id: createId(),
@@ -301,11 +303,6 @@ export default function App() {
         );
       } else {
         setBackendHealthy(false);
-        setBackendHealthLabel(
-          healthResult.reason instanceof Error
-            ? healthResult.reason.message
-            : "Backend health unavailable",
-        );
         setTelemetry((current) =>
           appendTelemetry(current, {
             id: createId(),
@@ -401,6 +398,16 @@ export default function App() {
   useEffect(() => {
     saveWorkspaceState(workspaceState);
   }, [workspaceState]);
+
+  useEffect(() => {
+    if (!expertMode) {
+      setDiagnosticsOpen(false);
+    }
+  }, [expertMode]);
+
+  useEffect(() => {
+    setDiagnosticsOpen(false);
+  }, [mode]);
 
   useEffect(() => {
     if (!githubUnlocked) {
@@ -588,43 +595,51 @@ export default function App() {
 
   const chatRows: StatusPanelRow[] = [
     { label: "Modell", value: activeModelAlias ?? "Noch nicht gewählt" },
-    { label: "Kontext", value: availableModels.length > 0 ? "Modell verfügbar" : "Keine Auswahl" },
-    { label: "Status", value: backendHealthy === true ? "Bereit" : backendHealthy === false ? "Nicht verfügbar" : "Wird geprüft" },
-    { label: "Sicherheit", value: "Nur Lesen aktiv" },
+    {
+      label: "Verfügbarkeit",
+      value:
+        backendHealthy === true
+          ? "Bereit"
+          : backendHealthy === false
+            ? "Nicht verfügbar"
+            : "Wird geprüft",
+    },
   ];
 
   const githubRows: StatusPanelRow[] = [
     { label: "Repository", value: githubContext.repositoryLabel },
-    { label: "Lesestatus", value: githubContext.analysisLabel },
-    { label: "Vorschlag", value: githubContext.proposalLabel },
-    { label: "Freigabe", value: githubUnlocked ? githubContext.approvalLabel : "Admin-Login erforderlich" },
-    { label: "Ergebnis", value: githubContext.resultLabel },
-    { label: "Sicherheit", value: githubUnlocked ? githubContext.accessLabel : "Gesperrt" },
+    { label: "Zugriff", value: githubUnlocked ? githubContext.accessLabel : "Nicht angemeldet" },
+    ...(githubUnlocked && githubContext.approvalLabel !== "Nicht erforderlich"
+      ? [{ label: "Freigabe", value: githubContext.approvalLabel }]
+      : []),
   ];
 
   const matrixRows: StatusPanelRow[] = [
     { label: "Bereich", value: matrixContext.scopeLabel },
-    { label: "Raum", value: matrixContext.expertDetails.composerRoomId ?? "Noch nicht gesetzt" },
-    { label: "Beitrag", value: matrixContext.expertDetails.composerEventId ?? "Keiner ausgewählt" },
-    { label: "Thread", value: matrixContext.expertDetails.composerThreadRootId ?? "Kein Thread offen" },
-    { label: "Composer", value: matrixContext.expertDetails.composerTargetLabel },
     { label: "Zusammenfassung", value: matrixContext.summaryLabel },
-    { label: "Freigabe", value: matrixContext.approvalLabel },
-    { label: "Sicherheit", value: "Nur Lesen aktiv" },
+    ...(matrixContext.approvalLabel !== "Nicht erforderlich"
+      ? [{ label: "Freigabe", value: matrixContext.approvalLabel }]
+      : []),
   ];
 
   const reviewRows: StatusPanelRow[] = [
-    { label: "Offen", value: String(reviewItems.length) },
-    { label: "Stand", value: reviewItems.length === 0 ? "Keine offenen Prüfungen" : reviewItems[0]?.status === "stale" ? "Veraltet" : "Offen" },
-    { label: "Freigabe", value: reviewItems.some((item) => item.status === "pending_review") ? "Erforderlich" : "Nicht erforderlich" },
-    { label: "Ausführung", value: reviewItems.some((item) => item.status === "stale") ? "Blockiert" : "Nicht gestartet" },
+    { label: "Offene Prüfungen", value: String(reviewItems.length) },
+    {
+      label: "Einordnung",
+      value:
+        reviewItems.length === 0
+          ? "Keine offenen Prüfungen"
+          : reviewItems.some((item) => item.status === "stale")
+            ? "Blockiert"
+            : reviewItems.some((item) => item.status === "pending_review")
+              ? "Freigabe nötig"
+              : "Bereit",
+    },
   ];
 
   const settingsRows: StatusPanelRow[] = [
     { label: "Ansicht", value: expertMode ? "Expert" : "Beginner" },
-    { label: "Diagnose", value: expertMode ? "Sichtbar" : "Verborgen" },
-    { label: "Freigabe", value: "Nicht erforderlich" },
-    { label: "Sicherheit", value: "Keine Schreibrechte" },
+    { label: "Diagnose", value: expertMode ? "Auf Anfrage sichtbar" : "Verborgen" },
   ];
 
   const currentRows = useMemo(() => {
@@ -645,102 +660,474 @@ export default function App() {
   const currentStatusBadge = useMemo(() => {
     switch (mode) {
       case "github":
-        return githubUnlocked ? githubContext.connectionLabel : "Gesperrt";
+        if (!githubUnlocked) {
+          return githubAuthState.error ? "Verbindung prüfen" : "Nicht angemeldet";
+        }
+
+        if (githubContext.approvalLabel !== "Nicht erforderlich") {
+          return "Freigabe nötig";
+        }
+
+        if (githubContext.repositoryLabel.startsWith("Noch kein")) {
+          return "Repo wählen";
+        }
+
+        return githubContext.connectionLabel;
       case "matrix":
-        return matrixContext.expertDetails.backendRouteStatus ?? "Bereit";
+        if (matrixContext.approvalLabel !== "Nicht erforderlich") {
+          return "Freigabe nötig";
+        }
+
+        if (matrixContext.scopeLabel.startsWith("Noch kein")) {
+          return "Bereich wählen";
+        }
+
+        if (matrixContext.summaryLabel.startsWith("Noch keine")) {
+          return "Zusammenfassung fehlt";
+        }
+
+        return "Bereit";
       case "review":
-        return reviewItems.length === 0 ? "Leer" : "Aktiv";
+        if (reviewItems.length === 0) {
+          return "Leer";
+        }
+
+        if (reviewItems.some((item) => item.status === "stale")) {
+          return "Blockiert";
+        }
+
+        if (reviewItems.some((item) => item.status === "pending_review")) {
+          return "Freigabe nötig";
+        }
+
+        return "Aktiv";
       case "settings":
         return expertMode ? "Expert Mode" : "Beginner Mode";
       default:
         return backendHealthy === false ? "Nicht verfügbar" : backendHealthy === true ? "Bereit" : "Wird geprüft";
     }
-  }, [backendHealthy, expertMode, githubContext.connectionLabel, githubUnlocked, matrixContext.expertDetails.backendRouteStatus, mode, reviewItems.length]);
+  }, [
+    backendHealthy,
+    expertMode,
+    githubAuthState.error,
+    githubContext.approvalLabel,
+    githubContext.connectionLabel,
+    githubContext.repositoryLabel,
+    githubUnlocked,
+    matrixContext.approvalLabel,
+    matrixContext.scopeLabel,
+    matrixContext.summaryLabel,
+    mode,
+    reviewItems,
+  ]);
 
   const currentStatusTone = useMemo(() => {
     switch (mode) {
       case "github":
-        return githubUnlocked ? "partial" : "error";
+        if (!githubUnlocked) {
+          return githubAuthState.error ? "error" : "partial";
+        }
+
+        return githubContext.approvalLabel !== "Nicht erforderlich" || githubContext.repositoryLabel.startsWith("Noch kein")
+          ? "partial"
+          : "ready";
       case "matrix":
-        return "ready";
+        return matrixContext.approvalLabel !== "Nicht erforderlich" || matrixContext.scopeLabel.startsWith("Noch kein") || matrixContext.summaryLabel.startsWith("Noch keine")
+          ? "partial"
+          : "ready";
       case "review":
-        return reviewItems.length === 0 ? "partial" : "ready";
+        if (reviewItems.length === 0) {
+          return "partial";
+        }
+
+        if (reviewItems.some((item) => item.status === "stale")) {
+          return "error";
+        }
+
+        return reviewItems.some((item) => item.status === "pending_review") ? "partial" : "ready";
       case "settings":
         return "partial";
       default:
         return backendHealthy === false ? "error" : backendHealthy === true ? "ready" : "partial";
     }
-  }, [backendHealthy, githubUnlocked, mode, reviewItems.length]);
+  }, [
+    backendHealthy,
+    githubAuthState.error,
+    githubContext.approvalLabel,
+    githubContext.repositoryLabel,
+    githubUnlocked,
+    matrixContext.approvalLabel,
+    matrixContext.scopeLabel,
+    matrixContext.summaryLabel,
+    mode,
+    reviewItems,
+  ]);
+
+  const currentStatusHeadline = useMemo(() => {
+    switch (mode) {
+      case "github":
+        if (!githubUnlocked) {
+          return githubAuthState.error ? "GitHub-Sessionprüfung fehlgeschlagen." : "Admin-Anmeldung erforderlich.";
+        }
+
+        if (githubContext.approvalLabel !== "Nicht erforderlich") {
+          return "Vorschlag wartet auf Freigabe.";
+        }
+
+        if (githubContext.repositoryLabel.startsWith("Noch kein")) {
+          return "Repo auswählen, dann kann gelesen werden.";
+        }
+
+        return "Repo lesen und Vorschläge vorbereiten.";
+      case "matrix":
+        if (matrixContext.scopeLabel.startsWith("Noch kein")) {
+          return "Wähle einen Bereich, um das Topic-Update zu starten.";
+        }
+
+        if (matrixContext.approvalLabel !== "Nicht erforderlich") {
+          return "Topic-Update wartet auf deine Freigabe.";
+        }
+
+        if (matrixContext.summaryLabel.startsWith("Noch keine")) {
+          return "Zusammenfassung wird gerade geladen.";
+        }
+
+        return "Backend-owned Topic-Update bereit.";
+      case "review":
+        if (reviewItems.length === 0) {
+          return "Noch keine offenen Prüfungen.";
+        }
+
+        if (reviewItems.some((item) => item.status === "stale")) {
+          return "Eine Prüfung ist veraltet.";
+        }
+
+        if (reviewItems.some((item) => item.status === "pending_review")) {
+          return "Prüfungen warten auf Freigabe.";
+        }
+
+        return "Prüfungen sind bereit.";
+      case "settings":
+        return "Ansicht und Diagnose sauber trennen.";
+      default:
+        return backendHealthy === false ? "Backend nicht verfügbar." : backendHealthy === true ? "Chat bereit." : "Backend wird geprüft.";
+    }
+  }, [
+    backendHealthy,
+    githubAuthState.error,
+    githubContext.approvalLabel,
+    githubContext.repositoryLabel,
+    githubUnlocked,
+    matrixContext.approvalLabel,
+    matrixContext.scopeLabel,
+    matrixContext.summaryLabel,
+    mode,
+    reviewItems,
+  ]);
+
+  const currentHelperText = useMemo(() => {
+    switch (mode) {
+      case "github":
+        if (!githubUnlocked) {
+          return githubAuthState.error
+            ? "Die Sessionprüfung konnte nicht abgeschlossen werden. Prüfe den Login oder lade die Seite neu."
+            : "Melde dich als Admin an, wenn du GitHub lesen und Vorschläge vorbereiten willst.";
+        }
+
+        if (githubContext.approvalLabel !== "Nicht erforderlich") {
+          return "Prüfe den Vorschlag und gib ihn erst frei, wenn du die Änderungen verstanden hast.";
+        }
+
+        if (githubContext.repositoryLabel.startsWith("Noch kein")) {
+          return "Wähle zuerst ein erlaubtes Repo und starte danach die Analyse.";
+        }
+
+        return "Die Analyse bleibt lesend, bis du einen Vorschlag freigibst.";
+      case "matrix":
+        if (matrixContext.scopeLabel.startsWith("Noch kein")) {
+          return "Wähle zuerst einen Bereich, dann kann das Backend die aktuelle Zusammenfassung laden.";
+        }
+
+        if (matrixContext.approvalLabel !== "Nicht erforderlich") {
+          return "Prüfe den Topic-Vorschlag und gib ihn erst frei, wenn du bereit bist.";
+        }
+
+        if (matrixContext.summaryLabel.startsWith("Noch keine")) {
+          return "Die Zusammenfassung wird noch aus dem gewählten Scope geladen.";
+        }
+
+        return "Arbeite den Topic-Update-Fluss weiter über Analyse, Review, Execute und Verify.";
+      case "review":
+        if (reviewItems.length === 0) {
+          return "Öffne GitHub oder Matrix, um prüfbare Änderungen zu erzeugen.";
+        }
+
+        if (reviewItems.some((item) => item.status === "stale")) {
+          return "Bring die veraltete Prüfung wieder in Sync, bevor du weiterarbeitest.";
+        }
+
+        if (reviewItems.some((item) => item.status === "pending_review")) {
+          return "Prüfe den Vorschlag und entscheide dann über die Freigabe.";
+        }
+
+        return "Arbeite die offenen Punkte der Reihe nach ab.";
+      case "settings":
+        return expertMode
+          ? "Technische Details sind sichtbar, wenn du sie brauchst."
+          : "Expert zeigt technische Details nur auf explizite Anfrage.";
+      default:
+        return backendHealthy === false
+          ? "Prüfe die Backend-Verbindung, bevor du den Chat weiter nutzt."
+          : "Stell deine nächste Frage direkt im Chat.";
+    }
+  }, [
+    backendHealthy,
+    expertMode,
+    githubAuthState.error,
+    githubContext.approvalLabel,
+    githubContext.repositoryLabel,
+    githubUnlocked,
+    matrixContext.approvalLabel,
+    matrixContext.scopeLabel,
+    matrixContext.summaryLabel,
+    mode,
+    reviewItems,
+  ]);
 
   const currentExpertRows = useMemo(() => {
     switch (mode) {
       case "github":
         if (!githubUnlocked) {
           return [
-            { label: "Route", value: "/api/auth/me" },
-            { label: "Anmeldung", value: "Erforderlich" },
-            { label: "GitHub API Status", value: githubAuthState.status === "loading" ? "Wird geprüft" : "Gesperrt" }
+            { label: "Anmeldung", value: githubAuthState.error ? "Fehler prüfen" : "Erforderlich" },
+            { label: "Sessionstatus", value: githubAuthState.status === "loading" ? "Wird geprüft" : "Nicht angemeldet" }
           ];
         }
 
         return [
-          { label: "Route", value: "/api/github/actions/propose" },
-          { label: "Anfrage-ID", value: githubContext.expertDetails.requestId ?? "n/a" },
-          { label: "Plan-ID", value: githubContext.expertDetails.planId ?? "n/a" },
-          { label: "Branch", value: githubContext.expertDetails.branchName ?? "n/a" },
-          { label: "GitHub API Status", value: githubContext.expertDetails.apiStatus },
-          { label: "Laufzeit-Ereignisse", value: githubContext.expertDetails.sseEvents.join(" · ") || "n/a" },
+          { label: "Verbindung", value: githubContext.expertDetails.apiStatus },
+          { label: "Auswahl", value: githubContext.expertDetails.selectedRepoSlug ?? "n/a" },
+          { label: "Freigabe", value: githubContext.approvalLabel },
+          { label: "Ereignisse", value: githubContext.expertDetails.sseEvents.length > 0 ? `${githubContext.expertDetails.sseEvents.length} Ereignis(se)` : "n/a" },
         ];
       case "matrix":
         return [
-          { label: "Route", value: matrixContext.expertDetails.route },
-          { label: "Composer mode", value: matrixContext.expertDetails.composerMode },
-          { label: "Composer room", value: matrixContext.expertDetails.composerRoomId ?? "n/a" },
-          { label: "Composer event", value: matrixContext.expertDetails.composerEventId ?? "n/a" },
-          { label: "Composer thread", value: matrixContext.expertDetails.composerThreadRootId ?? "n/a" },
-          { label: "Composer target", value: matrixContext.expertDetails.composerTargetLabel },
-          { label: "Request ID", value: matrixContext.expertDetails.requestId ?? "n/a" },
-          { label: "Plan ID", value: matrixContext.expertDetails.planId ?? "n/a" },
-          { label: "Room ID", value: matrixContext.expertDetails.roomId ?? "n/a" },
-          { label: "Space ID", value: matrixContext.expertDetails.spaceId ?? "n/a" },
-          { label: "Event ID", value: matrixContext.expertDetails.eventId ?? "n/a" },
-          { label: "HTTP Status", value: matrixContext.expertDetails.httpStatus ?? "n/a" },
-          { label: "Latenz", value: matrixContext.expertDetails.latency ?? "n/a" },
-          { label: "Backend route status", value: matrixContext.expertDetails.backendRouteStatus },
-          { label: "SSE lifecycle", value: matrixContext.expertDetails.sseLifecycle },
+          { label: "Scope", value: matrixContext.scopeLabel },
+          { label: "Zusammenfassung", value: matrixContext.summaryLabel },
+          { label: "Freigabe", value: matrixContext.approvalLabel },
+          { label: "Composer", value: matrixContext.expertDetails.composerTargetLabel },
         ];
       case "review":
         return [
-          { label: "Runtime event trail", value: reviewItems.map((item) => `${item.source}:${item.id}`).join(" · ") || "n/a" },
-          { label: "Backend route status", value: reviewItems.length === 0 ? "keine offenen Routen" : "offene Vorschläge vorhanden" },
+          { label: "Offen", value: String(reviewItems.length) },
+          {
+            label: "Einordnung",
+            value: reviewItems.length === 0
+              ? "Keine offenen Prüfungen"
+              : reviewItems.some((item) => item.status === "stale")
+                ? "Veraltet"
+                : reviewItems.some((item) => item.status === "pending_review")
+                  ? "Freigabe nötig"
+                  : "Bereit",
+          },
         ];
       case "settings":
         return [
-          { label: "Route", value: "Settings / Diagnose" },
-          { label: "Backend route status", value: expertMode ? "sichtbar" : "verborgen" },
+          { label: "Ansicht", value: expertMode ? "Expert" : "Beginner" },
+          { label: "Diagnose", value: expertMode ? "Sichtbar" : "Verborgen" },
         ];
       default:
         return [];
     }
-  }, [expertMode, githubAuthState.status, githubContext.expertDetails, githubUnlocked, matrixContext.expertDetails, mode, reviewItems]);
+  }, [expertMode, githubAuthState.error, githubAuthState.status, githubContext.approvalLabel, githubContext.expertDetails, githubUnlocked, matrixContext.approvalLabel, matrixContext.expertDetails, matrixContext.scopeLabel, matrixContext.summaryLabel, mode, reviewItems]);
 
   const currentExpertChildren = useMemo(() => {
     if (mode === "github") {
-      return githubContext.expertDetails.rawDiffPreview ? (
-        <pre className="github-diff-preview">{githubContext.expertDetails.rawDiffPreview}</pre>
-      ) : (
-        <p className="muted-copy">Diff erscheint erst, wenn ein Vorschlag vorbereitet wurde.</p>
+      return (
+        <div className="expert-detail-sections">
+          <section className="expert-detail-section">
+            <p className="info-label">Verbindung</p>
+            <div className="expert-detail-section-grid">
+              <div>
+                <span>API-Status</span>
+                <strong>{githubContext.expertDetails.apiStatus}</strong>
+              </div>
+              <div>
+                <span>Auswahl</span>
+                <strong>{githubContext.expertDetails.selectedRepoSlug ?? "n/a"}</strong>
+              </div>
+            </div>
+          </section>
+
+          <section className="expert-detail-section">
+            <p className="info-label">Freigabe</p>
+            <div className="expert-detail-section-grid">
+              <div>
+                <span>Anfrage-ID</span>
+                <strong>{githubContext.expertDetails.requestId ?? "n/a"}</strong>
+              </div>
+              <div>
+                <span>Plan-ID</span>
+                <strong>{githubContext.expertDetails.planId ?? "n/a"}</strong>
+              </div>
+              <div>
+                <span>Branch</span>
+                <strong>{githubContext.expertDetails.branchName ?? "n/a"}</strong>
+              </div>
+            </div>
+          </section>
+
+          <section className="expert-detail-section">
+            <p className="info-label">Laufzeit</p>
+            <div className="expert-detail-section-grid">
+              <div>
+                <span>Ereignisse</span>
+                <strong>{githubContext.expertDetails.sseEvents.length > 0 ? githubContext.expertDetails.sseEvents.join(" · ") : "n/a"}</strong>
+              </div>
+            </div>
+          </section>
+
+          <section className="expert-detail-section">
+            <p className="info-label">Diff</p>
+            {githubContext.expertDetails.rawDiffPreview ? (
+              <pre className="github-diff-preview">{githubContext.expertDetails.rawDiffPreview}</pre>
+            ) : (
+              <p className="muted-copy">Diff erscheint erst, wenn ein Vorschlag vorbereitet wurde.</p>
+            )}
+          </section>
+        </div>
       );
     }
 
-    if (mode === "matrix" && matrixContext.expertDetails.rawPayload) {
-      return <pre className="github-diff-preview">{matrixContext.expertDetails.rawPayload}</pre>;
+    if (mode === "matrix") {
+      return (
+        <div className="expert-detail-sections">
+          <section className="expert-detail-section">
+            <p className="info-label">Scope</p>
+            <div className="expert-detail-section-grid">
+              <div>
+                <span>Bereich</span>
+                <strong>{matrixContext.scopeLabel}</strong>
+              </div>
+              <div>
+                <span>Zusammenfassung</span>
+                <strong>{matrixContext.summaryLabel}</strong>
+              </div>
+              <div>
+                <span>Freigabe</span>
+                <strong>{matrixContext.approvalLabel}</strong>
+              </div>
+            </div>
+          </section>
+
+          <section className="expert-detail-section">
+            <p className="info-label">Topic Update</p>
+            <div className="expert-detail-section-grid">
+              <div>
+                <span>Plan-ID</span>
+                <strong>{matrixContext.expertDetails.planId ?? "n/a"}</strong>
+              </div>
+              <div>
+                <span>Composer</span>
+                <strong>{matrixContext.expertDetails.composerTargetLabel}</strong>
+              </div>
+              <div>
+                <span>Composer mode</span>
+                <strong>{matrixContext.expertDetails.composerMode}</strong>
+              </div>
+              <div>
+                <span>Composer room</span>
+                <strong>{matrixContext.expertDetails.composerRoomId ?? "n/a"}</strong>
+              </div>
+              <div>
+                <span>Composer thread</span>
+                <strong>{matrixContext.expertDetails.composerThreadRootId ?? "n/a"}</strong>
+              </div>
+            </div>
+          </section>
+
+          <section className="expert-detail-section">
+            <p className="info-label">Laufzeit</p>
+            <div className="expert-detail-section-grid">
+              <div>
+                <span>Backend route</span>
+                <strong>{matrixContext.expertDetails.backendRouteStatus}</strong>
+              </div>
+              <div>
+                <span>HTTP</span>
+                <strong>{matrixContext.expertDetails.httpStatus ?? "n/a"}</strong>
+              </div>
+              <div>
+                <span>Latenz</span>
+                <strong>{matrixContext.expertDetails.latency ?? "n/a"}</strong>
+              </div>
+              <div>
+                <span>SSE lifecycle</span>
+                <strong>{matrixContext.expertDetails.sseLifecycle}</strong>
+              </div>
+            </div>
+            <div className="expert-detail-section-grid">
+              <div>
+                <span>Runtime trail</span>
+                <strong>{matrixContext.expertDetails.runtimeEventTrail.join(" · ") || "n/a"}</strong>
+              </div>
+            </div>
+          </section>
+
+          <section className="expert-detail-section">
+            <p className="info-label">Payload</p>
+            {matrixContext.expertDetails.rawPayload ? (
+              <pre className="github-diff-preview">{matrixContext.expertDetails.rawPayload}</pre>
+            ) : (
+              <p className="muted-copy">Payload erscheint erst, wenn ein Topic-Update vorbereitet wurde.</p>
+            )}
+          </section>
+        </div>
+      );
     }
 
     return null;
-  }, [githubContext.expertDetails.rawDiffPreview, matrixContext.expertDetails.rawPayload, mode]);
+  }, [githubContext.expertDetails, matrixContext.expertDetails, matrixContext.approvalLabel, matrixContext.scopeLabel, matrixContext.summaryLabel, mode]);
 
-  const globalSafety = "Die App kann Informationen ansehen, aber nichts verändern.";
+  const systemSummaryRows = useMemo<StatusPanelRow[]>(() => {
+    switch (mode) {
+      case "github":
+        return [
+          { label: "Workspace", value: "GitHub" },
+          { label: "Session", value: activeSession?.title ?? "n/a" },
+          { label: "Repo", value: githubContext.repositoryLabel },
+          { label: "Approval", value: githubUnlocked ? githubContext.approvalLabel : "Login required" },
+        ];
+      case "matrix":
+        return [
+          { label: "Workspace", value: "Matrix" },
+          { label: "Session", value: activeSession?.title ?? "n/a" },
+          { label: "Scope", value: matrixContext.scopeLabel },
+          { label: "Approval", value: matrixContext.approvalLabel },
+        ];
+      case "review":
+        return [
+          { label: "Workspace", value: "Review" },
+          { label: "Session", value: activeSession?.title ?? "n/a" },
+          { label: "Open items", value: String(reviewItems.length) },
+          { label: "State", value: reviewItems.some((item) => item.status === "stale") ? "Stale present" : reviewItems.length > 0 ? "Ready" : "Idle" },
+        ];
+      case "settings":
+        return [
+          { label: "Workspace", value: "Settings" },
+          { label: "Session", value: activeSession?.title ?? "n/a" },
+          { label: "View", value: expertMode ? "Expert" : "Beginner" },
+          { label: "Diagnostics", value: expertMode ? "Available" : "Hidden" },
+        ];
+      default:
+        return [
+          { label: "Workspace", value: "Chat" },
+          { label: "Session", value: activeSession?.title ?? "n/a" },
+          { label: "Model", value: activeModelAlias ?? "unresolved" },
+          { label: "Backend", value: backendHealthy === false ? "Unavailable" : backendHealthy === true ? "Healthy" : "Pending" },
+        ];
+    }
+  }, [activeModelAlias, activeSession?.title, backendHealthy, expertMode, githubContext.approvalLabel, githubContext.repositoryLabel, githubUnlocked, matrixContext.approvalLabel, matrixContext.scopeLabel, mode, reviewItems, reviewItems.length]);
 
   return (
     <main className="app-shell app-shell-console" data-testid="app-shell">
@@ -753,54 +1140,29 @@ export default function App() {
           </p>
         </div>
 
-        <div className="header-status">
-          <div className="status-row">
-            <span className={`status-pill status-${backendHealthy === false ? "error" : backendHealthy === true ? "ready" : "partial"}`}>
-              {backendHealthy === true ? "Backend healthy" : backendHealthy === false ? "Backend error" : "Backend pending"}
-            </span>
-            <span className={`status-pill status-${githubAuthState.status === "authenticated" ? "ready" : githubAuthState.status === "loading" ? "partial" : "error"}`}>
-              {githubAuthState.status === "authenticated" ? "GitHub unlocked" : githubAuthState.status === "loading" ? "GitHub session" : "GitHub locked"}
-            </span>
-            {restoredSession ? <span className="status-pill status-restored">RESTORED_SESSION</span> : null}
-            {githubUnlocked ? (
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => {
-                  void handleGitHubLogout();
-                }}
-                disabled={githubAuthState.busy}
-              >
-                {githubAuthState.busy ? "Abmelden…" : "Logout"}
-              </button>
-            ) : null}
-            <BeginnerExpertToggle expertMode={expertMode} setExpertMode={setExpertMode} />
-          </div>
-
-          <div className="status-stack">
-            <span>Active tab: {tabLabel(mode)}</span>
-            <span>Active workspace: {tabLabel(sessionWorkspace)}</span>
-            <span>Active session: {activeSession?.title ?? "n/a"}</span>
-            <span>Public model alias: {activeModelAlias ?? "unresolved"}</span>
-            <span>Backend context: {backendHealthLabel ?? "loading"}</span>
-          </div>
+        <div className="header-actions">
+          {githubUnlocked ? (
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                void handleGitHubLogout();
+              }}
+              disabled={githubAuthState.busy}
+            >
+              {githubAuthState.busy ? "Abmelden…" : "Logout"}
+            </button>
+          ) : null}
+          <BeginnerExpertToggle expertMode={expertMode} setExpertMode={setExpertMode} />
         </div>
       </header>
-
-      <section className="global-safety-bar" aria-label="Sicherheitsstatus">
-        <div>
-          <p className="info-label">Nur Lesen aktiv</p>
-          <p>{globalSafety}</p>
-        </div>
-      </section>
 
       <section className="console-layout">
         <aside className="workspace-sidebar">
           <div className="sidebar-card sidebar-card-brand">
             <p className="app-kicker">GUIDED WORKSPACE</p>
             <strong>Arbeitsbereich wählen</strong>
-            <p>Sessions bleiben pro Workspace erhalten und können hier jederzeit wieder geöffnet werden.</p>
-            <p>Beginner first. Technik bleibt im Hintergrund, bis du Expert Mode aktivierst.</p>
+            <p>Sessions bleiben pro Workspace erhalten. Technik bleibt im Hintergrund, bis du Expert Mode aktivierst.</p>
           </div>
 
           <nav className="sidebar-nav" aria-label="Primary workspace navigation">
@@ -883,14 +1245,8 @@ export default function App() {
             onSelect={(sessionId) => handleWorkspaceSessionSelect(sessionWorkspace, sessionId)}
             onArchive={(sessionId) => handleWorkspaceSessionArchive(sessionWorkspace, sessionId)}
             onDelete={(sessionId) => handleWorkspaceSessionDelete(sessionWorkspace, sessionId)}
-            headerNote={`Wiederaufnehmbare Sessions · Aktiver Workspace: ${tabLabel(sessionWorkspace)} · Aktive Session: ${activeSession?.title ?? "n/a"}`}
+            headerNote="Wiederaufnehmbare Sessions pro Workspace"
           />
-
-          <div className="sidebar-card sidebar-card-safety">
-            <span className="info-label">Safety</span>
-            <strong>Nur Lesen aktiv</strong>
-            <p>Änderungen bleiben gesperrt, bis du sie bewusst über Review freigibst.</p>
-          </div>
         </aside>
 
         <section className="console-main">
@@ -899,7 +1255,6 @@ export default function App() {
               key={chatSession?.id ?? "chat-session"}
               session={chatSession}
               backendHealthy={backendHealthy}
-              backendHealthLabel={backendHealthLabel}
               activeModelAlias={activeModelAlias}
               availableModels={availableModels}
               onActiveModelAliasChange={setActiveModelAlias}
@@ -911,7 +1266,6 @@ export default function App() {
               key={githubSession?.id ?? "github-session"}
               session={githubSession}
               backendHealthy={backendHealthy}
-              backendHealthLabel={backendHealthLabel}
               expertMode={expertMode}
               onTelemetry={recordTelemetry}
               onContextChange={setGitHubContext}
@@ -951,7 +1305,8 @@ export default function App() {
         </section>
 
         <aside className="workspace-context">
-          <StatusPanel
+          <SystemSummaryCard
+            testId="shell-summary-card"
             title={
               mode === "github"
                 ? "Projektstatus"
@@ -963,32 +1318,25 @@ export default function App() {
                       ? "Systemstatus"
                       : "Chatstatus"
             }
-            headline={
-              mode === "github"
-                ? githubUnlocked
-                  ? githubContext.accessLabel
-                  : "Anmeldung erforderlich"
-                : mode === "matrix"
-                  ? matrixContext.approvalLabel
-                  : mode === "review"
-                    ? reviewItems.length === 0
-                      ? "Noch nichts offen"
-                      : "Prüfung offen"
-                    : mode === "settings"
-                      ? expertMode
-                        ? "Expert Mode"
-                        : "Beginner Mode"
-                      : "Bereit"
-            }
+            headline={currentStatusHeadline}
             badge={currentStatusBadge}
             badgeTone={currentStatusTone}
-            rows={currentRows}
-            safetyTitle="Sicherheit"
-            safetyText=""
-            expertMode={expertMode}
-            expertRows={currentExpertRows}
-            expertChildren={currentExpertChildren}
+            rows={systemSummaryRows}
+            helperText={expertMode ? currentHelperText : undefined}
+            detailsLabel={expertMode ? "Open diagnostics" : "Expert mode required"}
+            onOpenDiagnostics={expertMode ? () => setDiagnosticsOpen((current) => !current) : undefined}
           />
+
+          <DiagnosticsDrawer
+            expertMode={expertMode}
+            title={mode === "github" ? "GitHub diagnostics" : mode === "matrix" ? "Matrix diagnostics" : mode === "review" ? "Review diagnostics" : mode === "settings" ? "Settings diagnostics" : "Chat diagnostics"}
+            rows={currentExpertRows}
+            className="shell-diagnostics-drawer"
+            open={diagnosticsOpen}
+            onToggle={setDiagnosticsOpen}
+          >
+            {currentExpertChildren}
+          </DiagnosticsDrawer>
         </aside>
       </section>
     </main>
