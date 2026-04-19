@@ -62,7 +62,10 @@ const CHAT_ERROR = {
 
 type MatrixStatus = "ok" | "error" | "malformed";
 
-async function installBaseMocks(page: Page, options?: { matrixStatus?: MatrixStatus }) {
+async function installBaseMocks(
+  page: Page,
+  options?: { matrixStatus?: MatrixStatus; authAuthenticated?: boolean | (() => boolean) },
+) {
   await page.route("**/health", async (route) => {
     await route.fulfill({
       status: 200,
@@ -80,11 +83,15 @@ async function installBaseMocks(page: Page, options?: { matrixStatus?: MatrixSta
   });
 
   await page.route("**/api/auth/me", async (route) => {
+    const authenticated = typeof options?.authAuthenticated === "function"
+      ? options.authAuthenticated()
+      : options?.authAuthenticated !== false;
+
     await route.fulfill({
-      status: 200,
+      status: authenticated ? 200 : 401,
       contentType: "application/json",
       body: JSON.stringify({
-        authenticated: true
+        authenticated
       })
     });
   });
@@ -422,6 +429,49 @@ async function waitForMatrixWorkspace(page: Page) {
   await expect(page.getByTestId("matrix-rooms")).toBeVisible();
 }
 
+async function installAbortableChatFetchMock(page: Page) {
+  await page.addInitScript(() => {
+    const originalFetch = window.fetch.bind(window);
+
+    window.fetch = async (input, init) => {
+      const request = typeof input === "string" ? new Request(input, init) : input;
+      const requestUrl = new URL(request.url, window.location.href);
+
+      if (requestUrl.pathname.endsWith("/chat") && request.method === "POST") {
+        const encoder = new TextEncoder();
+        const signal = init?.signal ?? request.signal;
+
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode('event: start\ndata: {"ok":true,"model":"default"}\n\n'));
+
+            setTimeout(() => {
+              controller.enqueue(encoder.encode('event: token\ndata: {"delta":"Partial reply"}\n\n'));
+            }, 50);
+
+            signal?.addEventListener(
+              "abort",
+              () => {
+                controller.error(new DOMException("Aborted", "AbortError"));
+              },
+              { once: true },
+            );
+          },
+        });
+
+        return new Response(stream, {
+          status: 200,
+          headers: {
+            "Content-Type": "text/event-stream; charset=utf-8",
+          },
+        });
+      }
+
+      return originalFetch(input, init);
+    };
+  });
+}
+
 async function waitForPwaRegistration(page: Page) {
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute("href", "/manifest.webmanifest");
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/icon.svg");
@@ -501,7 +551,7 @@ test("workspace navigation is keyboard reachable and status regions are labeled"
   await expect(matrixTab).toHaveAttribute("aria-current", "page");
 });
 
-test("workspace sessions survive workspace switches and can be reopened from the session list", async ({ page }) => {
+test("chat draft survives workspace switches and a reload keeps the composer usable", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
   await loadConsole(page);
 
@@ -521,6 +571,16 @@ test("workspace sessions survive workspace switches and can be reopened from the
   await waitForMatrixWorkspace(page);
   await page.getByTestId("tab-chat").click();
   await expect(chatComposer).toHaveValue("Persist this draft");
+  await expect(page.locator("#model-select")).toHaveValue("default");
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+
+  await expect(page.getByTestId("tab-chat")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("workspace-session-list")).toContainText("Persist this draft");
+  await expect(chatComposer).toHaveValue("Persist this draft");
+  await expect(page.getByRole("button", { name: "Stopp" })).toHaveCount(0);
+  await chatComposer.fill("Reload still works");
+  await expect(page.getByTestId("chat-send")).toBeEnabled();
 });
 
 test("legacy Matrix state is re-saved in canonical topic-update form", async ({ page }) => {
@@ -1061,7 +1121,7 @@ test("chat keyboard submit is wired, requests the backend, and keeps focus usabl
   await expect(page.getByTestId("tab-chat")).toBeVisible();
   await expect(page.getByTestId("tab-matrix")).toBeVisible();
   await expect(page.getByRole("button", { name: "Jump to latest" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Stopp" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Stopp" })).toHaveCount(0);
   await expect(page.locator(".message-list")).toHaveAttribute("aria-live", "polite");
   await expect(sendButton).toBeDisabled();
   await expect(connectionState).toHaveText("Bereit");
@@ -1072,9 +1132,11 @@ test("chat keyboard submit is wired, requests the backend, and keeps focus usabl
   await composer.press(submitChord());
 
   await expect(sendButton).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Stopp" })).toBeVisible();
   await expect(connectionState).toHaveText(/Senden|Antwort läuft|Fertig/);
   await expect(page.getByText("Hello from mocked backend")).toBeVisible();
   await expect(connectionState).toHaveText("Fertig");
+  await expect(page.getByRole("button", { name: "Stopp" })).toHaveCount(0);
   await expect(page.locator(".message-user")).toHaveCount(1);
   await expect(page.locator(".message-assistant")).toHaveCount(1);
   await composer.focus();
@@ -1086,6 +1148,37 @@ test("chat keyboard submit is wired, requests the backend, and keeps focus usabl
     role: "user",
     content: "Please harden the browser harness"
   });
+});
+
+test("chat abort stops the active stream, clears the draft, and returns the composer to a usable state", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await installAbortableChatFetchMock(page);
+
+  await loadConsole(page);
+  await page.getByTestId("tab-chat").click();
+
+  const composer = page.getByRole("textbox", { name: "Chat composer" });
+  const sendButton = page.getByTestId("chat-send");
+
+  await expect(page.getByRole("button", { name: "Stopp" })).toHaveCount(0);
+  await composer.fill("Abort this stream");
+  await sendButton.click();
+
+  await expect(page.getByRole("button", { name: "Stopp" })).toBeVisible();
+  await expect(page.getByTestId("chat-connection-state")).toHaveText(/Senden|Antwort läuft/);
+  await expect(page.locator(".stream-draft-card")).toContainText("Partial reply");
+
+  await page.getByRole("button", { name: "Stopp" }).click();
+
+  await expect(page.getByRole("button", { name: "Stopp" })).toHaveCount(0);
+  await expect(page.getByTestId("chat-connection-state")).toHaveText("Fehler");
+  await expect(page.getByRole("alert")).toContainText("Stream cancelled.");
+  await expect(page.locator(".stream-draft-card")).toHaveCount(0);
+  await expect(page.locator(".message-user")).toHaveCount(1);
+  await expect(page.locator(".message-assistant")).toHaveCount(0);
+  await expect(composer).toBeEnabled();
+  await composer.fill("Retry after abort");
+  await expect(sendButton).toBeEnabled();
 });
 
 test("empty composer cannot submit and sends no backend request", async ({ page }) => {
@@ -1828,6 +1921,178 @@ test("Matrix room topic update stale-plan failure is surfaced and does not fake 
   await expect(page.getByTestId("matrix-topic-execution")).toHaveCount(0);
   await expect(page.getByTestId("matrix-topic-verification")).toHaveCount(0);
   expect(verifyCount).toBe(0);
+});
+
+test("GitHub login fails closed until authenticated and then unlocks the workspace", async ({ page }) => {
+  let authenticated = false;
+
+  await installBaseMocks(page, { matrixStatus: "ok", authAuthenticated: () => authenticated });
+  await installGitHubWorkspaceMocks(page);
+
+  let loginAttempts = 0;
+
+  await page.route("**/api/auth/login", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+
+    loginAttempts += 1;
+
+    if (loginAttempts === 1) {
+      await route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({
+          code: "auth_invalid_credentials"
+        })
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        authenticated: true
+      })
+    });
+
+    authenticated = true;
+  });
+
+  await page.route("**/api/auth/logout", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        authenticated: false
+      })
+    });
+
+    authenticated = false;
+  });
+
+  await loadConsole(page);
+  await page.getByTestId("tab-github").click();
+
+  await expect(page.getByTestId("github-admin-login")).toBeVisible();
+  const password = page.getByLabel("Admin-Passwort");
+
+  await password.fill("wrong-password");
+  await page.getByRole("button", { name: "Anmelden" }).click();
+
+  await expect(page.getByRole("alert")).toHaveText("Das Passwort ist falsch.");
+
+  await password.fill("correct-password");
+  await page.getByRole("button", { name: "Anmelden" }).click();
+
+  await expect(page.getByTestId("github-workspace")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "GitHub Workspace" })).toBeVisible();
+  await expect(page.locator("#github-repo-select")).toBeVisible();
+
+  await page.getByRole("button", { name: "Logout" }).click();
+  await expect(page.getByTestId("github-admin-login")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "GitHub Login" })).toBeVisible();
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("github-admin-login")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Logout" })).toHaveCount(0);
+
+  expect(loginAttempts).toBe(2);
+});
+
+test("Review aggregates GitHub and Matrix approval items across workspace switches", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await installGitHubWorkspaceMocks(page);
+
+  await page.route("**/api/matrix/analyze", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        plan: {
+          planId: "plan-review-matrix",
+          roomId: "!room:matrix.example",
+          scopeId: null,
+          snapshotId: null,
+          status: "pending_review",
+          actions: [
+            {
+              type: "set_room_topic",
+              roomId: "!room:matrix.example",
+              currentValue: "Old topic",
+              proposedValue: "New topic",
+            },
+          ],
+          currentValue: "Old topic",
+          proposedValue: "New topic",
+          risk: "low",
+          requiresApproval: true,
+          createdAt: "2026-04-15T08:00:00.000Z",
+          expiresAt: "2026-04-15T08:12:00.000Z",
+        },
+      }),
+    });
+  });
+
+  await loadConsole(page);
+  await page.getByTestId("tab-review").click();
+  await expect(page.getByTestId("review-workspace")).toContainText("Noch keine offenen Prüfungen.");
+
+  await page.getByTestId("tab-github").click();
+  await page.locator("#github-repo-select").selectOption("octo/demo");
+  await page.getByRole("button", { name: "Analyse starten" }).click();
+  await page.getByRole("button", { name: "Vorschlag erstellen" }).click();
+
+  await page.getByTestId("tab-matrix").click();
+  await waitForMatrixWorkspace(page);
+  await page.getByTestId("matrix-topic-room-id").fill("!room:matrix.example");
+  await page.getByTestId("matrix-topic-text").fill("New topic");
+  await page.getByRole("button", { name: "Analyze topic update" }).click();
+
+  await page.getByTestId("tab-review").click();
+  const reviewCards = page.locator(".review-item-card");
+
+  await expect(reviewCards).toHaveCount(2);
+  await expect(page.getByTestId("review-workspace")).toContainText("2 offene Prüfungen");
+  await expect(page.getByTestId("review-workspace")).toContainText("Demo plan");
+  await expect(page.getByTestId("review-workspace")).toContainText("Room topic update plan");
+  await expect(page.getByTestId("review-workspace")).toContainText("Wartet auf Freigabe");
+});
+
+test("Settings exposes diagnostics in Expert mode and can clear them", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await loadConsole(page);
+
+  await page.getByTestId("tab-settings").click();
+  await expect(page.getByTestId("settings-workspace")).toBeVisible();
+  await expect(page.getByTestId("settings-workspace")).not.toContainText("Backend health loaded");
+
+  const settingsWorkspace = page.getByTestId("settings-workspace");
+  await settingsWorkspace.getByRole("button", { name: "Expert" }).click();
+
+  await expect(settingsWorkspace.getByText("Backend health loaded")).toBeVisible();
+  await expect(settingsWorkspace.getByText("Public model alias loaded")).toBeVisible();
+  await settingsWorkspace.getByRole("button", { name: "Diagnose leeren" }).click();
+  await expect(settingsWorkspace.getByText("Noch keine lokalen Diagnoseereignisse.")).toBeVisible();
+
+  await page.getByTestId("tab-chat").click();
+  await page.getByTestId("tab-settings").click();
+  await expect(page.getByTestId("settings-workspace")).toContainText("Noch keine lokalen Diagnoseereignisse.");
+  await expect(page.getByTestId("settings-workspace")).toContainText("Expert");
+  await expect(page.getByTestId("settings-workspace")).toContainText("Beginner / Expert");
+  await expect(page.getByTestId("settings-workspace").getByRole("button", { name: "Diagnose leeren" })).toBeVisible();
 });
 
 function connectionState(page: Page) {

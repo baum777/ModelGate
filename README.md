@@ -57,7 +57,8 @@ The browser is a thin PWA shell. It renders backend-owned results, keeps local U
 - Matrix hierarchy preview is browser-side advisory/mock-only in this repo. It is not backend-verified or write-authoritative.
 - Matrix and GitHub routes fail closed until their backend env is present and valid. They do not auto-enable.
 - `GITHUB_APP_*` fields are reserved placeholders and are not wired into the current runtime path.
-- `npm run smoke:matrix` is manual-only and depends on a dedicated Matrix room.
+- `npm run smoke:matrix` is the manual Matrix topic-retarget smoke and depends on a dedicated Matrix room.
+- `npm run test:matrix-live` is the opt-in live smoke wrapper used by the separate `Matrix live smoke` workflow; it skips cleanly when the backend or required env is missing.
 - Restored browser state is UI-local only. It is not backend truth.
 
 ## Local Development
@@ -223,6 +224,18 @@ Suggested checks:
 npm run typecheck
 npm test
 npm run build
+```
+
+For browser coverage:
+
+```bash
+npm run test:browser
+```
+
+For the opt-in Matrix live smoke:
+
+```bash
+npm run test:matrix-live
 ```
 
 For backend-only checks:

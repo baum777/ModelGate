@@ -65,7 +65,7 @@ Security note:
 | S3 | Stream never ends `start`-only | automated | [server/test/backend.test.ts](../server/test/backend.test.ts) | Exact terminal event required; owner: backend |
 | S4 | Long Markdown response stays visually stable | manual | Browser smoke in local UI | No browser automation coverage yet; owner: web |
 | S5 | Code block response renders without layout breakage | manual | Browser smoke in local UI | No browser automation coverage yet; owner: web |
-| S6 | Stream abort is visible as a user-facing error or cancellation | manual | Browser smoke in local UI | Abort handling exists, but no executable browser test; owner: web |
+| S6 | Stream abort is visible as a user-facing error or cancellation | automated | [tests/browser/modelgate.spec.ts](../tests/browser/modelgate.spec.ts) | Browser harness covers abort/cancel and stable recovery; owner: web |
 | S7 | Provider IDs do not appear in SSE frames | automated | [server/test/backend.test.ts](../server/test/backend.test.ts) | SSE payload stays on public alias only; owner: backend |
 | S8 | Exactly one assistant draft is finalized per completed stream | automated | [web/test/chat-workflow.test.ts](../web/test/chat-workflow.test.ts) | Reducer prevents duplicate finalization; owner: web |
 
@@ -91,7 +91,7 @@ Security note:
 | U3 | Matrix Workspace tab opens and is visible | automated | [tests/browser/modelgate.spec.ts](../tests/browser/modelgate.spec.ts) | Tab switching is covered with mocked backend state; owner: web |
 | U4 | Header shows health, model alias, and status | automated | [tests/browser/modelgate.spec.ts](../tests/browser/modelgate.spec.ts) | Header truth is verified against mocked backend responses; owner: web |
 | U5 | Tab switching keeps state consistent | implemented-but-manual | Local browser run of the Vite client | State is UI-local; owner: web |
-| U6 | Reload restores active tab/scope state | implemented-but-manual | Local browser run of the Vite client | Restored state is not backend truth; owner: web |
+| U6 | Reload restores chat draft and active tab state | automated | [tests/browser/modelgate.spec.ts](../tests/browser/modelgate.spec.ts) | Chat reload smoke verifies the persisted composer state and tab return; owner: web |
 | U7 | `RESTORED_SESSION` badge is visible | implemented-but-manual | Local browser run of the Vite client | Badge exists in [web/src/App.tsx](../web/src/App.tsx); owner: web |
 | U8 | UI shows only the public alias, not provider IDs | automated | [tests/browser/modelgate.spec.ts](../tests/browser/modelgate.spec.ts) | Provider IDs are excluded from visible UI text; owner: web + backend |
 | U9 | Beginner navigation exposes only Chat, GitHub Workspace, Matrix Workspace, Review, Settings | automated | [tests/browser/modelgate.spec.ts](../tests/browser/modelgate.spec.ts) | Shell IA uses the beginner-safe nav contract; owner: web |
@@ -166,7 +166,7 @@ Backend-owned room topic analyze, plan refresh, execute, and verify are locally 
 | Test ID | Description | Current status | Verification method | Notes / owner |
 | --- | --- | --- | --- | --- |
 | T1 | Analyze produces a candidate for changing room topic | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Backend Matrix analyze route is wired; owner: backend |
-| T2 | Promote to Review creates a plan with `planId` | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Backend-owned plan promotion is now wired; owner: backend |
+| T2 | Analyze creates a plan with `planId` | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Legacy promote wording is dead; the active path is analyze -> stored plan fetch; owner: backend |
 | T3 | Review shows before/after topic diff | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Diff comes from the backend plan store; owner: backend |
 | T4 | Without approval, no topic change occurs | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Approval-gated execution fails closed; owner: backend |
 | T5 | Approve and Execute runs backend-owned write | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Backend-owned write helper is exercised; owner: backend |
@@ -186,7 +186,7 @@ Backend-owned room topic analyze, plan refresh, execute, and verify are locally 
 | --- | --- | --- | --- | --- |
 | A1 | Analyze with scope returns a deterministic topic plan | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) and [web/test/matrix-api.test.ts](../web/test/matrix-api.test.ts) | Matrix analyze is backend-owned, deterministic, and client-validated; owner: backend + web |
 | A2 | Provenance markers are backend-issued only | automated | [server/test/matrix-routes.test.ts](../server/test/matrix-routes.test.ts) and [tests/browser/modelgate.spec.ts](../tests/browser/modelgate.spec.ts) | Read-only provenance is backend-owned, derived, and browser-rendered; owner: backend + web |
-| A3 | Promote candidate creates a plan-based transition | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Backend plan promotion is now real; owner: backend |
+| A3 | Plan transitions stay backend-owned | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Legacy promote wording is dead; backend analyze still creates the reviewable transition; owner: backend |
 | R1 | Review plan shows a structured diff | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Diff is returned by the backend plan fetch route; owner: backend |
 | R2 | Approve sends approval intent only | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Execute requires an explicit approval intent; owner: backend + web |
 | X1 | Execute is backend-owned | automated | [server/test/matrix-actions.test.ts](../server/test/matrix-actions.test.ts) | Write execution stays server-side; owner: backend |

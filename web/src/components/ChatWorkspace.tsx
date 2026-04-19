@@ -310,9 +310,11 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             <button type="button" className="secondary-button" onClick={jumpToLatest}>
               Jump to latest
             </button>
-            <button type="button" className="ghost-button" onClick={stopStreaming} disabled={!streamActive}>
-              Stopp
-            </button>
+            {streamActive ? (
+              <button type="button" className="ghost-button" onClick={stopStreaming}>
+                Stopp
+              </button>
+            ) : null}
           </div>
         </header>
 

@@ -553,7 +553,9 @@ Behavior:
 - prints the room id and restore target if cleanup cannot be completed
 
 CI remains unaffected because `npm run smoke:matrix` is manual-only and is not wired
-into `test`, `build`, or browser automation.
+into `test`, `build`, or browser automation. The repository also exposes the
+opt-in `npm run test:matrix-live` wrapper, and the separate `Matrix live smoke`
+workflow is dispatch-only.
 
 ## Current Limitations
 
