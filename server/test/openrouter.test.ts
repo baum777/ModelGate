@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { AppEnv } from "../src/lib/env.js";
 import { OpenRouterError, createOpenRouterClient, resolveOpenRouterApiKey } from "../src/lib/openrouter.js";
 import { createTestEnv } from "../test-support/helpers.js";
 
@@ -344,6 +345,19 @@ test("openrouter client does not fall back to the default key for specialized mo
   );
 
   assert.equal(fetchCalls, 0);
+});
+
+test("openrouter key resolver fails closed when a specialized key property is absent", () => {
+  const env = {
+    OPENROUTER_API_KEY: "default-key"
+  } as AppEnv;
+
+  assert.throws(
+    () => resolveOpenRouterApiKey(env, "qwen/qwen3-coder:free"),
+    (error) => error instanceof OpenRouterError
+      && error.status === 503
+      && error.message === "OpenRouter API key OPENROUTER_API_KEY_QWEN3_CODER is not configured for qwen/qwen3-coder"
+  );
 });
 
 test("openrouter client times out upstream requests and aborts cleanly", async () => {

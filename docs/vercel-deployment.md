@@ -48,6 +48,9 @@ Set these in Vercel project settings. Keep all secrets in server-side env settin
 | Name | Required | Secret | Purpose |
 | --- | --- | --- | --- |
 | `OPENROUTER_API_KEY` | yes | yes | Required for chat provider calls. |
+| `OPENROUTER_API_KEY_QWEN3_CODER` | no | yes | Specialized API key for qwen/qwen3-coder provider targets. |
+| `OPENROUTER_API_KEY_GPT_OSS_120B_PLANNER` | no | yes | Specialized API key for openai/gpt-oss-120b provider targets. |
+| `OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B` | no | yes | Specialized API key for nvidia/nemotron-3-super-120b provider targets. |
 | `OPENROUTER_BASE_URL` | no | no | OpenRouter API base URL. |
 | `OPENROUTER_MODEL` | no | no | Hidden provider target for the public default alias. |
 | `OPENROUTER_MODELS` | no | no | Hidden fallback provider targets. |

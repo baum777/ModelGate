@@ -35,6 +35,26 @@ function buildUpstreamErrorResponse(): ChatErrorResponse {
   };
 }
 
+function buildUpstreamErrorResponseFromError(error: unknown): { status: number; body: ChatErrorResponse } {
+  if (error instanceof OpenRouterError) {
+    return {
+      status: error.status,
+      body: {
+        ok: false,
+        error: {
+          code: "upstream_error",
+          message: error.message
+        }
+      }
+    };
+  }
+
+  return {
+    status: 502,
+    body: buildUpstreamErrorResponse()
+  };
+}
+
 function buildInternalErrorResponse(): ChatErrorResponse {
   return {
     ok: false,
@@ -43,18 +63,6 @@ function buildInternalErrorResponse(): ChatErrorResponse {
       message: "Chat backend model policy unavailable"
     }
   };
-}
-
-function getUpstreamStatus(error: unknown) {
-  if (error instanceof OpenRouterError) {
-    return error.status;
-  }
-
-  if (error && typeof error === "object" && "status" in error && typeof (error as { status?: unknown }).status === "number") {
-    return (error as { status: number }).status;
-  }
-
-  return undefined;
 }
 
 function isAbortError(error: unknown) {
@@ -201,12 +209,12 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
           return;
         }
 
-        const upstreamStatus = getUpstreamStatus(error);
+        const upstream = buildUpstreamErrorResponseFromError(error);
         request.log.error({
-          status: upstreamStatus
+          status: upstream.status
         }, "streaming chat request failed");
 
-        writeSseEvent(reply.raw, "error", buildUpstreamErrorResponse());
+        writeSseEvent(reply.raw, "error", upstream.body);
       } finally {
         request.raw.off("aborted", onClientAbort);
         reply.raw.end();
@@ -224,13 +232,13 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
         text: result.text
       });
     } catch (error) {
-      const upstreamStatus = getUpstreamStatus(error);
+      const upstream = buildUpstreamErrorResponseFromError(error);
 
       request.log.error({
-        status: upstreamStatus
+        status: upstream.status
       }, "chat request failed");
 
-      return reply.status(502).send(buildUpstreamErrorResponse());
+      return reply.status(upstream.status).send(upstream.body);
     }
   });
 }

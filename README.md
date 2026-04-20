@@ -126,6 +126,9 @@ Secrets stay backend-only. Do not put tokens in Vite public env vars.
 | Variable | Where | Purpose |
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | backend only | Required for OpenRouter chat calls. |
+| `OPENROUTER_API_KEY_QWEN3_CODER` | backend only | Optional specialized key for qwen/qwen3-coder provider targets. |
+| `OPENROUTER_API_KEY_GPT_OSS_120B_PLANNER` | backend only | Optional specialized key for openai/gpt-oss-120b provider targets. |
+| `OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B` | backend only | Optional specialized key for nvidia/nemotron-3-super-120b provider targets. |
 
 ### Workflow routing vars
 

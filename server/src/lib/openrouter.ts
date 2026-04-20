@@ -93,7 +93,7 @@ function modelFamilyKey(modelId: string) {
 }
 
 function requireOpenRouterApiKey(env: AppEnv) {
-  const apiKey = env.OPENROUTER_API_KEY.trim();
+  const apiKey = String(env.OPENROUTER_API_KEY ?? "").trim();
 
   if (!apiKey) {
     throw createOpenRouterError("OpenRouter API key is not configured", 503);
@@ -109,7 +109,7 @@ export function resolveOpenRouterApiKey(env: AppEnv, modelId: string) {
     return requireOpenRouterApiKey(env);
   }
 
-  const apiKey = env[specializedFamily.envKey].trim();
+  const apiKey = String(env[specializedFamily.envKey] ?? "").trim();
 
   if (!apiKey) {
     throw createOpenRouterError(

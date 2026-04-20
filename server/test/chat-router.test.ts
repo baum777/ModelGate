@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { createMockOpenRouterClient, createTestEnv } from "../test-support/helpers.js";
+import { OpenRouterError } from "../src/lib/openrouter.js";
 import type { LlmRouterPolicy, LlmRouterRule } from "../src/lib/llm-router.js";
 
 function parseSseEvents(body: string) {
@@ -265,6 +266,51 @@ test("chat router enabled fails closed when free-model enforcement removes every
   assert.doesNotMatch(response.body, /coding-nonfree|review-nonfree|daily-nonfree/);
 });
 
+test("chat router surfaces upstream openrouter failures with their specific message", async (t) => {
+  const env = createTestEnv({
+    OPENROUTER_MODEL: "openrouter/auto",
+    OPENROUTER_MODELS: ["anthropic/claude-3.5-sonnet"]
+  });
+  const app = createApp({
+    env,
+    openRouter: createMockOpenRouterClient({
+      createChatCompletion: async () => {
+        throw new OpenRouterError("OpenRouter API key OPENROUTER_API_KEY_QWEN3_CODER is not configured for qwen/qwen3-coder", 503);
+      }
+    }),
+    llmRouterPolicy: createRouterPolicy({
+      enabled: false
+    }),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/chat",
+    payload: {
+      messages: [
+        {
+          role: "user",
+          content: "please code this"
+        }
+      ]
+    }
+  });
+
+  assert.equal(response.statusCode, 503);
+  assert.deepEqual(JSON.parse(response.body), {
+    ok: false,
+    error: {
+      code: "upstream_error",
+      message: "OpenRouter API key OPENROUTER_API_KEY_QWEN3_CODER is not configured for qwen/qwen3-coder"
+    }
+  });
+});
+
 test("chat router enabled streaming still terminates with exactly one final event", async (t) => {
   const env = createTestEnv({
     OPENROUTER_MODEL: "openrouter/auto",
@@ -323,4 +369,50 @@ test("chat router enabled streaming still terminates with exactly one final even
     "default"
   ]);
   assert.doesNotMatch(response.body, /coding-primary:free/);
+});
+
+test("chat router surfaces upstream openrouter failures in streaming responses", async (t) => {
+  const env = createTestEnv({
+    OPENROUTER_MODEL: "openrouter/auto",
+    OPENROUTER_MODELS: ["anthropic/claude-3.5-sonnet"]
+  });
+  const app = createApp({
+    env,
+    openRouter: createMockOpenRouterClient({
+      relayChatCompletionStream: async () => {
+        throw new OpenRouterError("OpenRouter API key OPENROUTER_API_KEY_QWEN3_CODER is not configured for qwen/qwen3-coder", 503);
+      }
+    }),
+    llmRouterPolicy: createRouterPolicy({
+      enabled: false
+    }),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/chat",
+    payload: {
+      stream: true,
+      messages: [
+        {
+          role: "user",
+          content: "please code this"
+        }
+      ]
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.headers["content-type"] ?? "", /text\/event-stream/);
+  const events = parseSseEvents(response.body);
+  assert.deepEqual(events.map((event) => event.event), [
+    "start",
+    "error"
+  ]);
+  assert.equal(JSON.parse(events[1].data).error.message, "OpenRouter API key OPENROUTER_API_KEY_QWEN3_CODER is not configured for qwen/qwen3-coder");
 });

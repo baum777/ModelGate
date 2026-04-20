@@ -11,8 +11,11 @@ function parseCsvList(value: string) {
   return [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))];
 }
 
-function createVercelEnv(source: NodeJS.ProcessEnv = process.env) {
+export function createVercelEnv(source: NodeJS.ProcessEnv = process.env) {
   const openRouterApiKey = String(source.OPENROUTER_API_KEY ?? "").trim();
+  const openRouterQwenApiKey = String(source.OPENROUTER_API_KEY_QWEN3_CODER ?? "").trim();
+  const openRouterPlannerApiKey = String(source.OPENROUTER_API_KEY_GPT_OSS_120B_PLANNER ?? "").trim();
+  const openRouterNemotronApiKey = String(source.OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B ?? "").trim();
   const githubToken = String(source.GITHUB_TOKEN ?? "").trim();
   const githubAgentApiKey = String(source.GITHUB_AGENT_API_KEY ?? "").trim();
   const openRouterRequestTimeoutMs = Number.parseInt(String(source.OPENROUTER_REQUEST_TIMEOUT_MS ?? "15000").trim(), 10);
@@ -27,6 +30,9 @@ function createVercelEnv(source: NodeJS.ProcessEnv = process.env) {
     PORT: Number.isFinite(port) ? port : 8787,
     HOST: String(source.HOST ?? "127.0.0.1").trim() || "127.0.0.1",
     OPENROUTER_API_KEY: openRouterApiKey,
+    OPENROUTER_API_KEY_QWEN3_CODER: openRouterQwenApiKey,
+    OPENROUTER_API_KEY_GPT_OSS_120B_PLANNER: openRouterPlannerApiKey,
+    OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B: openRouterNemotronApiKey,
     OPENROUTER_BASE_URL: String(source.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1").trim() || "https://openrouter.ai/api/v1",
     OPENROUTER_MODEL: String(source.OPENROUTER_MODEL ?? "openrouter/auto").trim() || "openrouter/auto",
     OPENROUTER_MODELS: parseCsvList(String(source.OPENROUTER_MODELS ?? "")),
