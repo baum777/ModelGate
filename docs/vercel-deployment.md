@@ -7,6 +7,7 @@ ModelGate can be deployed on Vercel as a static Vite frontend plus a single serv
 - Frontend build output: `web/dist`
 - API entrypoint: `api/[...path].ts`
 - Shared backend implementation: `server/src/app.ts`
+- Both API function bundles include `config/**/*.yml` because the backend loads runtime policy files from `config/` during cold start.
 - Route behavior:
   - `/health`
   - `/models`

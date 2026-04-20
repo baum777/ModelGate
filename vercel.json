@@ -5,7 +5,11 @@
   "functions": {
     "api/[...path].ts": {
       "maxDuration": 60,
-      "includeFiles": "config/llm-router.yml"
+      "includeFiles": "config/**/*.yml"
+    },
+    "api/matrix/[...path].ts": {
+      "maxDuration": 60,
+      "includeFiles": "config/**/*.yml"
     }
   },
   "rewrites": [
