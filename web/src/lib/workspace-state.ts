@@ -275,7 +275,8 @@ function normalizeChatState(value: unknown): ChatState | null {
       connectionState === "submitting" || connectionState === "streaming"
         ? "A chat stream was in progress and was not resumed after reload."
         : lastStreamWarning,
-    autoScrollEnabled
+    autoScrollEnabled,
+    activeRoute: null
   };
 
   return normalized;

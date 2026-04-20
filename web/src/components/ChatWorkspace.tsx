@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useRef, useState, type FormEvent } from "react";
-import { streamChatCompletion } from "../lib/api.js";
+import { streamChatCompletion, type ChatRouteMetadata } from "../lib/api.js";
 import {
   chatReducer,
   createInitialChatState,
@@ -12,11 +12,24 @@ import {
   type ChatSession
 } from "../lib/workspace-state.js";
 
+type PublicModelEntry = {
+  alias: string;
+  label: string;
+  description: string;
+  capabilities: string[];
+  tier: "core" | "specialized" | "fallback";
+  streaming: boolean;
+  recommendedFor: string[];
+  default?: boolean;
+  available?: boolean;
+};
+
 type ChatWorkspaceProps = {
   session: ChatSession;
   backendHealthy: boolean | null;
   activeModelAlias: string | null;
   availableModels: string[];
+  modelRegistry: PublicModelEntry[];
   onActiveModelAliasChange: (alias: string) => void;
   onTelemetry: (kind: "info" | "warning" | "error", label: string, detail?: string) => void;
   onSessionChange: (session: ChatSession) => void;
@@ -52,6 +65,26 @@ function normalizeNotice(message: string | null, fallback: string) {
     .trim();
 }
 
+function formatRouteBadge(route: ChatRouteMetadata | null) {
+  if (!route) {
+    return "Route pending";
+  }
+
+  const markers: string[] = [];
+
+  if (route.fallbackUsed) {
+    markers.push("fallback");
+  }
+
+  if (route.degraded) {
+    markers.push("degraded");
+  }
+
+  return markers.length > 0
+    ? `${route.selectedAlias} · ${route.taskClass} · ${markers.join("/")}`
+    : `${route.selectedAlias} · ${route.taskClass}`;
+}
+
 export function ChatWorkspace(props: ChatWorkspaceProps) {
   const [chatState, dispatch] = useReducer(
     chatReducer,
@@ -66,6 +99,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const malformedAbortRef = useRef(false);
+  const selectedModelEntry = props.modelRegistry.find((entry) => entry.alias === selectedModel) ?? null;
 
   useEffect(() => {
     if (props.activeModelAlias && props.activeModelAlias !== selectedModel) {
@@ -177,6 +211,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     try {
       await streamChatCompletion(
         {
+          modelAlias: selectedModel || undefined,
           model: selectedModel || undefined,
           messages: outboundMessages
         },
@@ -188,6 +223,17 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             });
             props.onTelemetry("info", "Chat stream started", `Backend accepted stream for alias ${payload.model}.`);
           },
+          onRoute: (payload) => {
+            dispatch({
+              type: "stream_route",
+              route: payload.route
+            });
+            props.onTelemetry(
+              "info",
+              "Chat route metadata",
+              `${payload.route.selectedAlias} (${payload.route.taskClass}), fallback=${payload.route.fallbackUsed ? "yes" : "no"}`
+            );
+          },
           onToken: (delta) => {
             dispatch({
               type: "stream_token",
@@ -198,7 +244,8 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             dispatch({
               type: "stream_done",
               model: payload.model,
-              text: payload.text
+              text: payload.text,
+              route: payload.route
             });
             props.onTelemetry("info", "Chat stream completed", `Finalized alias ${payload.model}.`);
           },
@@ -295,6 +342,9 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             )}
           </select>
           <p>Only the public alias is shown here. Provider targets stay server-side.</p>
+          {selectedModelEntry ? (
+            <p className="hint">{selectedModelEntry.label}: {selectedModelEntry.description}</p>
+          ) : null}
         </aside>
       </section>
 
@@ -304,6 +354,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             <span className="runtime-label">Connection</span>
             <strong data-testid="chat-connection-state">{statusLabel(chatState.connectionState)}</strong>
             <span className="runtime-note">Auto-scroll: {chatState.autoScrollEnabled ? "on" : "off"}</span>
+            <span className="runtime-note">{formatRouteBadge(chatState.activeRoute)}</span>
           </div>
 
           <div className="runtime-actions">
@@ -329,6 +380,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               <span className="message-role">{message.role}</span>
               <p>{message.content}</p>
               {message.modelAlias ? <span className="message-meta">alias: {message.modelAlias}</span> : null}
+              {message.route ? <span className="message-meta">route: {formatRouteBadge(message.route)}</span> : null}
             </article>
           ))}
 
@@ -337,6 +389,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               <span className="message-role">assistant draft</span>
               <p>{draft.text || (draft.started ? "…" : "Waiting for start frame…")}</p>
               <span className="message-meta">model alias: {draft.model ?? "pending"}</span>
+              <span className="message-meta">route: {formatRouteBadge(chatState.activeRoute)}</span>
             </article>
           ) : null}
 
@@ -357,20 +410,20 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
 
         <form className="composer" onSubmit={handleSubmit}>
           <textarea
-              data-testid="chat-composer"
-              aria-label="Chat composer"
-              value={chatState.input}
-              onChange={(event) => dispatch({ type: "set_input", input: event.target.value })}
-              onKeyDown={(event) => {
-                if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                  event.preventDefault();
-                  void submitCurrentPrompt();
-                }
-              }}
-              placeholder="Frag das backend-verwaltete Modell etwas..."
-              rows={5}
-              disabled={chatState.connectionState === "submitting" || chatState.connectionState === "streaming"}
-            />
+            data-testid="chat-composer"
+            aria-label="Chat composer"
+            value={chatState.input}
+            onChange={(event) => dispatch({ type: "set_input", input: event.target.value })}
+            onKeyDown={(event) => {
+              if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                event.preventDefault();
+                void submitCurrentPrompt();
+              }
+            }}
+            placeholder="Frag das backend-verwaltete Modell etwas..."
+            rows={5}
+            disabled={chatState.connectionState === "submitting" || chatState.connectionState === "streaming"}
+          />
 
           <div className="composer-footer">
             <p className="hint">

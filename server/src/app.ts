@@ -4,7 +4,6 @@ import { createGitHubClient, type GitHubClient } from "./lib/github-client.js";
 import { createGitHubConfig, type GitHubConfig } from "./lib/github-env.js";
 import { createGitHubActionStore, type GitHubActionStore } from "./lib/github-action-store.js";
 import { createAuthConfig, type AuthConfig } from "./lib/auth.js";
-import { loadLlmRouterPolicy, type LlmRouterPolicy } from "./lib/llm-router.js";
 import { createDisabledMatrixConfig, type MatrixConfig } from "./lib/matrix-env.js";
 import { buildCorsHeaders } from "./lib/http.js";
 import { buildModelRegistry, type ModelRegistry } from "./lib/model-policy.js";
@@ -33,7 +32,6 @@ export type AppDependencies = {
   matrixActionStore?: MatrixActionStore;
   modelRegistry?: ModelRegistry;
   modelCapabilitiesConfig?: ModelCapabilitiesConfig;
-  llmRouterPolicy?: LlmRouterPolicy;
   logger?: boolean;
 };
 
@@ -55,9 +53,6 @@ function registerCors(app: ReturnType<typeof Fastify>, env: AppEnv) {
 export function createApp(deps: AppDependencies) {
   const modelRegistry = deps.modelRegistry ?? buildModelRegistry(deps.env);
   const modelCapabilitiesConfig = deps.modelCapabilitiesConfig ?? loadModelCapabilitiesConfig();
-  const llmRouterPolicy = deps.llmRouterPolicy ?? loadLlmRouterPolicy({
-    LLM_ROUTER_ENABLED: "false"
-  });
   const authConfig = deps.authConfig ?? createAuthConfig(deps.env);
   const githubConfig = deps.githubConfig ?? createGitHubConfig(deps.env);
   const githubClient = deps.githubClient ?? createGitHubClient({ config: githubConfig });
@@ -98,7 +93,7 @@ export function createApp(deps: AppDependencies) {
     env: deps.env,
     openRouter: deps.openRouter,
     modelRegistry,
-    llmRouterPolicy
+    modelCapabilitiesConfig
   });
 
   return app;

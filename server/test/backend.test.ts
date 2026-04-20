@@ -58,12 +58,19 @@ test("health and models return backend-owned metadata", async (t) => {
   });
 
   assert.equal(modelResponse.statusCode, 200);
-  assert.deepEqual(JSON.parse(modelResponse.body), {
-    ok: true,
-    defaultModel: "default",
-    models: ["default"],
-    source: "backend-policy"
-  });
+  const modelsPayload = JSON.parse(modelResponse.body) as {
+    ok: boolean;
+    defaultModel: string;
+    models: string[];
+    source: string;
+    registry: Array<{ alias: string; label: string }>;
+  };
+  assert.equal(modelsPayload.ok, true);
+  assert.equal(modelsPayload.defaultModel, "default");
+  assert.deepEqual(modelsPayload.models, ["default"]);
+  assert.equal(modelsPayload.source, "backend-policy");
+  assert.equal(modelsPayload.registry[0]?.alias, "default");
+  assert.equal(typeof modelsPayload.registry[0]?.label, "string");
 });
 
 test("server boots Matrix read-only routes without an OpenRouter key and chat fails closed", async (t) => {
@@ -129,12 +136,12 @@ test("server boots Matrix read-only routes without an OpenRouter key and chat fa
     }
   });
 
-  assert.equal(chatResponse.statusCode, 502);
+  assert.equal(chatResponse.statusCode, 503);
   assert.deepEqual(JSON.parse(chatResponse.body), {
     ok: false,
     error: {
       code: "upstream_error",
-      message: "Chat provider request failed"
+      message: "OpenRouter API key is not configured"
     }
   });
   assert.equal(fetchCalls, 0);
@@ -225,7 +232,8 @@ test("/chat returns the non-stream response shape and sanitizes provider failure
         assert.equal(selection.logicalModelId, "stable-free-default");
         assert.deepEqual(selection.providerTargets, [
           "openrouter/auto",
-          "anthropic/claude-3.5-sonnet"
+          "meta-llama/llama-3.3-70b-instruct:free",
+          "google/gemma-4-31b-it:free"
         ]);
         assert.deepEqual(request.messages, [
           {
@@ -261,11 +269,22 @@ test("/chat returns the non-stream response shape and sanitizes provider failure
   });
 
   assert.equal(successResponse.statusCode, 200);
-  assert.deepEqual(JSON.parse(successResponse.body), {
-    ok: true,
-    model: "default",
-    text: "Hello back"
-  });
+  const successPayload = JSON.parse(successResponse.body) as {
+    ok: boolean;
+    model: string;
+    text: string;
+    route: {
+      selectedAlias: string;
+      fallbackUsed: boolean;
+      degraded: boolean;
+      streaming: boolean;
+    };
+  };
+  assert.equal(successPayload.ok, true);
+  assert.equal(successPayload.model, "default");
+  assert.equal(successPayload.text, "Hello back");
+  assert.equal(successPayload.route.selectedAlias, "default");
+  assert.equal(successPayload.route.streaming, false);
 
   const failingApp = createApp({
     env,
@@ -315,7 +334,8 @@ test("/chat streams start, token, done, and sanitized error frames", async (t) =
         assert.equal(selection.logicalModelId, "stable-free-default");
         assert.deepEqual(selection.providerTargets, [
           "openrouter/auto",
-          "anthropic/claude-3.5-sonnet"
+          "meta-llama/llama-3.3-70b-instruct:free",
+          "google/gemma-4-31b-it:free"
         ]);
         options.onToken("Hello");
         options.onToken(" world");
@@ -352,12 +372,14 @@ test("/chat streams start, token, done, and sanitized error frames", async (t) =
   const successEvents = parseSseEvents(successResponse.body);
   assert.deepEqual(successEvents.map((event) => event.event), [
     "start",
+    "route",
     "token",
     "token",
     "done"
   ]);
   assert.deepEqual(successEvents.map((event) => JSON.parse(event.data) as { model?: string }).map((event) => event.model), [
     "default",
+    undefined,
     undefined,
     undefined,
     "default"
@@ -397,10 +419,12 @@ test("/chat streams start, token, done, and sanitized error frames", async (t) =
   const zeroTokenEvents = parseSseEvents(zeroTokenResponse.body);
   assert.deepEqual(zeroTokenEvents.map((event) => event.event), [
     "start",
+    "route",
     "done"
   ]);
   assert.deepEqual(zeroTokenEvents.map((event) => JSON.parse(event.data) as { model?: string }).map((event) => event.model), [
     "default",
+    undefined,
     "default"
   ]);
   assert.ok(!zeroTokenResponse.body.includes("event: token"));
@@ -438,13 +462,15 @@ test("/chat streams start, token, done, and sanitized error frames", async (t) =
   const failureEvents = parseSseEvents(failureResponse.body);
   assert.deepEqual(failureEvents.map((event) => event.event), [
     "start",
+    "route",
     "error"
   ]);
   assert.deepEqual(failureEvents.map((event) => JSON.parse(event.data) as { model?: string; error?: { code?: string } }).map((event) => event.model), [
     "default",
+    undefined,
     undefined
   ]);
-  assert.deepEqual(JSON.parse(failureEvents[1].data), {
+  assert.deepEqual(JSON.parse(failureEvents[2].data), {
     ok: false,
     error: {
       code: "upstream_error",
@@ -508,11 +534,13 @@ test("/chat stream over HTTP always ends with exactly one terminal event", async
   const successEvents = parseSseEvents(await successResponse.text());
   assert.deepEqual(successEvents.map((event) => event.event), [
     "start",
+    "route",
     "token",
     "done"
   ]);
   assert.deepEqual(successEvents.map((event) => JSON.parse(event.data) as { model?: string }).map((event) => event.model), [
     "default",
+    undefined,
     undefined,
     "default"
   ]);
@@ -563,9 +591,10 @@ test("/chat stream over HTTP always ends with exactly one terminal event", async
   const failureEvents = parseSseEvents(await failureResponse.text());
   assert.deepEqual(failureEvents.map((event) => event.event), [
     "start",
+    "route",
     "error"
   ]);
-  assert.deepEqual(JSON.parse(failureEvents[1].data), {
+  assert.deepEqual(JSON.parse(failureEvents[2].data), {
     ok: false,
     error: {
       code: "upstream_error",

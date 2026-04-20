@@ -1,18 +1,17 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { ChatRequestSchema, type ChatErrorResponse } from "../lib/chat-contract.js";
 import type { AppEnv } from "../lib/env.js";
 import { buildCorsHeaders, writeSseEvent } from "../lib/http.js";
-import { resolveLlmRouterSelection, type LlmRouterPolicy } from "../lib/llm-router.js";
-import { recordRouterDecision } from "../lib/local-evidence-log.js";
 import type { ModelRegistry } from "../lib/model-policy.js";
 import { type OpenRouterClient, OpenRouterError } from "../lib/openrouter.js";
-import { assertNoFrontendProviderModelOverride } from "../lib/workflow-model-router.js";
+import { resolveChatRouteDecision } from "../lib/routing-authority.js";
+import { assertNoFrontendProviderModelOverride, type ModelCapabilitiesConfig } from "../lib/workflow-model-router.js";
 
 type ChatRouteDependencies = {
   env: AppEnv;
   openRouter: OpenRouterClient;
   modelRegistry: ModelRegistry;
-  llmRouterPolicy: LlmRouterPolicy;
+  modelCapabilitiesConfig: ModelCapabilitiesConfig;
 };
 
 function buildInvalidRequestResponse(): ChatErrorResponse {
@@ -55,36 +54,18 @@ function buildUpstreamErrorResponseFromError(error: unknown): { status: number; 
   };
 }
 
-function buildInternalErrorResponse(): ChatErrorResponse {
+function buildInternalErrorResponse(message = "Chat backend model policy unavailable"): ChatErrorResponse {
   return {
     ok: false,
     error: {
       code: "internal_error",
-      message: "Chat backend model policy unavailable"
+      message
     }
   };
 }
 
 function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
-}
-
-async function logRouterDecision(
-  request: FastifyRequest,
-  policy: LlmRouterPolicy,
-  entry: Parameters<typeof recordRouterDecision>[1]
-) {
-  if (!policy.enabled || !policy.logging.enabled) {
-    return;
-  }
-
-  try {
-    await recordRouterDecision(policy.logging, entry);
-  } catch (error) {
-    request.log.warn({
-      error: error instanceof Error ? error.message : "unknown"
-    }, "llm router evidence logging failed");
-  }
 }
 
 export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
@@ -102,59 +83,34 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
     }
 
     const body = parsed.data;
-    const resolution = deps.modelRegistry.resolveModel(body.model);
+    let routeDecision: ReturnType<typeof resolveChatRouteDecision>;
 
-    if (resolution.ok === false) {
-      if (resolution.reason === "unsupported_model") {
+    try {
+      routeDecision = resolveChatRouteDecision({
+        env: deps.env,
+        request: body,
+        modelRegistry: deps.modelRegistry,
+        modelCapabilitiesConfig: deps.modelCapabilitiesConfig
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown";
+      if (message.includes("unsupported_model")) {
         return reply.status(400).send(buildInvalidRequestResponse());
       }
 
       request.log.error({
-        reason: resolution.reason
-      }, "model policy resolution failed");
-
+        error: message
+      }, "chat route resolution failed");
       return reply.status(500).send(buildInternalErrorResponse());
     }
 
-    const routerResolution = resolveLlmRouterSelection({
-      messages: body.messages,
-      baseProviderTargets: resolution.selection.providerTargets,
-      policy: deps.llmRouterPolicy
-    });
-
-    if (!routerResolution.ok) {
-      await logRouterDecision(request, deps.llmRouterPolicy, {
-        taskType: routerResolution.taskType,
-        publicModelId: resolution.selection.publicModelId,
-        providerModelId: null,
-        fallbackUsed: false,
-        candidateCount: routerResolution.candidateModels.length,
-        reason: routerResolution.reason,
-        result: "failed"
-      });
-
-      request.log.error({
-        reason: routerResolution.reason,
-        taskType: routerResolution.taskType
-      }, "llm router selection failed");
-
-      return reply.status(502).send(buildUpstreamErrorResponse());
-    }
-
-    const selection = {
-      ...resolution.selection,
-      providerTargets: routerResolution.candidateModels
-    };
-
-    await logRouterDecision(request, deps.llmRouterPolicy, {
-      taskType: routerResolution.taskType,
-      publicModelId: selection.publicModelId,
-      providerModelId: routerResolution.selectedModel,
-      fallbackUsed: routerResolution.fallbackUsed,
-      candidateCount: routerResolution.candidateModels.length,
-      reason: routerResolution.reason,
-      result: "selected"
-    });
+    request.log.info({
+      selectedAlias: routeDecision.route.selectedAlias,
+      taskClass: routeDecision.route.taskClass,
+      fallbackUsed: routeDecision.route.fallbackUsed,
+      degraded: routeDecision.route.degraded,
+      retryCount: routeDecision.route.retryCount
+    }, "chat route decision");
 
     if (body.stream) {
       const origin = request.headers.origin;
@@ -178,11 +134,13 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
 
       writeSseEvent(reply.raw, "start", {
         ok: true,
-        model: selection.publicModelId
+        model: routeDecision.selection.publicModelAlias
+      });
+      writeSseEvent(reply.raw, "route", {
+        ok: true,
+        route: routeDecision.route
       });
 
-      // `close` can fire after a normal response finishes, so only treat an
-      // explicit client abort as a cancellation signal.
       const onClientAbort = () => {
         abortController.abort();
       };
@@ -190,7 +148,7 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
       request.raw.on("aborted", onClientAbort);
 
       try {
-        const result = await deps.openRouter.relayChatCompletionStream(body, selection, {
+        const result = await deps.openRouter.relayChatCompletionStream(body, routeDecision.selection, {
           signal: abortController.signal,
           onToken: (delta) => {
             writeSseEvent(reply.raw, "token", { delta });
@@ -201,7 +159,8 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
           writeSseEvent(reply.raw, "done", {
             ok: true,
             model: result.model,
-            text: result.text
+            text: result.text,
+            route: routeDecision.route
           });
         }
       } catch (error) {
@@ -224,12 +183,13 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
     }
 
     try {
-      const result = await deps.openRouter.createChatCompletion(body, selection);
+      const result = await deps.openRouter.createChatCompletion(body, routeDecision.selection);
 
       return reply.status(200).send({
         ok: true,
         model: result.model,
-        text: result.text
+        text: result.text,
+        route: routeDecision.route
       });
     } catch (error) {
       const upstream = buildUpstreamErrorResponseFromError(error);

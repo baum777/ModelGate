@@ -1,15 +1,21 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
+  "buildCommand": "npm run build:web",
   "outputDirectory": "web/dist",
   "functions": {
     "api/[...path].ts": {
       "maxDuration": 60,
-      "includeFiles": "config/**/*.yml"
+      "includeFiles": [
+        "config/llm-router.yml",
+        "config/model-capabilities.yml"
+      ]
     },
     "api/matrix/[...path].ts": {
       "maxDuration": 60,
-      "includeFiles": "config/**/*.yml"
+      "includeFiles": [
+        "config/llm-router.yml",
+        "config/model-capabilities.yml"
+      ]
     }
   },
   "rewrites": [
@@ -26,16 +32,20 @@
       "destination": "/api/chat"
     },
     {
-      "source": "/api/matrix/(.*)",
-      "destination": "/api/matrix/[...path]?...path=$1"
+      "source": "/api/matrix/:path*",
+      "destination": "/api/matrix/[...path]?path=:path*"
     },
     {
-      "source": "/api/auth/(.*)",
-      "destination": "/api/[...path]?...path=$1"
+      "source": "/api/auth/:path*",
+      "destination": "/api/[...path]?path=:path*"
     },
     {
-      "source": "/api/github/(.*)",
-      "destination": "/api/[...path]?...path=$1"
+      "source": "/api/github/:path*",
+      "destination": "/api/[...path]?path=:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/[...path]?path=:path*"
     }
   ]
 }

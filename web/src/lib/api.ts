@@ -3,6 +3,17 @@ export type ChatMessage = {
   content: string;
 };
 
+export type ChatRouteMetadata = {
+  selectedAlias: string;
+  taskClass: "dialog" | "coding" | "analysis" | "review";
+  fallbackUsed: boolean;
+  degraded: boolean;
+  streaming: boolean;
+  policyVersion?: string;
+  decisionReason?: string;
+  retryCount?: number;
+};
+
 export type HealthResponse = {
   ok: true;
   service: string;
@@ -17,6 +28,17 @@ export type ModelResponse = {
   ok: boolean;
   defaultModel: string;
   models: string[];
+  registry: Array<{
+    alias: string;
+    label: string;
+    description: string;
+    capabilities: string[];
+    tier: "core" | "specialized" | "fallback";
+    streaming: boolean;
+    recommendedFor: string[];
+    default?: boolean;
+    available?: boolean;
+  }>;
   source: string;
 };
 
@@ -26,8 +48,9 @@ export type AuthSessionResponse = {
 
 export type ChatStreamHandlers = {
   onStart?: (payload: { ok: true; model: string }) => void;
+  onRoute?: (payload: { ok: true; route: ChatRouteMetadata }) => void;
   onToken?: (delta: string) => void;
-  onDone?: (payload: { ok: true; model: string; text: string }) => void;
+  onDone?: (payload: { ok: true; model: string; text: string; route: ChatRouteMetadata }) => void;
   onError?: (message: string) => void;
   onMalformed?: (message: string) => void;
 };
@@ -181,6 +204,10 @@ export async function fetchModels(): Promise<ModelResponse> {
 export async function streamChatCompletion(
   body: {
     model?: string;
+    modelAlias?: string;
+    task?: "dialog" | "coding" | "analysis" | "review";
+    mode?: "balanced" | "fast" | "deep";
+    preference?: "latency" | "quality" | "cost";
     temperature?: number;
     messages: ChatMessage[];
   },
@@ -262,20 +289,85 @@ export async function streamChatCompletion(
       continue;
     }
 
+    if (event.event === "route") {
+      if (!sawStart) {
+        handlers.onMalformed?.("Received route before stream start.");
+        continue;
+      }
+
+      const payload = parseJson<{ ok?: unknown; route?: unknown }>("route", event.data);
+
+      if (!payload) {
+        continue;
+      }
+
+      if (payload.ok !== true || !payload.route || typeof payload.route !== "object") {
+        handlers.onMalformed?.("Backend route frame was incomplete.");
+        continue;
+      }
+
+      const route = payload.route as Partial<ChatRouteMetadata>;
+
+      if (
+        typeof route.selectedAlias !== "string"
+        || typeof route.taskClass !== "string"
+        || typeof route.fallbackUsed !== "boolean"
+        || typeof route.degraded !== "boolean"
+        || typeof route.streaming !== "boolean"
+      ) {
+        handlers.onMalformed?.("Backend route frame had invalid fields.");
+        continue;
+      }
+
+      handlers.onRoute?.({
+        ok: true,
+        route: {
+          selectedAlias: route.selectedAlias,
+          taskClass: route.taskClass as ChatRouteMetadata["taskClass"],
+          fallbackUsed: route.fallbackUsed,
+          degraded: route.degraded,
+          streaming: route.streaming,
+          policyVersion: typeof route.policyVersion === "string" ? route.policyVersion : undefined,
+          decisionReason: typeof route.decisionReason === "string" ? route.decisionReason : undefined,
+          retryCount: typeof route.retryCount === "number" ? route.retryCount : undefined
+        }
+      });
+      continue;
+    }
+
     if (event.event === "done") {
       if (!sawStart) {
         handlers.onMalformed?.("Received done before stream start.");
         continue;
       }
 
-      const payload = parseJson<{ ok?: unknown; model?: unknown; text?: unknown }>("done", event.data);
+      const payload = parseJson<{ ok?: unknown; model?: unknown; text?: unknown; route?: unknown }>("done", event.data);
 
       if (!payload) {
         continue;
       }
 
-      if (payload.ok !== true || typeof payload.model !== "string" || typeof payload.text !== "string") {
+      if (
+        payload.ok !== true
+        || typeof payload.model !== "string"
+        || typeof payload.text !== "string"
+        || !payload.route
+        || typeof payload.route !== "object"
+      ) {
         handlers.onMalformed?.("Backend stream terminal frame was incomplete.");
+        continue;
+      }
+
+      const route = payload.route as Partial<ChatRouteMetadata>;
+
+      if (
+        typeof route.selectedAlias !== "string"
+        || typeof route.taskClass !== "string"
+        || typeof route.fallbackUsed !== "boolean"
+        || typeof route.degraded !== "boolean"
+        || typeof route.streaming !== "boolean"
+      ) {
+        handlers.onMalformed?.("Backend stream terminal route metadata was incomplete.");
         continue;
       }
 
@@ -283,7 +375,17 @@ export async function streamChatCompletion(
       handlers.onDone?.({
         ok: true,
         model: payload.model,
-        text: payload.text
+        text: payload.text,
+        route: {
+          selectedAlias: route.selectedAlias,
+          taskClass: route.taskClass as ChatRouteMetadata["taskClass"],
+          fallbackUsed: route.fallbackUsed,
+          degraded: route.degraded,
+          streaming: route.streaming,
+          policyVersion: typeof route.policyVersion === "string" ? route.policyVersion : undefined,
+          decisionReason: typeof route.decisionReason === "string" ? route.decisionReason : undefined,
+          retryCount: typeof route.retryCount === "number" ? route.retryCount : undefined
+        }
       });
       continue;
     }

@@ -15,20 +15,21 @@ function encodeChunks(chunks: string[]) {
   });
 }
 
-test("chat reducer finalizes exactly one assistant draft on done", async () => {
+test("chat reducer finalizes exactly one assistant draft on done with route metadata", async () => {
   const events: Array<{ event: string; data: string }> = [];
   for await (const event of readSseEvents(
     encodeChunks([
       "event: start\ndata: {\"ok\":true,\"model\":\"default\"}\n\n",
+      "event: route\ndata: {\"ok\":true,\"route\":{\"selectedAlias\":\"default\",\"taskClass\":\"dialog\",\"fallbackUsed\":false,\"degraded\":false,\"streaming\":true}}\n\n",
       "event: token\ndata: {\"delta\":\"Hel\"}\n\n",
       "event: token\ndata: {\"delta\":\"lo\"}\n\n",
-      "event: done\ndata: {\"ok\":true,\"model\":\"default\",\"text\":\"Hello\"}\n\n"
+      "event: done\ndata: {\"ok\":true,\"model\":\"default\",\"text\":\"Hello\",\"route\":{\"selectedAlias\":\"default\",\"taskClass\":\"dialog\",\"fallbackUsed\":false,\"degraded\":false,\"streaming\":true}}\n\n"
     ])
   )) {
     events.push(event);
   }
 
-  assert.deepEqual(events.map((entry) => entry.event), ["start", "token", "token", "done"]);
+  assert.deepEqual(events.map((entry) => entry.event), ["start", "route", "token", "token", "done"]);
 
   let state = createInitialChatState();
   state = chatReducer(state, {
@@ -40,14 +41,36 @@ test("chat reducer finalizes exactly one assistant draft on done", async () => {
     }
   });
   state = chatReducer(state, { type: "stream_start", model: "default" });
+  state = chatReducer(state, {
+    type: "stream_route",
+    route: {
+      selectedAlias: "default",
+      taskClass: "dialog",
+      fallbackUsed: false,
+      degraded: false,
+      streaming: true
+    }
+  });
   state = chatReducer(state, { type: "stream_token", delta: "Hel" });
   state = chatReducer(state, { type: "stream_token", delta: "lo" });
-  state = chatReducer(state, { type: "stream_done", model: "default", text: "Hello" });
+  state = chatReducer(state, {
+    type: "stream_done",
+    model: "default",
+    text: "Hello",
+    route: {
+      selectedAlias: "default",
+      taskClass: "dialog",
+      fallbackUsed: false,
+      degraded: false,
+      streaming: true
+    }
+  });
 
   assert.equal(state.connectionState, "completed");
   assert.equal(state.currentAssistantDraft, null);
   assert.equal(state.lastError, null);
   assert.equal(state.lastStreamWarning, null);
+  assert.equal(state.activeRoute?.selectedAlias, "default");
   assert.equal(state.messages.length, 2);
   assert.deepEqual(state.messages[0], {
     id: "user-1",
@@ -58,7 +81,14 @@ test("chat reducer finalizes exactly one assistant draft on done", async () => {
     id: "assistant-2",
     role: "assistant",
     content: "Hello",
-    modelAlias: "default"
+    modelAlias: "default",
+    route: {
+      selectedAlias: "default",
+      taskClass: "dialog",
+      fallbackUsed: false,
+      degraded: false,
+      streaming: true
+    }
   });
 });
 

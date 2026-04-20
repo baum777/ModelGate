@@ -7,7 +7,7 @@ import test from "node:test";
 type VercelConfig = {
   functions?: Record<string, {
     maxDuration?: number;
-    includeFiles?: string;
+    includeFiles?: string | string[];
   }>;
 };
 
@@ -16,7 +16,13 @@ test("vercel config bundles runtime-loaded config files for both api entrypoints
   const vercelConfig = JSON.parse(fs.readFileSync(vercelConfigPath, "utf8")) as VercelConfig;
 
   assert.equal(vercelConfig.functions?.["api/[...path].ts"]?.maxDuration, 60);
-  assert.equal(vercelConfig.functions?.["api/[...path].ts"]?.includeFiles, "config/**/*.yml");
+  assert.deepEqual(vercelConfig.functions?.["api/[...path].ts"]?.includeFiles, [
+    "config/llm-router.yml",
+    "config/model-capabilities.yml"
+  ]);
   assert.equal(vercelConfig.functions?.["api/matrix/[...path].ts"]?.maxDuration, 60);
-  assert.equal(vercelConfig.functions?.["api/matrix/[...path].ts"]?.includeFiles, "config/**/*.yml");
+  assert.deepEqual(vercelConfig.functions?.["api/matrix/[...path].ts"]?.includeFiles, [
+    "config/llm-router.yml",
+    "config/model-capabilities.yml"
+  ]);
 });

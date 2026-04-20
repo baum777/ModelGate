@@ -3,7 +3,6 @@ import test from "node:test";
 import { createApp } from "../src/app.js";
 import { createMockOpenRouterClient, createTestEnv } from "../test-support/helpers.js";
 import { OpenRouterError } from "../src/lib/openrouter.js";
-import type { LlmRouterPolicy, LlmRouterRule } from "../src/lib/llm-router.js";
 
 function parseSseEvents(body: string) {
   return body
@@ -25,55 +24,25 @@ function parseSseEvents(body: string) {
     });
 }
 
-const ROUTER_RULES: LlmRouterRule[] = [
-  { taskType: "coding", keywords: ["code", "build"], model: "coding-primary:free" },
-  { taskType: "repo_review", keywords: ["review", "pull request"], model: "repo-review-primary:free" },
-  { taskType: "daily", keywords: [], model: "daily-primary:free" }
-];
-
-function createRouterPolicy(overrides: Partial<LlmRouterPolicy> = {}): LlmRouterPolicy {
-  return {
-    enabled: overrides.enabled ?? true,
-    mode: "rules_first",
-    requireFreeModels: overrides.requireFreeModels ?? false,
-    maxFallbacks: overrides.maxFallbacks ?? 2,
-    failClosed: overrides.failClosed ?? true,
-    defaultModel: overrides.defaultModel ?? "default-fallback:free",
-    fallbackModel: overrides.fallbackModel ?? "secondary-fallback:free",
-    rules: overrides.rules ?? ROUTER_RULES,
-    logging: overrides.logging ?? {
-      enabled: false,
-      routerLogPath: ".local-ai/logs/ROUTER_DECISIONS.log.md",
-      modelRunLogPath: ".local-ai/logs/MODEL_RUNS.log.md",
-      promptEvidenceLogPath: ".local-ai/logs/PROMPT_EVIDENCE.log.md"
-    }
-  };
-}
-
-test("chat router disabled preserves existing provider target behavior", async (t) => {
+test("chat routing resolves one public alias and never leaks provider targets", async (t) => {
   const env = createTestEnv({
-    OPENROUTER_MODEL: "openrouter/auto",
+    CHAT_MODEL: "google/gemma-4-31b-it:free",
     OPENROUTER_MODELS: ["anthropic/claude-3.5-sonnet"]
   });
   const app = createApp({
     env,
     openRouter: createMockOpenRouterClient({
-      createChatCompletion: async (request, selection) => {
-        assert.equal(request.stream, false);
-        assert.equal(selection.publicModelId, "default");
+      createChatCompletion: async (_request, selection) => {
         assert.deepEqual(selection.providerTargets, [
+          "google/gemma-4-31b-it:free",
           "openrouter/auto",
-          "anthropic/claude-3.5-sonnet"
+          "meta-llama/llama-3.3-70b-instruct:free"
         ]);
-
         return {
-          model: selection.publicModelId,
-          text: "disabled path"
+          model: selection.publicModelAlias,
+          text: "ok"
         };
       }
-    }),
-    llmRouterPolicy: createRouterPolicy({
-      enabled: false
     }),
     logger: false
   });
@@ -86,253 +55,50 @@ test("chat router disabled preserves existing provider target behavior", async (
     method: "POST",
     url: "/chat",
     payload: {
+      task: "coding",
       messages: [
         {
           role: "user",
-          content: "please review this pull request"
+          content: "please implement this"
         }
       ]
     }
   });
 
   assert.equal(response.statusCode, 200);
-  assert.deepEqual(JSON.parse(response.body), {
-    ok: true,
-    model: "default",
-    text: "disabled path"
-  });
-  assert.doesNotMatch(response.body, /coding-primary:free|repo-review-primary:free/);
+  const payload = JSON.parse(response.body) as {
+    ok: boolean;
+    model: string;
+    text: string;
+    route: {
+      selectedAlias: string;
+      taskClass: string;
+      fallbackUsed: boolean;
+      degraded: boolean;
+      streaming: boolean;
+    };
+  };
+  assert.equal(payload.ok, true);
+  assert.equal(payload.model, "default");
+  assert.equal(payload.route.selectedAlias, "default");
+  assert.equal(payload.route.taskClass, "coding");
+  assert.equal(payload.route.streaming, false);
+  assert.doesNotMatch(response.body, /google\/gemma|anthropic\/claude/);
 });
 
-test("chat router enabled selects the coding model for coding prompts", async (t) => {
-  const env = createTestEnv({
-    OPENROUTER_MODEL: "openrouter/auto",
-    OPENROUTER_MODELS: ["anthropic/claude-3.5-sonnet"]
-  });
-  const app = createApp({
-    env,
-    openRouter: createMockOpenRouterClient({
-      createChatCompletion: async (request, selection) => {
-        assert.equal(request.stream, false);
-        assert.equal(selection.publicModelId, "default");
-        assert.equal(selection.providerTargets[0], "coding-primary:free");
-        assert.ok(selection.providerTargets.includes("default-fallback:free"));
-
-        return {
-          model: selection.publicModelId,
-          text: "routed coding"
-        };
-      }
-    }),
-    llmRouterPolicy: createRouterPolicy({
-      enabled: true,
-      requireFreeModels: false
-    }),
-    logger: false
-  });
-
-  t.after(async () => {
-    await app.close();
-  });
-
-  const response = await app.inject({
-    method: "POST",
-    url: "/chat",
-    payload: {
-      messages: [
-        {
-          role: "user",
-          content: "please code this"
-        }
-      ]
-    }
-  });
-
-  assert.equal(response.statusCode, 200);
-  assert.deepEqual(JSON.parse(response.body), {
-    ok: true,
-    model: "default",
-    text: "routed coding"
-  });
-  assert.doesNotMatch(response.body, /coding-primary:free/);
-});
-
-test("chat router enabled selects the repo review model for review prompts", async (t) => {
-  const env = createTestEnv({
-    OPENROUTER_MODEL: "openrouter/auto",
-    OPENROUTER_MODELS: ["anthropic/claude-3.5-sonnet"]
-  });
-  const app = createApp({
-    env,
-    openRouter: createMockOpenRouterClient({
-      createChatCompletion: async (request, selection) => {
-        assert.equal(request.stream, false);
-        assert.equal(selection.publicModelId, "default");
-        assert.equal(selection.providerTargets[0], "repo-review-primary:free");
-
-        return {
-          model: selection.publicModelId,
-          text: "routed review"
-        };
-      }
-    }),
-    llmRouterPolicy: createRouterPolicy({
-      enabled: true,
-      requireFreeModels: false
-    }),
-    logger: false
-  });
-
-  t.after(async () => {
-    await app.close();
-  });
-
-  const response = await app.inject({
-    method: "POST",
-    url: "/chat",
-    payload: {
-      messages: [
-        {
-          role: "user",
-          content: "please review this pull request"
-        }
-      ]
-    }
-  });
-
-  assert.equal(response.statusCode, 200);
-  assert.deepEqual(JSON.parse(response.body), {
-    ok: true,
-    model: "default",
-    text: "routed review"
-  });
-  assert.doesNotMatch(response.body, /repo-review-primary:free/);
-});
-
-test("chat router enabled fails closed when free-model enforcement removes every candidate", async (t) => {
-  let called = false;
-  const env = createTestEnv({
-    OPENROUTER_MODEL: "openrouter/auto",
-    OPENROUTER_MODELS: ["anthropic/claude-3.5-sonnet"]
-  });
-  const app = createApp({
-    env,
-    openRouter: createMockOpenRouterClient({
-      createChatCompletion: async () => {
-        called = true;
-        throw new Error("should not be called");
-      }
-    }),
-    llmRouterPolicy: createRouterPolicy({
-      enabled: true,
-      requireFreeModels: true,
-      defaultModel: "default-nonfree",
-      fallbackModel: "fallback-nonfree",
-      rules: [
-        { taskType: "coding", keywords: ["code", "build"], model: "coding-nonfree" },
-        { taskType: "repo_review", keywords: ["review"], model: "review-nonfree" },
-        { taskType: "daily", keywords: [], model: "daily-nonfree" }
-      ]
-    }),
-    logger: false
-  });
-
-  t.after(async () => {
-    await app.close();
-  });
-
-  const response = await app.inject({
-    method: "POST",
-    url: "/chat",
-    payload: {
-      messages: [
-        {
-          role: "user",
-          content: "please code this"
-        }
-      ]
-    }
-  });
-
-  assert.equal(called, false);
-  assert.equal(response.statusCode, 502);
-  assert.deepEqual(JSON.parse(response.body), {
-    ok: false,
-    error: {
-      code: "upstream_error",
-      message: "Chat provider request failed"
-    }
-  });
-  assert.doesNotMatch(response.body, /coding-nonfree|review-nonfree|daily-nonfree/);
-});
-
-test("chat router surfaces upstream openrouter failures with their specific message", async (t) => {
-  const env = createTestEnv({
-    OPENROUTER_MODEL: "openrouter/auto",
-    OPENROUTER_MODELS: ["anthropic/claude-3.5-sonnet"]
-  });
-  const app = createApp({
-    env,
-    openRouter: createMockOpenRouterClient({
-      createChatCompletion: async () => {
-        throw new OpenRouterError("OpenRouter API key OPENROUTER_API_KEY_QWEN3_CODER is not configured for qwen/qwen3-coder", 503);
-      }
-    }),
-    llmRouterPolicy: createRouterPolicy({
-      enabled: false
-    }),
-    logger: false
-  });
-
-  t.after(async () => {
-    await app.close();
-  });
-
-  const response = await app.inject({
-    method: "POST",
-    url: "/chat",
-    payload: {
-      messages: [
-        {
-          role: "user",
-          content: "please code this"
-        }
-      ]
-    }
-  });
-
-  assert.equal(response.statusCode, 503);
-  assert.deepEqual(JSON.parse(response.body), {
-    ok: false,
-    error: {
-      code: "upstream_error",
-      message: "OpenRouter API key OPENROUTER_API_KEY_QWEN3_CODER is not configured for qwen/qwen3-coder"
-    }
-  });
-});
-
-test("chat router enabled streaming still terminates with exactly one final event", async (t) => {
-  const env = createTestEnv({
-    OPENROUTER_MODEL: "openrouter/auto",
-    OPENROUTER_MODELS: ["anthropic/claude-3.5-sonnet"]
-  });
+test("streaming route metadata arrives before tokens", async (t) => {
+  const env = createTestEnv();
   const app = createApp({
     env,
     openRouter: createMockOpenRouterClient({
       relayChatCompletionStream: async (_request, selection, options) => {
-        assert.equal(selection.publicModelId, "default");
-        assert.equal(selection.providerTargets[0], "coding-primary:free");
-        options.onToken("Hello");
-
+        assert.equal(selection.publicModelAlias, "default");
+        options.onToken("Hi");
         return {
-          model: selection.publicModelId,
-          text: "Hello"
+          model: selection.publicModelAlias,
+          text: "Hi"
         };
       }
-    }),
-    llmRouterPolicy: createRouterPolicy({
-      enabled: true,
-      requireFreeModels: false
     }),
     logger: false
   });
@@ -346,45 +112,41 @@ test("chat router enabled streaming still terminates with exactly one final even
     url: "/chat",
     payload: {
       stream: true,
+      task: "dialog",
       messages: [
         {
           role: "user",
-          content: "please code this"
+          content: "hello"
         }
       ]
     }
   });
 
   assert.equal(response.statusCode, 200);
-  assert.match(response.headers["content-type"] ?? "", /text\/event-stream/);
   const events = parseSseEvents(response.body);
-  assert.deepEqual(events.map((event) => event.event), [
-    "start",
-    "token",
-    "done"
-  ]);
-  assert.deepEqual(events.map((event) => JSON.parse(event.data) as { model?: string }).map((event) => event.model), [
-    "default",
-    undefined,
-    "default"
-  ]);
-  assert.doesNotMatch(response.body, /coding-primary:free/);
+  assert.deepEqual(events.map((event) => event.event), ["start", "route", "token", "done"]);
+  const routePayload = JSON.parse(events[1].data) as {
+    ok: boolean;
+    route: {
+      selectedAlias: string;
+      taskClass: string;
+      streaming: boolean;
+    };
+  };
+  assert.equal(routePayload.ok, true);
+  assert.equal(routePayload.route.selectedAlias, "default");
+  assert.equal(routePayload.route.taskClass, "dialog");
+  assert.equal(routePayload.route.streaming, true);
 });
 
-test("chat router surfaces upstream openrouter failures in streaming responses", async (t) => {
-  const env = createTestEnv({
-    OPENROUTER_MODEL: "openrouter/auto",
-    OPENROUTER_MODELS: ["anthropic/claude-3.5-sonnet"]
-  });
+test("streaming preserves sanitized upstream failures", async (t) => {
+  const env = createTestEnv();
   const app = createApp({
     env,
     openRouter: createMockOpenRouterClient({
       relayChatCompletionStream: async () => {
-        throw new OpenRouterError("OpenRouter API key OPENROUTER_API_KEY_QWEN3_CODER is not configured for qwen/qwen3-coder", 503);
+        throw new OpenRouterError("OpenRouter request failed", 502);
       }
-    }),
-    llmRouterPolicy: createRouterPolicy({
-      enabled: false
     }),
     logger: false
   });
@@ -401,18 +163,22 @@ test("chat router surfaces upstream openrouter failures in streaming responses",
       messages: [
         {
           role: "user",
-          content: "please code this"
+          content: "hello"
         }
       ]
     }
   });
 
   assert.equal(response.statusCode, 200);
-  assert.match(response.headers["content-type"] ?? "", /text\/event-stream/);
   const events = parseSseEvents(response.body);
-  assert.deepEqual(events.map((event) => event.event), [
-    "start",
-    "error"
-  ]);
-  assert.equal(JSON.parse(events[1].data).error.message, "OpenRouter API key OPENROUTER_API_KEY_QWEN3_CODER is not configured for qwen/qwen3-coder");
+  assert.deepEqual(events.map((event) => event.event), ["start", "route", "error"]);
+  const errorPayload = JSON.parse(events[2].data) as {
+    ok: boolean;
+    error: {
+      code: string;
+      message: string;
+    };
+  };
+  assert.equal(errorPayload.ok, false);
+  assert.equal(errorPayload.error.code, "upstream_error");
 });

@@ -5,8 +5,9 @@ export function modelRoutes(app: FastifyInstance, modelRegistry: ModelRegistry) 
   app.get("/models", async () => {
     return {
       ok: true,
-      defaultModel: modelRegistry.defaultModelId,
-      models: modelRegistry.publicModels.map((model) => model.id),
+      defaultModel: modelRegistry.defaultModelAlias,
+      models: modelRegistry.publicModels.map((model) => model.alias),
+      registry: modelRegistry.getPublicRegistry(),
       source: "backend-policy"
     };
   });

@@ -243,6 +243,7 @@ async function generateProposalDraft(
     ? selection.selection
     : {
       publicModelId: options.modelRegistry.defaultModelId,
+      publicModelAlias: options.modelRegistry.defaultModelAlias,
       logicalModelId: "stable-free-default",
       providerTargets: []
     };

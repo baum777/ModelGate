@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createVercelEnv, normalizeVercelRequestUrl } from "../../api/_handler.ts";
+import { createVercelRuntimeConfig, normalizeVercelRequestUrl } from "../../api/_handler.ts";
+import { createRuntimeConfig } from "../src/runtime/create-runtime-config.js";
 
 test("vercel handler preserves matrix routes and strips the /api prefix for root API calls", () => {
   assert.equal(normalizeVercelRequestUrl("/api/chat"), "/chat");
@@ -14,16 +15,29 @@ test("vercel handler preserves matrix routes and strips the /api prefix for root
   assert.equal(normalizeVercelRequestUrl("/api/github/repos/acme/widget/tree?ref=main"), "/api/github/repos/acme/widget/tree?ref=main");
 });
 
-test("vercel env forwards all specialized OpenRouter api keys", () => {
-  const env = createVercelEnv({
+test("local and vercel runtime builders normalize env from one shared source", () => {
+  const source: NodeJS.ProcessEnv = {
+    PORT: "9876",
+    HOST: "0.0.0.0",
     OPENROUTER_API_KEY: "default-key",
     OPENROUTER_API_KEY_QWEN3_CODER: "qwen-key",
     OPENROUTER_API_KEY_GPT_OSS_120B_PLANNER: "planner-key",
-    OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B: "nemotron-key"
+    OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B: "nemotron-key",
+    CHAT_MODEL: "google/gemma-4-31b-it:free",
+    OPENROUTER_MODEL: "openrouter/auto",
+    OPENROUTER_MODELS: "openrouter/auto,anthropic/claude-3.5-sonnet",
+    GITHUB_ALLOWED_REPOS: "acme/widget"
+  };
+  const localRuntime = createRuntimeConfig({
+    source,
+    loadDotEnv: false
   });
+  const vercelRuntime = createVercelRuntimeConfig(source);
 
-  assert.equal(env.OPENROUTER_API_KEY, "default-key");
-  assert.equal(env.OPENROUTER_API_KEY_QWEN3_CODER, "qwen-key");
-  assert.equal(env.OPENROUTER_API_KEY_GPT_OSS_120B_PLANNER, "planner-key");
-  assert.equal(env.OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B, "nemotron-key");
+  assert.equal(localRuntime.env.PORT, 9876);
+  assert.equal(vercelRuntime.env.PORT, 9876);
+  assert.equal(localRuntime.env.HOST, "0.0.0.0");
+  assert.equal(vercelRuntime.env.HOST, "0.0.0.0");
+  assert.deepEqual(localRuntime.env.OPENROUTER_MODELS, vercelRuntime.env.OPENROUTER_MODELS);
+  assert.equal(localRuntime.env.CHAT_MODEL, vercelRuntime.env.CHAT_MODEL);
 });

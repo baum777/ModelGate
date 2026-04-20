@@ -1,3 +1,5 @@
+import type { ChatRouteMetadata } from "./api.js";
+
 export type ConnectionState = "idle" | "submitting" | "streaming" | "completed" | "error";
 
 export type ChatMessage = {
@@ -6,6 +8,7 @@ export type ChatMessage = {
   content: string;
   modelAlias?: string | null;
   createdAt?: string;
+  route?: ChatRouteMetadata | null;
 };
 
 export type ChatDraft = {
@@ -22,6 +25,7 @@ export interface ChatState {
   lastError: string | null;
   lastStreamWarning: string | null;
   autoScrollEnabled: boolean;
+  activeRoute: ChatRouteMetadata | null;
 }
 
 export type ChatAction =
@@ -29,8 +33,9 @@ export type ChatAction =
   | { type: "set_auto_scroll"; enabled: boolean }
   | { type: "submit_message"; message: ChatMessage }
   | { type: "stream_start"; model: string }
+  | { type: "stream_route"; route: ChatRouteMetadata }
   | { type: "stream_token"; delta: string }
-  | { type: "stream_done"; model: string; text: string }
+  | { type: "stream_done"; model: string; text: string; route: ChatRouteMetadata }
   | { type: "stream_error"; message: string }
   | { type: "stream_malformed"; message: string }
   | { type: "reset_stream_warning" };
@@ -43,7 +48,8 @@ export function createInitialChatState(snapshot?: Partial<ChatState>): ChatState
     currentAssistantDraft: snapshot?.currentAssistantDraft ?? null,
     lastError: snapshot?.lastError ?? null,
     lastStreamWarning: snapshot?.lastStreamWarning ?? null,
-    autoScrollEnabled: snapshot?.autoScrollEnabled ?? true
+    autoScrollEnabled: snapshot?.autoScrollEnabled ?? true,
+    activeRoute: snapshot?.activeRoute ?? null
   };
 }
 
@@ -77,7 +83,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         connectionState: "submitting",
         currentAssistantDraft: createAssistantDraft(null),
         lastError: null,
-        lastStreamWarning: null
+        lastStreamWarning: null,
+        activeRoute: null
       };
 
     case "stream_start":
@@ -100,6 +107,21 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         },
         lastError: null,
         lastStreamWarning: null
+      };
+
+    case "stream_route":
+      if (!state.currentAssistantDraft?.started) {
+        return {
+          ...state,
+          connectionState: "error",
+          lastStreamWarning: "Received route metadata before stream start.",
+          currentAssistantDraft: null
+        };
+      }
+
+      return {
+        ...state,
+        activeRoute: action.route
       };
 
     case "stream_token":
@@ -138,13 +160,15 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
             id: `assistant-${state.messages.length + 1}`,
             role: "assistant",
             content: action.text,
-            modelAlias: action.model
+            modelAlias: action.model,
+            route: action.route
           }
         ],
         connectionState: "completed",
         currentAssistantDraft: null,
         lastError: null,
-        lastStreamWarning: null
+        lastStreamWarning: null,
+        activeRoute: action.route
       };
 
     case "stream_error":

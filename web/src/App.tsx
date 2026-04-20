@@ -263,6 +263,17 @@ export default function App() {
   const [backendHealthy, setBackendHealthy] = useState<boolean | null>(null);
   const [activeModelAlias, setActiveModelAlias] = useState<string | null>(null);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [modelRegistry, setModelRegistry] = useState<Array<{
+    alias: string;
+    label: string;
+    description: string;
+    capabilities: string[];
+    tier: "core" | "specialized" | "fallback";
+    streaming: boolean;
+    recommendedFor: string[];
+    default?: boolean;
+    available?: boolean;
+  }>>([]);
   const [restoredSession] = useState(() => {
     if (typeof window === "undefined") {
       return false;
@@ -320,6 +331,7 @@ export default function App() {
         const models = modelsResult.value.models;
         setAvailableModels(models);
         setActiveModelAlias(modelsResult.value.defaultModel);
+        setModelRegistry(modelsResult.value.registry ?? []);
         setTelemetry((current) =>
           appendTelemetry(current, {
             id: createId(),
@@ -1257,6 +1269,7 @@ export default function App() {
               backendHealthy={backendHealthy}
               activeModelAlias={activeModelAlias}
               availableModels={availableModels}
+              modelRegistry={modelRegistry}
               onActiveModelAliasChange={setActiveModelAlias}
               onTelemetry={recordTelemetry}
               onSessionChange={handleChatSessionChange}

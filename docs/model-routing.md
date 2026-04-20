@@ -4,98 +4,90 @@ This document describes the current backend-owned model routing surface in Model
 
 ## Objective
 
-- Keep model selection server-side.
-- Allow the frontend to request workflow intent, not provider targets.
-- Preserve fail-closed behavior for malformed or missing structured output.
-- Keep execute paths approval-gated and non-model-driven.
+- Keep model/provider routing backend-authoritative.
+- Expose only bounded public alias and route metadata to the browser.
+- Keep fallback/degraded behavior explicit and observable.
+- Keep approval/write paths backend-owned.
 
 ## Current Truth
 
-- `GET /models` exposes only the public alias list. It does not expose provider IDs.
-- Chat continues to use backend-owned routing and the existing OpenRouter policy layer.
-- GitHub proposal planning is backend-owned and now resolves its model through workflow policy.
-- Matrix analyze remains deterministic in this slice. The workflow model env is parsed and policy-resolved, but Matrix execute/write behavior is still not model-driven and the Matrix policy flags are not runtime-authoritative.
-- Approval-gated GitHub and Matrix writes stay server-side.
+- Chat routing is resolved by one authority module: `server/src/lib/routing-authority.ts`.
+- Local and Vercel runtimes share one startup source of truth: `server/src/runtime/create-runtime-config.ts`.
+- The browser can request bounded intent fields (`task`, `mode`, `preference`, `modelAlias`) but cannot select raw provider targets.
+- `GET /models` returns a public alias registry (labels/capabilities/tier), not provider IDs.
+- `POST /chat` streaming order is `start -> route -> token* -> done|error`.
+- Route metadata surfaces `selectedAlias`, `taskClass`, `fallbackUsed`, `degraded`, `streaming`, and optional decision fields.
 
-## Configuration Contract
+## Authority Chain
 
-### Environment
+For chat requests:
 
-The server reads backend-only env vars for both legacy OpenRouter compatibility and workflow-specific routing.
+1. Validate request contract and block provider override keys.
+2. Resolve public alias via `server/src/lib/model-policy.ts`.
+3. Resolve backend provider target candidates via `resolveChatModel()` in `server/src/lib/workflow-model-router.ts`.
+4. Produce one route decision object in `server/src/lib/routing-authority.ts`.
+5. Execute OpenRouter calls with backend-only provider targets.
+6. Return bounded route metadata to browser responses/stream events.
 
-- `OPENROUTER_MODEL` is a legacy compatibility slot for the chat provider target.
-- `OPENROUTER_MODELS` is the hidden provider target pool behind the public alias.
-- `CHAT_MODEL` is the explicit backend-owned chat workflow model.
-- `CODE_AGENT_MODEL` is the proposal-planning model for GitHub workflows.
-- `STRUCTURED_PLAN_MODEL` is the structured-output model for schema-critical plan objects.
-- `MATRIX_ANALYZE_MODEL` is parsed for Matrix analysis policy, but Matrix analyze remains deterministic in this slice and the Matrix policy flags remain deferred from live runtime authority.
-- `FAST_FALLBACK_MODEL` and `DIALOG_FALLBACK_MODEL` are backend-owned fallback slots.
-- `MODEL_ROUTING_MODE=policy` is the only supported workflow routing mode.
-- `ALLOW_MODEL_FALLBACK=true` allows fallback on non-execute phases only.
-- `MODEL_ROUTING_FAIL_CLOSED=true` keeps missing or malformed routing closed.
-- `MODEL_ROUTING_LOG_ENABLED` and `MODEL_ROUTING_LOG_PATH` enable local workflow routing evidence logs.
+No frontend path can access raw OpenRouter provider/model IDs.
 
-Matrix workflow booleans are parsed as contract inputs only:
+## Public Contracts
 
-- `MATRIX_ANALYZE_LLM_ENABLED`
-- `MATRIX_EXECUTE_APPROVAL_REQUIRED`
-- `MATRIX_VERIFY_AFTER_EXECUTE`
-- `MATRIX_ALLOWED_ACTION_TYPES`
-- `MATRIX_FAIL_CLOSED`
+### `GET /models`
 
-### `config/model-capabilities.yml`
+- `defaultModel`: default public alias
+- `models`: public alias list (compatibility)
+- `registry`: bounded public entries
+  - `alias`
+  - `label`
+  - `description`
+  - `capabilities`
+  - `tier`
+  - `streaming`
+  - `recommendedFor`
+  - optional `default`
+  - optional `available`
 
-The backend loads `config/model-capabilities.yml` at runtime. It is not docs-only.
+Excluded from response:
 
-- Each role section is validated on startup/first load.
-- The file describes purpose, strengths, best practices, structured-output requirements, approval requirements, and fallback links.
-- `global_policy` describes the frontend boundary and execute restrictions.
+- raw provider model IDs
+- provider selection internals
+- fallback target chain internals
 
-## Runtime Routing
+### `POST /chat`
 
-### Chat
+Request accepts:
 
-- The frontend can request the public alias `default`.
-- The backend resolves the actual provider target set.
-- `CHAT_MODEL` is preferred when set.
-- `OPENROUTER_MODEL` remains available for backward compatibility.
-- Hidden provider targets stay server-side.
+- `messages` (required)
+- `stream` (optional)
+- bounded intent fields: `task`, `mode`, `preference`, `modelAlias`
+- legacy compatibility field: `model` (interpreted as alias, not provider target)
 
-### GitHub proposal planning
+Response includes:
 
-- GitHub proposal generation is routed through `CODE_AGENT_MODEL` by default.
-- Structured output is validated after model response parsing.
-- The model can propose only. It does not write repos directly.
-- Fallback is allowed only before execute, never during execute.
+- `model` (public alias)
+- `text`
+- `route` metadata object
 
-### Structured plan objects
+SSE events:
 
-- `STRUCTURED_PLAN_MODEL` is available for schema-critical structured objects.
-- If the primary structured model is missing, the policy falls back to `CODE_AGENT_MODEL`, then to the backend safe default chain when fallback is enabled.
-- Malformed structured output fails closed.
+- `start`
+- `route`
+- `token`
+- `done`
+- `error`
 
-### Matrix analyze
+## Config and Env
 
-- The `MATRIX_ANALYZE_MODEL` env is parsed and policy-resolved, but it does not yet make Matrix analyze model-driven.
-- The current Matrix topic-update analyze route still behaves deterministically.
-- Matrix execute and verify remain backend-owned and approval-gated; the parsed policy booleans do not supersede those backend-owned gates.
+- Runtime-loaded config files:
+  - `config/model-capabilities.yml`
+  - `config/llm-router.yml`
+- Runtime env normalization is shared between local and Vercel startup.
+- Legacy `LLM_ROUTER_*` variables remain compatibility inputs for the separate rules-first router module, but chat request routing authority is now centralized in `routing-authority.ts`.
 
-## Frontend Boundary
+## Boundary Guarantees
 
-- The frontend may not set privileged provider targets.
-- `assertNoFrontendProviderModelOverride()` blocks provider-target override fields.
-- The browser should only see public aliases and backend-returned workflow results.
-
-## Safety Gates
-
-- Structured output validation is required for workflow policy paths that need it.
-- Execute paths must not silently fallback.
-- Malformed structured output fails closed.
-- Approval remains backend-owned for GitHub and Matrix writes.
-- The server never exposes raw secret values through model routing responses.
-
-## Known Gaps
-
-- Matrix analyze remains deterministic in this slice.
-- The Matrix workflow env is parsed, but the repo does not yet use the new Matrix routing policy keys to drive a model-backed analyze/execute split.
-- The workflow routing log is local and advisory only.
+- Browser remains non-authoritative.
+- Backend remains the runtime/model-routing authority.
+- Approval/write flows remain backend-controlled.
+- Fallback/degraded behavior is visible in route metadata and backend logs.
