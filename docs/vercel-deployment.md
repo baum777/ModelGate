@@ -33,6 +33,11 @@ The deployment is intentionally simple enough for the free or hobby plan:
 - no background jobs
 - no deployment-time smoke test
 
+The repository also includes a GitHub Actions deploy workflow at
+[.github/workflows/vercel-deploy.yml](../.github/workflows/vercel-deploy.yml)
+that runs the same prebuilt Vercel CLI path on pushes to `main` and on manual
+dispatch.
+
 ## Required Environment Variables
 
 Set these in Vercel project settings. Keep all secrets in server-side env settings only.
@@ -186,6 +191,24 @@ npm run dev:web
 ```
 
 That workflow is separate from the Vercel deployment path.
+
+## CLI Deploy Path
+
+Use the Vercel CLI from the repository root when you want to deploy manually:
+
+```bash
+npx vercel@50.28.0 pull --yes --environment=production --token=$VERCEL_TOKEN
+npx vercel@50.28.0 build --prod --token=$VERCEL_TOKEN
+npx vercel@50.28.0 deploy --prebuilt --prod --token=$VERCEL_TOKEN
+```
+
+Required CI variables:
+
+- `VERCEL_TOKEN`
+- `VERCEL_ORG_ID`
+- `VERCEL_PROJECT_ID`
+
+The workflow and the CLI path both stay fail-closed if those values are missing.
 
 ## Production Verification Checklist
 

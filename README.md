@@ -109,6 +109,7 @@ ModelGate is deployed as a Vite frontend plus a single Node serverless entrypoin
 3. Set the output directory to `web/dist`.
 4. Keep secrets server-side in Vercel project env settings.
 5. Use `vercel dev` for the closest local preview of the production topology.
+6. The repo also includes [.github/workflows/vercel-deploy.yml](.github/workflows/vercel-deploy.yml) for the same CLI path in GitHub Actions.
 
 The deployment path uses:
 
