@@ -24,7 +24,7 @@ export function SettingsWorkspace({
           <p className="status-pill status-partial">Settings</p>
           <h1>Einstellungen</h1>
           <p className="hero-copy">
-            Ansicht wählen, Sicherheit prüfen und Diagnose im Expert Mode öffnen.
+            Disclosure wählen, Verbindungstruth prüfen und Diagnose im Expert Mode öffnen.
           </p>
         </div>
       </section>
@@ -45,6 +45,21 @@ export function SettingsWorkspace({
               Expert
             </button>
           </div>
+        </article>
+
+        <article className="workspace-card">
+          <header className="card-header">
+            <div>
+              <span>Autorität</span>
+              <strong>Identitäts- und Verbindungstruth</strong>
+            </div>
+          </header>
+          <p className="muted-copy">
+            Gemeinsame Infrastruktur bedeutet nicht gemeinsame Autorität. GitHub-Ausführung bleibt pro Nutzer, Matrix ist eine gemeinsame Kollaborationsfläche mit pro-Nutzer-Identität, und die AI-Provider-Zugangsdaten bleiben privat.
+          </p>
+          <p className="muted-copy">
+            Der Browser spiegelt nur Wahrheit wider, die der Backend-Server bereits belegen kann. Er verwaltet keine Zugangsdaten und leitet keine Account-Zugehörigkeit ab.
+          </p>
         </article>
 
         <article className="workspace-card">

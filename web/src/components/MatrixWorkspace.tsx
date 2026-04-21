@@ -1,4 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+  ApprovalTransitionCard,
+  DecisionZone,
+  ExecutionReceiptCard,
+  ProposalCard,
+} from "./ApprovalPrimitives.js";
 import { ExpertDetails } from "./ExpertDetails.js";
 import {
   MATRIX_API_BASE_URL,
@@ -87,7 +93,25 @@ const formatDate = (value: string) => {
 const text = (value: string | null | undefined) =>
   value && value.trim() ? value : "n/a";
 const releaseScopeNotice =
-  "Backend-owned Matrix topic updates are available for Explore, scope summary, read-only provenance, analyze, review, approval, execute, and verify.";
+  "Backend-gesteuerte Matrix-Topic-Updates sind für Explore, Scope-Summary, read-only Provenienz, Analyse, Review, Freigabe, Ausführung und Verifikation verfügbar.";
+
+export function buildMatrixReviewItems(topicPlan: MatrixRoomTopicAgentPlan | null): ReviewItem[] {
+  if (!topicPlan) {
+    return [];
+  }
+
+  return [
+    {
+      id: topicPlan.planId,
+      source: "matrix",
+      title: "Plan zur Raumtopic-Aktualisierung",
+      summary: `Aktuell: ${text(topicPlan.currentValue)} · Vorgeschlagen: ${text(topicPlan.proposedValue)} · Risiko: ${topicPlan.risk}`,
+      status: topicPlan.status === "executed" ? "executed" : "pending_review",
+      stale: false,
+      sourceLabel: "Matrix Workspace",
+    },
+  ];
+}
 
 function describeMatrixError(operation: string, error: unknown) {
   if (error instanceof MatrixRequestError) {
@@ -184,23 +208,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     () => selectedSpaceIds.filter((value) => value.trim().length > 0),
     [selectedSpaceIds],
   );
-  const matrixReviewItems = useMemo<ReviewItem[]>(() => {
-    const items: ReviewItem[] = [];
-
-    if (topicPlan) {
-      items.push({
-        id: topicPlan.planId,
-        source: "matrix" as const,
-        title: "Room topic update plan",
-        summary: `Current value: ${text(topicPlan.currentValue)} · Proposed value: ${text(topicPlan.proposedValue)} · Risk: ${topicPlan.risk}`,
-        status: topicPlan.status === "executed" ? "executed" : "pending_review",
-        stale: false,
-        sourceLabel: "Matrix Workspace",
-      });
-    }
-
-    return items;
-  }, [topicPlan]);
+  const matrixReviewItems = useMemo<ReviewItem[]>(() => buildMatrixReviewItems(topicPlan), [topicPlan]);
   const activeComposerRoomId = roomId?.trim() || topicRoomId.trim() || selectedRoomIds[0]?.trim() || null;
   const threadOpenSourceId = selectedThreadRootId?.trim() || selectedEventId?.trim() || null;
   const activeThreadRootId = selectedThreadRootId?.trim() || null;
@@ -246,8 +254,14 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     () => ({
       scopeLabel: currentScope ? "Bereich gewählt" : "Noch kein Bereich gewählt",
       summaryLabel: scopeSummary ? "Zusammenfassung bereit" : "Noch keine Zusammenfassung",
-      approvalLabel: topicPlan?.status === "pending_review" ? "Freigabe erforderlich" : "Nicht erforderlich",
-      safetyText: "Der Browser kann Daten ansehen und Freigabeabsichten senden; backend-owned writes bleiben approval-gated.",
+      approvalLabel: topicPlan
+        ? topicPlan.status === "pending_review"
+          ? "Freigabe erforderlich"
+          : topicExecution
+            ? "Beleg bereit"
+            : "Prüfung gesperrt"
+        : "Nicht erforderlich",
+      safetyText: "Der Browser kann Daten ansehen und Freigabeabsichten senden; backend-gesteuerte Writes bleiben freigabegeschützt.",
       expertDetails: matrixExpertDetails,
       reviewItems: matrixReviewItems,
     }),
@@ -785,7 +799,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   async function refreshTopicUpdatePlan() {
     if (!topicPlan) {
       setTopicPlanRefreshError(
-        "Analyze a topic update before refreshing the plan.",
+        "Analysiere zuerst ein Topic-Update, bevor du den Plan aktualisierst.",
       );
       return;
     }
@@ -812,7 +826,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     }
   }
 
-  async function executeTopicUpdate() {
+  async function executeTopicUpdate(approvalIntent = topicApprovalPending) {
     if (!topicPlan) {
       setTopicExecuteError("Analyze a topic update before execution.");
       return;
@@ -830,7 +844,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       return;
     }
 
-    if (!topicApprovalPending) {
+    if (!approvalIntent) {
       setTopicExecuteError(
         "Explicit approval is required before execution.",
       );
@@ -854,6 +868,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       );
       await verifyTopicUpdate(topicPlan.planId);
     } catch (error) {
+      setTopicApprovalPending(false);
       setTopicExecuteError(
         describeMatrixError("Matrix room topic execute", error),
       );
@@ -884,14 +899,14 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
           <h1>Matrix Workspace</h1>{" "}
           <p className="hero-copy">
             {" "}
-            Backend-owned Explore, scope summary, provenance, analyze,
-            review, approval, execute, and verify flow for Matrix topic
-            updates only.{" "}
+            Backend-gesteuerter Explore-, Scope-Summary-, Provenienz-, Analyse-,
+            Review-, Freigabe-, Ausführungs- und Verifikationsfluss für
+            Matrix-Topic-Updates.{" "}
           </p>{" "}
           {props.restoredSession ? (
             <div className="restored-banner" data-testid="matrix-restored-banner">
-              RESTORED_SESSION: local Matrix selection is visible, but backend
-              freshness is not assumed.
+              RESTORED_SESSION: lokale Matrix-Auswahl ist sichtbar, aber
+              Backend-Frische wird nicht angenommen.
             </div>
           ) : null}
           <div className="chip-row" aria-label="Matrix release scope">
@@ -965,9 +980,9 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
           {" "}
           <header className="card-header">
             <div>
-              <span>Room topic update</span>
+              <span>Raumtopic-Aktualisierung</span>
               <strong>
-                Analyze, approve, execute, and verify a backend-owned topic change
+                Analysieren, freigeben, ausführen und verifizieren eines backend-gesteuerten Topic-Wechsels
               </strong>
             </div>
           </header>{" "}
@@ -1032,59 +1047,54 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             </p>
           ) : null}{" "}
           {topicPlan ? (
-            <div className="plan-card" data-testid="matrix-topic-plan">
-              <div className="plan-card-header">
-                <div>
-                  <strong>Topic update plan</strong>
-                  <span>{topicPlan.status}</span>
-                </div>
-                <div className="plan-badges">
-                  <span
-                    className={`workflow-chip ${topicPlan.status === "pending_review" ? "workflow-chip-active" : "workflow-chip-complete"}`}
-                  >
-                    {topicPlan.status === "pending_review"
-                      ? "Approval pending"
-                      : "Plan executed"}
-                  </span>
-                </div>
-              </div>
+            <ProposalCard
+              testId="matrix-topic-plan"
+              title="Raumtopic aktualisieren"
+              summary={topicPlan.proposedValue}
+              consequence="Der Backend-Readback aktualisiert das Raumtopic erst nach expliziter Freigabe."
+              statusLabel={
+                topicPlan.status === "pending_review"
+                  ? "Freigabe erforderlich"
+                  : topicVerification?.status === "verified"
+                    ? "Beleg verifiziert"
+                    : topicExecution
+                      ? "Ausführungsbeleg offen"
+                      : "Plan ausgeführt"
+              }
+              statusTone={
+                topicPlan.status === "pending_review"
+                  ? "partial"
+                  : topicVerification?.status === "failed"
+                    ? "error"
+                    : topicVerification?.status === "mismatch"
+                      ? "error"
+                      : "ready"
+              }
+              metadata={[
+                { label: "Room", value: topicPlan.roomId },
+                { label: "Scope", value: text(topicPlan.scopeId) },
+                { label: "Snapshot", value: text(topicPlan.snapshotId) },
+                { label: "Risk", value: topicPlan.risk },
+                { label: "Expires", value: formatDate(topicPlan.expiresAt) },
+              ]}
+            >
               <div className="detail-grid">
                 {props.expertMode ? (
                   <>
                     <div>
-                      <span>Room ID</span>
-                      <strong>{topicPlan.roomId}</strong>
+                      <span>Status</span>
+                      <strong>{topicPlan.status}</strong>
                     </div>
                     <div>
-                      <span>Scope ID</span>
-                      <strong>{text(topicPlan.scopeId)}</strong>
+                      <span>Requires approval</span>
+                      <strong>{String(topicPlan.requiresApproval)}</strong>
                     </div>
                     <div>
-                      <span>Snapshot ID</span>
-                      <strong>{text(topicPlan.snapshotId)}</strong>
+                      <span>Actions</span>
+                      <strong>{topicPlan.actions.length}</strong>
                     </div>
                   </>
                 ) : null}
-                <div>
-                  <span>Status</span>
-                  <strong>{topicPlan.status}</strong>
-                </div>
-                <div>
-                  <span>Risk</span>
-                  <strong>{topicPlan.risk}</strong>
-                </div>
-                <div>
-                  <span>Requires approval</span>
-                  <strong>{String(topicPlan.requiresApproval)}</strong>
-                </div>
-                <div>
-                  <span>Actions</span>
-                  <strong>{topicPlan.actions.length}</strong>
-                </div>
-                <div>
-                  <span>Expires at</span>
-                  <strong>{formatDate(topicPlan.expiresAt)}</strong>
-                </div>
               </div>
               <div className="delta-grid">
                 <div>
@@ -1106,42 +1116,48 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                   ))}
                 </div>
               </div>
-              <label className="approval-check">
-                <input
-                  type="checkbox"
-                  checked={topicApprovalPending}
-                  onChange={(event) =>
-                    setTopicApprovalPending(event.target.checked)
-                  }
-                  disabled={
-                    topicExecuteLoading ||
-                    topicVerifyLoading ||
-                    topicPlanRefreshLoading ||
-                    topicPlan.status !== "pending_review"
-                  }
-                />
-                <span>Ich bestätige die Freigabe für diese Änderung.</span>
-              </label>
+
+              {topicPlan.status === "pending_review" ? (
+                <>
+                  {topicExecuteLoading || topicVerifyLoading ? (
+                    <ApprovalTransitionCard
+                      testId="matrix-topic-transition"
+                      title="Matrix topic approval is being applied"
+                      detail="Backend-Ausführung und Verifikation laufen für den ausgewählten Raum."
+                    />
+                  ) : null}
+                  <DecisionZone
+                    testId="matrix-topic-decision"
+                    approveLabel={topicExecuteLoading ? "Ausführung läuft…" : "Freigeben und ausführen"}
+                    rejectLabel="Vorschlag ablehnen"
+                    onApprove={() => {
+                      setTopicApprovalPending(true);
+                      void executeTopicUpdate(true);
+                    }}
+                    onReject={() => {
+                      setTopicApprovalPending(false);
+                      setLastActionResult("Freigabe verworfen: keine Ausführung gestartet.");
+                      props.onTelemetry("warning", "Matrix proposal rejected", "Die lokale Freigabeabsicht wurde verworfen.");
+                    }}
+                    approveDisabled={
+                      topicExecuteLoading ||
+                      topicVerifyLoading ||
+                      topicPlanRefreshLoading ||
+                      topicPlan.status !== "pending_review"
+                    }
+                    rejectDisabled={
+                      topicExecuteLoading ||
+                      topicVerifyLoading ||
+                      topicPlanRefreshLoading ||
+                      topicPlan.status !== "pending_review"
+                    }
+                    busy={topicExecuteLoading || topicVerifyLoading}
+                    helperText="Freigeben sendet eine Backend-Freigabeabsicht. Ablehnen löscht nur die lokale Freigabeabsicht."
+                  />
+                </>
+              ) : null}
+
               <div className="action-row">
-                <button
-                  type="button"
-                  onClick={() => {
-                    void executeTopicUpdate();
-                  }}
-                  disabled={
-                    !topicApprovalPending ||
-                    topicExecuteLoading ||
-                    topicVerifyLoading ||
-                    topicPlanRefreshLoading ||
-                    topicPlan.status !== "pending_review"
-                  }
-                  data-testid="matrix-topic-execute"
-                >
-                  {topicExecuteLoading ? "Executing…" : "Approve and execute"}
-                </button>
-                <span className="muted-copy">
-                  Verification runs from backend readback after execution.
-                </span>
                 <button
                   type="button"
                   className="secondary-button"
@@ -1151,33 +1167,37 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                   disabled={topicPlanRefreshLoading}
                   data-testid="matrix-topic-refresh"
                 >
-                  {topicPlanRefreshLoading ? "Refreshing…" : "Refresh plan"}
+                  {topicPlanRefreshLoading ? "Aktualisiere…" : "Plan aktualisieren"}
                 </button>
+                <span className="muted-copy">
+                  Die Verifikation läuft als Backend-Readback nach der Ausführung.
+                </span>
               </div>
+
               {topicExecution ? (
-                <div
-                  className="verification-card"
-                  data-testid="matrix-topic-execution"
+                <ExecutionReceiptCard
+                  title="Ausführungsbeleg für Raumtopic"
+                  detail="Der Backend-Readback bleibt die Quelle der Wahrheit."
+                  outcome={
+                    topicVerification?.status === "failed"
+                      ? "failed"
+                      : topicVerification?.status === "mismatch"
+                        ? "unverifiable"
+                        : "executed"
+                  }
+                  metadata={[
+                    { label: "Transaction ID", value: topicExecution.transactionId },
+                    { label: "Executed at", value: formatDate(topicExecution.executedAt) },
+                    { label: "Status", value: topicExecution.status },
+                  ]}
+                  testId="matrix-topic-execution"
                 >
-                  <div className="detail-grid">
-                    <div>
-                      <span>Transaction ID</span>
-                      <strong>{topicExecution.transactionId}</strong>
-                    </div>
-                    <div>
-                      <span>Executed at</span>
-                      <strong>{formatDate(topicExecution.executedAt)}</strong>
-                    </div>
-                    <div>
-                      <span>Status</span>
-                      <strong>{topicExecution.status}</strong>
-                    </div>
-                  </div>
-                </div>
+                  {topicVerifyLoading ? (
+                    <p className="muted-copy">Backend-Readback wird verifiziert…</p>
+                  ) : null}
+                </ExecutionReceiptCard>
               ) : null}
-              {topicVerifyLoading ? (
-                <p className="muted-copy">Verifying backend readback…</p>
-              ) : null}
+
               {topicVerification ? (
                 <div
                   className="verification-card"
@@ -1219,11 +1239,11 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                   {topicVerifyError}
                 </p>
               ) : null}
-            </div>
+            </ProposalCard>
           ) : (
               <p className="empty-state">
               {props.expertMode
-                ? "Enter a room ID and proposed topic, then analyze a backend-owned topic update plan."
+                ? "Raum-ID und Vorschlag eintragen, dann den backend-gesteuerten Topic-Update-Plan analysieren."
                 : "Bereich wählen, dann Topic Update analysieren."}
             </p>
           )}{" "}

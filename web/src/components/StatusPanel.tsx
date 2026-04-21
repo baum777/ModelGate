@@ -1,3 +1,4 @@
+import React from "react";
 import type { ReactNode } from "react";
 import { DiagnosticsDrawer, type DiagnosticsDetailRow } from "./ExpertDetails.js";
 import { SectionLabel, StatusBadge } from "./ShellPrimitives.js";

@@ -1,4 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ApprovalTransitionCard,
+  DecisionZone,
+  ExecutionReceiptCard,
+  ProposalCard,
+} from "./ApprovalPrimitives.js";
 import { ExpertDetails } from "./ExpertDetails.js";
 import {
   executeGitHubPlan,
@@ -179,6 +185,31 @@ function friendlyTargetBranchLabel(targetBranch: string | null, repo: GitHubRepo
   return "Zielzweig";
 }
 
+export function buildGitHubReviewItems(
+  proposalPlan: GitHubChangePlan | null,
+  verificationResult: GitHubVerifyResult | null,
+): ReviewItem[] {
+  if (!proposalPlan) {
+    return [];
+  }
+
+  return [
+    {
+      id: proposalPlan.planId,
+      source: "github",
+      title: proposalPlan.summary,
+      summary: proposalPlan.rationale,
+      status: proposalPlan.stale
+        ? "stale"
+        : verificationResult?.status === "verified"
+          ? "executed"
+          : "pending_review",
+      stale: proposalPlan.stale,
+      sourceLabel: "GitHub Workspace",
+    },
+  ];
+}
+
 export function GitHubWorkspace(props: GitHubWorkspaceProps) {
   const [repos, setRepos] = useState<GitHubRepoSummary[]>([]);
   const [reposLoading, setReposLoading] = useState(true);
@@ -315,12 +346,26 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       : "Noch nicht gestartet";
   const proposalLabel = proposalPlan
     ? executionResult
-      ? "Ausgeführt"
-      : "Bereit zur Prüfung"
+      ? verificationResult?.status === "verified"
+        ? "Verifiziert"
+        : "Ausgeführt"
+      : proposalPlan.stale
+        ? "Veraltet"
+        : "Bereit zur Prüfung"
     : analysisBundle
       ? "Bereit"
       : "Noch nicht erstellt";
-  const approvalLabel = proposalPlan && !executionResult ? "Wartet auf dich" : "Nicht erforderlich";
+  const approvalLabel = proposalPlan
+    ? executionResult
+      ? verificationResult?.status === "verified"
+        ? "Beleg verifiziert"
+        : "Ausführungsbeleg offen"
+      : proposalPlan.stale
+        ? "Prüfung erforderlich"
+        : "Freigabe erforderlich"
+    : analysisBundle
+      ? "Lesestatus bereit"
+      : "Nicht erforderlich";
   const resultCopy = resultStatusCopy(executionResult, verificationResult, verifying);
   const selectedRepoLabel = selectedRepo
     ? props.expertMode
@@ -344,7 +389,6 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     || proposalLoading;
   const executeDisabled =
     !proposalPlan
-    || !approvalChecked
     || executing
     || verifying
     || stalePlanBlocked
@@ -391,27 +435,9 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
 
   useEffect(() => {
     if (props.onReviewItemsChange) {
-      props.onReviewItemsChange(
-        proposalPlan
-          ? [
-              {
-                id: proposalPlan.planId,
-                source: "github",
-                title: proposalPlan.summary,
-                summary: proposalPlan.rationale,
-                status: proposalPlan.stale
-                  ? "stale"
-                  : verificationResult?.status === "verified"
-                    ? "executed"
-                    : "pending_review",
-                stale: proposalPlan.stale,
-                sourceLabel: "GitHub Workspace",
-              },
-            ]
-          : [],
-      );
+      props.onReviewItemsChange(buildGitHubReviewItems(proposalPlan, verificationResult));
     }
-  }, [proposalPlan, props.onReviewItemsChange, verificationResult?.status]);
+  }, [proposalPlan, props.onReviewItemsChange, verificationResult]);
 
   useEffect(() => {
     if (!proposalPlan || proposalPlan.stale) {
@@ -869,17 +895,43 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                 ) : null}
 
                 {proposalPlan ? (
-                  <div className="github-plan-summary">
-                    <div className="github-plan-header">
-                      <div>
-                        <p className="info-label">Vorbereiteter Vorschlag</p>
-                        <strong>{proposalPlan.summary}</strong>
-                      </div>
-                      <span className="status-pill status-partial">Freigabe nötig</span>
-                    </div>
-
-                    <p>{proposalPlan.rationale}</p>
-
+                  <ProposalCard
+                    testId="github-approval-surface"
+                    title={proposalPlan.summary}
+                    summary={proposalPlan.rationale}
+                    consequence={
+                      executionResult
+                        ? "Der Pull Request wurde bereits erstellt und bleibt backend-gesteuert."
+                        : "Der Pull Request wird erst nach expliziter Freigabe im Backend erstellt."
+                    }
+                    statusLabel={
+                      proposalPlan.stale
+                        ? "Veralteter Vorschlag"
+                        : executionResult
+                          ? verificationResult?.status === "verified"
+                            ? "Beleg verifiziert"
+                            : "Ausführungsbeleg offen"
+                          : "Freigabe erforderlich"
+                    }
+                    statusTone={
+                      proposalPlan.stale
+                        ? "error"
+                        : executionResult
+                          ? verificationResult?.status === "verified"
+                            ? "ready"
+                            : "partial"
+                          : "partial"
+                    }
+                    metadata={[
+                      {
+                        label: "Repository",
+                        value: selectedRepo?.fullName ?? selectedRepoFullName ?? "n/a",
+                      },
+                      { label: "Branch", value: proposalPlan.branchName },
+                      { label: "Target", value: proposalPlan.targetBranch },
+                      { label: "Risk", value: proposalPlan.riskLevel },
+                    ]}
+                  >
                     <div className="github-plan-file-grid">
                       {proposalFiles.map((file) => (
                         <article key={file.path} className="github-plan-file-card">
@@ -889,33 +941,41 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                       ))}
                     </div>
 
-                    <div className="github-approval-gate" data-testid="github-approval-gate">
-                      <p className="info-label">Freigabe nötig</p>
-                      <label className="approval-check">
-                        <input
-                          type="checkbox"
-                          checked={approvalChecked}
-                          onChange={(event) => {
-                            setApprovalChecked(event.target.checked);
-                          }}
-                          disabled={approvalLocked}
-                        />
-                        <span>Ich habe den Vorschlag geprüft und möchte einen Pull Request erstellen.</span>
-                      </label>
-                      <div className="action-row">
-                        <span className="muted-copy">Ergebnis prüfen</span>
-                        <button
-                          type="button"
-                          onClick={() => {
+                    {proposalPlan.stale ? (
+                      <p className="warning-banner" role="status" data-testid="github-stale-proposal">
+                        Der Vorschlag ist veraltet und muss neu erstellt werden.
+                      </p>
+                    ) : null}
+
+                    {!executionResult ? (
+                      <>
+                        {executing || verifying ? (
+                          <ApprovalTransitionCard
+                            testId="github-approval-transition"
+                            title="GitHub-Freigabe wird angewendet"
+                            detail="Backend-Ausführung und Verifikation laufen für das ausgewählte Repository."
+                          />
+                        ) : null}
+                        <DecisionZone
+                          testId="github-decision-zone"
+                          approveLabel={executing ? "Freigabe wird verarbeitet…" : "Freigeben und ausführen"}
+                          rejectLabel="Vorschlag ablehnen"
+                          onApprove={() => {
                             void handleExecuteProposal();
                           }}
-                          disabled={executeDisabled}
-                        >
-                          {executing ? "Freigabe wird verarbeitet…" : "Freigeben und ausführen"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                          onReject={() => {
+                            setApprovalChecked(false);
+                            setEventTrail((current) => [...current, "Freigabe abgelehnt"].slice(-4));
+                            props.onTelemetry("warning", "GitHub proposal rejected", "Die lokale Freigabeabsicht wurde verworfen.");
+                          }}
+                          approveDisabled={approvalLocked}
+                          rejectDisabled={approvalLocked}
+                          busy={executing || verifying}
+                          helperText="Freigeben startet die Backend-Ausführung. Ablehnen verwirft nur die lokale Freigabeabsicht."
+                        />
+                      </>
+                    ) : null}
+                  </ProposalCard>
                 ) : (
                   <div className="github-plan-empty">
                     <p className="muted-copy">
@@ -934,25 +994,31 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
           </article>
 
           {proposalPlan && executionResult ? (
-            <article className="workspace-card github-plan-summary github-pr-result-card" data-testid="github-pr-result">
-              <div className="github-plan-header">
-                <div>
-                  <p className="info-label">Pull Request erstellt</p>
-                  <strong>{resultCopy.detail}</strong>
-                </div>
-                <span className={`status-pill status-${resultCopy.tone}`}>
-                  {resultCopy.label}
-                </span>
-              </div>
-
-              <div className="github-result-copy">
-                <p className="muted-copy">Bereit zur Prüfung auf GitHub.</p>
+                  <ExecutionReceiptCard
+              title={resultCopy.detail}
+              detail="Bereit zur Prüfung auf GitHub."
+              outcome={
+                verificationResult?.status === "failed"
+                  ? "failed"
+                  : verificationResult?.status === "mismatch"
+                    ? "unverifiable"
+                    : verificationResult?.status === "verified"
+                      ? "executed"
+                      : "executed"
+              }
+              metadata={[
+                {
+                  label: "Zielzweig",
+                  value: props.expertMode ? executionResult.targetBranch : friendlyTargetBranchLabel(executionResult.targetBranch, selectedRepo),
+                },
+                { label: "PR", value: `#${executionResult.prNumber}` },
+                { label: "Commit", value: executionResult.commitSha },
+                { label: "Verifikation", value: verificationResult?.status ?? "ausstehend" },
+              ]}
+              testId="github-pr-result"
+            >
+              {executionResult.prUrl ? (
                 <p>
-                  {props.expertMode
-                    ? `Zielzweig: ${executionResult.targetBranch}`
-                    : `Ziel: ${friendlyTargetBranchLabel(executionResult.targetBranch, selectedRepo)}`}
-                </p>
-                {executionResult.prUrl ? (
                   <a
                     href={executionResult.prUrl}
                     target="_blank"
@@ -961,8 +1027,8 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                   >
                     Auf GitHub öffnen
                   </a>
-                ) : null}
-              </div>
+                </p>
+              ) : null}
 
               <div className="action-row">
                 <span className="muted-copy">
@@ -979,7 +1045,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                   {verifying ? "Prüfung läuft…" : "Ergebnis prüfen"}
                 </button>
               </div>
-            </article>
+            </ExecutionReceiptCard>
           ) : null}
 
           <ExpertDetails

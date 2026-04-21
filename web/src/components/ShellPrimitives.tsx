@@ -1,3 +1,4 @@
+import React from "react";
 import type { ComponentPropsWithoutRef, ElementType, ReactNode } from "react";
 
 type ShellCardVariant = "base" | "rail" | "truth" | "muted";

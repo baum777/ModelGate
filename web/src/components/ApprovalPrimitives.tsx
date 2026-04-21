@@ -1,3 +1,4 @@
+import React from "react";
 import type { ReactNode } from "react";
 import { SectionLabel, ShellCard, StatusBadge } from "./ShellPrimitives.js";
 
@@ -8,6 +9,8 @@ type ProposalCardProps = {
   summary: string;
   consequence: string;
   metadata?: Array<{ label: string; value: string }>;
+  statusLabel?: string;
+  statusTone?: "ready" | "partial" | "error" | "muted";
   children?: ReactNode;
   testId?: string;
 };
@@ -35,6 +38,7 @@ type ExecutionReceiptProps = {
   detail: string;
   outcome: ApprovalOutcome;
   metadata?: Array<{ label: string; value: string }>;
+  children?: ReactNode;
   testId?: string;
 };
 
@@ -54,14 +58,14 @@ function toneForOutcome(outcome: ApprovalOutcome) {
 function labelForOutcome(outcome: ApprovalOutcome) {
   switch (outcome) {
     case "executed":
-      return "Executed";
+      return "Ausgeführt";
     case "failed":
-      return "Failed";
+      return "Fehlgeschlagen";
     case "unverifiable":
-      return "Unverifiable";
+      return "Nicht verifizierbar";
     case "rejected":
     default:
-      return "Rejected";
+      return "Abgelehnt";
   }
 }
 
@@ -70,6 +74,8 @@ export function ProposalCard({
   summary,
   consequence,
   metadata = [],
+  statusLabel = "Freigabe erforderlich",
+  statusTone = "partial",
   children,
   testId,
 }: ProposalCardProps) {
@@ -77,10 +83,10 @@ export function ProposalCard({
     <ShellCard variant="base" className="proposal-card" data-testid={testId}>
       <header className="proposal-card-header">
         <div>
-          <SectionLabel>Proposal</SectionLabel>
+          <SectionLabel>Vorschlag</SectionLabel>
           <strong>{title}</strong>
         </div>
-        <StatusBadge tone="partial">Approval required</StatusBadge>
+        <StatusBadge tone={statusTone}>{statusLabel}</StatusBadge>
       </header>
 
       <p className="proposal-summary">{summary}</p>
@@ -120,7 +126,7 @@ export function DecisionZone({
     <section className="decision-zone" data-testid={testId}>
       <div className="decision-actions">
         <button type="button" onClick={onApprove} disabled={approveDisabled || busy}>
-          {busy ? "Running…" : approveLabel}
+          {busy ? "Läuft…" : approveLabel}
         </button>
         <button type="button" className="secondary-button" onClick={onReject} disabled={rejectDisabled || busy}>
           {rejectLabel}
@@ -135,8 +141,8 @@ export function ApprovalTransitionCard({ title, detail, testId }: ApprovalTransi
   return (
     <ShellCard variant="muted" className="approval-transition-card" data-testid={testId}>
       <header className="approval-transition-header">
-        <SectionLabel>Executing</SectionLabel>
-        <StatusBadge tone="partial">In progress</StatusBadge>
+        <SectionLabel>Ausführung</SectionLabel>
+        <StatusBadge tone="partial">Läuft</StatusBadge>
       </header>
       <strong>{title}</strong>
       <p className="shell-muted-copy">{detail}</p>
@@ -149,12 +155,13 @@ export function ExecutionReceiptCard({
   detail,
   outcome,
   metadata = [],
+  children,
   testId,
 }: ExecutionReceiptProps) {
   return (
     <ShellCard variant="muted" className={`execution-receipt execution-receipt-${outcome}`} data-testid={testId}>
       <header className="execution-receipt-header">
-        <SectionLabel>Execution receipt</SectionLabel>
+        <SectionLabel>Ausführungsbeleg</SectionLabel>
         <StatusBadge tone={toneForOutcome(outcome)}>{labelForOutcome(outcome)}</StatusBadge>
       </header>
       <strong>{title}</strong>
@@ -169,6 +176,7 @@ export function ExecutionReceiptCard({
           ))}
         </div>
       ) : null}
+      {children}
     </ShellCard>
   );
 }
