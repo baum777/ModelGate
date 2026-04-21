@@ -88,7 +88,7 @@ export function SettingsWorkspace({
               <strong>{truthSnapshot.backend.label}</strong>
             </div>
             <div>
-              <span>GitHub Session</span>
+              <span>GitHub acting identity</span>
               <strong>{truthSnapshot.github.sessionLabel}</strong>
             </div>
             <div>
@@ -96,15 +96,15 @@ export function SettingsWorkspace({
               <strong>{truthSnapshot.github.connectionLabel}</strong>
             </div>
             <div>
-              <span>GitHub Zugriff</span>
+              <span>GitHub authority domain</span>
               <strong>{truthSnapshot.github.accessLabel}</strong>
             </div>
             <div>
-              <span>GitHub Repo</span>
+              <span>GitHub active scope</span>
               <strong>{truthSnapshot.github.repositoryLabel}</strong>
             </div>
             <div>
-              <span>Matrix Identität</span>
+              <span>Matrix acting identity</span>
               <strong>{truthSnapshot.matrix.identityLabel}</strong>
             </div>
             <div>
@@ -116,8 +116,20 @@ export function SettingsWorkspace({
               <strong>{truthSnapshot.matrix.homeserverLabel}</strong>
             </div>
             <div>
-              <span>Bereich</span>
+              <span>Matrix active scope</span>
               <strong>{truthSnapshot.matrix.scopeLabel}</strong>
+            </div>
+            <div>
+              <span>Chat acting identity</span>
+              <strong>not exposed by backend</strong>
+            </div>
+            <div>
+              <span>Chat active scope</span>
+              <strong>session-local chat thread (browser)</strong>
+            </div>
+            <div>
+              <span>Chat authority domain</span>
+              <strong>chat backend route (/chat)</strong>
             </div>
           </div>
           <p className="muted-copy">{truthSnapshot.backend.detail}</p>

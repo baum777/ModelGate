@@ -24,6 +24,11 @@ import {
   deriveSessionTitle,
   type GitHubSession
 } from "../lib/workspace-state.js";
+import {
+  BACKEND_TRUTH_UNAVAILABLE,
+  buildGovernanceMetadataRows,
+  mergeMetadataRows,
+} from "../lib/governance-metadata.js";
 
 export type GitHubWorkspaceStatus = {
   repositoryLabel: string;
@@ -208,31 +213,52 @@ function friendlyTargetBranchLabel(targetBranch: string | null, repo: GitHubRepo
 
 export function buildGitHubReviewItems(
   proposalPlan: GitHubChangePlan | null,
+  executionResult: GitHubExecuteResult | null,
   verificationResult: GitHubVerifyResult | null,
 ): ReviewItem[] {
   if (!proposalPlan) {
     return [];
   }
 
+  const status = proposalPlan.stale
+    ? "stale"
+    : verificationResult?.status === "verified"
+      ? "executed"
+      : verificationResult?.status === "failed" || verificationResult?.status === "mismatch"
+        ? "rejected"
+        : executionResult
+          ? "approved"
+          : "pending_review";
+  const receiptSummary = verificationResult
+    ? `verification ${verificationResult.status}`
+    : executionResult
+      ? "execution recorded, verification pending"
+      : "proposal pending approval";
+
   return [
     {
       id: proposalPlan.planId,
       source: "github",
       title: proposalPlan.summary,
-      summary: proposalPlan.rationale,
-      status: proposalPlan.stale
-        ? "stale"
-        : verificationResult?.status === "verified"
-          ? "executed"
-          : "pending_review",
+      summary: `${proposalPlan.rationale} · ${receiptSummary}`,
+      status,
       stale: proposalPlan.stale,
       sourceLabel: "GitHub Workspace",
-      provenanceRows: [
-        { label: "Repository", value: proposalPlan.repo.fullName },
-        { label: "Ausgangszweig", value: proposalPlan.baseRef },
-        { label: "Zielzweig", value: proposalPlan.targetBranch },
-        { label: "Risiko", value: formatGitHubRiskLevel(proposalPlan.riskLevel) },
-      ],
+      provenanceRows: mergeMetadataRows(
+        buildGovernanceMetadataRows({
+          actingIdentity: BACKEND_TRUTH_UNAVAILABLE,
+          activeScope: `${proposalPlan.repo.fullName}@${proposalPlan.baseRef}`,
+          authorityDomain: "github backend action routes",
+          targetScope: `${proposalPlan.repo.fullName}@${proposalPlan.targetBranch}`,
+          executionDomain: "github pull request workflow",
+          executionTarget: executionResult
+            ? `PR #${executionResult.prNumber}`
+            : `${proposalPlan.branchName} -> ${proposalPlan.targetBranch}`,
+          provenanceSummary: `plan ${proposalPlan.planId}`,
+          receiptSummary
+        }),
+        [{ label: "Risk", value: formatGitHubRiskLevel(proposalPlan.riskLevel) }]
+      ),
     },
   ];
 }
@@ -385,13 +411,15 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       ? "Bereit"
       : "Noch nicht erstellt";
   const approvalLabel = proposalPlan
-    ? executionResult
-      ? verificationResult?.status === "verified"
+    ? proposalPlan.stale
+      ? "Prüfung erforderlich"
+      : verificationResult?.status === "verified"
         ? "Beleg verifiziert"
-        : "Ausführungsbeleg offen"
-      : proposalPlan.stale
-        ? "Prüfung erforderlich"
-        : "Freigabe erforderlich"
+        : verificationResult?.status === "failed" || verificationResult?.status === "mismatch"
+          ? "Beleg mit Abweichung"
+          : executionResult
+            ? "Ausführungsbeleg offen"
+            : "Freigabe erforderlich"
     : analysisBundle
       ? "Lesestatus bereit"
       : "Nicht erforderlich";
@@ -464,9 +492,9 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
 
   useEffect(() => {
     if (props.onReviewItemsChange) {
-      props.onReviewItemsChange(buildGitHubReviewItems(proposalPlan, verificationResult));
+      props.onReviewItemsChange(buildGitHubReviewItems(proposalPlan, executionResult, verificationResult));
     }
-  }, [proposalPlan, props.onReviewItemsChange, verificationResult]);
+  }, [executionResult, proposalPlan, props.onReviewItemsChange, verificationResult]);
 
   useEffect(() => {
     if (!proposalPlan || proposalPlan.stale) {
@@ -951,15 +979,21 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                             : "partial"
                           : "partial"
                     }
-                    metadata={[
-                      {
-                        label: "Repository",
-                        value: selectedRepo?.fullName ?? selectedRepoFullName ?? "n/a",
-                      },
-                      { label: "Branch", value: proposalPlan.branchName },
-                      { label: "Target", value: proposalPlan.targetBranch },
-                      { label: "Risk", value: proposalPlan.riskLevel },
-                    ]}
+                    metadata={mergeMetadataRows(
+                      buildGovernanceMetadataRows({
+                        actingIdentity: BACKEND_TRUTH_UNAVAILABLE,
+                        activeScope: `${selectedRepo?.fullName ?? selectedRepoFullName ?? "n/a"}@${proposalPlan.baseRef}`,
+                        authorityDomain: "github backend action routes",
+                        targetScope: `${selectedRepo?.fullName ?? selectedRepoFullName ?? "n/a"}@${proposalPlan.targetBranch}`,
+                        executionDomain: "github pull request workflow",
+                        executionTarget: `${proposalPlan.branchName} -> ${proposalPlan.targetBranch}`,
+                        provenanceSummary: `plan ${proposalPlan.planId}`,
+                        receiptSummary: executionResult
+                          ? verificationResult?.status ?? "execution recorded"
+                          : "proposal pending approval",
+                      }),
+                      [{ label: "Risk", value: proposalPlan.riskLevel }]
+                    )}
                   >
                     <div className="github-plan-file-grid">
                       {proposalFiles.map((file) => (
@@ -1035,15 +1069,26 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                       ? "executed"
                       : "executed"
               }
-              metadata={[
-                {
-                  label: "Zielzweig",
-                  value: props.expertMode ? executionResult.targetBranch : friendlyTargetBranchLabel(executionResult.targetBranch, selectedRepo),
-                },
-                { label: "PR", value: `#${executionResult.prNumber}` },
-                { label: "Commit", value: executionResult.commitSha },
-                { label: "Verifikation", value: verificationResult?.status ?? "ausstehend" },
-              ]}
+              metadata={mergeMetadataRows(
+                buildGovernanceMetadataRows({
+                  actingIdentity: BACKEND_TRUTH_UNAVAILABLE,
+                  activeScope: `${selectedRepo?.fullName ?? selectedRepoFullName ?? "n/a"}@${proposalPlan.baseRef}`,
+                  authorityDomain: "github backend action routes",
+                  targetScope: `${selectedRepo?.fullName ?? selectedRepoFullName ?? "n/a"}@${executionResult.targetBranch}`,
+                  executionDomain: "github pull request workflow",
+                  executionTarget: `PR #${executionResult.prNumber}`,
+                  provenanceSummary: `plan ${executionResult.planId}`,
+                  receiptSummary: verificationResult?.status ?? "verification pending",
+                }),
+                [
+                  {
+                    label: "Zielzweig",
+                    value: props.expertMode ? executionResult.targetBranch : friendlyTargetBranchLabel(executionResult.targetBranch, selectedRepo),
+                  },
+                  { label: "Commit", value: executionResult.commitSha },
+                  { label: "Verifikation", value: verificationResult?.status ?? "ausstehend" },
+                ]
+              )}
               testId="github-pr-result"
             >
               {executionResult.prUrl ? (

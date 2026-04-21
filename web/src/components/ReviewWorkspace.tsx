@@ -38,9 +38,9 @@ const REVIEW_STATUS_PRIORITY: Record<ReviewItemStatus, number> = {
 function statusLabel(status: ReviewItemStatus) {
   switch (status) {
     case "approved":
-      return "Freigegeben";
+      return "Ausführung läuft";
     case "rejected":
-      return "Abgelehnt";
+      return "Fehlgeschlagen / Abgelehnt";
     case "stale":
       return "Veraltet";
     case "executed":
@@ -81,6 +81,10 @@ export function describeReviewNextStep(items: ReviewItem[]) {
 
   if (items.some((item) => item.status === "approved")) {
     return "Ausführung beobachten";
+  }
+
+  if (items.some((item) => item.status === "rejected")) {
+    return "Terminale Abweichung prüfen";
   }
 
   if (items.some((item) => item.status === "executed")) {
@@ -216,7 +220,7 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
                       <span>{sourceLabelFor(item)}</span>
                       <strong>{item.title}</strong>
                     </div>
-                    <span className={`status-pill ${item.status === "stale" ? "status-error" : item.status === "approved" || item.status === "executed" ? "status-ready" : "status-partial"}`}>
+                    <span className={`status-pill ${item.status === "stale" || item.status === "rejected" ? "status-error" : item.status === "executed" ? "status-ready" : "status-partial"}`}>
                       {statusLabel(item.status)}
                     </span>
                   </div>

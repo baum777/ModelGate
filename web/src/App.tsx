@@ -696,6 +696,10 @@ export default function App() {
       ? [{ label: "Freigabe", value: matrixContext.approvalLabel }]
       : []),
   ];
+  const reviewHasStale = reviewItems.some((item) => item.status === "stale");
+  const reviewHasPending = reviewItems.some((item) => item.status === "pending_review");
+  const reviewHasExecuting = reviewItems.some((item) => item.status === "approved");
+  const reviewHasRejected = reviewItems.some((item) => item.status === "rejected");
 
   const reviewRows: StatusPanelRow[] = [
     { label: "Offene Prüfungen", value: String(reviewItems.length) },
@@ -704,11 +708,15 @@ export default function App() {
       value:
         reviewItems.length === 0
           ? "Keine offenen Prüfungen"
-          : reviewItems.some((item) => item.status === "stale")
+          : reviewHasStale
             ? "Blockiert"
-            : reviewItems.some((item) => item.status === "pending_review")
+            : reviewHasPending
               ? "Freigabe nötig"
-              : "Bereit",
+              : reviewHasExecuting
+                ? "Ausführung läuft"
+                : reviewHasRejected
+                  ? "Terminale Abweichung"
+                  : "Bereit",
     },
   ];
 
@@ -818,12 +826,20 @@ export default function App() {
           return "Leer";
         }
 
-        if (reviewItems.some((item) => item.status === "stale")) {
+        if (reviewHasStale) {
           return "Blockiert";
         }
 
-        if (reviewItems.some((item) => item.status === "pending_review")) {
+        if (reviewHasPending) {
           return "Freigabe nötig";
+        }
+
+        if (reviewHasExecuting) {
+          return "Ausführung läuft";
+        }
+
+        if (reviewHasRejected) {
+          return "Abweichung";
         }
 
         return "Aktiv";
@@ -945,11 +961,11 @@ export default function App() {
           return "partial";
         }
 
-        if (reviewItems.some((item) => item.status === "stale")) {
+        if (reviewHasStale || reviewHasRejected) {
           return "error";
         }
 
-        return reviewItems.some((item) => item.status === "pending_review") ? "partial" : "ready";
+        return reviewHasPending || reviewHasExecuting ? "partial" : "ready";
       case "settings":
         if (backendHealthy === false) {
           return "error";
@@ -1050,12 +1066,20 @@ export default function App() {
           return "Noch keine offenen Prüfungen.";
         }
 
-        if (reviewItems.some((item) => item.status === "stale")) {
+        if (reviewHasStale) {
           return "Eine Prüfung ist veraltet.";
         }
 
-        if (reviewItems.some((item) => item.status === "pending_review")) {
+        if (reviewHasPending) {
           return "Prüfungen warten auf Freigabe.";
+        }
+
+        if (reviewHasExecuting) {
+          return "Mindestens eine Ausführung läuft noch.";
+        }
+
+        if (reviewHasRejected) {
+          return "Mindestens ein Ausführungsbeleg hat eine Abweichung.";
         }
 
         return "Prüfungen sind bereit.";
@@ -1156,12 +1180,20 @@ export default function App() {
           return "Öffne GitHub oder Matrix, um prüfbare Änderungen zu erzeugen.";
         }
 
-        if (reviewItems.some((item) => item.status === "stale")) {
+        if (reviewHasStale) {
           return "Bring die veraltete Prüfung wieder in Sync, bevor du weiterarbeitest.";
         }
 
-        if (reviewItems.some((item) => item.status === "pending_review")) {
+        if (reviewHasPending) {
           return "Prüfe den Vorschlag und entscheide dann über die Freigabe.";
+        }
+
+        if (reviewHasExecuting) {
+          return "Beobachte laufende Ausführung und warte auf den terminalen Beleg.";
+        }
+
+        if (reviewHasRejected) {
+          return "Kläre die terminale Abweichung im Quell-Workspace.";
         }
 
         return "Arbeite die offenen Punkte der Reihe nach ab.";
@@ -1249,11 +1281,15 @@ export default function App() {
             label: "Einordnung",
             value: reviewItems.length === 0
               ? "Keine offenen Prüfungen"
-              : reviewItems.some((item) => item.status === "stale")
+              : reviewHasStale
                 ? "Veraltet"
-                : reviewItems.some((item) => item.status === "pending_review")
+                : reviewHasPending
                   ? "Freigabe nötig"
-                  : "Bereit",
+                  : reviewHasExecuting
+                    ? "Ausführung läuft"
+                    : reviewHasRejected
+                      ? "Abweichung"
+                      : "Bereit",
           },
         ];
       case "settings":

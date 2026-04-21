@@ -37,6 +37,11 @@ import {
   type MatrixComposerTarget,
   type MatrixSession,
 } from "../lib/workspace-state.js";
+import {
+  BACKEND_TRUTH_UNAVAILABLE,
+  buildGovernanceMetadataRows,
+  mergeMetadataRows,
+} from "../lib/governance-metadata.js";
 
 type WorkflowStatus = "loading" | "partial" | "ready" | "error";
 type LoadStatus = "idle" | "loading" | "ready" | "error";
@@ -98,26 +103,53 @@ const text = (value: string | null | undefined) =>
 const releaseScopeNotice =
   "Backend-gesteuerte Matrix-Topic-Updates sind für Explore, Scope-Summary, read-only Provenienz, Analyse, Review, Freigabe, Ausführung und Verifikation verfügbar.";
 
-export function buildMatrixReviewItems(topicPlan: MatrixRoomTopicAgentPlan | null): ReviewItem[] {
+export function buildMatrixReviewItems(
+  topicPlan: MatrixRoomTopicAgentPlan | null,
+  topicExecution: MatrixRoomTopicExecutionResult | null,
+  topicVerification: MatrixRoomTopicVerificationResult | null,
+  actingIdentity: string | null
+): ReviewItem[] {
   if (!topicPlan) {
     return [];
   }
+
+  const status = topicVerification?.status === "verified"
+    ? "executed"
+    : topicVerification?.status === "failed" || topicVerification?.status === "mismatch"
+      ? "rejected"
+      : topicExecution
+        ? "approved"
+        : topicPlan.status === "executed"
+          ? "approved"
+          : "pending_review";
+  const receiptSummary = topicVerification
+    ? `verification ${topicVerification.status}`
+    : topicExecution
+      ? "execution recorded, verification pending"
+      : "proposal pending approval";
 
   return [
     {
       id: topicPlan.planId,
       source: "matrix",
       title: "Plan zur Raumtopic-Aktualisierung",
-      summary: `Aktuell: ${text(topicPlan.currentValue)} · Vorgeschlagen: ${text(topicPlan.proposedValue)} · Risiko: ${topicPlan.risk}`,
-      status: topicPlan.status === "executed" ? "executed" : "pending_review",
+      summary: `Aktuell: ${text(topicPlan.currentValue)} · Vorgeschlagen: ${text(topicPlan.proposedValue)} · Risiko: ${topicPlan.risk} · ${receiptSummary}`,
+      status,
       stale: false,
       sourceLabel: "Matrix Workspace",
-      provenanceRows: [
-        { label: "Raum", value: topicPlan.roomId },
-        { label: "Scope", value: text(topicPlan.scopeId) },
-        { label: "Snapshot", value: text(topicPlan.snapshotId) },
-        { label: "Risiko", value: topicPlan.risk },
-      ],
+      provenanceRows: mergeMetadataRows(
+        buildGovernanceMetadataRows({
+          actingIdentity: actingIdentity ?? BACKEND_TRUTH_UNAVAILABLE,
+          activeScope: topicPlan.scopeId ?? BACKEND_TRUTH_UNAVAILABLE,
+          authorityDomain: "matrix backend action routes",
+          targetScope: topicPlan.roomId,
+          executionDomain: "matrix room topic execute/verify routes",
+          executionTarget: topicExecution ? `transaction ${topicExecution.transactionId}` : topicPlan.roomId,
+          provenanceSummary: topicPlan.snapshotId ? `snapshot ${topicPlan.snapshotId}` : "scope snapshot not provided by backend",
+          receiptSummary
+        }),
+        [{ label: "Risk", value: topicPlan.risk }]
+      ),
     },
   ];
 }
@@ -217,7 +249,10 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     () => selectedSpaceIds.filter((value) => value.trim().length > 0),
     [selectedSpaceIds],
   );
-  const matrixReviewItems = useMemo<ReviewItem[]>(() => buildMatrixReviewItems(topicPlan), [topicPlan]);
+  const matrixReviewItems = useMemo<ReviewItem[]>(
+    () => buildMatrixReviewItems(topicPlan, topicExecution, topicVerification, whoami?.userId ?? null),
+    [topicExecution, topicPlan, topicVerification, whoami?.userId]
+  );
   const activeComposerRoomId = roomId?.trim() || topicRoomId.trim() || selectedRoomIds[0]?.trim() || null;
   const threadOpenSourceId = selectedThreadRootId?.trim() || selectedEventId?.trim() || null;
   const activeThreadRootId = selectedThreadRootId?.trim() || null;
@@ -282,15 +317,19 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       approvalLabel: topicPlan
         ? topicPlan.status === "pending_review"
           ? "Freigabe erforderlich"
-          : topicExecution
-            ? "Beleg bereit"
-            : "Prüfung gesperrt"
+          : topicVerification?.status === "verified"
+            ? "Beleg verifiziert"
+            : topicVerification?.status === "failed" || topicVerification?.status === "mismatch"
+              ? "Beleg mit Abweichung"
+              : topicExecution
+                ? "Ausführungsbeleg offen"
+                : "Prüfung gesperrt"
         : "Nicht erforderlich",
       safetyText: "Der Browser kann Daten ansehen und Freigabeabsichten senden; backend-gesteuerte Writes bleiben freigabegeschützt.",
       expertDetails: matrixExpertDetails,
       reviewItems: matrixReviewItems,
     }),
-    [connectionLabel, currentScope, identityLabel, homeserverLabel, matrixExpertDetails, matrixReviewItems, scopeSummary, topicPlan],
+    [connectionLabel, currentScope, identityLabel, homeserverLabel, matrixExpertDetails, matrixReviewItems, scopeSummary, topicExecution, topicPlan, topicVerification],
   );
 
   useEffect(() => {
@@ -1095,13 +1134,22 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                       ? "error"
                       : "ready"
               }
-              metadata={[
-                { label: "Room", value: topicPlan.roomId },
-                { label: "Scope", value: text(topicPlan.scopeId) },
-                { label: "Snapshot", value: text(topicPlan.snapshotId) },
-                { label: "Risk", value: topicPlan.risk },
-                { label: "Expires", value: formatDate(topicPlan.expiresAt) },
-              ]}
+              metadata={mergeMetadataRows(
+                buildGovernanceMetadataRows({
+                  actingIdentity: whoami?.userId ?? BACKEND_TRUTH_UNAVAILABLE,
+                  activeScope: topicPlan.scopeId ?? BACKEND_TRUTH_UNAVAILABLE,
+                  authorityDomain: "matrix backend action routes",
+                  targetScope: topicPlan.roomId,
+                  executionDomain: "matrix room topic execute/verify routes",
+                  executionTarget: topicPlan.roomId,
+                  provenanceSummary: topicPlan.snapshotId ? `snapshot ${topicPlan.snapshotId}` : "scope snapshot not provided by backend",
+                  receiptSummary: topicVerification?.status ?? "proposal pending approval",
+                }),
+                [
+                  { label: "Risk", value: topicPlan.risk },
+                  { label: "Expires", value: formatDate(topicPlan.expiresAt) },
+                ]
+              )}
             >
               <div className="detail-grid">
                 {props.expertMode ? (
@@ -1210,11 +1258,23 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                         ? "unverifiable"
                         : "executed"
                   }
-                  metadata={[
-                    { label: "Transaction ID", value: topicExecution.transactionId },
-                    { label: "Executed at", value: formatDate(topicExecution.executedAt) },
-                    { label: "Status", value: topicExecution.status },
-                  ]}
+                  metadata={mergeMetadataRows(
+                    buildGovernanceMetadataRows({
+                      actingIdentity: whoami?.userId ?? BACKEND_TRUTH_UNAVAILABLE,
+                      activeScope: topicPlan.scopeId ?? BACKEND_TRUTH_UNAVAILABLE,
+                      authorityDomain: "matrix backend action routes",
+                      targetScope: topicPlan.roomId,
+                      executionDomain: "matrix room topic execute/verify routes",
+                      executionTarget: `transaction ${topicExecution.transactionId}`,
+                      provenanceSummary: topicPlan.snapshotId ? `snapshot ${topicPlan.snapshotId}` : "scope snapshot not provided by backend",
+                      receiptSummary: topicVerification?.status ?? topicExecution.status,
+                    }),
+                    [
+                      { label: "Transaction ID", value: topicExecution.transactionId },
+                      { label: "Executed at", value: formatDate(topicExecution.executedAt) },
+                      { label: "Status", value: topicExecution.status },
+                    ]
+                  )}
                   testId="matrix-topic-execution"
                 >
                   {topicVerifyLoading ? (

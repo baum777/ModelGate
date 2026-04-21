@@ -19,6 +19,11 @@ import {
   ProposalCard,
 } from "./ApprovalPrimitives.js";
 import { SectionLabel, ShellCard, StatusBadge } from "./ShellPrimitives.js";
+import {
+  BACKEND_TRUTH_UNAVAILABLE,
+  buildGovernanceMetadataRows,
+  mergeMetadataRows,
+} from "../lib/governance-metadata.js";
 
 type PublicModelEntry = {
   alias: string;
@@ -98,6 +103,27 @@ function formatTimestamp(value: string | undefined) {
 function buildProposalConsequence(modelAlias: string | null) {
   const alias = modelAlias ?? "selected public alias";
   return `Approve sends this prompt to backend alias ${alias}. A backend execution receipt will be recorded in this session.`;
+}
+
+function buildChatGovernanceRows(options: {
+  modelAlias: string | null;
+  receiptSummary?: string | null;
+  routeSummary?: string | null;
+}) {
+  return mergeMetadataRows(
+    buildGovernanceMetadataRows({
+      actingIdentity: BACKEND_TRUTH_UNAVAILABLE,
+      activeScope: "session-local chat thread (browser)",
+      authorityDomain: "chat backend route (/chat)",
+      targetScope: options.modelAlias ? `public alias ${options.modelAlias}` : "public alias unresolved",
+      executionDomain: "backend SSE stream",
+      executionTarget: options.modelAlias ? `public alias ${options.modelAlias}` : null,
+      receiptSummary: options.receiptSummary ?? null,
+    }),
+    options.routeSummary
+      ? [{ label: "Route", value: options.routeSummary }]
+      : []
+  );
 }
 
 export function ChatWorkspace(props: ChatWorkspaceProps) {
@@ -414,10 +440,13 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             title="Prompt execution proposal"
             summary={pendingProposal.prompt}
             consequence={pendingProposal.consequence}
-            metadata={[
-              { label: "Alias", value: pendingProposal.modelAlias ?? "n/a" },
-              { label: "Prepared", value: formatTimestamp(pendingProposal.createdAt) },
-            ]}
+            metadata={mergeMetadataRows(
+              buildChatGovernanceRows({
+                modelAlias: pendingProposal.modelAlias ?? selectedModel ?? null,
+                receiptSummary: "proposal pending operator approval",
+              }),
+              [{ label: "Prepared", value: formatTimestamp(pendingProposal.createdAt) }]
+            )}
           >
             <DecisionZone
               testId="chat-decision-zone"
@@ -477,11 +506,14 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               title={receipt.prompt}
               detail={receipt.detail}
               outcome={receipt.outcome}
-              metadata={[
-                { label: "Alias", value: receipt.modelAlias ?? "n/a" },
-                { label: "Recorded", value: formatTimestamp(receipt.createdAt) },
-                ...(receipt.route ? [{ label: "Route", value: formatRouteBadge(receipt.route) }] : [])
-              ]}
+              metadata={mergeMetadataRows(
+                buildChatGovernanceRows({
+                  modelAlias: receipt.modelAlias ?? null,
+                  receiptSummary: receipt.outcome,
+                  routeSummary: receipt.route ? formatRouteBadge(receipt.route) : null,
+                }),
+                [{ label: "Recorded", value: formatTimestamp(receipt.createdAt) }]
+              )}
             />
           ))}
 

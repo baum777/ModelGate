@@ -4,7 +4,7 @@ import {
   describeRepositoryAccess,
   buildGitHubReviewItems,
 } from "../src/components/GitHubWorkspace.js";
-import type { GitHubChangePlan, GitHubVerifyResult } from "../src/lib/github-api.js";
+import type { GitHubChangePlan, GitHubExecuteResult, GitHubVerifyResult } from "../src/lib/github-api.js";
 
 test("GitHub workspace review items map proposal state into the shared review language", () => {
   const plan = {
@@ -41,18 +41,37 @@ test("GitHub workspace review items map proposal state into the shared review la
   const verified = {
     status: "verified",
   } as GitHubVerifyResult;
+  const mismatch = {
+    status: "mismatch",
+  } as GitHubVerifyResult;
+  const execution = {
+    planId: "plan-1",
+    status: "executed",
+    branchName: "feature/truth",
+    baseSha: "sha-main",
+    headSha: "sha-head",
+    commitSha: "sha-commit",
+    prNumber: 42,
+    prUrl: "https://example.test/pr/42",
+    targetBranch: "main",
+    executedAt: "2026-04-21T08:10:00.000Z",
+  } as GitHubExecuteResult;
 
-  const pendingItems = buildGitHubReviewItems(plan, null);
-  const executedItems = buildGitHubReviewItems(plan, verified);
-  const staleItems = buildGitHubReviewItems({ ...plan, stale: true }, null);
+  const pendingItems = buildGitHubReviewItems(plan, null, null);
+  const approvedItems = buildGitHubReviewItems(plan, execution, null);
+  const executedItems = buildGitHubReviewItems(plan, execution, verified);
+  const rejectedItems = buildGitHubReviewItems(plan, execution, mismatch);
+  const staleItems = buildGitHubReviewItems({ ...plan, stale: true }, null, null);
 
   assert.equal(pendingItems[0]?.status, "pending_review");
+  assert.equal(approvedItems[0]?.status, "approved");
   assert.equal(executedItems[0]?.status, "executed");
+  assert.equal(rejectedItems[0]?.status, "rejected");
   assert.equal(staleItems[0]?.status, "stale");
   assert.equal(executedItems[0]?.sourceLabel, "GitHub Workspace");
   assert.deepEqual(pendingItems[0]?.provenanceRows?.[0], {
-    label: "Repository",
-    value: "acme/console",
+    label: "Acting identity",
+    value: "not exposed by backend",
   });
   assert.equal(describeRepositoryAccess(plan.repo), "Schreibzugriff");
   assert.equal(describeRepositoryAccess({ ...plan.repo, permissions: { canWrite: false } }), "Nur Lesen");
