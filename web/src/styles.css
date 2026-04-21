@@ -2154,6 +2154,7 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
   justify-content: flex-end;
 }
 
@@ -2165,6 +2166,7 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
   border: 1px solid var(--shell-border-soft);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.03);
+  min-height: 2.35rem;
 }
 
 .shell-language-button {

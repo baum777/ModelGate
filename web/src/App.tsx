@@ -216,12 +216,12 @@ export default function App() {
       ? {
           telemetryHealthLoaded: "Backend-Health geladen",
           telemetryHealthLoadedDetail: (service: string, modeLabel: string, allowedModelCount: number) =>
-            `${service} meldet ${modeLabel} mit ${allowedModelCount} öffentlichen Modell(aliasen).`,
+            `${service} meldet ${modeLabel} mit ${allowedModelCount} öffentlichen Modellen.`,
           telemetryHealthFailed: "Backend-Health fehlgeschlagen",
           telemetryHealthFailedDetail: "Kein Zugriff auf /health",
           telemetryModelAliasLoaded: "Öffentlicher Modellalias geladen",
           telemetryModelAliasLoadedDetail: (alias: string) =>
-            `Alias ${alias} ausgewählt; Provider-Ziele bleiben backend-owned.`,
+            `Alias ${alias} ausgewählt; Provider-Ziele bleiben backend-seitig.`,
           telemetryModelListFailed: "Modellliste fehlgeschlagen",
           telemetryModelListFailedDetail: "Kein Zugriff auf /models",
           chatGovernancePendingApproval: "Freigabe ausstehend",
@@ -230,7 +230,7 @@ export default function App() {
           chatGovernanceProposalRejected: "Vorschlag verworfen",
           chatGovernanceLastExecutionFailed: "Letzte Ausführung fehlgeschlagen",
           chatGovernanceNoOpenProposal: "Kein offener Vorschlag",
-          sessionHeaderNote: "Wiederaufnehmbare Sessions pro Workspace",
+          sessionHeaderNote: "Wiederaufnehmbare Sessions pro Arbeitsbereich",
         }
       : {
           telemetryHealthLoaded: "Backend health loaded",
@@ -1561,6 +1561,7 @@ export default function App() {
               className={locale === "en" ? "secondary-button shell-language-button shell-language-button-active" : "secondary-button shell-language-button"}
               onClick={() => setLocale("en")}
               aria-pressed={locale === "en"}
+              aria-label={locale === "de" ? "Sprache: Englisch" : "Language: English"}
             >
               {ui.shell.languageOptionEnglish}
             </button>
@@ -1569,6 +1570,7 @@ export default function App() {
               className={locale === "de" ? "secondary-button shell-language-button shell-language-button-active" : "secondary-button shell-language-button"}
               onClick={() => setLocale("de")}
               aria-pressed={locale === "de"}
+              aria-label={locale === "de" ? "Sprache: Deutsch" : "Language: German"}
             >
               {ui.shell.languageOptionGerman}
             </button>

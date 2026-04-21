@@ -32,5 +32,5 @@ test("app shell renders core DE labels", () => {
   assert.match(markup, /ModelGate Konsole/);
   assert.match(markup, /Arbeitsbereich wählen/);
   assert.match(markup, /Sprache/);
-  assert.match(markup, /Wiederaufnehmbare Sessions pro Workspace/);
+  assert.match(markup, /Wiederaufnehmbare Sessions pro Arbeitsbereich/);
 });
