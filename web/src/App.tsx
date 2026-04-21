@@ -706,7 +706,7 @@ export default function App() {
   const reviewHasStale = reviewItems.some((item) => item.status === "stale");
   const reviewHasPending = reviewItems.some((item) => item.status === "pending_review");
   const reviewHasExecuting = reviewItems.some((item) => item.status === "approved");
-  const reviewHasRejected = reviewItems.some((item) => item.status === "rejected");
+  const reviewHasTerminal = reviewItems.some((item) => item.status === "rejected" || item.status === "failed");
 
   const reviewRows: StatusPanelRow[] = [
     { label: ui.review.openReviews, value: String(reviewItems.length) },
@@ -721,7 +721,7 @@ export default function App() {
               ? ui.review.approvalNeeded
               : reviewHasExecuting
                 ? ui.review.executing
-                : reviewHasRejected
+                : reviewHasTerminal
                   ? ui.review.terminalDeviation
                   : ui.review.ready,
     },
@@ -845,7 +845,7 @@ export default function App() {
           return ui.review.executing;
         }
 
-        if (reviewHasRejected) {
+    if (reviewHasTerminal) {
           return ui.review.terminalDeviation;
         }
 
@@ -960,7 +960,7 @@ export default function App() {
           return "partial";
         }
 
-        if (reviewHasStale || reviewHasRejected) {
+    if (reviewHasStale || reviewHasTerminal) {
           return "error";
         }
 
@@ -1077,7 +1077,7 @@ export default function App() {
           return ui.review.executing;
         }
 
-        if (reviewHasRejected) {
+    if (reviewHasTerminal) {
           return ui.review.terminalDeviation;
         }
 
@@ -1191,7 +1191,7 @@ export default function App() {
           return ui.review.executing;
         }
 
-        if (reviewHasRejected) {
+    if (reviewHasTerminal) {
           return ui.review.terminalDeviation;
         }
 
@@ -1286,7 +1286,7 @@ export default function App() {
                   ? ui.review.approvalNeeded
                   : reviewHasExecuting
                     ? ui.review.executing
-                    : reviewHasRejected
+                    : reviewHasTerminal
                       ? ui.review.terminalDeviation
                       : ui.review.ready,
           },

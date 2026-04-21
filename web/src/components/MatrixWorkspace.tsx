@@ -231,8 +231,10 @@ export function buildMatrixReviewItems(
 
   const status = topicVerification?.status === "verified"
     ? "executed"
-    : topicVerification?.status === "failed" || topicVerification?.status === "mismatch"
-      ? "rejected"
+    : topicVerification?.status === "failed"
+      ? "failed"
+      : topicVerification?.status === "mismatch"
+        ? "rejected"
       : topicExecution
         ? "approved"
         : topicPlan.status === "executed"

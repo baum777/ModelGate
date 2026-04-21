@@ -3,7 +3,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 export type Locale = "en" | "de";
 
 export type SessionStatus = "draft" | "in_progress" | "review_required" | "done" | "failed";
-export type ReviewStatus = "pending_review" | "approved" | "rejected" | "stale" | "executed";
+export type ReviewStatus = "pending_review" | "approved" | "failed" | "rejected" | "stale" | "executed";
 export type ApprovalOutcome = "executed" | "failed" | "rejected" | "unverifiable";
 export type ConnectionState = "idle" | "submitting" | "streaming" | "completed" | "error";
 export type WorkspaceMode = "chat" | "github" | "matrix" | "review" | "settings";
@@ -1092,14 +1092,16 @@ export function getReviewStatusLabel(locale: Locale, status: ReviewStatus): stri
     ? {
         pending_review: "Wartet auf Freigabe",
         approved: "Ausführung läuft",
-        rejected: "Fehlgeschlagen / Abgelehnt",
+        failed: "Fehlgeschlagen",
+        rejected: "Abgelehnt / Abweichung",
         stale: "Veraltet",
         executed: "Ausgeführt",
       }
     : {
         pending_review: "Waiting for approval",
         approved: "Execution running",
-        rejected: "Failed / Rejected",
+        failed: "Failed",
+        rejected: "Rejected / Mismatch",
         stale: "Stale",
         executed: "Executed",
       };

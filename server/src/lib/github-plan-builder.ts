@@ -227,8 +227,9 @@ async function generateProposalDraft(
 ): Promise<GitHubProposalDraft> {
   const selection = options.modelRegistry.resolveModel();
   const workflowPolicy = resolveGitHubProposalModel(options.env, options.modelCapabilities);
+  const selectionReason = "reason" in selection ? selection.reason : null;
 
-  if (!selection.ok && selection.reason !== "no_eligible_provider_targets") {
+  if (!selection.ok && selectionReason !== "no_eligible_provider_targets") {
     throw new GitHubClientError({
       code: "github_not_configured",
       status: 503,

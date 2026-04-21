@@ -366,8 +366,10 @@ export function buildGitHubReviewItems(
     ? "stale"
     : verificationResult?.status === "verified"
       ? "executed"
-      : verificationResult?.status === "failed" || verificationResult?.status === "mismatch"
-        ? "rejected"
+      : verificationResult?.status === "failed"
+        ? "failed"
+        : verificationResult?.status === "mismatch"
+          ? "rejected"
         : executionResult
           ? "approved"
           : "pending_review";

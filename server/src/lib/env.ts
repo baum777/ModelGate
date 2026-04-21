@@ -138,10 +138,19 @@ function parseCsvList(input: string): string[] {
 export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   const parsed = EnvSchema.parse(source);
 
-  return {
-    ...parsed,
+  const normalized: AppEnv = {
+    PORT: parsed.PORT,
+    HOST: parsed.HOST.trim(),
+    OPENROUTER_API_KEY: parsed.OPENROUTER_API_KEY.trim(),
+    OPENROUTER_API_KEY_QWEN3_CODER: parsed.OPENROUTER_API_KEY_QWEN3_CODER.trim(),
+    OPENROUTER_API_KEY_GPT_OSS_120B_PLANNER: parsed.OPENROUTER_API_KEY_GPT_OSS_120B_PLANNER.trim(),
+    OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B: parsed.OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B.trim(),
+    OPENROUTER_BASE_URL: parsed.OPENROUTER_BASE_URL.trim(),
+    OPENROUTER_MODEL: parsed.OPENROUTER_MODEL.trim(),
     OPENROUTER_MODELS: parseCsvList(parsed.OPENROUTER_MODELS),
     OPENROUTER_REQUEST_TIMEOUT_MS: Number.parseInt(parsed.OPENROUTER_REQUEST_TIMEOUT_MS.trim(), 10),
+    APP_NAME: parsed.APP_NAME.trim(),
+    DEFAULT_SYSTEM_PROMPT: parsed.DEFAULT_SYSTEM_PROMPT.trim(),
     CORS_ORIGINS: parseCsvList(parsed.CORS_ORIGINS),
     CHAT_MODEL: parsed.CHAT_MODEL.trim(),
     CODE_AGENT_MODEL: parsed.CODE_AGENT_MODEL.trim(),
@@ -180,6 +189,8 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     MODEL_GATE_SESSION_SECRET: parsed.MODEL_GATE_SESSION_SECRET.trim(),
     MODEL_GATE_SESSION_TTL_SECONDS: parsePositiveIntOrDefault(parsed.MODEL_GATE_SESSION_TTL_SECONDS, 86_400)
   };
+
+  return normalized;
 }
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
