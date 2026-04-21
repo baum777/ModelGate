@@ -12,6 +12,7 @@ import {
   deriveSessionTitle,
   type ChatSession
 } from "../lib/workspace-state.js";
+import { getConnectionStateLabel, useLocalization } from "../lib/localization.js";
 import {
   ApprovalTransitionCard,
   DecisionZone,
@@ -52,21 +53,6 @@ function createId() {
   return crypto.randomUUID();
 }
 
-function statusLabel(state: ConnectionState) {
-  switch (state) {
-    case "submitting":
-      return "Submitting";
-    case "streaming":
-      return "Executing";
-    case "completed":
-      return "Completed";
-    case "error":
-      return "Error";
-    default:
-      return "Ready";
-  }
-}
-
 function formatRouteBadge(route: ChatRouteMetadata | null) {
   if (!route) {
     return "Route pending";
@@ -87,7 +73,7 @@ function formatRouteBadge(route: ChatRouteMetadata | null) {
     : `${route.selectedAlias} · ${route.taskClass}`;
 }
 
-function formatTimestamp(value: string | undefined) {
+function formatTimestamp(locale: "en" | "de", value: string | undefined) {
   if (!value) {
     return "n/a";
   }
@@ -97,12 +83,14 @@ function formatTimestamp(value: string | undefined) {
     return value;
   }
 
-  return parsed.toLocaleString();
+  return parsed.toLocaleString(locale);
 }
 
-function buildProposalConsequence(modelAlias: string | null) {
+function buildProposalConsequence(locale: "en" | "de", modelAlias: string | null) {
   const alias = modelAlias ?? "selected public alias";
-  return `Approve sends this prompt to backend alias ${alias}. A backend execution receipt will be recorded in this session.`;
+  return locale === "de"
+    ? `Freigeben sendet diesen Prompt an den Backend-Alias ${alias}. Ein Backend-Ausführungsbeleg wird in dieser Session protokolliert.`
+    : `Approve sends this prompt to backend alias ${alias}. A backend execution receipt will be recorded in this session.`;
 }
 
 function buildChatGovernanceRows(options: {
@@ -127,6 +115,7 @@ function buildChatGovernanceRows(options: {
 }
 
 export function ChatWorkspace(props: ChatWorkspaceProps) {
+  const { locale, copy: ui } = useLocalization();
   const [chatState, dispatch] = useReducer(
     chatReducer,
     props.session.metadata.chatState,
@@ -206,7 +195,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
         id: createId(),
         prompt: trimmed,
         modelAlias: selectedModel || null,
-        consequence: buildProposalConsequence(selectedModel || null),
+        consequence: buildProposalConsequence(locale, selectedModel || null),
         createdAt: new Date().toISOString(),
         status: "pending"
       }
@@ -349,13 +338,13 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const backendUnreachable = props.backendHealthy === false;
 
   const composerBlockReason = backendUnreachable
-    ? "Backend unreachable. Composer is fail-closed."
+    ? ui.chat.composerLocked.backend
     : modelUnresolved
-      ? "No public model alias selected."
+      ? ui.chat.composerLocked.model
       : awaitingApproval
-        ? "Awaiting approval for the prepared proposal."
+        ? ui.chat.composerLocked.approval
         : executionRunning
-          ? "Execution is running. Composer is locked."
+          ? ui.chat.composerLocked.execution
           : null;
 
   const notices = [
@@ -376,15 +365,13 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     >
       <section className="workspace-hero chat-hero">
         <div>
-          <h1>Chat Workspace</h1>
-          <p className="hero-copy">
-            Conversation stays separate from governed work objects. Backend remains execution authority.
-          </p>
+          <h1>{ui.chat.title}</h1>
+          <p className="hero-copy">{ui.chat.intro}</p>
           <p className="workspace-session-title">{props.session.title}</p>
         </div>
 
         <aside className="mini-panel">
-          <label htmlFor="model-select">Public model alias</label>
+          <label htmlFor="model-select">{ui.chat.modelSelectLabel}</label>
           <select
             id="model-select"
             value={selectedModel}
@@ -397,7 +384,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             disabled={props.availableModels.length === 0 || Boolean(pendingProposal)}
           >
             {props.availableModels.length === 0 ? (
-              <option value="">No public aliases available</option>
+              <option value="">{ui.chat.noModels}</option>
             ) : (
               props.availableModels.map((model) => (
                 <option key={model} value={model}>
@@ -406,29 +393,31 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               ))
             )}
           </select>
-          <p>Only public alias metadata is exposed. Provider targets stay backend-only.</p>
+          <p>{ui.chat.onlyPublicAlias}</p>
           {selectedModelEntry ? (
             <p className="hint">{selectedModelEntry.label}: {selectedModelEntry.description}</p>
-          ) : null}
+          ) : (
+            <p className="hint">{ui.chat.modelHintFallback}</p>
+          )}
         </aside>
       </section>
 
       <section className="chat-card governed-chat-card">
         <header className="chat-runtime-bar governed-chat-runtime">
           <div className="runtime-stack">
-            <SectionLabel>Conversation state</SectionLabel>
-            <strong data-testid="chat-connection-state">{statusLabel(chatState.connectionState)}</strong>
+            <SectionLabel>{ui.chat.conversationState}</SectionLabel>
+            <strong data-testid="chat-connection-state">{getConnectionStateLabel(locale, chatState.connectionState)}</strong>
             <span className="runtime-note">{formatRouteBadge(latestRoute)}</span>
           </div>
           <div className="runtime-actions">
             {executionRunning ? (
               <button type="button" className="ghost-button" onClick={stopExecution}>
-                Stop execution
+                {ui.chat.stopExecution}
               </button>
             ) : null}
             {notices.length > 0 ? (
               <button type="button" className="secondary-button" onClick={() => dispatch({ type: "clear_notices" })}>
-                Clear notices
+                {ui.chat.clearNotices}
               </button>
             ) : null}
           </div>
@@ -437,15 +426,15 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
         {pendingProposal?.status === "pending" ? (
           <ProposalCard
             testId="chat-proposal-card"
-            title="Prompt execution proposal"
+            title={ui.chat.proposalTitle}
             summary={pendingProposal.prompt}
             consequence={pendingProposal.consequence}
             metadata={mergeMetadataRows(
               buildChatGovernanceRows({
                 modelAlias: pendingProposal.modelAlias ?? selectedModel ?? null,
-                receiptSummary: "proposal pending operator approval",
+                receiptSummary: ui.chat.composerLocked.approval,
               }),
-              [{ label: "Prepared", value: formatTimestamp(pendingProposal.createdAt) }]
+              [{ label: ui.sessionList.updated, value: formatTimestamp(locale, pendingProposal.createdAt) }]
             )}
           >
             <DecisionZone
@@ -454,7 +443,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
                 void executeProposal(pendingProposal);
               }}
               onReject={rejectProposal}
-              helperText="Approve starts backend execution. Reject records a terminal rejection receipt."
+              helperText={ui.chat.proposalHelper}
             />
           </ProposalCard>
         ) : null}
@@ -462,15 +451,15 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
         {pendingProposal?.status === "executing" ? (
           <ApprovalTransitionCard
             testId="chat-executing-card"
-            title="Approved prompt is executing"
-            detail={`Backend execution in progress for alias ${pendingProposal.modelAlias ?? "n/a"}.`}
+            title={ui.chat.executingTitle}
+            detail={ui.chat.executingDetail(pendingProposal.modelAlias ?? ui.common.na)}
           />
         ) : null}
 
         <div className="governed-thread" aria-live="polite">
           {chatState.messages.length === 0 && chatState.receipts.length === 0 && !pendingProposal ? (
             <p className="empty-state" role="status">
-              No governed activity yet. Prepare a proposal to run the next prompt.
+              {ui.chat.emptyState}
             </p>
           ) : null}
 
@@ -481,7 +470,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               className={`thread-block ${message.role === "user" ? "thread-block-operator" : "thread-block-agent"}`}
             >
               <header className="thread-block-header">
-                <SectionLabel>{message.role === "user" ? "Operator input" : "Agent response"}</SectionLabel>
+                <SectionLabel>{message.role === "user" ? ui.chat.operatorInput : ui.chat.agentResponse}</SectionLabel>
                 {message.modelAlias ? <StatusBadge tone="muted">{message.modelAlias}</StatusBadge> : null}
               </header>
               <p>{message.content}</p>
@@ -492,10 +481,10 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           {draft?.started ? (
             <ShellCard variant="muted" className="thread-block thread-block-agent-draft">
               <header className="thread-block-header">
-                <SectionLabel>Agent response (draft)</SectionLabel>
+                <SectionLabel>{ui.chat.agentDraft}</SectionLabel>
                 <StatusBadge tone="partial">{draft.model ?? "pending"}</StatusBadge>
               </header>
-              <p>{draft.text || "Awaiting tokens…"}</p>
+              <p>{draft.text || ui.chat.composerLocked.approval}</p>
             </ShellCard>
           ) : null}
 
@@ -512,7 +501,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
                   receiptSummary: receipt.outcome,
                   routeSummary: receipt.route ? formatRouteBadge(receipt.route) : null,
                 }),
-                [{ label: "Recorded", value: formatTimestamp(receipt.createdAt) }]
+                [{ label: ui.sessionList.updated, value: formatTimestamp(locale, receipt.createdAt) }]
               )}
             />
           ))}
@@ -524,9 +513,9 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               className={`thread-notice ${notice.level === "error" ? "thread-notice-error" : "thread-notice-system"}`}
             >
               <header className="thread-block-header">
-                <SectionLabel>{notice.level === "error" ? "Error notice" : "System notice"}</SectionLabel>
+                <SectionLabel>{notice.level === "error" ? ui.chat.errorNotice : ui.chat.systemNotice}</SectionLabel>
                 <StatusBadge tone={notice.level === "error" ? "error" : "partial"}>
-                  {notice.level === "error" ? "Error" : "Notice"}
+                  {notice.level === "error" ? ui.chat.noticeError : ui.chat.noticeSystem}
                 </StatusBadge>
               </header>
               <p>{notice.message}</p>
@@ -539,24 +528,24 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
         <form className="composer governed-composer" onSubmit={handleSubmit}>
           <textarea
             data-testid="chat-composer"
-            aria-label="Chat composer"
+            aria-label={ui.chat.title}
             value={chatState.input}
             onChange={(event) => dispatch({ type: "set_input", input: event.target.value })}
-            placeholder="Write operator input to prepare the next governed proposal..."
+            placeholder={ui.chat.composerPlaceholder}
             rows={4}
             disabled={Boolean(composerBlockReason)}
           />
 
           <div className="composer-footer">
             <p className="hint">
-              {composerBlockReason ?? "Submit prepares a proposal. Backend execution starts only after approval."}
+              {composerBlockReason ?? ui.chat.composerHelper}
             </p>
             <button
               type="submit"
               data-testid="chat-send"
               disabled={Boolean(composerBlockReason) || chatState.input.trim().length === 0}
             >
-              Prepare proposal
+              {ui.chat.prepareProposal}
             </button>
           </div>
         </form>

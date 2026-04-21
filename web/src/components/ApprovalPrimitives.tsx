@@ -1,6 +1,7 @@
 import React from "react";
 import type { ReactNode } from "react";
 import { SectionLabel, ShellCard, StatusBadge } from "./ShellPrimitives.js";
+import { getApprovalOutcomeLabel, useLocalization } from "../lib/localization.js";
 
 export type ApprovalOutcome = "executed" | "failed" | "rejected" | "unverifiable";
 
@@ -55,20 +56,6 @@ function toneForOutcome(outcome: ApprovalOutcome) {
   }
 }
 
-function labelForOutcome(outcome: ApprovalOutcome) {
-  switch (outcome) {
-    case "executed":
-      return "Ausgeführt";
-    case "failed":
-      return "Fehlgeschlagen";
-    case "unverifiable":
-      return "Nicht verifizierbar";
-    case "rejected":
-    default:
-      return "Abgelehnt";
-  }
-}
-
 export function ProposalCard({
   title,
   summary,
@@ -79,11 +66,13 @@ export function ProposalCard({
   children,
   testId,
 }: ProposalCardProps) {
+  const { copy: ui } = useLocalization();
+
   return (
     <ShellCard variant="base" className="proposal-card" data-testid={testId}>
       <header className="proposal-card-header">
         <div>
-          <SectionLabel>Vorschlag</SectionLabel>
+          <SectionLabel>{ui.approval.proposalSection}</SectionLabel>
           <strong>{title}</strong>
         </div>
         <StatusBadge tone={statusTone}>{statusLabel}</StatusBadge>
@@ -91,7 +80,7 @@ export function ProposalCard({
 
       <p className="proposal-summary">{summary}</p>
       <p className="proposal-consequence">
-        <span>Consequence</span>
+        <span>{ui.approval.consequenceLabel}</span>
         <strong>{consequence}</strong>
       </p>
 
@@ -122,14 +111,16 @@ export function DecisionZone({
   helperText,
   testId,
 }: DecisionZoneProps) {
+  const { copy: ui } = useLocalization();
+
   return (
     <section className="decision-zone" data-testid={testId}>
       <div className="decision-actions">
         <button type="button" onClick={onApprove} disabled={approveDisabled || busy}>
-          {busy ? "Läuft…" : approveLabel}
+          {busy ? ui.approval.running : approveLabel ?? ui.approval.approve}
         </button>
         <button type="button" className="secondary-button" onClick={onReject} disabled={rejectDisabled || busy}>
-          {rejectLabel}
+          {rejectLabel ?? ui.approval.reject}
         </button>
       </div>
       {helperText ? <p className="shell-muted-copy">{helperText}</p> : null}
@@ -138,11 +129,13 @@ export function DecisionZone({
 }
 
 export function ApprovalTransitionCard({ title, detail, testId }: ApprovalTransitionProps) {
+  const { copy: ui } = useLocalization();
+
   return (
     <ShellCard variant="muted" className="approval-transition-card" data-testid={testId}>
       <header className="approval-transition-header">
-        <SectionLabel>Ausführung</SectionLabel>
-        <StatusBadge tone="partial">Läuft</StatusBadge>
+        <SectionLabel>{ui.approval.executionSection}</SectionLabel>
+        <StatusBadge tone="partial">{ui.approval.running}</StatusBadge>
       </header>
       <strong>{title}</strong>
       <p className="shell-muted-copy">{detail}</p>
@@ -158,11 +151,13 @@ export function ExecutionReceiptCard({
   children,
   testId,
 }: ExecutionReceiptProps) {
+  const { locale, copy: ui } = useLocalization();
+
   return (
     <ShellCard variant="muted" className={`execution-receipt execution-receipt-${outcome}`} data-testid={testId}>
       <header className="execution-receipt-header">
-        <SectionLabel>Ausführungsbeleg</SectionLabel>
-        <StatusBadge tone={toneForOutcome(outcome)}>{labelForOutcome(outcome)}</StatusBadge>
+        <SectionLabel>{ui.approval.receiptSection}</SectionLabel>
+        <StatusBadge tone={toneForOutcome(outcome)}>{getApprovalOutcomeLabel(locale, outcome)}</StatusBadge>
       </header>
       <strong>{title}</strong>
       <p className="shell-muted-copy">{detail}</p>

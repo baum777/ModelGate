@@ -30,6 +30,15 @@ import {
   TruthRailSection,
 } from "./components/ShellPrimitives.js";
 import {
+  getConnectionStateLabel,
+  getShellHealthCopy,
+  getSessionStatusLabel,
+  getReviewStatusLabel,
+  resolveInitialLocale,
+  useLocalization,
+  type Locale,
+} from "./lib/localization.js";
+import {
   fetchAuthSession,
   fetchHealth,
   fetchModels,
@@ -60,7 +69,6 @@ import {
   type MatrixSession
 } from "./lib/workspace-state.js";
 import {
-  deriveShellHealthState,
   summarizePendingApprovals,
 } from "./lib/shell-view-model.js";
 
@@ -81,19 +89,19 @@ type PersistedShellState = {
 const SHELL_STORAGE_KEY = "modelgate.console.shell.v2";
 
 const DEFAULT_GITHUB_CONTEXT: GitHubWorkspaceStatus = {
-  repositoryLabel: "Noch kein GitHub-Repo ausgewählt",
-  connectionLabel: "Nicht verbunden",
-  accessLabel: "Nur Lesen",
-  analysisLabel: "Noch nicht gestartet",
-  proposalLabel: "Noch nicht erstellt",
-  approvalLabel: "Nicht erforderlich",
-  resultLabel: "Noch nicht gestartet",
-  safetyText: "Die App kann Informationen ansehen, aber nichts verändern.",
+  repositoryLabel: "No GitHub repository selected yet",
+  connectionLabel: "Not connected",
+  accessLabel: "Read only",
+  analysisLabel: "Not started",
+  proposalLabel: "Not created yet",
+  approvalLabel: "Not required",
+  resultLabel: "Not started",
+  safetyText: "The app can inspect information, but it cannot change anything.",
   expertDetails: {
     requestId: null,
     planId: null,
     branchName: null,
-    apiStatus: "Backend-Routen aktiv",
+    apiStatus: "Backend routes active",
     sseEvents: [],
     rawDiffPreview: null,
     selectedRepoSlug: null,
@@ -101,15 +109,15 @@ const DEFAULT_GITHUB_CONTEXT: GitHubWorkspaceStatus = {
 };
 
 const DEFAULT_MATRIX_CONTEXT: MatrixWorkspaceStatus = {
-  identityLabel: "Identität wird geprüft",
-  connectionLabel: "Wird geprüft",
+  identityLabel: "Identity is being checked",
+  connectionLabel: "Checking",
   homeserverLabel: "n/a",
-  scopeLabel: "Noch kein Bereich gewählt",
-  summaryLabel: "Noch keine Zusammenfassung",
-  approvalLabel: "Nicht erforderlich",
-  safetyText: "Die App kann Informationen ansehen, aber nichts verändern.",
+  scopeLabel: "No scope selected yet",
+  summaryLabel: "No summary yet",
+  approvalLabel: "Not required",
+  safetyText: "The app can inspect information, but it cannot change anything.",
   expertDetails: {
-    route: "Backend-Routen aktiv",
+    route: "Backend routes active",
     requestId: null,
     planId: null,
     roomId: null,
@@ -117,7 +125,7 @@ const DEFAULT_MATRIX_CONTEXT: MatrixWorkspaceStatus = {
     eventId: null,
     httpStatus: null,
     latency: null,
-    backendRouteStatus: "Bereit",
+    backendRouteStatus: "Ready",
     runtimeEventTrail: [],
     sseLifecycle: "idle",
     rawPayload: null,
@@ -125,7 +133,7 @@ const DEFAULT_MATRIX_CONTEXT: MatrixWorkspaceStatus = {
     composerRoomId: null,
     composerEventId: null,
     composerThreadRootId: null,
-    composerTargetLabel: "Neuer Post",
+    composerTargetLabel: "New post",
   },
   reviewItems: [],
 };
@@ -246,15 +254,17 @@ function BeginnerExpertToggle({
   expertMode: boolean;
   setExpertMode: (value: boolean) => void;
 }) {
+  const { copy: ui } = useLocalization();
+
   return (
-    <div className="mode-toggle" role="group" aria-label="Beginner und Expert Modus">
+    <div className="mode-toggle" role="group" aria-label={`${ui.settings.beginner} / ${ui.settings.expert}`}>
       <button
         type="button"
         className={expertMode ? "mode-toggle-button" : "mode-toggle-button mode-toggle-button-active"}
         onClick={() => setExpertMode(false)}
         aria-pressed={!expertMode}
       >
-        Beginner
+        {ui.settings.beginner}
       </button>
       <button
         type="button"
@@ -262,7 +272,7 @@ function BeginnerExpertToggle({
         onClick={() => setExpertMode(true)}
         aria-pressed={expertMode}
       >
-        Expert
+        {ui.settings.expert}
       </button>
     </div>
   );
@@ -300,6 +310,7 @@ function sessionStatusCopy(status: WorkspaceSession<unknown>["status"]) {
 
 export default function App() {
   const persisted = readPersistedShellState();
+  const { locale, setLocale, copy: ui } = useLocalization();
   const [mode, setMode] = useState<WorkspaceMode>(persisted?.activeTab ?? "chat");
   const [expertMode, setExpertMode] = useState(persisted?.expertMode ?? false);
   const [workspaceState, setWorkspaceState] = useState(() => loadWorkspaceState());
@@ -702,21 +713,21 @@ export default function App() {
   const reviewHasRejected = reviewItems.some((item) => item.status === "rejected");
 
   const reviewRows: StatusPanelRow[] = [
-    { label: "Offene Prüfungen", value: String(reviewItems.length) },
+    { label: ui.review.openReviews, value: String(reviewItems.length) },
     {
-      label: "Einordnung",
+      label: ui.review.rowClassification,
       value:
         reviewItems.length === 0
-          ? "Keine offenen Prüfungen"
+          ? ui.review.emptyTitle
           : reviewHasStale
-            ? "Blockiert"
+            ? ui.review.blocked
             : reviewHasPending
-              ? "Freigabe nötig"
+              ? ui.review.approvalNeeded
               : reviewHasExecuting
-                ? "Ausführung läuft"
+                ? ui.review.executing
                 : reviewHasRejected
-                  ? "Terminale Abweichung"
-                  : "Bereit",
+                  ? ui.review.terminalDeviation
+                  : ui.review.ready,
     },
   ];
 
@@ -724,29 +735,29 @@ export default function App() {
     backend: {
       label:
         backendHealthy === false
-          ? "Nicht verfügbar"
+          ? ui.shell.healthUnavailable
           : backendHealthy === true
-            ? "Bereit"
-            : "Wird geprüft",
+            ? ui.shell.healthReady
+            : ui.shell.healthChecking,
       detail:
         backendHealthy === false
-          ? "Backend health is unavailable; the shell remains fail-closed."
+          ? ui.shell.healthUnavailableDetail
           : backendHealthy === true
-            ? "Backend health is available."
-            : "Backend health is being checked.",
+            ? ui.shell.healthReadyDetail
+            : ui.shell.healthCheckingDetail,
     },
     github: {
       sessionLabel:
         githubAuthState.status === "authenticated"
-          ? "Angemeldet"
+          ? ui.auth.statusAuthenticated
           : githubAuthState.status === "loading"
-            ? "Session wird geprüft"
+            ? ui.auth.statusChecking
             : githubAuthState.error
-              ? "Fehler"
-              : "Nicht angemeldet",
+              ? ui.common.error
+              : ui.auth.statusLocked,
       connectionLabel: githubContext.connectionLabel,
       repositoryLabel: githubContext.repositoryLabel,
-      accessLabel: githubUnlocked ? githubContext.accessLabel : "Nicht angemeldet",
+      accessLabel: githubUnlocked ? githubContext.accessLabel : ui.auth.statusLocked,
     },
     matrix: {
       identityLabel: matrixContext.identityLabel,
@@ -755,17 +766,17 @@ export default function App() {
       scopeLabel: matrixContext.scopeLabel,
     },
     models: {
-      activeAlias: activeModelAlias ?? "Noch nicht gewählt",
+      activeAlias: activeModelAlias ?? ui.common.none,
       availableCount: availableModels.length,
-      registrySourceLabel: modelRegistry.length > 0 ? "backend-policy" : "n/a",
+      registrySourceLabel: modelRegistry.length > 0 ? "backend-policy" : ui.common.na,
     },
   };
 
   const settingsRows: StatusPanelRow[] = [
-    { label: "Backend", value: settingsTruthSnapshot.backend.label },
+    { label: ui.settings.backend, value: settingsTruthSnapshot.backend.label },
     { label: "GitHub", value: `${settingsTruthSnapshot.github.sessionLabel} · ${settingsTruthSnapshot.github.accessLabel}` },
     { label: "Matrix", value: `${settingsTruthSnapshot.matrix.identityLabel} · ${settingsTruthSnapshot.matrix.connectionLabel}` },
-    { label: "Modell", value: settingsTruthSnapshot.models.activeAlias },
+    { label: ui.settings.modelCardTitle, value: settingsTruthSnapshot.models.activeAlias },
   ];
 
   const currentRows = useMemo(() => {
@@ -787,102 +798,102 @@ export default function App() {
     switch (mode) {
       case "github":
         if (!githubUnlocked) {
-          return githubAuthState.error ? "Verbindung prüfen" : "Nicht angemeldet";
+          return githubAuthState.error ? ui.shell.statusPartial : ui.auth.statusLocked;
         }
 
-        if (githubContext.connectionLabel !== "Bereit") {
+        if (githubContext.connectionLabel !== ui.shell.statusReady) {
           return githubContext.connectionLabel;
         }
 
-        if (githubContext.approvalLabel !== "Nicht erforderlich") {
-          return "Freigabe nötig";
+        if (githubContext.approvalLabel !== ui.common.none && githubContext.approvalLabel !== ui.github.nextStepReadOnly) {
+          return ui.review.approvalNeeded;
         }
 
-        if (githubContext.repositoryLabel.startsWith("Noch kein")) {
-          return "Repo wählen";
+        if (githubContext.repositoryLabel.startsWith("No ") || githubContext.repositoryLabel.startsWith("Noch kein")) {
+          return ui.github.repoSelectLabel;
         }
 
         return githubContext.connectionLabel;
       case "matrix":
-        if (matrixContext.connectionLabel !== "Verbunden") {
+        if (matrixContext.connectionLabel !== "Connected" && matrixContext.connectionLabel !== "Verbunden") {
           return matrixContext.connectionLabel;
         }
 
-        if (matrixContext.approvalLabel !== "Nicht erforderlich") {
-          return "Freigabe nötig";
+        if (matrixContext.approvalLabel !== ui.common.none && matrixContext.approvalLabel !== ui.shell.statusReady) {
+          return ui.review.approvalNeeded;
         }
 
-        if (matrixContext.scopeLabel.startsWith("Noch kein")) {
-          return "Bereich wählen";
+        if (matrixContext.scopeLabel.startsWith("No ") || matrixContext.scopeLabel.startsWith("Noch kein")) {
+          return ui.matrix.scopeSelected;
         }
 
-        if (matrixContext.summaryLabel.startsWith("Noch keine")) {
-          return "Zusammenfassung fehlt";
+        if (matrixContext.summaryLabel.startsWith("No ") || matrixContext.summaryLabel.startsWith("Noch keine")) {
+          return ui.matrix.scopeSummaryReady;
         }
 
-        return "Bereit";
+        return ui.shell.statusReady;
       case "review":
         if (reviewItems.length === 0) {
-          return "Leer";
+          return ui.shell.statusPartial;
         }
 
         if (reviewHasStale) {
-          return "Blockiert";
+          return ui.shell.statusError;
         }
 
         if (reviewHasPending) {
-          return "Freigabe nötig";
+          return ui.review.approvalNeeded;
         }
 
         if (reviewHasExecuting) {
-          return "Ausführung läuft";
+          return ui.review.executing;
         }
 
         if (reviewHasRejected) {
-          return "Abweichung";
+          return ui.review.terminalDeviation;
         }
 
-        return "Aktiv";
+        return ui.shell.statusReady;
       case "settings":
         if (backendHealthy === false) {
-          return "Backend prüfen";
+          return ui.shell.statusError;
         }
 
         if (githubAuthState.error) {
-          return "GitHub prüfen";
+          return ui.shell.statusError;
         }
 
         if (githubAuthState.status === "loading") {
-          return "Session prüfen";
+          return ui.shell.statusPartial;
         }
 
         if (!githubUnlocked) {
-          return "GitHub gesperrt";
+          return ui.auth.statusLocked;
         }
 
-        if (matrixContext.connectionLabel === "Nicht verbunden") {
-          return "Matrix prüfen";
+        if (matrixContext.connectionLabel === "Not connected" || matrixContext.connectionLabel === "Nicht verbunden") {
+          return ui.shell.statusError;
         }
 
         if (!activeModelAlias) {
-          return "Modell wählen";
+          return ui.shell.statusPartial;
         }
 
-        return "Kontrollzentrum";
+        return ui.shell.statusReady;
       default:
         if (chatPendingProposal?.status === "pending") {
-          return "Freigabe nötig";
+          return ui.review.approvalNeeded;
         }
 
         if (chatPendingProposal?.status === "executing") {
-          return "Ausführung";
+          return ui.chat.executingTitle;
         }
 
         if (chatLatestReceipt?.outcome === "failed" || chatLatestReceipt?.outcome === "unverifiable") {
-          return "Fehlgeschlagen";
+          return ui.shell.statusError;
         }
 
-        return backendHealthy === false ? "Nicht verfügbar" : backendHealthy === true ? "Bereit" : "Wird geprüft";
+        return backendHealthy === false ? ui.shell.healthUnavailable : backendHealthy === true ? ui.shell.healthReady : ui.shell.healthChecking;
     }
   }, [
     backendHealthy,
@@ -905,7 +916,7 @@ export default function App() {
     reviewItems,
   ]);
 
-  const healthState = useMemo(() => deriveShellHealthState(backendHealthy), [backendHealthy]);
+  const healthState = useMemo(() => getShellHealthCopy(locale, backendHealthy), [backendHealthy, locale]);
   const approvalSummary = useMemo(() => {
     const base = summarizePendingApprovals(reviewItems);
     const chatPending = chatPendingProposal?.status === "pending" ? 1 : 0;
@@ -916,17 +927,17 @@ export default function App() {
       chatPending,
     };
   }, [chatPendingProposal?.status, reviewItems]);
-  const workspaceName = tabLabel(mode);
-  const workspaceContextTitle = `${workspaceName} Kontext`;
+  const workspaceName = ui.shell.workspaceTabs[mode].label;
+  const workspaceContextTitle = `${workspaceName} ${ui.shell.workspaceContextSuffix}`;
   const diagnosticsTitle = mode === "github"
-    ? "GitHub diagnostics"
+    ? `${ui.shell.workspaceTabs.github.label} ${ui.shell.diagnosticsLabel}`
     : mode === "matrix"
-      ? "Matrix diagnostics"
+      ? `${ui.shell.workspaceTabs.matrix.label} ${ui.shell.diagnosticsLabel}`
       : mode === "review"
-        ? "Review diagnostics"
+        ? `${ui.shell.workspaceTabs.review.label} ${ui.shell.diagnosticsLabel}`
         : mode === "settings"
-          ? "Settings diagnostics"
-          : "Chat diagnostics";
+          ? `${ui.shell.workspaceTabs.settings.label} ${ui.shell.diagnosticsLabel}`
+          : `${ui.shell.workspaceTabs.chat.label} ${ui.shell.diagnosticsLabel}`;
   const showBeginnerDiagnostics = !expertMode && healthState.tone === "error";
   const diagnosticsAccessible = expertMode || showBeginnerDiagnostics;
 
@@ -937,23 +948,23 @@ export default function App() {
           return githubAuthState.error ? "error" : "partial";
         }
 
-        if (githubContext.connectionLabel !== "Bereit") {
-          return githubContext.connectionLabel === "Nicht verbunden" ? "error" : "partial";
+        if (githubContext.connectionLabel !== ui.shell.statusReady) {
+          return githubContext.connectionLabel === ui.shell.statusError ? "error" : "partial";
         }
 
-        return githubContext.approvalLabel !== "Nicht erforderlich" || githubContext.repositoryLabel.startsWith("Noch kein")
+        return githubContext.approvalLabel !== ui.common.none || githubContext.repositoryLabel.includes(ui.github.noRepoSelected)
           ? "partial"
           : "ready";
       case "matrix":
-        if (matrixContext.connectionLabel === "Nicht verbunden") {
+        if (matrixContext.connectionLabel === ui.shell.statusError) {
           return "error";
         }
 
-        if (matrixContext.connectionLabel !== "Verbunden") {
+        if (matrixContext.connectionLabel !== ui.shell.statusReady) {
           return "partial";
         }
 
-        return matrixContext.approvalLabel !== "Nicht erforderlich" || matrixContext.scopeLabel.startsWith("Noch kein") || matrixContext.summaryLabel.startsWith("Noch keine")
+        return matrixContext.approvalLabel !== ui.common.none || matrixContext.scopeLabel.includes(ui.matrix.threadNone) || matrixContext.summaryLabel.includes(ui.matrix.scopeSummaryUnavailable)
           ? "partial"
           : "ready";
       case "review":
@@ -975,11 +986,11 @@ export default function App() {
           return "error";
         }
 
-        if (githubAuthState.status === "loading" || !githubUnlocked || matrixContext.connectionLabel === "Wird geprüft") {
+        if (githubAuthState.status === "loading" || !githubUnlocked || matrixContext.connectionLabel === ui.shell.healthChecking) {
           return "partial";
         }
 
-        if (matrixContext.connectionLabel === "Nicht verbunden") {
+        if (matrixContext.connectionLabel === ui.shell.statusError) {
           return "error";
         }
 
@@ -1023,106 +1034,106 @@ export default function App() {
     switch (mode) {
       case "github":
         if (!githubUnlocked) {
-          return githubAuthState.error ? "GitHub-Sessionprüfung fehlgeschlagen." : "Admin-Anmeldung erforderlich.";
+          return githubAuthState.error ? ui.github.workspaceNoticeRepos : ui.auth.footerNote;
         }
 
-        if (githubContext.connectionLabel !== "Bereit") {
-          return githubContext.connectionLabel === "Nicht verbunden"
-            ? "GitHub-Verbindung ist nicht verfügbar."
-            : "GitHub-Verbindung wird geprüft.";
+        if (githubContext.connectionLabel !== ui.shell.statusReady) {
+          return githubContext.connectionLabel === ui.shell.statusError
+            ? ui.github.workspaceNoticeRepos
+            : ui.shell.healthCheckingDetail;
         }
 
-        if (githubContext.approvalLabel !== "Nicht erforderlich") {
-          return "Vorschlag wartet auf Freigabe.";
+        if (githubContext.approvalLabel !== ui.common.none) {
+          return ui.review.approvalNeeded;
         }
 
-        if (githubContext.repositoryLabel.startsWith("Noch kein")) {
-          return "Repo auswählen, dann kann gelesen werden.";
+        if (githubContext.repositoryLabel.includes(ui.github.noRepoSelected)) {
+          return ui.github.nextStepChooseRepo;
         }
 
-        return "Repo lesen und Vorschläge vorbereiten.";
+        return ui.github.intro;
       case "matrix":
-        if (matrixContext.connectionLabel !== "Verbunden") {
-          return matrixContext.connectionLabel === "Nicht verbunden"
-            ? "Matrix-Identität oder Verbindung ist nicht verfügbar."
-            : "Matrix-Verbindung wird geprüft.";
+        if (matrixContext.connectionLabel !== ui.shell.statusReady) {
+          return matrixContext.connectionLabel === ui.shell.statusError
+            ? ui.matrix.topicStatusUnavailable
+            : ui.shell.healthCheckingDetail;
         }
 
-        if (matrixContext.scopeLabel.startsWith("Noch kein")) {
-          return "Wähle einen Bereich, um das Topic-Update zu starten.";
+        if (matrixContext.scopeLabel.includes(ui.matrix.scopeSelected)) {
+          return ui.matrix.resolveScope;
         }
 
-        if (matrixContext.approvalLabel !== "Nicht erforderlich") {
-          return "Topic-Update wartet auf deine Freigabe.";
+        if (matrixContext.approvalLabel !== ui.common.none) {
+          return ui.matrix.topicStatusApproval;
         }
 
-        if (matrixContext.summaryLabel.startsWith("Noch keine")) {
-          return "Zusammenfassung wird gerade geladen.";
+        if (matrixContext.summaryLabel.includes(ui.matrix.scopeSummaryUnavailable)) {
+          return ui.matrix.scopeSummaryLoading;
         }
 
-        return "Backend-owned Topic-Update bereit.";
+        return ui.matrix.scopeNotice;
       case "review":
         if (reviewItems.length === 0) {
-          return "Noch keine offenen Prüfungen.";
+          return ui.review.emptyTitle;
         }
 
         if (reviewHasStale) {
-          return "Eine Prüfung ist veraltet.";
+          return ui.review.warning;
         }
 
         if (reviewHasPending) {
-          return "Prüfungen warten auf Freigabe.";
+          return ui.review.approvalNeeded;
         }
 
         if (reviewHasExecuting) {
-          return "Mindestens eine Ausführung läuft noch.";
+          return ui.review.executing;
         }
 
         if (reviewHasRejected) {
-          return "Mindestens ein Ausführungsbeleg hat eine Abweichung.";
+          return ui.review.terminalDeviation;
         }
 
-        return "Prüfungen sind bereit.";
+        return ui.review.ready;
       case "settings":
         if (backendHealthy === false) {
-          return "Backendtruth ist nicht verfügbar; Settings bleiben fail-closed.";
+          return ui.shell.healthUnavailableDetail;
         }
 
         if (githubAuthState.error) {
-          return "GitHub-Sessionprüfung ist fehlgeschlagen.";
+          return ui.github.workspaceNoticeRepos;
         }
 
         if (githubAuthState.status === "loading") {
-          return "GitHub-Sitzung wird geprüft.";
+          return ui.auth.statusChecking;
         }
 
         if (!githubUnlocked) {
-          return "GitHub-Ausführung bleibt gesperrt, bis die Sitzung authentifiziert ist.";
+          return ui.shell.accountLoginRequired;
         }
 
-        if (matrixContext.connectionLabel === "Nicht verbunden") {
-          return "Matrix-Identität ist noch nicht aufgelöst.";
+        if (matrixContext.connectionLabel === ui.shell.statusError) {
+          return ui.matrix.topicStatusUnavailable;
         }
 
         if (!activeModelAlias) {
-          return "Der Backend-Modellalias ist noch nicht gewählt.";
+          return ui.settings.modelChoiceNote;
         }
 
-        return "Identitäts-, Verbindungs- und Modelltruth sind sichtbar.";
+        return ui.settings.connectionTruthNote;
       default:
         if (chatPendingProposal?.status === "pending") {
-          return "Chat-Vorschlag wartet auf Freigabe.";
+          return ui.chat.composerLocked.approval;
         }
 
         if (chatPendingProposal?.status === "executing") {
-          return "Freigegebene Chat-Ausführung läuft.";
+          return ui.chat.composerLocked.execution;
         }
 
         if (chatLatestReceipt?.outcome === "failed" || chatLatestReceipt?.outcome === "unverifiable") {
-          return "Letzte Chat-Ausführung war nicht erfolgreich.";
+          return ui.shell.statusError;
         }
 
-        return backendHealthy === false ? "Backend nicht verfügbar." : backendHealthy === true ? "Chat bereit." : "Backend wird geprüft.";
+        return backendHealthy === false ? ui.shell.healthUnavailableDetail : backendHealthy === true ? ui.shell.healthReadyDetail : ui.shell.healthCheckingDetail;
     }
   }, [
     backendHealthy,
@@ -1148,91 +1159,91 @@ export default function App() {
       case "github":
         if (!githubUnlocked) {
           return githubAuthState.error
-            ? "Die Sessionprüfung konnte nicht abgeschlossen werden. Prüfe den Login oder lade die Seite neu."
-            : "Melde dich als Admin an, wenn du GitHub lesen und Vorschläge vorbereiten willst.";
+            ? ui.github.workspaceNoticeRepos
+            : ui.auth.intro;
         }
 
-        if (githubContext.approvalLabel !== "Nicht erforderlich") {
-          return "Prüfe den Vorschlag und gib ihn erst frei, wenn du die Änderungen verstanden hast.";
+        if (githubContext.approvalLabel !== ui.common.none) {
+          return ui.github.approveHelper;
         }
 
-        if (githubContext.repositoryLabel.startsWith("Noch kein")) {
-          return "Wähle zuerst ein erlaubtes Repo und starte danach die Analyse.";
+        if (githubContext.repositoryLabel.includes(ui.github.noRepoSelected)) {
+          return ui.github.workspaceNoticeSelection;
         }
 
-        return "Die Analyse bleibt lesend, bis du einen Vorschlag freigibst.";
+        return ui.github.actionReadBody;
       case "matrix":
-        if (matrixContext.scopeLabel.startsWith("Noch kein")) {
-          return "Wähle zuerst einen Bereich, dann kann das Backend die aktuelle Zusammenfassung laden.";
+        if (matrixContext.scopeLabel.includes(ui.matrix.scopeSelected)) {
+          return ui.matrix.scopeSummaryInfo;
         }
 
-        if (matrixContext.approvalLabel !== "Nicht erforderlich") {
-          return "Prüfe den Topic-Vorschlag und gib ihn erst frei, wenn du bereit bist.";
+        if (matrixContext.approvalLabel !== ui.common.none) {
+          return ui.matrix.topicStatusApproval;
         }
 
-        if (matrixContext.summaryLabel.startsWith("Noch keine")) {
-          return "Die Zusammenfassung wird noch aus dem gewählten Scope geladen.";
+        if (matrixContext.summaryLabel.includes(ui.matrix.scopeSummaryUnavailable)) {
+          return ui.matrix.scopeSummaryInfo;
         }
 
-        return "Arbeite den Topic-Update-Fluss weiter über Analyse, Review, Execute und Verify.";
+        return ui.matrix.scopeNotice;
       case "review":
         if (reviewItems.length === 0) {
-          return "Öffne GitHub oder Matrix, um prüfbare Änderungen zu erzeugen.";
+          return ui.review.emptyBody;
         }
 
         if (reviewHasStale) {
-          return "Bring die veraltete Prüfung wieder in Sync, bevor du weiterarbeitest.";
+          return ui.review.warning;
         }
 
         if (reviewHasPending) {
-          return "Prüfe den Vorschlag und entscheide dann über die Freigabe.";
+          return ui.review.approvalNeeded;
         }
 
         if (reviewHasExecuting) {
-          return "Beobachte laufende Ausführung und warte auf den terminalen Beleg.";
+          return ui.review.executing;
         }
 
         if (reviewHasRejected) {
-          return "Kläre die terminale Abweichung im Quell-Workspace.";
+          return ui.review.terminalDeviation;
         }
 
-        return "Arbeite die offenen Punkte der Reihe nach ab.";
+        return ui.review.ready;
       case "settings":
         if (backendHealthy === false) {
-          return "Backendtruth ist nicht verfügbar; Settings bleiben fail-closed.";
+          return ui.shell.healthUnavailableDetail;
         }
 
         if (githubAuthState.error) {
-          return "GitHub-Sessionprüfung ist fehlgeschlagen.";
+          return ui.github.workspaceNoticeRepos;
         }
 
         if (!githubUnlocked) {
-          return "GitHub-Sitzung ist noch nicht authentifiziert.";
+          return ui.auth.statusLocked;
         }
 
-        if (matrixContext.connectionLabel === "Nicht verbunden") {
-          return "Matrix-Identität und Verbindung sind noch nicht aufgelöst.";
+        if (matrixContext.connectionLabel === ui.shell.statusError) {
+          return ui.matrix.topicStatusUnavailable;
         }
 
         return expertMode
-          ? "Technische Details zeigen reale Verbindungs- und Modelltruth."
-          : "Expert zeigt technische Details nur auf explizite Anfrage.";
+          ? ui.settings.connectionTruthNote
+          : ui.shell.diagnosticsHidden;
       default:
         if (chatPendingProposal?.status === "pending") {
-          return "Freigabe oder Verwerfen entscheiden, bevor neue Chat-Eingaben vorbereitet werden.";
+          return ui.chat.proposalHelper;
         }
 
         if (chatPendingProposal?.status === "executing") {
-          return "Ausführung läuft. Composer bleibt bis zum terminalen Ergebnis gesperrt.";
+          return ui.chat.composerLocked.execution;
         }
 
         if (chatLatestReceipt?.outcome === "failed" || chatLatestReceipt?.outcome === "unverifiable") {
-          return "Prüfe den Receipt und starte erst danach einen neuen Vorschlag.";
+          return ui.chat.composerLocked.backend;
         }
 
         return backendHealthy === false
-          ? "Prüfe die Backend-Verbindung, bevor du den Chat weiter nutzt."
-          : "Stell deine nächste Frage direkt im Chat.";
+          ? ui.chat.composerLocked.backend
+          : ui.chat.intro;
     }
   }, [
     backendHealthy,
@@ -1256,54 +1267,54 @@ export default function App() {
       case "github":
         if (!githubUnlocked) {
           return [
-            { label: "Anmeldung", value: githubAuthState.error ? "Fehler prüfen" : "Erforderlich" },
-            { label: "Sessionstatus", value: githubAuthState.status === "loading" ? "Wird geprüft" : "Nicht angemeldet" }
+            { label: ui.auth.cardTitle, value: githubAuthState.error ? ui.common.error : ui.auth.statusLocked },
+            { label: ui.shell.sessionLabel, value: githubAuthState.status === "loading" ? ui.auth.statusChecking : ui.auth.statusLocked }
           ];
         }
 
         return [
-          { label: "Verbindung", value: githubContext.expertDetails.apiStatus },
-          { label: "Auswahl", value: githubContext.expertDetails.selectedRepoSlug ?? "n/a" },
-          { label: "Freigabe", value: githubContext.approvalLabel },
-          { label: "Ereignisse", value: githubContext.expertDetails.sseEvents.length > 0 ? `${githubContext.expertDetails.sseEvents.length} Ereignis(se)` : "n/a" },
+          { label: ui.settings.githubConnection, value: githubContext.expertDetails.apiStatus },
+          { label: ui.github.repoSelectLabel, value: githubContext.expertDetails.selectedRepoSlug ?? ui.common.na },
+          { label: ui.review.nextStepLabel, value: githubContext.approvalLabel },
+          { label: ui.github.repositoryStatus, value: githubContext.expertDetails.sseEvents.length > 0 ? `${githubContext.expertDetails.sseEvents.length} ${ui.review.openReviews}` : ui.common.na },
         ];
       case "matrix":
         return [
-          { label: "Scope", value: matrixContext.scopeLabel },
-          { label: "Zusammenfassung", value: matrixContext.summaryLabel },
-          { label: "Freigabe", value: matrixContext.approvalLabel },
-          { label: "Composer", value: matrixContext.expertDetails.composerTargetLabel },
+          { label: ui.matrix.scopeTitle, value: matrixContext.scopeLabel },
+          { label: ui.matrix.scopeSummaryTitle, value: matrixContext.summaryLabel },
+          { label: ui.matrix.topicStatusApproval, value: matrixContext.approvalLabel },
+          { label: ui.matrix.composerTitle, value: matrixContext.expertDetails.composerTargetLabel },
         ];
       case "review":
         return [
-          { label: "Offen", value: String(reviewItems.length) },
+          { label: ui.review.rowOpen, value: String(reviewItems.length) },
           {
-            label: "Einordnung",
+            label: ui.review.rowClassification,
             value: reviewItems.length === 0
-              ? "Keine offenen Prüfungen"
+              ? ui.review.emptyTitle
               : reviewHasStale
-                ? "Veraltet"
+                ? ui.review.blocked
                 : reviewHasPending
-                  ? "Freigabe nötig"
+                  ? ui.review.approvalNeeded
                   : reviewHasExecuting
-                    ? "Ausführung läuft"
+                    ? ui.review.executing
                     : reviewHasRejected
-                      ? "Abweichung"
-                      : "Bereit",
+                      ? ui.review.terminalDeviation
+                      : ui.review.ready,
           },
         ];
       case "settings":
         return [
-          { label: "Backend", value: settingsTruthSnapshot.backend.label },
-          { label: "GitHub Session", value: settingsTruthSnapshot.github.sessionLabel },
-          { label: "Matrix Identität", value: settingsTruthSnapshot.matrix.identityLabel },
-          { label: "Modell", value: settingsTruthSnapshot.models.activeAlias },
+          { label: ui.settings.backend, value: settingsTruthSnapshot.backend.label },
+          { label: ui.settings.githubIdentity, value: settingsTruthSnapshot.github.sessionLabel },
+          { label: ui.settings.matrixIdentity, value: settingsTruthSnapshot.matrix.identityLabel },
+          { label: ui.settings.modelCardTitle, value: settingsTruthSnapshot.models.activeAlias },
         ];
       default:
         return [
-          { label: "Proposal", value: chatPendingProposal?.status ?? "none" },
-          { label: "Receipts", value: String(chatSession?.metadata.chatState.receipts.length ?? 0) },
-          { label: "Route", value: chatSession?.metadata.chatState.activeRoute?.selectedAlias ?? "n/a" }
+          { label: ui.chat.proposalTitle, value: chatPendingProposal?.status ?? ui.common.none },
+          { label: ui.approval.receiptSection, value: String(chatSession?.metadata.chatState.receipts.length ?? 0) },
+          { label: ui.chat.routePending, value: chatSession?.metadata.chatState.activeRoute?.selectedAlias ?? ui.common.na }
         ];
     }
   }, [
@@ -1334,43 +1345,43 @@ export default function App() {
       return (
         <div className="expert-detail-sections">
           <section className="expert-detail-section">
-            <p className="info-label">Verbindung</p>
+            <p className="info-label">{ui.settings.githubConnection}</p>
             <div className="expert-detail-section-grid">
               <div>
-                <span>API-Status</span>
+                <span>{ui.settings.backend}</span>
                 <strong>{githubContext.expertDetails.apiStatus}</strong>
               </div>
               <div>
-                <span>Auswahl</span>
-                <strong>{githubContext.expertDetails.selectedRepoSlug ?? "n/a"}</strong>
+                <span>{ui.github.repoSelectLabel}</span>
+                <strong>{githubContext.expertDetails.selectedRepoSlug ?? ui.common.na}</strong>
               </div>
             </div>
           </section>
 
           <section className="expert-detail-section">
-            <p className="info-label">Freigabe</p>
+            <p className="info-label">{ui.review.nextStepLabel}</p>
             <div className="expert-detail-section-grid">
               <div>
-                <span>Anfrage-ID</span>
-                <strong>{githubContext.expertDetails.requestId ?? "n/a"}</strong>
+                <span>{ui.shell.sessionIdPrefix}</span>
+                <strong>{githubContext.expertDetails.requestId ?? ui.common.na}</strong>
               </div>
               <div>
-                <span>Plan-ID</span>
-                <strong>{githubContext.expertDetails.planId ?? "n/a"}</strong>
+                <span>{ui.github.reviewTitle}</span>
+                <strong>{githubContext.expertDetails.planId ?? ui.common.na}</strong>
               </div>
               <div>
-                <span>Branch</span>
-                <strong>{githubContext.expertDetails.branchName ?? "n/a"}</strong>
+                <span>{ui.github.defaultBranch}</span>
+                <strong>{githubContext.expertDetails.branchName ?? ui.common.na}</strong>
               </div>
             </div>
           </section>
 
           <section className="expert-detail-section">
-            <p className="info-label">Laufzeit</p>
+            <p className="info-label">{ui.shell.healthTitle}</p>
             <div className="expert-detail-section-grid">
               <div>
-                <span>Ereignisse</span>
-                <strong>{githubContext.expertDetails.sseEvents.length > 0 ? githubContext.expertDetails.sseEvents.join(" · ") : "n/a"}</strong>
+                <span>{ui.github.repositoryStatus}</span>
+                <strong>{githubContext.expertDetails.sseEvents.length > 0 ? githubContext.expertDetails.sseEvents.join(" · ") : ui.common.na}</strong>
               </div>
             </div>
           </section>
@@ -1380,7 +1391,7 @@ export default function App() {
             {githubContext.expertDetails.rawDiffPreview ? (
               <pre className="github-diff-preview">{githubContext.expertDetails.rawDiffPreview}</pre>
             ) : (
-              <p className="muted-copy">Diff erscheint erst, wenn ein Vorschlag vorbereitet wurde.</p>
+              <p className="muted-copy">{ui.github.diffAppearsLater}</p>
             )}
           </section>
         </div>
@@ -1391,73 +1402,73 @@ export default function App() {
       return (
         <div className="expert-detail-sections">
           <section className="expert-detail-section">
-            <p className="info-label">Scope</p>
+            <p className="info-label">{ui.matrix.scopeTitle}</p>
             <div className="expert-detail-section-grid">
               <div>
-                <span>Bereich</span>
+                <span>{ui.matrix.scopeSelectedLabel}</span>
                 <strong>{matrixContext.scopeLabel}</strong>
               </div>
               <div>
-                <span>Zusammenfassung</span>
+                <span>{ui.matrix.scopeSummaryTitle}</span>
                 <strong>{matrixContext.summaryLabel}</strong>
               </div>
               <div>
-                <span>Freigabe</span>
+                <span>{ui.matrix.topicStatusApproval}</span>
                 <strong>{matrixContext.approvalLabel}</strong>
               </div>
             </div>
           </section>
 
           <section className="expert-detail-section">
-            <p className="info-label">Topic Update</p>
+            <p className="info-label">{ui.matrix.topicTitle}</p>
             <div className="expert-detail-section-grid">
               <div>
-                <span>Plan-ID</span>
-                <strong>{matrixContext.expertDetails.planId ?? "n/a"}</strong>
+                <span>{ui.github.reviewTitle}</span>
+                <strong>{matrixContext.expertDetails.planId ?? ui.common.na}</strong>
               </div>
               <div>
-                <span>Composer</span>
+                <span>{ui.matrix.composerTitle}</span>
                 <strong>{matrixContext.expertDetails.composerTargetLabel}</strong>
               </div>
               <div>
-                <span>Composer mode</span>
+                <span>{ui.matrix.composerModeLabel}</span>
                 <strong>{matrixContext.expertDetails.composerMode}</strong>
               </div>
               <div>
-                <span>Composer room</span>
-                <strong>{matrixContext.expertDetails.composerRoomId ?? "n/a"}</strong>
+                <span>{ui.matrix.roomId}</span>
+                <strong>{matrixContext.expertDetails.composerRoomId ?? ui.common.na}</strong>
               </div>
               <div>
-                <span>Composer thread</span>
-                <strong>{matrixContext.expertDetails.composerThreadRootId ?? "n/a"}</strong>
+                <span>{ui.matrix.threadRootId}</span>
+                <strong>{matrixContext.expertDetails.composerThreadRootId ?? ui.common.na}</strong>
               </div>
             </div>
           </section>
 
           <section className="expert-detail-section">
-            <p className="info-label">Laufzeit</p>
+            <p className="info-label">{ui.shell.healthTitle}</p>
             <div className="expert-detail-section-grid">
               <div>
-                <span>Backend route</span>
+                <span>{ui.github.repositoryStatus}</span>
                 <strong>{matrixContext.expertDetails.backendRouteStatus}</strong>
               </div>
               <div>
                 <span>HTTP</span>
-                <strong>{matrixContext.expertDetails.httpStatus ?? "n/a"}</strong>
+                <strong>{matrixContext.expertDetails.httpStatus ?? ui.common.na}</strong>
               </div>
               <div>
-                <span>Latenz</span>
-                <strong>{matrixContext.expertDetails.latency ?? "n/a"}</strong>
+                <span>{ui.shell.healthCheckingDetail}</span>
+                <strong>{matrixContext.expertDetails.latency ?? ui.common.na}</strong>
               </div>
               <div>
-                <span>SSE lifecycle</span>
+                <span>{ui.shell.diagnosticsLabel}</span>
                 <strong>{matrixContext.expertDetails.sseLifecycle}</strong>
               </div>
             </div>
             <div className="expert-detail-section-grid">
               <div>
-                <span>Runtime trail</span>
-                <strong>{matrixContext.expertDetails.runtimeEventTrail.join(" · ") || "n/a"}</strong>
+                <span>{ui.shell.diagnosticsLabel}</span>
+                <strong>{matrixContext.expertDetails.runtimeEventTrail.join(" · ") || ui.common.na}</strong>
               </div>
             </div>
           </section>
@@ -1467,7 +1478,7 @@ export default function App() {
             {matrixContext.expertDetails.rawPayload ? (
               <pre className="github-diff-preview">{matrixContext.expertDetails.rawPayload}</pre>
             ) : (
-              <p className="muted-copy">Payload erscheint erst, wenn ein Topic-Update vorbereitet wurde.</p>
+              <p className="muted-copy">{ui.matrix.topicStatusOpen}</p>
             )}
           </section>
         </div>
@@ -1485,6 +1496,7 @@ export default function App() {
     settingsTruthSnapshot.github.sessionLabel,
     settingsTruthSnapshot.matrix.identityLabel,
     settingsTruthSnapshot.models.activeAlias,
+    ui,
     mode,
   ]);
 
@@ -1549,29 +1561,45 @@ export default function App() {
     <main className="app-shell app-shell-console" data-testid="app-shell">
       <header className="global-header global-header-shell">
         <div className="brand-block">
-          <p className="app-kicker">MODELGATE</p>
-          <h1>ModelGate Console</h1>
-          <p className="app-deck">
-            Governance-first operator shell. Runtime truth stays backend-owned.
-          </p>
+          <p className="app-kicker">{ui.shell.appKicker}</p>
+          <h1>{ui.shell.appTitle}</h1>
+          <p className="app-deck">{ui.shell.appDeck}</p>
         </div>
 
         <div className="header-actions">
-          <StatusBadge tone={healthState.tone}>Backend {healthState.label}</StatusBadge>
+          <div className="shell-language-toggle" role="group" aria-label={ui.shell.languageLabel}>
+            <button
+              type="button"
+              className={locale === "en" ? "secondary-button shell-language-button shell-language-button-active" : "secondary-button shell-language-button"}
+              onClick={() => setLocale("en")}
+              aria-pressed={locale === "en"}
+            >
+              {ui.shell.languageOptionEnglish}
+            </button>
+            <button
+              type="button"
+              className={locale === "de" ? "secondary-button shell-language-button shell-language-button-active" : "secondary-button shell-language-button"}
+              onClick={() => setLocale("de")}
+              aria-pressed={locale === "de"}
+            >
+              {ui.shell.languageOptionGerman}
+            </button>
+          </div>
+          <StatusBadge tone={healthState.tone}>{ui.shell.backendPrefix} {healthState.label}</StatusBadge>
         </div>
       </header>
 
       <section className="console-layout">
         <aside className="workspace-sidebar shell-left-rail">
           <ShellCard variant="rail" className="shell-left-brand">
-            <p className="app-kicker">WORKSPACE CONSOLE</p>
-            <strong>Arbeitsbereich wählen</strong>
-            <MutedSystemCopy>Navigation, Sessionkontext und Disclosure bleiben links persistent.</MutedSystemCopy>
+            <p className="app-kicker">{ui.shell.workspaceConsoleKicker}</p>
+            <strong>{ui.shell.workspaceConsoleTitle}</strong>
+            <MutedSystemCopy>{ui.shell.workspaceConsoleNote}</MutedSystemCopy>
           </ShellCard>
 
           <ShellCard variant="rail" className="shell-nav-card">
-            <SectionLabel>Workspaces</SectionLabel>
-            <nav className="sidebar-nav" aria-label="Primary workspace navigation">
+            <SectionLabel>{ui.shell.workspacesLabel}</SectionLabel>
+            <nav className="sidebar-nav" aria-label={ui.shell.workspacesLabel}>
               {WORKSPACE_MODES.map((workspaceMode) => (
                 <button
                   key={workspaceMode}
@@ -1583,8 +1611,8 @@ export default function App() {
                 >
                   <WorkspaceIcon mode={workspaceMode} />
                   <span>
-                    <strong>{tabLabel(workspaceMode)}</strong>
-                    <small>{tabDescription(workspaceMode)}</small>
+                    <strong>{ui.shell.workspaceTabs[workspaceMode].label}</strong>
+                    <small>{ui.shell.workspaceTabs[workspaceMode].description}</small>
                   </span>
                 </button>
               ))}
@@ -1592,27 +1620,27 @@ export default function App() {
           </ShellCard>
 
           <ShellCard variant="muted" className="shell-session-identity-card">
-            <SectionLabel>Session</SectionLabel>
-            <strong>{activeSession?.title ?? "Keine Session aktiv"}</strong>
+            <SectionLabel>{ui.shell.sessionLabel}</SectionLabel>
+            <strong>{activeSession?.title ?? ui.shell.noActiveSession}</strong>
             <MutedSystemCopy>{workspaceName}</MutedSystemCopy>
             <div className="shell-session-meta">
-              <StatusBadge tone={statusToneForBadge}>{sessionStatusCopy(activeSession?.status ?? "draft")}</StatusBadge>
-              {activeSession?.archived ? <StatusBadge tone="muted">Archiviert</StatusBadge> : null}
+              <StatusBadge tone={statusToneForBadge}>{getSessionStatusLabel(locale, activeSession?.status ?? "draft")}</StatusBadge>
+              {activeSession?.archived ? <StatusBadge tone="muted">{ui.shell.archivedBadge}</StatusBadge> : null}
             </div>
             {expertMode && activeSession?.id ? (
-              <MutedSystemCopy className="shell-session-id">ID: {activeSession.id}</MutedSystemCopy>
+              <MutedSystemCopy className="shell-session-id">{ui.shell.sessionIdPrefix}: {activeSession.id}</MutedSystemCopy>
             ) : null}
 
             <div className="shell-disclosure-control">
-              <SectionLabel>Disclosure</SectionLabel>
+              <SectionLabel>{ui.shell.disclosureLabel}</SectionLabel>
               <BeginnerExpertToggle expertMode={expertMode} setExpertMode={setExpertMode} />
             </div>
 
             <div className="shell-account-block">
-              <SectionLabel>Account</SectionLabel>
+              <SectionLabel>{ui.shell.accountLabel}</SectionLabel>
               <div className="shell-account-row">
                 <StatusBadge tone={accountTone}>
-                  {githubUnlocked ? "GitHub Admin" : githubAuthState.status === "loading" ? "Session prüfen" : "Kein Admin-Login"}
+                  {githubUnlocked ? ui.shell.accountAuthenticated : githubAuthState.status === "loading" ? ui.shell.accountChecking : ui.shell.accountLocked}
                 </StatusBadge>
                 {githubUnlocked ? (
                   <button
@@ -1623,7 +1651,7 @@ export default function App() {
                     }}
                     disabled={githubAuthState.busy}
                   >
-                    {githubAuthState.busy ? "Abmelden…" : "Logout"}
+                    {githubAuthState.busy ? `${ui.shell.accountLogout}...` : ui.shell.accountLogout}
                   </button>
                 ) : null}
               </div>
@@ -1639,7 +1667,7 @@ export default function App() {
             onSelect={(sessionId) => handleWorkspaceSessionSelect(sessionWorkspace, sessionId)}
             onArchive={(sessionId) => handleWorkspaceSessionArchive(sessionWorkspace, sessionId)}
             onDelete={(sessionId) => handleWorkspaceSessionDelete(sessionWorkspace, sessionId)}
-            headerNote="Wiederaufnehmbare Sessions pro Workspace"
+            headerNote={locale === "de" ? "Wiederaufnehmbare Sessions pro Workspace" : "Resumable sessions per workspace"}
           />
         </aside>
 
@@ -1648,7 +1676,7 @@ export default function App() {
             <header className="workspace-frame-header">
               <div>
                 <SectionLabel>{workspaceName}</SectionLabel>
-                <h2>{activeSession?.title ?? "Aktive Session"}</h2>
+                <h2>{activeSession?.title ?? ui.shell.currentSessionFallback}</h2>
               </div>
               <StatusBadge tone={statusToneForBadge}>{currentStatusBadge}</StatusBadge>
             </header>
@@ -1659,7 +1687,7 @@ export default function App() {
 
         <aside className="workspace-context truth-rail">
           <TruthRailSection
-            title="Health"
+            title={ui.shell.healthTitle}
             testId="truth-rail-health"
             badge={<StatusBadge tone={healthState.tone}>{healthState.label}</StatusBadge>}
           >
@@ -1667,43 +1695,41 @@ export default function App() {
             {expertMode ? (
               <div className="truth-rail-pairs">
                 <div>
-                  <span>Mode</span>
+                  <span>{ui.shell.modeLabel}</span>
                   <strong>{workspaceName}</strong>
                 </div>
                 <div>
-                  <span>Public alias</span>
-                  <strong>{activeModelAlias ?? "n/a"}</strong>
+                  <span>{ui.shell.publicAliasLabel}</span>
+                  <strong>{activeModelAlias ?? ui.common.na}</strong>
                 </div>
               </div>
             ) : null}
           </TruthRailSection>
 
           <TruthRailSection
-            title="Session"
+            title={ui.shell.sessionLabel}
             testId="truth-rail-session"
-            badge={<StatusBadge tone={statusToneForBadge}>{sessionStatusCopy(activeSession?.status ?? "draft")}</StatusBadge>}
+            badge={<StatusBadge tone={statusToneForBadge}>{getSessionStatusLabel(locale, activeSession?.status ?? "draft")}</StatusBadge>}
           >
-            <p className="truth-rail-keyline">{activeSession?.title ?? "Keine aktive Session"}</p>
+            <p className="truth-rail-keyline">{activeSession?.title ?? ui.shell.noActiveSession}</p>
             <MutedSystemCopy>
-              Workspace: {workspaceName}
-              {activeSession?.updatedAt ? ` · aktualisiert ${new Date(activeSession.updatedAt).toLocaleString()}` : ""}
+              {ui.shell.workspacesLabel}: {workspaceName}
+              {activeSession?.updatedAt ? ` · ${ui.sessionList.updated} ${new Date(activeSession.updatedAt).toLocaleString()}` : ""}
             </MutedSystemCopy>
-            {expertMode && activeSession?.id ? <MutedSystemCopy>ID: {activeSession.id}</MutedSystemCopy> : null}
+            {expertMode && activeSession?.id ? <MutedSystemCopy>{ui.shell.sessionIdPrefix}: {activeSession.id}</MutedSystemCopy> : null}
           </TruthRailSection>
 
           {approvalSummary.hasApprovals ? (
             <TruthRailSection
-              title="Pending approvals"
+              title={ui.shell.pendingApprovalsTitle}
               testId="truth-rail-approvals"
               badge={<StatusBadge tone={approvalSummary.stale > 0 ? "error" : "partial"}>{approvalSummary.pending}</StatusBadge>}
             >
               <p className="truth-rail-keyline">
-                {approvalSummary.pending} zur Freigabe, {approvalSummary.stale} veraltet
+                {ui.shell.pendingApprovalsSummary(approvalSummary.pending, approvalSummary.stale)}
               </p>
               <MutedSystemCopy>
-                {approvalSummary.chatPending > 0
-                  ? "Mindestens ein Chat-Vorschlag wartet auf Freigabe. Weitere Details im aktiven Workspace."
-                  : "Freigaben bleiben getrennt von Ausführung. Prüfe Details im Review-Workspace."}
+                {approvalSummary.chatPending > 0 ? ui.shell.pendingApprovalsChat : ui.shell.pendingApprovalsSeparate}
               </MutedSystemCopy>
             </TruthRailSection>
           ) : null}
@@ -1724,15 +1750,13 @@ export default function App() {
             <MutedSystemCopy>{currentHelperText}</MutedSystemCopy>
           </TruthRailSection>
 
-          <TruthRailSection title="Diagnostics" testId="truth-rail-diagnostics">
+          <TruthRailSection title={ui.shell.diagnosticsLabel} testId="truth-rail-diagnostics">
             <MutedSystemCopy>
-              {diagnosticsAccessible
-                ? "Diagnostik ist verfügbar. Nutzung bleibt read-only und kontextbezogen."
-                : "Beginner blendet Diagnostik standardmäßig aus. Bei Störung wird sie sichtbar."}
+              {diagnosticsAccessible ? ui.shell.diagnosticsAvailable : ui.shell.diagnosticsHidden}
             </MutedSystemCopy>
             {!diagnosticsAccessible ? (
               <button type="button" className="secondary-button" onClick={() => setExpertMode(true)}>
-                Expert Mode aktivieren
+                {ui.shell.activateExpert}
               </button>
             ) : (
               <button
@@ -1740,7 +1764,7 @@ export default function App() {
                 className="secondary-button"
                 onClick={() => setDiagnosticsOpen((current) => !current)}
               >
-                {diagnosticsOpen ? "Diagnostics schließen" : "Diagnostics öffnen"}
+                {diagnosticsOpen ? ui.shell.diagnosticsHide : ui.shell.diagnosticsShow}
               </button>
             )}
 

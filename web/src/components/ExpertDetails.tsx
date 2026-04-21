@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useLocalization } from "../lib/localization.js";
 
 export type DiagnosticsDetailRow = {
   label: string;
@@ -21,13 +22,15 @@ function joinClassNames(...classNames: Array<string | false | null | undefined>)
 
 export function DiagnosticsDrawer({
   expertMode,
-  title = "Diagnostics",
+  title,
   rows = [],
   children,
   className,
   open = true,
   onToggle,
 }: DiagnosticsDrawerProps) {
+  const { copy: ui } = useLocalization();
+
   if (!expertMode) {
     return null;
   }
@@ -38,7 +41,7 @@ export function DiagnosticsDrawer({
       open={open}
       onToggle={(event) => onToggle?.(event.currentTarget.open)}
     >
-      <summary>{title}</summary>
+      <summary>{title ?? ui.shell.diagnosticsLabel}</summary>
       {rows.length > 0 ? (
         <div className="expert-details-grid">
           {rows.map((row) => (

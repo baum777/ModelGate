@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { SessionStatus, WorkspaceKind, WorkspaceSession } from "../lib/workspace-state.js";
 import { sortSessionsByUpdatedAt, workspaceLabel } from "../lib/workspace-state.js";
 import { SectionLabel, StatusBadge } from "./ShellPrimitives.js";
+import { getSessionStatusLabel, useLocalization } from "../lib/localization.js";
 
 export type SessionListItemProps<TMetadata> = {
   session: WorkspaceSession<TMetadata>;
@@ -22,21 +23,6 @@ type SessionListProps<TMetadata> = {
   headerNote?: ReactNode;
 };
 
-function statusCopy(status: SessionStatus) {
-  switch (status) {
-    case "in_progress":
-      return "In Arbeit";
-    case "review_required":
-      return "Review nötig";
-    case "done":
-      return "Fertig";
-    case "failed":
-      return "Fehler";
-    default:
-      return "Entwurf";
-  }
-}
-
 function statusTone(status: SessionStatus) {
   switch (status) {
     case "in_progress":
@@ -52,7 +38,7 @@ function statusTone(status: SessionStatus) {
   }
 }
 
-function formatRelativeTime(isoTimestamp: string) {
+function formatRelativeTime(locale: "en" | "de", isoTimestamp: string) {
   const timestamp = new Date(isoTimestamp).getTime();
 
   if (!Number.isFinite(timestamp)) {
@@ -62,26 +48,26 @@ function formatRelativeTime(isoTimestamp: string) {
   const deltaMinutes = Math.round((Date.now() - timestamp) / 60000);
 
   if (Math.abs(deltaMinutes) < 1) {
-    return "gerade eben";
+    return locale === "de" ? "gerade eben" : "just now";
   }
 
   if (Math.abs(deltaMinutes) < 60) {
-    return deltaMinutes > 0 ? `vor ${deltaMinutes}m` : `in ${Math.abs(deltaMinutes)}m`;
+    return new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(-deltaMinutes, "minute");
   }
 
   const deltaHours = Math.round(deltaMinutes / 60);
 
   if (Math.abs(deltaHours) < 24) {
-    return deltaHours > 0 ? `vor ${deltaHours}h` : `in ${Math.abs(deltaHours)}h`;
+    return new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(-deltaHours, "hour");
   }
 
   const deltaDays = Math.round(deltaHours / 24);
 
   if (Math.abs(deltaDays) < 7) {
-    return deltaDays > 0 ? `vor ${deltaDays}d` : `in ${Math.abs(deltaDays)}d`;
+    return new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(-deltaDays, "day");
   }
 
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(locale, {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(isoTimestamp));
@@ -97,6 +83,7 @@ export function SessionList<TMetadata>({
   onDelete,
   headerNote
 }: SessionListProps<TMetadata>) {
+  const { locale, copy: ui } = useLocalization();
   const sortedSessions = sortSessionsByUpdatedAt(sessions);
   const workspaceName = workspaceLabel(workspace);
 
@@ -104,12 +91,12 @@ export function SessionList<TMetadata>({
     <section
       className="session-list-card"
       data-testid="workspace-session-list"
-      aria-label={`${workspaceName} session list`}
+      aria-label={`${workspaceName} ${ui.sessionList.newSession}`}
     >
       <header className="session-list-header">
         <div>
-          <SectionLabel>{workspaceName} Sessions</SectionLabel>
-          <strong>{sortedSessions.length} insgesamt</strong>
+          <SectionLabel>{workspaceName} {locale === "de" ? "Sessions" : "sessions"}</SectionLabel>
+          <strong>{ui.sessionList.headerCount(sortedSessions.length)}</strong>
         </div>
         <button
           type="button"
@@ -117,7 +104,7 @@ export function SessionList<TMetadata>({
           onClick={onCreate}
           data-testid="workspace-create-session"
         >
-          Neue Session
+          {ui.sessionList.newSession}
         </button>
       </header>
 
@@ -126,7 +113,7 @@ export function SessionList<TMetadata>({
       <div className="session-list-items" aria-live="polite" aria-relevant="additions text">
         {sortedSessions.length === 0 ? (
           <p className="empty-state" role="status">
-            Noch keine Sessions.
+            {ui.sessionList.noSessions}
           </p>
         ) : (
           sortedSessions.map((session) => {
@@ -147,21 +134,21 @@ export function SessionList<TMetadata>({
                   <div className="session-list-copy">
                     <div className="session-list-title-row">
                       <strong>{session.title}</strong>
-                      <StatusBadge
-                        tone={statusTone(session.status)}
-                        className={`session-status-badge session-status-${statusTone(session.status)}`}
-                      >
-                        {statusCopy(session.status)}
-                      </StatusBadge>
-                    </div>
-                    <span className="session-list-subtitle">
-                      {session.archived ? "Archiviert" : "Aktiv"}
-                    </span>
+                    <StatusBadge
+                      tone={statusTone(session.status)}
+                      className={`session-status-badge session-status-${statusTone(session.status)}`}
+                    >
+                        {getSessionStatusLabel(locale, session.status)}
+                    </StatusBadge>
                   </div>
-                  <small className="session-list-meta">
-                    Aktualisiert {formatRelativeTime(session.updatedAt)} · {session.lastOpenedAt === session.updatedAt ? "gerade geöffnet" : `zuletzt geöffnet ${formatRelativeTime(session.lastOpenedAt)}`}
-                  </small>
-                </button>
+                  <span className="session-list-subtitle">
+                      {session.archived ? ui.sessionList.archived : ui.sessionList.active}
+                  </span>
+                </div>
+                <small className="session-list-meta">
+                    {ui.sessionList.updated} {formatRelativeTime(locale, session.updatedAt)} · {session.lastOpenedAt === session.updatedAt ? ui.sessionList.openedJustNow : ui.sessionList.openedRecently(formatRelativeTime(locale, session.lastOpenedAt))}
+                </small>
+              </button>
 
                 <div className="session-list-actions">
                   <button
@@ -171,7 +158,7 @@ export function SessionList<TMetadata>({
                     disabled={session.archived}
                     data-testid={`workspace-session-archive-${session.id}`}
                   >
-                    Archivieren
+                    {ui.sessionList.archive}
                   </button>
                   <button
                     type="button"
@@ -179,7 +166,7 @@ export function SessionList<TMetadata>({
                     onClick={() => onDelete(session.id)}
                     data-testid={`workspace-session-delete-${session.id}`}
                   >
-                    Löschen
+                    {ui.sessionList.delete}
                   </button>
                 </div>
               </article>

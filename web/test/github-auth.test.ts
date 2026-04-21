@@ -27,10 +27,10 @@ test("github admin login screen renders the password form", () => {
     })
   );
 
-  assert.match(markup, /GitHub Login/);
-  assert.match(markup, /Admin-Passwort/);
+  assert.match(markup, /GitHub login/);
+  assert.match(markup, /Admin password/);
   assert.match(markup, /type="password"/);
-  assert.match(markup, /Anmelden/);
+  assert.match(markup, /Sign in/);
 });
 
 test("github auth reducer unlocks on success, surfaces failures, and locks on logout", () => {

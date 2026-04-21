@@ -2,6 +2,7 @@ import React from "react";
 import type { ReactNode } from "react";
 import { DiagnosticsDrawer, type DiagnosticsDetailRow } from "./ExpertDetails.js";
 import { SectionLabel, StatusBadge } from "./ShellPrimitives.js";
+import { useLocalization } from "../lib/localization.js";
 
 export type StatusPanelRow = {
   label: string;
@@ -49,6 +50,8 @@ export function SystemSummaryCard({
   diagnosticsDisabled = false,
   testId,
 }: SystemSummaryCardProps) {
+  const { copy: ui } = useLocalization();
+
   return (
     <section className="status-panel-card system-summary-card" role="region" aria-label={title} data-testid={testId}>
       <div className="context-summary-header">
@@ -78,7 +81,7 @@ export function SystemSummaryCard({
             onClick={onOpenDiagnostics}
             disabled={diagnosticsDisabled}
           >
-            {detailsLabel}
+            {detailsLabel ?? ui.shell.diagnosticsLabel}
           </button>
         </div>
       ) : null}
@@ -99,6 +102,8 @@ export function StatusPanel({
   expertChildren,
   testId,
 }: StatusPanelProps) {
+  const { copy: ui } = useLocalization();
+
   return (
     <section className="status-panel-card status-panel-compact" role="region" aria-label={title} data-testid={testId}>
       <div className="context-summary-header">
@@ -125,7 +130,7 @@ export function StatusPanel({
         </p>
       ) : null}
 
-      <DiagnosticsDrawer expertMode={expertMode} rows={expertRows} className="status-panel-expert">
+      <DiagnosticsDrawer expertMode={expertMode} rows={expertRows} className="status-panel-expert" title={ui.shell.diagnosticsLabel}>
         {expertChildren}
       </DiagnosticsDrawer>
     </section>

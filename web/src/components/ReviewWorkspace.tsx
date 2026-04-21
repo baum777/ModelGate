@@ -5,6 +5,7 @@ import {
   ProposalCard,
 } from "./ApprovalPrimitives.js";
 import { StatusPanel } from "./StatusPanel.js";
+import { getReviewStatusLabel, useLocalization, type Locale } from "../lib/localization.js";
 
 export type ReviewItemStatus = "pending_review" | "approved" | "rejected" | "stale" | "executed";
 
@@ -35,21 +36,6 @@ const REVIEW_STATUS_PRIORITY: Record<ReviewItemStatus, number> = {
   rejected: 4,
 };
 
-function statusLabel(status: ReviewItemStatus) {
-  switch (status) {
-    case "approved":
-      return "Ausführung läuft";
-    case "rejected":
-      return "Fehlgeschlagen / Abgelehnt";
-    case "stale":
-      return "Veraltet";
-    case "executed":
-      return "Ausgeführt";
-    default:
-      return "Wartet auf Freigabe";
-  }
-}
-
 export function prioritizeReviewItems(items: ReviewItem[]) {
   return items.slice().sort((left, right) => {
     const priorityDelta = REVIEW_STATUS_PRIORITY[left.status] - REVIEW_STATUS_PRIORITY[right.status];
@@ -66,50 +52,67 @@ export function prioritizeReviewItems(items: ReviewItem[]) {
   });
 }
 
-export function describeReviewNextStep(items: ReviewItem[]) {
+export function describeReviewNextStep(items: ReviewItem[], locale: Locale = "en") {
+  const labels = locale === "de"
+    ? {
+        empty: "Keine offenen Prüfungen",
+        stale: "Veraltete Prüfung erneuern",
+        pending: "Freigabe prüfen",
+        approved: "Ausführung beobachten",
+        rejected: "Terminale Abweichung prüfen",
+        executed: "Erledigte Ausführungen prüfen",
+        ready: "Bereit",
+      }
+    : {
+        empty: "No open reviews",
+        stale: "Refresh stale review",
+        pending: "Check approval",
+        approved: "Watch execution",
+        rejected: "Check terminal deviation",
+        executed: "Review completed executions",
+        ready: "Ready",
+      };
+
   if (items.length === 0) {
-    return "Keine offenen Prüfungen";
+    return labels.empty;
   }
 
   if (items.some((item) => item.status === "stale")) {
-    return "Veraltete Prüfung erneuern";
+    return labels.stale;
   }
 
   if (items.some((item) => item.status === "pending_review")) {
-    return "Freigabe prüfen";
+    return labels.pending;
   }
 
   if (items.some((item) => item.status === "approved")) {
-    return "Ausführung beobachten";
+    return labels.approved;
   }
 
   if (items.some((item) => item.status === "rejected")) {
-    return "Terminale Abweichung prüfen";
+    return labels.rejected;
   }
 
   if (items.some((item) => item.status === "executed")) {
-    return "Erledigte Ausführungen prüfen";
+    return labels.executed;
   }
 
-  return "Bereit";
+  return labels.ready;
 }
 
 export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
+  const { locale, copy: ui } = useLocalization();
   const prioritizedItems = prioritizeReviewItems(items);
   const primaryItem = prioritizedItems[0] ?? null;
   const countLabel =
-    items.length === 0
-      ? "Keine offenen Prüfungen"
-      : items.length === 1
-        ? "Eine offene Prüfung"
-        : `${items.length} offene Prüfungen`;
+    items.length === 0 ? ui.common.none : String(items.length);
   const sourceLabelFor = (item: ReviewItem) =>
-    item.sourceLabel ?? (item.source === "github" ? "GitHub Workspace" : "Matrix Workspace");
+    item.sourceLabel ?? (item.source === "github" ? ui.shell.workspaceTabs.github.label : ui.shell.workspaceTabs.matrix.label);
   const provenanceRowsFor = (item: ReviewItem) => item.provenanceRows ?? [];
   const primaryMetadata = primaryItem
     ? [
-        { label: "Quelle", value: sourceLabelFor(primaryItem) },
-        { label: "Status", value: statusLabel(primaryItem.status) },
+        { label: ui.review.panelTitle, value: sourceLabelFor(primaryItem) },
+        { label: ui.review.rowClassification, value: getReviewStatusLabel(locale, primaryItem.status) },
         ...provenanceRowsFor(primaryItem),
       ]
     : [];
@@ -118,48 +121,55 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
     <section className="workspace-panel review-workspace" data-testid="review-workspace">
       <section className="workspace-hero">
         <div>
-          <p className="status-pill status-partial">Review</p>
-          <h1>Review</h1>
-          <p className="hero-copy">
-            Vorschläge sammeln, prüfen und freigeben. Ausführung bleibt im Backend.
-          </p>
+          <p className="status-pill status-partial">{ui.review.heroStatus}</p>
+          <h1>{ui.review.title}</h1>
+          <p className="hero-copy">{ui.review.intro}</p>
         </div>
       </section>
 
       <StatusPanel
-        title="Offene Prüfungen"
+        title={ui.review.panelTitle}
         headline={countLabel}
-        badge={items.length === 0 ? "Leer" : "Aktiv"}
+        badge={items.length === 0 ? ui.review.panelBadgeEmpty : ui.review.panelBadgeActive}
         badgeTone={items.length === 0 ? "partial" : "ready"}
         rows={[
-          { label: "Offen", value: String(items.length) },
+          { label: ui.review.rowOpen, value: String(items.length) },
           {
-            label: "Nächster Schritt",
-            value: describeReviewNextStep(items),
+            label: ui.review.nextStepLabel,
+            value: describeReviewNextStep(items, locale),
           },
           {
-            label: "Priorisiert",
-            value: primaryItem ? `${primaryItem.sourceLabel ?? primaryItem.source}:${primaryItem.status}` : "n/a",
+            label: ui.review.panelTitle,
+            value: primaryItem ? `${sourceLabelFor(primaryItem)} · ${getReviewStatusLabel(locale, primaryItem.status)}` : ui.common.na,
           },
         ]}
-        safetyTitle="Sicherheit"
-        safetyText="Review bleibt read-only und fail-closed. Veraltete Vorschläge werden nicht ausgeführt."
+        safetyTitle={ui.review.panelTitle}
+        safetyText={ui.review.intro}
         expertMode={expertMode}
         expertRows={[
-          { label: "Laufzeitspur", value: items.map((item) => `${item.source}:${item.id}`).join(" · ") || "n/a" },
-          { label: "Backend-Route", value: items.length === 0 ? "keine offenen Routen" : "offene Vorschläge vorhanden" },
-          { label: "Primärer Eintrag", value: primaryItem ? `${primaryItem.source}:${primaryItem.status}` : "n/a" },
+          {
+            label: locale === "de" ? "Laufzeitspur" : "Runtime trace",
+            value: items.map((item) => `${item.source}:${item.id}`).join(" · ") || ui.common.na,
+          },
+          {
+            label: locale === "de" ? "Backend-Route" : "Backend route",
+            value: items.length === 0
+              ? (locale === "de" ? "Keine offenen Routen" : "No open routes")
+              : (locale === "de" ? "Offene Vorschläge vorhanden" : "Open proposals available"),
+          },
+          {
+            label: locale === "de" ? "Primärer Eintrag" : "Primary item",
+            value: primaryItem ? `${primaryItem.source}:${getReviewStatusLabel(locale, primaryItem.status)}` : ui.common.na,
+          },
         ]}
       />
 
       {items.length === 0 ? (
         <article className="empty-state-card">
           <div className="empty-state-card-copy">
-            <p className="info-label">Review</p>
-            <h2>Noch keine offenen Prüfungen.</h2>
-            <p>
-              Wenn Chat, GitHub oder Matrix einen Vorschlag vorbereitet, erscheint er hier zur Freigabe.
-            </p>
+            <p className="info-label">{ui.review.heroStatus}</p>
+            <h2>{ui.review.emptyTitle}</h2>
+            <p>{ui.review.emptyBody}</p>
           </div>
         </article>
       ) : (
@@ -196,8 +206,8 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
                 testId="review-primary-proposal"
                 title={primaryItem.title}
                 summary={primaryItem.summary}
-                consequence="Review bleibt read-only; die Entscheidung wird im Quell-Workspace getroffen."
-                statusLabel={primaryItem.stale ? "Veraltete Prüfung" : "Freigabe ausstehend"}
+                consequence={ui.review.intro}
+                statusLabel={primaryItem.stale ? ui.review.warning : ui.review.approvalNeeded}
                 statusTone={primaryItem.stale ? "error" : "partial"}
                 metadata={primaryMetadata}
               />
@@ -207,8 +217,8 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
           <section className="workspace-card review-queue-card">
             <header className="card-header">
               <div>
-                <span>Prüfungswarteschlange</span>
-                <strong>Alle offenen Prüfungen</strong>
+                <span>{ui.review.queueTitle}</span>
+                <strong>{ui.review.queueHeader}</strong>
               </div>
             </header>
 
@@ -221,7 +231,7 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
                       <strong>{item.title}</strong>
                     </div>
                     <span className={`status-pill ${item.status === "stale" || item.status === "rejected" ? "status-error" : item.status === "executed" ? "status-ready" : "status-partial"}`}>
-                      {statusLabel(item.status)}
+                      {getReviewStatusLabel(locale, item.status)}
                     </span>
                   </div>
                   <p>{item.summary}</p>
@@ -235,7 +245,7 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
                       ))}
                     </div>
                   ) : null}
-                  {item.stale ? <p className="warning-banner" role="status">Dieser Vorschlag ist veraltet und muss neu geprüft werden.</p> : null}
+                  {item.stale ? <p className="warning-banner" role="status">{ui.review.warning}</p> : null}
                 </article>
               ))}
             </div>

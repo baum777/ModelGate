@@ -1,4 +1,5 @@
 import React from "react";
+import { useLocalization } from "../lib/localization.js";
 
 export type DiagnosticEntry = {
   kind: "info" | "warning" | "error";
@@ -45,15 +46,15 @@ export function SettingsWorkspace({
   onClearDiagnostics,
   truthSnapshot,
 }: SettingsWorkspaceProps) {
+  const { copy: ui } = useLocalization();
+
   return (
     <section className="workspace-panel settings-workspace" data-testid="settings-workspace">
       <section className="workspace-hero">
         <div>
-          <p className="status-pill status-partial">Settings</p>
-          <h1>Einstellungen</h1>
-          <p className="hero-copy">
-            Disclosure wählen, Identität und Verbindung gegen Backendtruth prüfen und Diagnose im Expert Mode öffnen.
-          </p>
+          <p className="status-pill status-partial">{ui.settings.heroStatus}</p>
+          <h1>{ui.settings.title}</h1>
+          <p className="hero-copy">{ui.settings.intro}</p>
         </div>
       </section>
 
@@ -61,16 +62,16 @@ export function SettingsWorkspace({
         <article className="workspace-card">
           <header className="card-header">
             <div>
-              <span>Ansicht</span>
-              <strong>Beginner / Expert</strong>
+              <span>{ui.settings.viewCardTitle}</span>
+              <strong>{ui.settings.beginner} / {ui.settings.expert}</strong>
             </div>
           </header>
           <div className="action-row">
             <button type="button" className={expertMode ? "secondary-button" : ""} onClick={() => onExpertModeChange(false)}>
-              Beginner
+              {ui.settings.beginner}
             </button>
             <button type="button" className={expertMode ? "" : "secondary-button"} onClick={() => onExpertModeChange(true)}>
-              Expert
+              {ui.settings.expert}
             </button>
           </div>
         </article>
@@ -78,106 +79,100 @@ export function SettingsWorkspace({
         <article className="workspace-card">
           <header className="card-header">
             <div>
-              <span>Identität und Verbindung</span>
-              <strong>Backend-, GitHub- und Matrixtruth</strong>
+              <span>{ui.settings.identityCardTitle}</span>
+              <strong>{ui.settings.backendTruth}</strong>
             </div>
           </header>
           <div className="detail-grid">
             <div>
-              <span>Backend</span>
+              <span>{ui.settings.backend}</span>
               <strong>{truthSnapshot.backend.label}</strong>
             </div>
             <div>
-              <span>GitHub acting identity</span>
+              <span>{ui.settings.githubIdentity}</span>
               <strong>{truthSnapshot.github.sessionLabel}</strong>
             </div>
             <div>
-              <span>GitHub Verbindung</span>
+              <span>{ui.settings.githubConnection}</span>
               <strong>{truthSnapshot.github.connectionLabel}</strong>
             </div>
             <div>
-              <span>GitHub authority domain</span>
+              <span>{ui.settings.githubAuthority}</span>
               <strong>{truthSnapshot.github.accessLabel}</strong>
             </div>
             <div>
-              <span>GitHub active scope</span>
+              <span>{ui.settings.githubScope}</span>
               <strong>{truthSnapshot.github.repositoryLabel}</strong>
             </div>
             <div>
-              <span>Matrix acting identity</span>
+              <span>{ui.settings.matrixIdentity}</span>
               <strong>{truthSnapshot.matrix.identityLabel}</strong>
             </div>
             <div>
-              <span>Matrix Verbindung</span>
+              <span>{ui.settings.matrixConnection}</span>
               <strong>{truthSnapshot.matrix.connectionLabel}</strong>
             </div>
             <div>
-              <span>Homeserver</span>
+              <span>{ui.settings.matrixHomeserver}</span>
               <strong>{truthSnapshot.matrix.homeserverLabel}</strong>
             </div>
             <div>
-              <span>Matrix active scope</span>
+              <span>{ui.settings.matrixScope}</span>
               <strong>{truthSnapshot.matrix.scopeLabel}</strong>
             </div>
             <div>
-              <span>Chat acting identity</span>
-              <strong>not exposed by backend</strong>
+              <span>{ui.settings.chatIdentity}</span>
+              <strong>{ui.settings.chatIdentity}</strong>
             </div>
             <div>
-              <span>Chat active scope</span>
-              <strong>session-local chat thread (browser)</strong>
+              <span>{ui.settings.chatScope}</span>
+              <strong>{ui.settings.chatScope}</strong>
             </div>
             <div>
-              <span>Chat authority domain</span>
-              <strong>chat backend route (/chat)</strong>
+              <span>{ui.settings.chatAuthority}</span>
+              <strong>{ui.settings.chatAuthority}</strong>
             </div>
           </div>
           <p className="muted-copy">{truthSnapshot.backend.detail}</p>
-          <p className="muted-copy">
-            Gemeinsame Infrastruktur bedeutet nicht gemeinsame Autorität. Der Browser spiegelt nur Wahrheit wider, die der Backend-Server bereits belegen kann.
-          </p>
+          <p className="muted-copy">{ui.settings.backendTruth}</p>
         </article>
 
         <article className="workspace-card">
           <header className="card-header">
             <div>
-              <span>Modelle</span>
-              <strong>Backend-Policy und Auswahl</strong>
+              <span>{ui.settings.modelCardTitle}</span>
+              <strong>{ui.settings.backendPolicy}</strong>
             </div>
           </header>
           <div className="detail-grid">
             <div>
-              <span>Aktiver Alias</span>
+              <span>{ui.settings.modelCardTitle}</span>
               <strong>{truthSnapshot.models.activeAlias}</strong>
             </div>
             <div>
-              <span>Verfügbare Modelle</span>
+              <span>{ui.settings.modelSourceLabel}</span>
               <strong>{String(truthSnapshot.models.availableCount)}</strong>
             </div>
             <div>
-              <span>Quelle</span>
+              <span>{ui.settings.modelSourceLabel}</span>
               <strong>{truthSnapshot.models.registrySourceLabel}</strong>
             </div>
           </div>
-          <p className="muted-copy">
-            Modellwahl bleibt alias-basiert. Provider-Zuordnung und Backend-Pfade bleiben serverowned und werden nicht im Browser als Wahrheit behandelt.
-          </p>
+          <p className="muted-copy">{ui.settings.modelChoiceNote}</p>
         </article>
 
         <article className="workspace-card">
           <header className="card-header">
             <div>
-              <span>Diagnose</span>
-              <strong>Expert-only Kontext</strong>
+              <span>{ui.settings.diagnosticsCardTitle}</span>
+              <strong>{ui.settings.diagnosticsHidden}</strong>
             </div>
           </header>
-          <p className="muted-copy">
-            Diagnose bleibt im Expert Mode verborgen.
-          </p>
+          <p className="muted-copy">{ui.settings.diagnosticsHidden}</p>
           {expertMode ? (
             <div className="diagnostic-feed" aria-live="polite">
               {diagnostics.length === 0 ? (
-                <p className="empty-state">Noch keine lokalen Diagnoseereignisse.</p>
+                <p className="empty-state">{ui.settings.diagnosticsEmpty}</p>
               ) : (
                 diagnostics.map((entry) => (
                   <article key={`${entry.kind}-${entry.label}-${entry.detail ?? ""}`} className={`telemetry-item telemetry-item-${entry.kind}`}>
@@ -188,7 +183,7 @@ export function SettingsWorkspace({
               )}
               <div className="action-row">
                 <button type="button" className="secondary-button" onClick={onClearDiagnostics}>
-                  Diagnose leeren
+                  {ui.settings.clearDiagnostics}
                 </button>
               </div>
             </div>

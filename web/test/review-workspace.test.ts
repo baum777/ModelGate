@@ -8,6 +8,7 @@ import {
   ReviewWorkspace,
   type ReviewItem,
 } from "../src/components/ReviewWorkspace.js";
+import { LocaleProvider } from "../src/lib/localization.js";
 
 test("Review workspace prioritizes stale items and exposes a canonical queue", () => {
   const items: ReviewItem[] = [
@@ -51,13 +52,17 @@ test("Review workspace prioritizes stale items and exposes a canonical queue", (
 
   const prioritized = prioritizeReviewItems(items);
   assert.equal(prioritized[0]?.status, "stale");
-  assert.equal(describeReviewNextStep(items), "Veraltete Prüfung erneuern");
+  assert.equal(describeReviewNextStep(items, "de"), "Veraltete Prüfung erneuern");
 
   const markup = renderToStaticMarkup(
-    React.createElement(ReviewWorkspace, {
-      items,
-      expertMode: false,
-    }),
+    React.createElement(
+      LocaleProvider,
+      { initialLocale: "de" },
+      React.createElement(ReviewWorkspace, {
+        items,
+        expertMode: false,
+      }),
+    ),
   );
 
   assert.match(markup, /Prüfungswarteschlange/);

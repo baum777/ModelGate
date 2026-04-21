@@ -1,6 +1,7 @@
 import React from "react";
 import type { FormEvent } from "react";
 import type { GitHubAuthState } from "../lib/github-auth.js";
+import { useLocalization } from "../lib/localization.js";
 
 type GitHubAdminLoginProps = {
   authState: GitHubAuthState;
@@ -9,23 +10,14 @@ type GitHubAdminLoginProps = {
   onSubmit: () => void;
 };
 
-function authStatusLabel(status: GitHubAuthState["status"]) {
-  switch (status) {
-    case "authenticated":
-      return "Freigeschaltet";
-    case "loading":
-      return "Prüfe Session";
-    default:
-      return "Gesperrt";
-  }
-}
-
 export function GitHubAdminLogin({
   authState,
   password,
   onPasswordChange,
   onSubmit
 }: GitHubAdminLoginProps) {
+  const { copy: ui } = useLocalization();
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     onSubmit();
@@ -35,24 +27,28 @@ export function GitHubAdminLogin({
     <section className="workspace-panel github-admin-login" data-testid="github-admin-login">
       <section className="workspace-hero github-login-hero">
         <div>
-          <p className="status-pill status-partial">{authStatusLabel(authState.status)}</p>
-          <h1>GitHub Login</h1>
-          <p className="hero-copy">
-            Der Zugriff auf GitHub-Read-Routen ist serverseitig gesperrt, bis du dich mit dem Admin-Passwort anmeldest.
+          <p className="status-pill status-partial">
+            {authState.status === "authenticated"
+              ? ui.auth.statusAuthenticated
+              : authState.status === "loading"
+                ? ui.auth.statusChecking
+                : ui.auth.statusLocked}
           </p>
+          <h1>{ui.auth.title}</h1>
+          <p className="hero-copy">{ui.auth.intro}</p>
         </div>
       </section>
 
       <article className="workspace-card github-login-card">
         <header className="card-header">
           <div>
-            <span>Serverseitige Authentifizierung</span>
-            <strong>Admin-Passwort eingeben</strong>
+            <span>{ui.auth.cardTitle}</span>
+            <strong>{ui.auth.cardSubtitle}</strong>
           </div>
         </header>
 
         <form className="github-login-form" onSubmit={handleSubmit}>
-          <label htmlFor="github-admin-password">Admin-Passwort</label>
+          <label htmlFor="github-admin-password">{ui.auth.passwordLabel}</label>
           <input
             id="github-admin-password"
             type="password"
@@ -70,20 +66,16 @@ export function GitHubAdminLogin({
           ) : null}
 
           <div className="action-row">
-            <span className="muted-copy">
-              Passwort bleibt nur im HttpOnly-Session-Cookie auf dem Server.
-            </span>
+            <span className="muted-copy">{ui.auth.hint}</span>
             <button type="submit" disabled={authState.busy || password.trim().length === 0}>
-              {authState.busy ? "Anmelden…" : "Anmelden"}
+              {authState.busy ? ui.auth.submitBusy : ui.auth.submit}
             </button>
           </div>
         </form>
       </article>
 
       <article className="workspace-card github-login-hint">
-        <p className="muted-copy">
-          Nach der Anmeldung werden die GitHub-Read-Routen freigeschaltet. Der Schreibpfad bleibt zusätzlich an den serverseitigen Admin-Key gebunden.
-        </p>
+        <p className="muted-copy">{ui.auth.footerNote}</p>
       </article>
     </section>
   );
