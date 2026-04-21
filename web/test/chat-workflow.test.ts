@@ -109,3 +109,73 @@ test("chat reducer surfaces malformed stream ordering", () => {
   assert.equal(state.lastStreamWarning, "Received token before stream start.");
   assert.equal(state.messages.length, 1);
 });
+
+test("chat reducer records rejected proposal receipts", () => {
+  let state = createInitialChatState({
+    input: "Prepare rollout checklist"
+  });
+
+  state = chatReducer(state, {
+    type: "create_proposal",
+    proposal: {
+      id: "proposal-1",
+      prompt: "Prepare rollout checklist",
+      modelAlias: "default",
+      consequence: "Approve sends prompt to backend.",
+      createdAt: "2026-04-21T08:00:00.000Z",
+      status: "pending"
+    }
+  });
+  state = chatReducer(state, {
+    type: "reject_proposal"
+  });
+
+  assert.equal(state.pendingProposal, null);
+  assert.equal(state.receipts.length, 1);
+  assert.equal(state.receipts[0]?.outcome, "rejected");
+  assert.equal(state.receipts[0]?.proposalId, "proposal-1");
+});
+
+test("chat reducer records executed receipt for approved proposal", () => {
+  let state = createInitialChatState();
+  state = chatReducer(state, {
+    type: "create_proposal",
+    proposal: {
+      id: "proposal-2",
+      prompt: "Summarize current deployment risk",
+      modelAlias: "default",
+      consequence: "Approve sends prompt to backend.",
+      createdAt: "2026-04-21T09:00:00.000Z",
+      status: "pending"
+    }
+  });
+  state = chatReducer(state, {
+    type: "start_proposal_execution"
+  });
+  state = chatReducer(state, {
+    type: "submit_message",
+    message: {
+      id: "user-1",
+      role: "user",
+      content: "Summarize current deployment risk"
+    }
+  });
+  state = chatReducer(state, { type: "stream_start", model: "default" });
+  state = chatReducer(state, {
+    type: "stream_done",
+    model: "default",
+    text: "Risk summary",
+    route: {
+      selectedAlias: "default",
+      taskClass: "analysis",
+      fallbackUsed: false,
+      degraded: false,
+      streaming: true
+    }
+  });
+
+  assert.equal(state.pendingProposal, null);
+  assert.equal(state.receipts.length, 1);
+  assert.equal(state.receipts[0]?.outcome, "executed");
+  assert.equal(state.messages.length, 2);
+});

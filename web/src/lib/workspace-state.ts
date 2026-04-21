@@ -1,4 +1,13 @@
-import { createInitialChatState, type ChatDraft, type ChatMessage, type ChatState, type ConnectionState } from "./chat-workflow.js";
+import {
+  createInitialChatState,
+  type ChatDraft,
+  type ChatExecutionReceipt,
+  type ChatMessage,
+  type ChatNotice,
+  type ChatProposal,
+  type ChatState,
+  type ConnectionState
+} from "./chat-workflow.js";
 import type {
   GitHubChangePlan,
   GitHubContextBundle,
@@ -218,7 +227,106 @@ function validateChatMessage(value: unknown): ChatMessage | null {
     message.createdAt = value.createdAt;
   }
 
+  if (isRecord(value.route)) {
+    const route = value.route;
+    if (
+      typeof route.selectedAlias === "string"
+      && (route.taskClass === "dialog" || route.taskClass === "coding" || route.taskClass === "analysis" || route.taskClass === "review")
+      && typeof route.fallbackUsed === "boolean"
+      && typeof route.degraded === "boolean"
+      && typeof route.streaming === "boolean"
+    ) {
+      message.route = {
+        selectedAlias: route.selectedAlias,
+        taskClass: route.taskClass,
+        fallbackUsed: route.fallbackUsed,
+        degraded: route.degraded,
+        streaming: route.streaming,
+        policyVersion: typeof route.policyVersion === "string" ? route.policyVersion : undefined,
+        decisionReason: typeof route.decisionReason === "string" ? route.decisionReason : undefined,
+        retryCount: typeof route.retryCount === "number" ? route.retryCount : undefined
+      };
+    }
+  }
+
   return message;
+}
+
+function normalizeChatProposal(value: unknown): ChatProposal | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (
+    typeof value.id !== "string"
+    || typeof value.prompt !== "string"
+    || (value.modelAlias !== null && value.modelAlias !== undefined && typeof value.modelAlias !== "string")
+    || typeof value.consequence !== "string"
+    || typeof value.createdAt !== "string"
+    || (value.status !== "pending" && value.status !== "executing")
+  ) {
+    return null;
+  }
+
+  return {
+    id: value.id,
+    prompt: value.prompt,
+    modelAlias: value.modelAlias ?? null,
+    consequence: value.consequence,
+    createdAt: value.createdAt,
+    status: value.status
+  };
+}
+
+function normalizeChatExecutionReceipt(value: unknown): ChatExecutionReceipt | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (
+    typeof value.id !== "string"
+    || typeof value.proposalId !== "string"
+    || typeof value.prompt !== "string"
+    || (value.modelAlias !== null && value.modelAlias !== undefined && typeof value.modelAlias !== "string")
+    || (value.outcome !== "executed" && value.outcome !== "failed" && value.outcome !== "rejected" && value.outcome !== "unverifiable")
+    || typeof value.detail !== "string"
+    || typeof value.createdAt !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    id: value.id,
+    proposalId: value.proposalId,
+    prompt: value.prompt,
+    modelAlias: value.modelAlias ?? null,
+    outcome: value.outcome,
+    detail: value.detail,
+    createdAt: value.createdAt,
+    route: null
+  };
+}
+
+function normalizeChatNotice(value: unknown): ChatNotice | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (
+    typeof value.id !== "string"
+    || (value.level !== "system" && value.level !== "error")
+    || typeof value.message !== "string"
+    || typeof value.createdAt !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    id: value.id,
+    level: value.level,
+    message: value.message,
+    createdAt: value.createdAt
+  };
 }
 
 function normalizeChatState(value: unknown): ChatState | null {
@@ -249,16 +357,38 @@ function normalizeChatState(value: unknown): ChatState | null {
   const lastError = readNullableString(value.lastError);
   const lastStreamWarning = readNullableString(value.lastStreamWarning);
   const autoScrollEnabled = readBoolean(value.autoScrollEnabled);
+  const pendingProposal = value.pendingProposal === null || value.pendingProposal === undefined
+    ? null
+    : normalizeChatProposal(value.pendingProposal);
+
+  if (value.pendingProposal !== null && value.pendingProposal !== undefined && !pendingProposal) {
+    return null;
+  }
+
+  if (value.receipts !== undefined && value.receipts !== null && !Array.isArray(value.receipts)) {
+    return null;
+  }
+
+  if (value.notices !== undefined && value.notices !== null && !Array.isArray(value.notices)) {
+    return null;
+  }
+
+  const receiptsValue = readArray(value.receipts) ?? [];
+  const noticesValue = readArray(value.notices) ?? [];
 
   if (!messagesValue || !connectionState || autoScrollEnabled === null) {
     return null;
   }
 
   const messages = messagesValue.map(validateChatMessage);
+  const receipts = receiptsValue.map(normalizeChatExecutionReceipt);
+  const notices = noticesValue.map(normalizeChatNotice);
 
-  if (messages.some((message) => message === null)) {
+  if (messages.some((message) => message === null) || receipts.some((receipt) => receipt === null) || notices.some((notice) => notice === null)) {
     return null;
   }
+
+  const normalizedPendingProposal = pendingProposal;
 
   const normalized: ChatState = {
     messages: messages.filter((message): message is ChatMessage => Boolean(message)),
@@ -276,7 +406,13 @@ function normalizeChatState(value: unknown): ChatState | null {
         ? "A chat stream was in progress and was not resumed after reload."
         : lastStreamWarning,
     autoScrollEnabled,
-    activeRoute: null
+    activeRoute: null,
+    pendingProposal:
+      connectionState === "submitting" || connectionState === "streaming"
+        ? null
+        : normalizedPendingProposal,
+    receipts: receipts.filter((receipt): receipt is ChatExecutionReceipt => Boolean(receipt)),
+    notices: notices.filter((notice): notice is ChatNotice => Boolean(notice))
   };
 
   return normalized;
@@ -913,6 +1049,9 @@ export function deriveSessionTitle<TMetadata>(session: WorkspaceSession<TMetadat
 
   if (session.workspace === "chat") {
     const metadata = session.metadata as ChatSessionMetadata;
+    if (metadata.chatState.pendingProposal?.prompt) {
+      return metadata.chatState.pendingProposal.prompt.trim().slice(0, 48);
+    }
     const firstUserMessage = metadata.chatState.messages.find((message) => message.role === "user");
     const text = firstUserMessage?.content ?? metadata.chatState.input;
     return text.trim().length > 0 ? text.trim().slice(0, 48) : "New chat";
@@ -952,6 +1091,12 @@ export function deriveSessionStatus<TMetadata>(session: WorkspaceSession<TMetada
     const metadata = session.metadata as ChatSessionMetadata;
     if (metadata.chatState.connectionState === "error" || metadata.chatState.lastError) {
       return "failed";
+    }
+    if (metadata.chatState.pendingProposal?.status === "pending") {
+      return "review_required";
+    }
+    if (metadata.chatState.pendingProposal?.status === "executing") {
+      return "in_progress";
     }
     if (metadata.chatState.connectionState === "submitting" || metadata.chatState.connectionState === "streaming") {
       return "in_progress";

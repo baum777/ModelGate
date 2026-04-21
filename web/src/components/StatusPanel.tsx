@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { DiagnosticsDrawer, type DiagnosticsDetailRow } from "./ExpertDetails.js";
+import { SectionLabel, StatusBadge } from "./ShellPrimitives.js";
 
 export type StatusPanelRow = {
   label: string;
@@ -51,10 +52,10 @@ export function SystemSummaryCard({
     <section className="status-panel-card system-summary-card" role="region" aria-label={title} data-testid={testId}>
       <div className="context-summary-header">
         <div>
-          <span>{title}</span>
+          <SectionLabel>{title}</SectionLabel>
           <strong>{headline}</strong>
         </div>
-        <span className={`status-pill status-${badgeTone}`}>{badge}</span>
+        <StatusBadge tone={badgeTone} className={`status-pill status-${badgeTone}`}>{badge}</StatusBadge>
       </div>
 
       <div className="status-panel-grid">
@@ -101,10 +102,10 @@ export function StatusPanel({
     <section className="status-panel-card status-panel-compact" role="region" aria-label={title} data-testid={testId}>
       <div className="context-summary-header">
         <div>
-          <span>{title}</span>
+          <SectionLabel>{title}</SectionLabel>
           <strong>{headline}</strong>
         </div>
-        <span className={`status-pill status-${badgeTone}`}>{badge}</span>
+        <StatusBadge tone={badgeTone} className={`status-pill status-${badgeTone}`}>{badge}</StatusBadge>
       </div>
 
       <div className="status-panel-grid status-panel-grid-compact">

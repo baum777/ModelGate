@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { SessionStatus, WorkspaceKind, WorkspaceSession } from "../lib/workspace-state.js";
 import { sortSessionsByUpdatedAt, workspaceLabel } from "../lib/workspace-state.js";
+import { SectionLabel, StatusBadge } from "./ShellPrimitives.js";
 
 export type SessionListItemProps<TMetadata> = {
   session: WorkspaceSession<TMetadata>;
@@ -107,7 +108,7 @@ export function SessionList<TMetadata>({
     >
       <header className="session-list-header">
         <div>
-          <span>{workspaceName} Sessions</span>
+          <SectionLabel>{workspaceName} Sessions</SectionLabel>
           <strong>{sortedSessions.length} insgesamt</strong>
         </div>
         <button
@@ -146,9 +147,12 @@ export function SessionList<TMetadata>({
                   <div className="session-list-copy">
                     <div className="session-list-title-row">
                       <strong>{session.title}</strong>
-                      <span className={`session-status-badge session-status-${statusTone(session.status)}`}>
+                      <StatusBadge
+                        tone={statusTone(session.status)}
+                        className={`session-status-badge session-status-${statusTone(session.status)}`}
+                      >
                         {statusCopy(session.status)}
-                      </span>
+                      </StatusBadge>
                     </div>
                     <span className="session-list-subtitle">
                       {session.archived ? "Archiviert" : "Aktiv"}

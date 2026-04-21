@@ -19,10 +19,16 @@ import {
 } from "./components/SettingsWorkspace.js";
 import { SessionList } from "./components/SessionList.js";
 import {
-  SystemSummaryCard,
   type StatusPanelRow,
 } from "./components/StatusPanel.js";
 import { DiagnosticsDrawer } from "./components/ExpertDetails.js";
+import {
+  MutedSystemCopy,
+  SectionLabel,
+  ShellCard,
+  StatusBadge,
+  TruthRailSection,
+} from "./components/ShellPrimitives.js";
 import {
   fetchAuthSession,
   fetchHealth,
@@ -53,6 +59,10 @@ import {
   type GitHubSession,
   type MatrixSession
 } from "./lib/workspace-state.js";
+import {
+  deriveShellHealthState,
+  summarizePendingApprovals,
+} from "./lib/shell-view-model.js";
 
 type WorkspaceMode = "chat" | "github" | "matrix" | "review" | "settings";
 
@@ -161,6 +171,23 @@ function tabLabel(mode: WorkspaceMode) {
   }
 }
 
+function tabDescription(mode: WorkspaceMode) {
+  switch (mode) {
+    case "github":
+      return "Repo lesen und Vorschläge prüfen";
+    case "matrix":
+      return "Scope, Provenienz und Topic Updates";
+    case "review":
+      return "Freigaben prüfen";
+    case "settings":
+      return "Ansicht und Diagnose";
+    default:
+      return "Fragen und Antworten";
+  }
+}
+
+const WORKSPACE_MODES: WorkspaceMode[] = ["chat", "github", "matrix", "review", "settings"];
+
 function WorkspaceIcon({ mode }: { mode: WorkspaceMode }) {
   switch (mode) {
     case "github":
@@ -251,6 +278,21 @@ function isSessionWorkspace(mode: WorkspaceMode): mode is WorkspaceKind {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function sessionStatusCopy(status: WorkspaceSession<unknown>["status"]) {
+  switch (status) {
+    case "in_progress":
+      return "In Arbeit";
+    case "review_required":
+      return "Freigabe nötig";
+    case "done":
+      return "Bereit";
+    case "failed":
+      return "Fehler";
+    default:
+      return "Entwurf";
+  }
 }
 
 export default function App() {
@@ -605,8 +647,23 @@ export default function App() {
     }
   }, [githubAuthState.busy, removeModeReviewItems]);
 
+  const chatPendingProposal = chatSession?.metadata.chatState.pendingProposal ?? null;
+  const chatLatestReceipt = chatSession?.metadata.chatState.receipts.at(-1) ?? null;
+  const chatGovernanceState = chatPendingProposal
+    ? chatPendingProposal.status === "pending"
+      ? "Freigabe ausstehend"
+      : "Ausführung läuft"
+    : chatLatestReceipt
+      ? chatLatestReceipt.outcome === "executed"
+        ? "Letzte Ausführung bestätigt"
+        : chatLatestReceipt.outcome === "rejected"
+          ? "Vorschlag verworfen"
+          : "Letzte Ausführung fehlgeschlagen"
+      : "Kein offener Vorschlag";
+
   const chatRows: StatusPanelRow[] = [
     { label: "Modell", value: activeModelAlias ?? "Noch nicht gewählt" },
+    { label: "Governance", value: chatGovernanceState },
     {
       label: "Verfügbarkeit",
       value:
@@ -716,10 +773,24 @@ export default function App() {
       case "settings":
         return expertMode ? "Expert Mode" : "Beginner Mode";
       default:
+        if (chatPendingProposal?.status === "pending") {
+          return "Freigabe nötig";
+        }
+
+        if (chatPendingProposal?.status === "executing") {
+          return "Ausführung";
+        }
+
+        if (chatLatestReceipt?.outcome === "failed" || chatLatestReceipt?.outcome === "unverifiable") {
+          return "Fehlgeschlagen";
+        }
+
         return backendHealthy === false ? "Nicht verfügbar" : backendHealthy === true ? "Bereit" : "Wird geprüft";
     }
   }, [
     backendHealthy,
+    chatLatestReceipt?.outcome,
+    chatPendingProposal?.status,
     expertMode,
     githubAuthState.error,
     githubContext.approvalLabel,
@@ -732,6 +803,31 @@ export default function App() {
     mode,
     reviewItems,
   ]);
+
+  const healthState = useMemo(() => deriveShellHealthState(backendHealthy), [backendHealthy]);
+  const approvalSummary = useMemo(() => {
+    const base = summarizePendingApprovals(reviewItems);
+    const chatPending = chatPendingProposal?.status === "pending" ? 1 : 0;
+    return {
+      ...base,
+      pending: base.pending + chatPending,
+      hasApprovals: base.hasApprovals || chatPending > 0,
+      chatPending,
+    };
+  }, [chatPendingProposal?.status, reviewItems]);
+  const workspaceName = tabLabel(mode);
+  const workspaceContextTitle = `${workspaceName} Kontext`;
+  const diagnosticsTitle = mode === "github"
+    ? "GitHub diagnostics"
+    : mode === "matrix"
+      ? "Matrix diagnostics"
+      : mode === "review"
+        ? "Review diagnostics"
+        : mode === "settings"
+          ? "Settings diagnostics"
+          : "Chat diagnostics";
+  const showBeginnerDiagnostics = !expertMode && healthState.tone === "error";
+  const diagnosticsAccessible = expertMode || showBeginnerDiagnostics;
 
   const currentStatusTone = useMemo(() => {
     switch (mode) {
@@ -760,10 +856,20 @@ export default function App() {
       case "settings":
         return "partial";
       default:
+        if (chatPendingProposal?.status === "pending" || chatPendingProposal?.status === "executing") {
+          return "partial";
+        }
+
+        if (chatLatestReceipt?.outcome === "failed" || chatLatestReceipt?.outcome === "unverifiable") {
+          return "error";
+        }
+
         return backendHealthy === false ? "error" : backendHealthy === true ? "ready" : "partial";
     }
   }, [
     backendHealthy,
+    chatLatestReceipt?.outcome,
+    chatPendingProposal?.status,
     githubAuthState.error,
     githubContext.approvalLabel,
     githubContext.repositoryLabel,
@@ -822,10 +928,24 @@ export default function App() {
       case "settings":
         return "Ansicht und Diagnose sauber trennen.";
       default:
+        if (chatPendingProposal?.status === "pending") {
+          return "Chat-Vorschlag wartet auf Freigabe.";
+        }
+
+        if (chatPendingProposal?.status === "executing") {
+          return "Freigegebene Chat-Ausführung läuft.";
+        }
+
+        if (chatLatestReceipt?.outcome === "failed" || chatLatestReceipt?.outcome === "unverifiable") {
+          return "Letzte Chat-Ausführung war nicht erfolgreich.";
+        }
+
         return backendHealthy === false ? "Backend nicht verfügbar." : backendHealthy === true ? "Chat bereit." : "Backend wird geprüft.";
     }
   }, [
     backendHealthy,
+    chatLatestReceipt?.outcome,
+    chatPendingProposal?.status,
     githubAuthState.error,
     githubContext.approvalLabel,
     githubContext.repositoryLabel,
@@ -888,12 +1008,26 @@ export default function App() {
           ? "Technische Details sind sichtbar, wenn du sie brauchst."
           : "Expert zeigt technische Details nur auf explizite Anfrage.";
       default:
+        if (chatPendingProposal?.status === "pending") {
+          return "Freigabe oder Verwerfen entscheiden, bevor neue Chat-Eingaben vorbereitet werden.";
+        }
+
+        if (chatPendingProposal?.status === "executing") {
+          return "Ausführung läuft. Composer bleibt bis zum terminalen Ergebnis gesperrt.";
+        }
+
+        if (chatLatestReceipt?.outcome === "failed" || chatLatestReceipt?.outcome === "unverifiable") {
+          return "Prüfe den Receipt und starte erst danach einen neuen Vorschlag.";
+        }
+
         return backendHealthy === false
           ? "Prüfe die Backend-Verbindung, bevor du den Chat weiter nutzt."
           : "Stell deine nächste Frage direkt im Chat.";
     }
   }, [
     backendHealthy,
+    chatLatestReceipt?.outcome,
+    chatPendingProposal?.status,
     expertMode,
     githubAuthState.error,
     githubContext.approvalLabel,
@@ -949,9 +1083,13 @@ export default function App() {
           { label: "Diagnose", value: expertMode ? "Sichtbar" : "Verborgen" },
         ];
       default:
-        return [];
+        return [
+          { label: "Proposal", value: chatPendingProposal?.status ?? "none" },
+          { label: "Receipts", value: String(chatSession?.metadata.chatState.receipts.length ?? 0) },
+          { label: "Route", value: chatSession?.metadata.chatState.activeRoute?.selectedAlias ?? "n/a" }
+        ];
     }
-  }, [expertMode, githubAuthState.error, githubAuthState.status, githubContext.approvalLabel, githubContext.expertDetails, githubUnlocked, matrixContext.approvalLabel, matrixContext.expertDetails, matrixContext.scopeLabel, matrixContext.summaryLabel, mode, reviewItems]);
+  }, [chatPendingProposal?.status, chatSession?.metadata.chatState.activeRoute?.selectedAlias, chatSession?.metadata.chatState.receipts.length, expertMode, githubAuthState.error, githubAuthState.status, githubContext.approvalLabel, githubContext.expertDetails, githubUnlocked, matrixContext.approvalLabel, matrixContext.expertDetails, matrixContext.scopeLabel, matrixContext.summaryLabel, mode, reviewItems]);
 
   const currentExpertChildren = useMemo(() => {
     if (mode === "github") {
@@ -1101,153 +1239,147 @@ export default function App() {
     return null;
   }, [githubContext.expertDetails, matrixContext.expertDetails, matrixContext.approvalLabel, matrixContext.scopeLabel, matrixContext.summaryLabel, mode]);
 
-  const systemSummaryRows = useMemo<StatusPanelRow[]>(() => {
-    switch (mode) {
-      case "github":
-        return [
-          { label: "Workspace", value: "GitHub" },
-          { label: "Session", value: activeSession?.title ?? "n/a" },
-          { label: "Repo", value: githubContext.repositoryLabel },
-          { label: "Approval", value: githubUnlocked ? githubContext.approvalLabel : "Login required" },
-        ];
-      case "matrix":
-        return [
-          { label: "Workspace", value: "Matrix" },
-          { label: "Session", value: activeSession?.title ?? "n/a" },
-          { label: "Scope", value: matrixContext.scopeLabel },
-          { label: "Approval", value: matrixContext.approvalLabel },
-        ];
-      case "review":
-        return [
-          { label: "Workspace", value: "Review" },
-          { label: "Session", value: activeSession?.title ?? "n/a" },
-          { label: "Open items", value: String(reviewItems.length) },
-          { label: "State", value: reviewItems.some((item) => item.status === "stale") ? "Stale present" : reviewItems.length > 0 ? "Ready" : "Idle" },
-        ];
-      case "settings":
-        return [
-          { label: "Workspace", value: "Settings" },
-          { label: "Session", value: activeSession?.title ?? "n/a" },
-          { label: "View", value: expertMode ? "Expert" : "Beginner" },
-          { label: "Diagnostics", value: expertMode ? "Available" : "Hidden" },
-        ];
-      default:
-        return [
-          { label: "Workspace", value: "Chat" },
-          { label: "Session", value: activeSession?.title ?? "n/a" },
-          { label: "Model", value: activeModelAlias ?? "unresolved" },
-          { label: "Backend", value: backendHealthy === false ? "Unavailable" : backendHealthy === true ? "Healthy" : "Pending" },
-        ];
-    }
-  }, [activeModelAlias, activeSession?.title, backendHealthy, expertMode, githubContext.approvalLabel, githubContext.repositoryLabel, githubUnlocked, matrixContext.approvalLabel, matrixContext.scopeLabel, mode, reviewItems, reviewItems.length]);
+  const workspaceSurface = mode === "chat" ? (
+    <ChatWorkspace
+      key={chatSession?.id ?? "chat-session"}
+      session={chatSession}
+      backendHealthy={backendHealthy}
+      activeModelAlias={activeModelAlias}
+      availableModels={availableModels}
+      modelRegistry={modelRegistry}
+      onActiveModelAliasChange={setActiveModelAlias}
+      onTelemetry={recordTelemetry}
+      onSessionChange={handleChatSessionChange}
+    />
+  ) : mode === "github" && githubUnlocked ? (
+    <GitHubWorkspace
+      key={githubSession?.id ?? "github-session"}
+      session={githubSession}
+      backendHealthy={backendHealthy}
+      expertMode={expertMode}
+      onTelemetry={recordTelemetry}
+      onContextChange={setGitHubContext}
+      onReviewItemsChange={updateGitHubReviewItems}
+      onSessionChange={handleGitHubSessionChange}
+    />
+  ) : mode === "github" ? (
+    <GitHubAdminLogin
+      authState={githubAuthState}
+      password={githubPassword}
+      onPasswordChange={setGitHubPassword}
+      onSubmit={() => {
+        void handleGitHubLogin();
+      }}
+    />
+  ) : mode === "matrix" ? (
+    <MatrixWorkspace
+      key={matrixSession?.id ?? "matrix-session"}
+      session={matrixSession}
+      restoredSession={restoredSession}
+      expertMode={expertMode}
+      onTelemetry={recordTelemetry}
+      onContextChange={setMatrixContext}
+      onReviewItemsChange={updateMatrixReviewItems}
+      onSessionChange={handleMatrixSessionChange}
+    />
+  ) : mode === "review" ? (
+    <ReviewWorkspace items={reviewItems} expertMode={expertMode} />
+  ) : (
+    <SettingsWorkspace
+      expertMode={expertMode}
+      onExpertModeChange={setExpertMode}
+      diagnostics={telemetry as DiagnosticEntry[]}
+      onClearDiagnostics={() => setTelemetry([])}
+    />
+  );
+  const statusToneForBadge = currentStatusTone === "error" ? "error" : currentStatusTone === "ready" ? "ready" : "partial";
+  const accountTone = githubUnlocked ? "ready" : githubAuthState.error ? "error" : "partial";
 
   return (
     <main className="app-shell app-shell-console" data-testid="app-shell">
-      <header className="global-header">
+      <header className="global-header global-header-shell">
         <div className="brand-block">
           <p className="app-kicker">MODELGATE</p>
           <h1>ModelGate Console</h1>
           <p className="app-deck">
-            Beginner-friendly shell with backend-owned authority, read-only guidance, and explicit approval gates.
+            Governance-first operator shell. Runtime truth stays backend-owned.
           </p>
         </div>
 
         <div className="header-actions">
-          {githubUnlocked ? (
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => {
-                void handleGitHubLogout();
-              }}
-              disabled={githubAuthState.busy}
-            >
-              {githubAuthState.busy ? "Abmelden…" : "Logout"}
-            </button>
-          ) : null}
-          <BeginnerExpertToggle expertMode={expertMode} setExpertMode={setExpertMode} />
+          <StatusBadge tone={healthState.tone}>Backend {healthState.label}</StatusBadge>
         </div>
       </header>
 
       <section className="console-layout">
-        <aside className="workspace-sidebar">
-          <div className="sidebar-card sidebar-card-brand">
-            <p className="app-kicker">GUIDED WORKSPACE</p>
+        <aside className="workspace-sidebar shell-left-rail">
+          <ShellCard variant="rail" className="shell-left-brand">
+            <p className="app-kicker">WORKSPACE CONSOLE</p>
             <strong>Arbeitsbereich wählen</strong>
-            <p>Sessions bleiben pro Workspace erhalten. Technik bleibt im Hintergrund, bis du Expert Mode aktivierst.</p>
-          </div>
+            <MutedSystemCopy>Navigation, Sessionkontext und Disclosure bleiben links persistent.</MutedSystemCopy>
+          </ShellCard>
 
-          <nav className="sidebar-nav" aria-label="Primary workspace navigation">
-            <button
-              type="button"
-              className={mode === "chat" ? "workspace-tab workspace-tab-active workspace-tab-vertical" : "workspace-tab workspace-tab-vertical"}
-              onClick={() => handleWorkspaceTabSelect("chat")}
-              aria-current={mode === "chat" ? "page" : undefined}
-              data-testid="tab-chat"
-            >
-              <WorkspaceIcon mode="chat" />
-              <span>
-                <strong>Chat</strong>
-                <small>Fragen und Antworten</small>
-              </span>
-            </button>
+          <ShellCard variant="rail" className="shell-nav-card">
+            <SectionLabel>Workspaces</SectionLabel>
+            <nav className="sidebar-nav" aria-label="Primary workspace navigation">
+              {WORKSPACE_MODES.map((workspaceMode) => (
+                <button
+                  key={workspaceMode}
+                  type="button"
+                  className={mode === workspaceMode ? "workspace-tab workspace-tab-active workspace-tab-vertical workspace-tab-shell-active" : "workspace-tab workspace-tab-vertical"}
+                  onClick={() => handleWorkspaceTabSelect(workspaceMode)}
+                  aria-current={mode === workspaceMode ? "page" : undefined}
+                  data-testid={`tab-${workspaceMode}`}
+                >
+                  <WorkspaceIcon mode={workspaceMode} />
+                  <span>
+                    <strong>{tabLabel(workspaceMode)}</strong>
+                    <small>{tabDescription(workspaceMode)}</small>
+                  </span>
+                </button>
+              ))}
+            </nav>
+          </ShellCard>
 
-            <button
-              type="button"
-              className={mode === "github" ? "workspace-tab workspace-tab-active workspace-tab-vertical" : "workspace-tab workspace-tab-vertical"}
-              onClick={() => handleWorkspaceTabSelect("github")}
-              aria-current={mode === "github" ? "page" : undefined}
-              data-testid="tab-github"
-            >
-              <WorkspaceIcon mode="github" />
-              <span>
-                <strong>GitHub Workspace</strong>
-                <small>Repo lesen und Vorschläge prüfen</small>
-              </span>
-            </button>
+          <ShellCard variant="muted" className="shell-session-identity-card">
+            <SectionLabel>Session</SectionLabel>
+            <strong>{activeSession?.title ?? "Keine Session aktiv"}</strong>
+            <MutedSystemCopy>{workspaceName}</MutedSystemCopy>
+            <div className="shell-session-meta">
+              <StatusBadge tone={statusToneForBadge}>{sessionStatusCopy(activeSession?.status ?? "draft")}</StatusBadge>
+              {activeSession?.archived ? <StatusBadge tone="muted">Archiviert</StatusBadge> : null}
+            </div>
+            {expertMode && activeSession?.id ? (
+              <MutedSystemCopy className="shell-session-id">ID: {activeSession.id}</MutedSystemCopy>
+            ) : null}
 
-            <button
-              type="button"
-              className={mode === "matrix" ? "workspace-tab workspace-tab-active workspace-tab-vertical" : "workspace-tab workspace-tab-vertical"}
-              onClick={() => handleWorkspaceTabSelect("matrix")}
-              aria-current={mode === "matrix" ? "page" : undefined}
-              data-testid="tab-matrix"
-            >
-              <WorkspaceIcon mode="matrix" />
-              <span>
-                <strong>Matrix Workspace</strong>
-                <small>Scope, Provenienz und Topic Updates</small>
-              </span>
-            </button>
+            <div className="shell-disclosure-control">
+              <SectionLabel>Disclosure</SectionLabel>
+              <BeginnerExpertToggle expertMode={expertMode} setExpertMode={setExpertMode} />
+            </div>
 
-            <button
-              type="button"
-              className={mode === "review" ? "workspace-tab workspace-tab-active workspace-tab-vertical" : "workspace-tab workspace-tab-vertical"}
-              onClick={() => handleWorkspaceTabSelect("review")}
-              aria-current={mode === "review" ? "page" : undefined}
-              data-testid="tab-review"
-            >
-              <WorkspaceIcon mode="review" />
-              <span>
-                <strong>Review</strong>
-                <small>Freigaben prüfen</small>
-              </span>
-            </button>
-
-            <button
-              type="button"
-              className={mode === "settings" ? "workspace-tab workspace-tab-active workspace-tab-vertical" : "workspace-tab workspace-tab-vertical"}
-              onClick={() => handleWorkspaceTabSelect("settings")}
-              aria-current={mode === "settings" ? "page" : undefined}
-              data-testid="tab-settings"
-            >
-              <WorkspaceIcon mode="settings" />
-              <span>
-                <strong>Settings</strong>
-                <small>Ansicht und Diagnose</small>
-              </span>
-            </button>
-          </nav>
+            <div className="shell-account-block">
+              <SectionLabel>Account</SectionLabel>
+              <div className="shell-account-row">
+                <StatusBadge tone={accountTone}>
+                  {githubUnlocked ? "GitHub Admin" : githubAuthState.status === "loading" ? "Session prüfen" : "Kein Admin-Login"}
+                </StatusBadge>
+                {githubUnlocked ? (
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => {
+                      void handleGitHubLogout();
+                    }}
+                    disabled={githubAuthState.busy}
+                  >
+                    {githubAuthState.busy ? "Abmelden…" : "Logout"}
+                  </button>
+                ) : null}
+              </div>
+              {githubAuthState.error ? <MutedSystemCopy>{githubAuthState.error}</MutedSystemCopy> : null}
+            </div>
+          </ShellCard>
 
           <SessionList
             workspace={sessionWorkspace}
@@ -1261,95 +1393,118 @@ export default function App() {
           />
         </aside>
 
-        <section className="console-main">
-          {mode === "chat" ? (
-            <ChatWorkspace
-              key={chatSession?.id ?? "chat-session"}
-              session={chatSession}
-              backendHealthy={backendHealthy}
-              activeModelAlias={activeModelAlias}
-              availableModels={availableModels}
-              modelRegistry={modelRegistry}
-              onActiveModelAliasChange={setActiveModelAlias}
-              onTelemetry={recordTelemetry}
-              onSessionChange={handleChatSessionChange}
-            />
-          ) : mode === "github" && githubUnlocked ? (
-            <GitHubWorkspace
-              key={githubSession?.id ?? "github-session"}
-              session={githubSession}
-              backendHealthy={backendHealthy}
-              expertMode={expertMode}
-              onTelemetry={recordTelemetry}
-              onContextChange={setGitHubContext}
-              onReviewItemsChange={updateGitHubReviewItems}
-              onSessionChange={handleGitHubSessionChange}
-            />
-          ) : mode === "github" ? (
-            <GitHubAdminLogin
-              authState={githubAuthState}
-              password={githubPassword}
-              onPasswordChange={setGitHubPassword}
-              onSubmit={() => {
-                void handleGitHubLogin();
-              }}
-            />
-          ) : mode === "matrix" ? (
-            <MatrixWorkspace
-              key={matrixSession?.id ?? "matrix-session"}
-              session={matrixSession}
-              restoredSession={restoredSession}
-              expertMode={expertMode}
-              onTelemetry={recordTelemetry}
-              onContextChange={setMatrixContext}
-              onReviewItemsChange={updateMatrixReviewItems}
-              onSessionChange={handleMatrixSessionChange}
-            />
-          ) : mode === "review" ? (
-            <ReviewWorkspace items={reviewItems} expertMode={expertMode} />
-          ) : (
-            <SettingsWorkspace
-              expertMode={expertMode}
-              onExpertModeChange={setExpertMode}
-              diagnostics={telemetry as DiagnosticEntry[]}
-              onClearDiagnostics={() => setTelemetry([])}
-            />
-          )}
+        <section className="console-main shell-center-main">
+          <ShellCard variant="base" className="workspace-frame-card">
+            <header className="workspace-frame-header">
+              <div>
+                <SectionLabel>{workspaceName}</SectionLabel>
+                <h2>{activeSession?.title ?? "Aktive Session"}</h2>
+              </div>
+              <StatusBadge tone={statusToneForBadge}>{currentStatusBadge}</StatusBadge>
+            </header>
+            <MutedSystemCopy className="workspace-frame-note">{currentStatusHeadline}</MutedSystemCopy>
+            <div className="workspace-frame-body">{workspaceSurface}</div>
+          </ShellCard>
         </section>
 
-        <aside className="workspace-context">
-          <SystemSummaryCard
-            testId="shell-summary-card"
-            title={
-              mode === "github"
-                ? "Projektstatus"
-                : mode === "matrix"
-                  ? "Matrixstatus"
-                  : mode === "review"
-                    ? "Reviewstatus"
-                    : mode === "settings"
-                      ? "Systemstatus"
-                      : "Chatstatus"
-            }
-            headline={currentStatusHeadline}
-            badge={currentStatusBadge}
-            badgeTone={currentStatusTone}
-            rows={systemSummaryRows}
-            helperText={expertMode ? currentHelperText : undefined}
-            detailsLabel={expertMode ? "Open diagnostics" : "Expert mode required"}
-            onOpenDiagnostics={expertMode ? () => setDiagnosticsOpen((current) => !current) : undefined}
-          />
-
-          <DiagnosticsDrawer
-            expertMode={expertMode}
-            title={mode === "github" ? "GitHub diagnostics" : mode === "matrix" ? "Matrix diagnostics" : mode === "review" ? "Review diagnostics" : mode === "settings" ? "Settings diagnostics" : "Chat diagnostics"}
-            rows={currentExpertRows}
-            className="shell-diagnostics-drawer"
-            open={diagnosticsOpen}
-            onToggle={setDiagnosticsOpen}
+        <aside className="workspace-context truth-rail">
+          <TruthRailSection
+            title="Health"
+            testId="truth-rail-health"
+            badge={<StatusBadge tone={healthState.tone}>{healthState.label}</StatusBadge>}
           >
-            {currentExpertChildren}
-          </DiagnosticsDrawer>
+            <MutedSystemCopy>{healthState.detail}</MutedSystemCopy>
+            {expertMode ? (
+              <div className="truth-rail-pairs">
+                <div>
+                  <span>Mode</span>
+                  <strong>{workspaceName}</strong>
+                </div>
+                <div>
+                  <span>Public alias</span>
+                  <strong>{activeModelAlias ?? "n/a"}</strong>
+                </div>
+              </div>
+            ) : null}
+          </TruthRailSection>
+
+          <TruthRailSection
+            title="Session"
+            testId="truth-rail-session"
+            badge={<StatusBadge tone={statusToneForBadge}>{sessionStatusCopy(activeSession?.status ?? "draft")}</StatusBadge>}
+          >
+            <p className="truth-rail-keyline">{activeSession?.title ?? "Keine aktive Session"}</p>
+            <MutedSystemCopy>
+              Workspace: {workspaceName}
+              {activeSession?.updatedAt ? ` · aktualisiert ${new Date(activeSession.updatedAt).toLocaleString()}` : ""}
+            </MutedSystemCopy>
+            {expertMode && activeSession?.id ? <MutedSystemCopy>ID: {activeSession.id}</MutedSystemCopy> : null}
+          </TruthRailSection>
+
+          {approvalSummary.hasApprovals ? (
+            <TruthRailSection
+              title="Pending approvals"
+              testId="truth-rail-approvals"
+              badge={<StatusBadge tone={approvalSummary.stale > 0 ? "error" : "partial"}>{approvalSummary.pending}</StatusBadge>}
+            >
+              <p className="truth-rail-keyline">
+                {approvalSummary.pending} zur Freigabe, {approvalSummary.stale} veraltet
+              </p>
+              <MutedSystemCopy>
+                {approvalSummary.chatPending > 0
+                  ? "Mindestens ein Chat-Vorschlag wartet auf Freigabe. Weitere Details im aktiven Workspace."
+                  : "Freigaben bleiben getrennt von Ausführung. Prüfe Details im Review-Workspace."}
+              </MutedSystemCopy>
+            </TruthRailSection>
+          ) : null}
+
+          <TruthRailSection
+            title={workspaceContextTitle}
+            testId="truth-rail-workspace-context"
+            badge={<StatusBadge tone={statusToneForBadge}>{currentStatusBadge}</StatusBadge>}
+          >
+            <div className="truth-rail-pairs">
+              {currentRows.map((row) => (
+                <div key={row.label}>
+                  <span>{row.label}</span>
+                  <strong>{row.value}</strong>
+                </div>
+              ))}
+            </div>
+            <MutedSystemCopy>{currentHelperText}</MutedSystemCopy>
+          </TruthRailSection>
+
+          <TruthRailSection title="Diagnostics" testId="truth-rail-diagnostics">
+            <MutedSystemCopy>
+              {diagnosticsAccessible
+                ? "Diagnostik ist verfügbar. Nutzung bleibt read-only und kontextbezogen."
+                : "Beginner blendet Diagnostik standardmäßig aus. Bei Störung wird sie sichtbar."}
+            </MutedSystemCopy>
+            {!diagnosticsAccessible ? (
+              <button type="button" className="secondary-button" onClick={() => setExpertMode(true)}>
+                Expert Mode aktivieren
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setDiagnosticsOpen((current) => !current)}
+              >
+                {diagnosticsOpen ? "Diagnostics schließen" : "Diagnostics öffnen"}
+              </button>
+            )}
+
+            <DiagnosticsDrawer
+              expertMode={diagnosticsAccessible}
+              title={diagnosticsTitle}
+              rows={currentExpertRows}
+              className="shell-diagnostics-drawer"
+              open={diagnosticsOpen}
+              onToggle={setDiagnosticsOpen}
+            >
+              {currentExpertChildren}
+            </DiagnosticsDrawer>
+          </TruthRailSection>
         </aside>
       </section>
     </main>

@@ -2131,3 +2131,402 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 .settings-workspace .workspace-card .action-row {
   justify-content: flex-start;
 }
+
+/* Phase 1 shell foundations: left rail/nav/session identity, workspace frame, truth rail stack. */
+:root {
+  --shell-gap: 16px;
+  --shell-radius: 16px;
+  --shell-border-soft: rgba(255, 255, 255, 0.08);
+  --shell-border-strong: rgba(255, 255, 255, 0.16);
+  --shell-muted-bg: rgba(255, 255, 255, 0.02);
+}
+
+.global-header-shell {
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.global-header-shell .brand-block h1 {
+  font-size: clamp(2rem, 4vw, 3.6rem);
+}
+
+.global-header-shell .header-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.shell-left-rail,
+.truth-rail {
+  display: grid;
+  gap: var(--shell-gap);
+}
+
+.shell-card {
+  border: 1px solid var(--shell-border-soft);
+  border-radius: var(--shell-radius);
+  background: linear-gradient(180deg, var(--panel), var(--panel-strong));
+  padding: 14px;
+}
+
+.shell-card-rail {
+  background: linear-gradient(180deg, rgba(7, 14, 35, 0.95), rgba(6, 12, 28, 0.92));
+}
+
+.shell-card-muted {
+  background: linear-gradient(180deg, rgba(8, 16, 40, 0.82), rgba(7, 14, 34, 0.92));
+}
+
+.shell-card-truth {
+  background: var(--shell-muted-bg);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.shell-section-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.shell-muted-copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.shell-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  padding: 0.22rem 0.56rem;
+  border: 1px solid var(--shell-border-soft);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.shell-badge-ready {
+  color: var(--success);
+}
+
+.shell-badge-partial {
+  color: var(--accent);
+}
+
+.shell-badge-error {
+  color: var(--danger);
+}
+
+.shell-badge-muted {
+  color: var(--muted);
+}
+
+.shell-left-brand {
+  display: grid;
+  gap: 8px;
+}
+
+.shell-nav-card {
+  display: grid;
+  gap: 10px;
+}
+
+.workspace-tab-shell-active {
+  border-left: 3px solid rgba(98, 214, 255, 0.66);
+}
+
+.shell-session-identity-card {
+  display: grid;
+  gap: 10px;
+}
+
+.shell-session-meta,
+.shell-account-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.shell-session-id {
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.78rem;
+}
+
+.shell-disclosure-control,
+.shell-account-block {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.shell-center-main {
+  min-width: 0;
+}
+
+.workspace-frame-card {
+  padding: 16px;
+  gap: 12px;
+}
+
+.workspace-frame-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.workspace-frame-header h2 {
+  margin: 0.15rem 0 0;
+  font-size: 1.18rem;
+  line-height: 1.2;
+}
+
+.workspace-frame-note {
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.workspace-frame-body {
+  min-width: 0;
+}
+
+.truth-rail {
+  align-content: start;
+}
+
+.truth-rail-section {
+  display: grid;
+  gap: 10px;
+}
+
+.truth-rail-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.truth-rail-section-body {
+  display: grid;
+  gap: 10px;
+}
+
+.truth-rail-keyline {
+  margin: 0;
+  font-weight: 600;
+}
+
+.truth-rail-pairs {
+  display: grid;
+  gap: 8px;
+}
+
+.truth-rail-pairs div {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--shell-border-soft);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.truth-rail-pairs span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+@media (max-width: 1280px) {
+  .global-header-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-frame-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* Phase 2 governed chat + shared approval language. */
+.governed-chat-workspace {
+  gap: 18px;
+}
+
+.governed-chat-card {
+  display: grid;
+  gap: 14px;
+}
+
+.governed-chat-runtime {
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.governed-thread {
+  display: grid;
+  gap: 10px;
+  max-height: 66vh;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.thread-block {
+  display: grid;
+  gap: 8px;
+}
+
+.thread-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.thread-block p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.thread-block-operator {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.thread-block-agent {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.thread-block-agent-draft {
+  border-style: dashed;
+}
+
+.proposal-card {
+  border-color: rgba(255, 176, 92, 0.26);
+  background: rgba(255, 176, 92, 0.08);
+  display: grid;
+  gap: 10px;
+}
+
+.proposal-card-header,
+.execution-receipt-header,
+.approval-transition-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.proposal-summary {
+  margin: 0;
+  font-weight: 600;
+  white-space: pre-wrap;
+}
+
+.proposal-consequence {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.proposal-consequence span {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.72rem;
+}
+
+.decision-zone {
+  display: grid;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.decision-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.approval-transition-card {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.execution-receipt {
+  display: grid;
+  gap: 8px;
+}
+
+.execution-receipt-executed {
+  border-color: rgba(103, 232, 201, 0.24);
+  background: rgba(103, 232, 201, 0.08);
+}
+
+.execution-receipt-failed,
+.execution-receipt-unverifiable {
+  border-color: rgba(251, 113, 133, 0.3);
+  background: rgba(251, 113, 133, 0.08);
+}
+
+.execution-receipt-rejected {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.approval-meta-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.approval-meta-grid div {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.approval-meta-grid span {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+}
+
+.thread-notice {
+  display: grid;
+  gap: 8px;
+}
+
+.thread-notice-system {
+  border-color: rgba(255, 191, 36, 0.24);
+  background: rgba(255, 191, 36, 0.09);
+}
+
+.thread-notice-error {
+  border-color: rgba(251, 113, 133, 0.28);
+  background: rgba(251, 113, 133, 0.08);
+}
+
+.governed-composer textarea:disabled {
+  opacity: 0.72;
+}
+
+@media (max-width: 900px) {
+  .decision-actions {
+    width: 100%;
+  }
+
+  .decision-actions button {
+    width: 100%;
+  }
+}
