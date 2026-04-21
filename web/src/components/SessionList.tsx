@@ -91,7 +91,7 @@ export function SessionList<TMetadata>({
     <section
       className="session-list-card"
       data-testid="workspace-session-list"
-      aria-label={`${workspaceName} ${ui.sessionList.newSession}`}
+      aria-label={`${workspaceName} ${locale === "de" ? "Sessions" : "sessions"}`}
     >
       <header className="session-list-header">
         <div>
