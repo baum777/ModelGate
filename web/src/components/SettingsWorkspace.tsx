@@ -1,7 +1,33 @@
+import React from "react";
+
 export type DiagnosticEntry = {
   kind: "info" | "warning" | "error";
   label: string;
   detail?: string;
+};
+
+export type SettingsTruthSnapshot = {
+  backend: {
+    label: string;
+    detail: string;
+  };
+  github: {
+    sessionLabel: string;
+    connectionLabel: string;
+    repositoryLabel: string;
+    accessLabel: string;
+  };
+  matrix: {
+    identityLabel: string;
+    connectionLabel: string;
+    homeserverLabel: string;
+    scopeLabel: string;
+  };
+  models: {
+    activeAlias: string;
+    availableCount: number;
+    registrySourceLabel: string;
+  };
 };
 
 type SettingsWorkspaceProps = {
@@ -9,6 +35,7 @@ type SettingsWorkspaceProps = {
   onExpertModeChange: (value: boolean) => void;
   diagnostics: DiagnosticEntry[];
   onClearDiagnostics: () => void;
+  truthSnapshot: SettingsTruthSnapshot;
 };
 
 export function SettingsWorkspace({
@@ -16,6 +43,7 @@ export function SettingsWorkspace({
   onExpertModeChange,
   diagnostics,
   onClearDiagnostics,
+  truthSnapshot,
 }: SettingsWorkspaceProps) {
   return (
     <section className="workspace-panel settings-workspace" data-testid="settings-workspace">
@@ -24,7 +52,7 @@ export function SettingsWorkspace({
           <p className="status-pill status-partial">Settings</p>
           <h1>Einstellungen</h1>
           <p className="hero-copy">
-            Disclosure wählen, Verbindungstruth prüfen und Diagnose im Expert Mode öffnen.
+            Disclosure wählen, Identität und Verbindung gegen Backendtruth prüfen und Diagnose im Expert Mode öffnen.
           </p>
         </div>
       </section>
@@ -50,15 +78,77 @@ export function SettingsWorkspace({
         <article className="workspace-card">
           <header className="card-header">
             <div>
-              <span>Autorität</span>
-              <strong>Identitäts- und Verbindungstruth</strong>
+              <span>Identität und Verbindung</span>
+              <strong>Backend-, GitHub- und Matrixtruth</strong>
             </div>
           </header>
+          <div className="detail-grid">
+            <div>
+              <span>Backend</span>
+              <strong>{truthSnapshot.backend.label}</strong>
+            </div>
+            <div>
+              <span>GitHub Session</span>
+              <strong>{truthSnapshot.github.sessionLabel}</strong>
+            </div>
+            <div>
+              <span>GitHub Verbindung</span>
+              <strong>{truthSnapshot.github.connectionLabel}</strong>
+            </div>
+            <div>
+              <span>GitHub Zugriff</span>
+              <strong>{truthSnapshot.github.accessLabel}</strong>
+            </div>
+            <div>
+              <span>GitHub Repo</span>
+              <strong>{truthSnapshot.github.repositoryLabel}</strong>
+            </div>
+            <div>
+              <span>Matrix Identität</span>
+              <strong>{truthSnapshot.matrix.identityLabel}</strong>
+            </div>
+            <div>
+              <span>Matrix Verbindung</span>
+              <strong>{truthSnapshot.matrix.connectionLabel}</strong>
+            </div>
+            <div>
+              <span>Homeserver</span>
+              <strong>{truthSnapshot.matrix.homeserverLabel}</strong>
+            </div>
+            <div>
+              <span>Bereich</span>
+              <strong>{truthSnapshot.matrix.scopeLabel}</strong>
+            </div>
+          </div>
+          <p className="muted-copy">{truthSnapshot.backend.detail}</p>
           <p className="muted-copy">
-            Gemeinsame Infrastruktur bedeutet nicht gemeinsame Autorität. GitHub-Ausführung bleibt pro Nutzer, Matrix ist eine gemeinsame Kollaborationsfläche mit pro-Nutzer-Identität, und die AI-Provider-Zugangsdaten bleiben privat.
+            Gemeinsame Infrastruktur bedeutet nicht gemeinsame Autorität. Der Browser spiegelt nur Wahrheit wider, die der Backend-Server bereits belegen kann.
           </p>
+        </article>
+
+        <article className="workspace-card">
+          <header className="card-header">
+            <div>
+              <span>Modelle</span>
+              <strong>Backend-Policy und Auswahl</strong>
+            </div>
+          </header>
+          <div className="detail-grid">
+            <div>
+              <span>Aktiver Alias</span>
+              <strong>{truthSnapshot.models.activeAlias}</strong>
+            </div>
+            <div>
+              <span>Verfügbare Modelle</span>
+              <strong>{String(truthSnapshot.models.availableCount)}</strong>
+            </div>
+            <div>
+              <span>Quelle</span>
+              <strong>{truthSnapshot.models.registrySourceLabel}</strong>
+            </div>
+          </div>
           <p className="muted-copy">
-            Der Browser spiegelt nur Wahrheit wider, die der Backend-Server bereits belegen kann. Er verwaltet keine Zugangsdaten und leitet keine Account-Zugehörigkeit ab.
+            Modellwahl bleibt alias-basiert. Provider-Zuordnung und Backend-Pfade bleiben serverowned und werden nicht im Browser als Wahrheit behandelt.
           </p>
         </article>
 

@@ -87,6 +87,27 @@ function friendlyRepoLabel(index: number, expertMode: boolean, fullName: string)
   return expertMode ? fullName : `Repository ${index + 1}`;
 }
 
+export function describeRepositoryAccess(repo: GitHubRepoSummary | null) {
+  if (!repo) {
+    return "Kein Repo ausgewählt";
+  }
+
+  return repo.permissions.canWrite ? "Schreibzugriff" : "Nur Lesen";
+}
+
+function formatGitHubRiskLevel(riskLevel: GitHubChangePlan["riskLevel"]) {
+  switch (riskLevel) {
+    case "low_surface":
+      return "low surface";
+    case "medium_surface":
+      return "medium surface";
+    case "high_surface":
+      return "high surface";
+    default:
+      return riskLevel;
+  }
+}
+
 function buildRawDiffPreview(plan: GitHubChangePlan | null) {
   if (!plan) {
     return null;
@@ -206,6 +227,12 @@ export function buildGitHubReviewItems(
           : "pending_review",
       stale: proposalPlan.stale,
       sourceLabel: "GitHub Workspace",
+      provenanceRows: [
+        { label: "Repository", value: proposalPlan.repo.fullName },
+        { label: "Ausgangszweig", value: proposalPlan.baseRef },
+        { label: "Zielzweig", value: proposalPlan.targetBranch },
+        { label: "Risiko", value: formatGitHubRiskLevel(proposalPlan.riskLevel) },
+      ],
     },
   ];
 }
@@ -337,8 +364,10 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
 
   const connectionLabel = props.backendHealthy === true
     ? "Bereit"
-    : "Nicht verbunden";
-  const accessLabel = "Nur Lesen";
+    : props.backendHealthy === false
+      ? "Nicht verbunden"
+      : "Wird geprüft";
+  const accessLabel = describeRepositoryAccess(selectedRepo);
   const analysisLabel = proposalPlan
     ? "Plan erstellt"
     : analysisBundle

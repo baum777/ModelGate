@@ -18,6 +18,10 @@ test("Review workspace prioritizes stale items and exposes a canonical queue", (
       summary: "Receipt available",
       status: "executed",
       sourceLabel: "GitHub Workspace",
+      provenanceRows: [
+        { label: "Repository", value: "acme/console" },
+        { label: "Zielzweig", value: "main" },
+      ],
     },
     {
       id: "pending-1",
@@ -26,6 +30,10 @@ test("Review workspace prioritizes stale items and exposes a canonical queue", (
       summary: "Awaiting approval",
       status: "pending_review",
       sourceLabel: "Matrix Workspace",
+      provenanceRows: [
+        { label: "Raum", value: "!room:matrix.example" },
+        { label: "Snapshot", value: "snapshot-1" },
+      ],
     },
     {
       id: "stale-1",
@@ -35,6 +43,9 @@ test("Review workspace prioritizes stale items and exposes a canonical queue", (
       status: "stale",
       stale: true,
       sourceLabel: "GitHub Workspace",
+      provenanceRows: [
+        { label: "Repository", value: "acme/console" },
+      ],
     },
   ];
 
@@ -52,4 +63,6 @@ test("Review workspace prioritizes stale items and exposes a canonical queue", (
   assert.match(markup, /Prüfungswarteschlange/);
   assert.match(markup, /Veraltete Prüfung/);
   assert.match(markup, /Alle offenen Prüfungen/);
+  assert.match(markup, /Repository/);
+  assert.match(markup, /Snapshot/);
 });

@@ -101,6 +101,9 @@ const DEFAULT_GITHUB_CONTEXT: GitHubWorkspaceStatus = {
 };
 
 const DEFAULT_MATRIX_CONTEXT: MatrixWorkspaceStatus = {
+  identityLabel: "Identität wird geprüft",
+  connectionLabel: "Wird geprüft",
+  homeserverLabel: "n/a",
   scopeLabel: "Noch kein Bereich gewählt",
   summaryLabel: "Noch keine Zusammenfassung",
   approvalLabel: "Nicht erforderlich",
@@ -677,6 +680,7 @@ export default function App() {
 
   const githubRows: StatusPanelRow[] = [
     { label: "Repository", value: githubContext.repositoryLabel },
+    { label: "Verbindung", value: githubContext.connectionLabel },
     { label: "Zugriff", value: githubUnlocked ? githubContext.accessLabel : "Nicht angemeldet" },
     ...(githubUnlocked && githubContext.approvalLabel !== "Nicht erforderlich"
       ? [{ label: "Freigabe", value: githubContext.approvalLabel }]
@@ -684,6 +688,8 @@ export default function App() {
   ];
 
   const matrixRows: StatusPanelRow[] = [
+    { label: "Identität", value: matrixContext.identityLabel },
+    { label: "Verbindung", value: matrixContext.connectionLabel },
     { label: "Bereich", value: matrixContext.scopeLabel },
     { label: "Zusammenfassung", value: matrixContext.summaryLabel },
     ...(matrixContext.approvalLabel !== "Nicht erforderlich"
@@ -706,9 +712,52 @@ export default function App() {
     },
   ];
 
+  const settingsTruthSnapshot = {
+    backend: {
+      label:
+        backendHealthy === false
+          ? "Nicht verfügbar"
+          : backendHealthy === true
+            ? "Bereit"
+            : "Wird geprüft",
+      detail:
+        backendHealthy === false
+          ? "Backend health is unavailable; the shell remains fail-closed."
+          : backendHealthy === true
+            ? "Backend health is available."
+            : "Backend health is being checked.",
+    },
+    github: {
+      sessionLabel:
+        githubAuthState.status === "authenticated"
+          ? "Angemeldet"
+          : githubAuthState.status === "loading"
+            ? "Session wird geprüft"
+            : githubAuthState.error
+              ? "Fehler"
+              : "Nicht angemeldet",
+      connectionLabel: githubContext.connectionLabel,
+      repositoryLabel: githubContext.repositoryLabel,
+      accessLabel: githubUnlocked ? githubContext.accessLabel : "Nicht angemeldet",
+    },
+    matrix: {
+      identityLabel: matrixContext.identityLabel,
+      connectionLabel: matrixContext.connectionLabel,
+      homeserverLabel: matrixContext.homeserverLabel,
+      scopeLabel: matrixContext.scopeLabel,
+    },
+    models: {
+      activeAlias: activeModelAlias ?? "Noch nicht gewählt",
+      availableCount: availableModels.length,
+      registrySourceLabel: modelRegistry.length > 0 ? "backend-policy" : "n/a",
+    },
+  };
+
   const settingsRows: StatusPanelRow[] = [
-    { label: "Ansicht", value: expertMode ? "Expert" : "Beginner" },
-    { label: "Diagnose", value: expertMode ? "Auf Anfrage sichtbar" : "Verborgen" },
+    { label: "Backend", value: settingsTruthSnapshot.backend.label },
+    { label: "GitHub", value: `${settingsTruthSnapshot.github.sessionLabel} · ${settingsTruthSnapshot.github.accessLabel}` },
+    { label: "Matrix", value: `${settingsTruthSnapshot.matrix.identityLabel} · ${settingsTruthSnapshot.matrix.connectionLabel}` },
+    { label: "Modell", value: settingsTruthSnapshot.models.activeAlias },
   ];
 
   const currentRows = useMemo(() => {
@@ -733,6 +782,10 @@ export default function App() {
           return githubAuthState.error ? "Verbindung prüfen" : "Nicht angemeldet";
         }
 
+        if (githubContext.connectionLabel !== "Bereit") {
+          return githubContext.connectionLabel;
+        }
+
         if (githubContext.approvalLabel !== "Nicht erforderlich") {
           return "Freigabe nötig";
         }
@@ -743,6 +796,10 @@ export default function App() {
 
         return githubContext.connectionLabel;
       case "matrix":
+        if (matrixContext.connectionLabel !== "Verbunden") {
+          return matrixContext.connectionLabel;
+        }
+
         if (matrixContext.approvalLabel !== "Nicht erforderlich") {
           return "Freigabe nötig";
         }
@@ -771,7 +828,31 @@ export default function App() {
 
         return "Aktiv";
       case "settings":
-        return expertMode ? "Expert Mode" : "Beginner Mode";
+        if (backendHealthy === false) {
+          return "Backend prüfen";
+        }
+
+        if (githubAuthState.error) {
+          return "GitHub prüfen";
+        }
+
+        if (githubAuthState.status === "loading") {
+          return "Session prüfen";
+        }
+
+        if (!githubUnlocked) {
+          return "GitHub gesperrt";
+        }
+
+        if (matrixContext.connectionLabel === "Nicht verbunden") {
+          return "Matrix prüfen";
+        }
+
+        if (!activeModelAlias) {
+          return "Modell wählen";
+        }
+
+        return "Kontrollzentrum";
       default:
         if (chatPendingProposal?.status === "pending") {
           return "Freigabe nötig";
@@ -793,11 +874,15 @@ export default function App() {
     chatPendingProposal?.status,
     expertMode,
     githubAuthState.error,
+    githubAuthState.status,
     githubContext.approvalLabel,
     githubContext.connectionLabel,
     githubContext.repositoryLabel,
     githubUnlocked,
+    backendHealthy,
+    activeModelAlias,
     matrixContext.approvalLabel,
+    matrixContext.connectionLabel,
     matrixContext.scopeLabel,
     matrixContext.summaryLabel,
     mode,
@@ -836,10 +921,22 @@ export default function App() {
           return githubAuthState.error ? "error" : "partial";
         }
 
+        if (githubContext.connectionLabel !== "Bereit") {
+          return githubContext.connectionLabel === "Nicht verbunden" ? "error" : "partial";
+        }
+
         return githubContext.approvalLabel !== "Nicht erforderlich" || githubContext.repositoryLabel.startsWith("Noch kein")
           ? "partial"
           : "ready";
       case "matrix":
+        if (matrixContext.connectionLabel === "Nicht verbunden") {
+          return "error";
+        }
+
+        if (matrixContext.connectionLabel !== "Verbunden") {
+          return "partial";
+        }
+
         return matrixContext.approvalLabel !== "Nicht erforderlich" || matrixContext.scopeLabel.startsWith("Noch kein") || matrixContext.summaryLabel.startsWith("Noch keine")
           ? "partial"
           : "ready";
@@ -854,7 +951,27 @@ export default function App() {
 
         return reviewItems.some((item) => item.status === "pending_review") ? "partial" : "ready";
       case "settings":
-        return "partial";
+        if (backendHealthy === false) {
+          return "error";
+        }
+
+        if (githubAuthState.error) {
+          return "error";
+        }
+
+        if (githubAuthState.status === "loading" || !githubUnlocked || matrixContext.connectionLabel === "Wird geprüft") {
+          return "partial";
+        }
+
+        if (matrixContext.connectionLabel === "Nicht verbunden") {
+          return "error";
+        }
+
+        if (!activeModelAlias) {
+          return "partial";
+        }
+
+        return "ready";
       default:
         if (chatPendingProposal?.status === "pending" || chatPendingProposal?.status === "executing") {
           return "partial";
@@ -871,9 +988,14 @@ export default function App() {
     chatLatestReceipt?.outcome,
     chatPendingProposal?.status,
     githubAuthState.error,
+    githubAuthState.status,
     githubContext.approvalLabel,
+    githubContext.connectionLabel,
     githubContext.repositoryLabel,
     githubUnlocked,
+    backendHealthy,
+    activeModelAlias,
+    matrixContext.connectionLabel,
     matrixContext.approvalLabel,
     matrixContext.scopeLabel,
     matrixContext.summaryLabel,
@@ -888,6 +1010,12 @@ export default function App() {
           return githubAuthState.error ? "GitHub-Sessionprüfung fehlgeschlagen." : "Admin-Anmeldung erforderlich.";
         }
 
+        if (githubContext.connectionLabel !== "Bereit") {
+          return githubContext.connectionLabel === "Nicht verbunden"
+            ? "GitHub-Verbindung ist nicht verfügbar."
+            : "GitHub-Verbindung wird geprüft.";
+        }
+
         if (githubContext.approvalLabel !== "Nicht erforderlich") {
           return "Vorschlag wartet auf Freigabe.";
         }
@@ -898,6 +1026,12 @@ export default function App() {
 
         return "Repo lesen und Vorschläge vorbereiten.";
       case "matrix":
+        if (matrixContext.connectionLabel !== "Verbunden") {
+          return matrixContext.connectionLabel === "Nicht verbunden"
+            ? "Matrix-Identität oder Verbindung ist nicht verfügbar."
+            : "Matrix-Verbindung wird geprüft.";
+        }
+
         if (matrixContext.scopeLabel.startsWith("Noch kein")) {
           return "Wähle einen Bereich, um das Topic-Update zu starten.";
         }
@@ -926,7 +1060,31 @@ export default function App() {
 
         return "Prüfungen sind bereit.";
       case "settings":
-        return "Ansicht und Diagnose sauber trennen.";
+        if (backendHealthy === false) {
+          return "Backendtruth ist nicht verfügbar; Settings bleiben fail-closed.";
+        }
+
+        if (githubAuthState.error) {
+          return "GitHub-Sessionprüfung ist fehlgeschlagen.";
+        }
+
+        if (githubAuthState.status === "loading") {
+          return "GitHub-Sitzung wird geprüft.";
+        }
+
+        if (!githubUnlocked) {
+          return "GitHub-Ausführung bleibt gesperrt, bis die Sitzung authentifiziert ist.";
+        }
+
+        if (matrixContext.connectionLabel === "Nicht verbunden") {
+          return "Matrix-Identität ist noch nicht aufgelöst.";
+        }
+
+        if (!activeModelAlias) {
+          return "Der Backend-Modellalias ist noch nicht gewählt.";
+        }
+
+        return "Identitäts-, Verbindungs- und Modelltruth sind sichtbar.";
       default:
         if (chatPendingProposal?.status === "pending") {
           return "Chat-Vorschlag wartet auf Freigabe.";
@@ -947,9 +1105,13 @@ export default function App() {
     chatLatestReceipt?.outcome,
     chatPendingProposal?.status,
     githubAuthState.error,
+    githubAuthState.status,
     githubContext.approvalLabel,
+    githubContext.connectionLabel,
     githubContext.repositoryLabel,
     githubUnlocked,
+    activeModelAlias,
+    matrixContext.connectionLabel,
     matrixContext.approvalLabel,
     matrixContext.scopeLabel,
     matrixContext.summaryLabel,
@@ -1004,8 +1166,24 @@ export default function App() {
 
         return "Arbeite die offenen Punkte der Reihe nach ab.";
       case "settings":
+        if (backendHealthy === false) {
+          return "Backendtruth ist nicht verfügbar; Settings bleiben fail-closed.";
+        }
+
+        if (githubAuthState.error) {
+          return "GitHub-Sessionprüfung ist fehlgeschlagen.";
+        }
+
+        if (!githubUnlocked) {
+          return "GitHub-Sitzung ist noch nicht authentifiziert.";
+        }
+
+        if (matrixContext.connectionLabel === "Nicht verbunden") {
+          return "Matrix-Identität und Verbindung sind noch nicht aufgelöst.";
+        }
+
         return expertMode
-          ? "Technische Details sind sichtbar, wenn du sie brauchst."
+          ? "Technische Details zeigen reale Verbindungs- und Modelltruth."
           : "Expert zeigt technische Details nur auf explizite Anfrage.";
       default:
         if (chatPendingProposal?.status === "pending") {
@@ -1033,6 +1211,7 @@ export default function App() {
     githubContext.approvalLabel,
     githubContext.repositoryLabel,
     githubUnlocked,
+    matrixContext.connectionLabel,
     matrixContext.approvalLabel,
     matrixContext.scopeLabel,
     matrixContext.summaryLabel,
@@ -1079,8 +1258,10 @@ export default function App() {
         ];
       case "settings":
         return [
-          { label: "Ansicht", value: expertMode ? "Expert" : "Beginner" },
-          { label: "Diagnose", value: expertMode ? "Sichtbar" : "Verborgen" },
+          { label: "Backend", value: settingsTruthSnapshot.backend.label },
+          { label: "GitHub Session", value: settingsTruthSnapshot.github.sessionLabel },
+          { label: "Matrix Identität", value: settingsTruthSnapshot.matrix.identityLabel },
+          { label: "Modell", value: settingsTruthSnapshot.models.activeAlias },
         ];
       default:
         return [
@@ -1089,7 +1270,28 @@ export default function App() {
           { label: "Route", value: chatSession?.metadata.chatState.activeRoute?.selectedAlias ?? "n/a" }
         ];
     }
-  }, [chatPendingProposal?.status, chatSession?.metadata.chatState.activeRoute?.selectedAlias, chatSession?.metadata.chatState.receipts.length, expertMode, githubAuthState.error, githubAuthState.status, githubContext.approvalLabel, githubContext.expertDetails, githubUnlocked, matrixContext.approvalLabel, matrixContext.expertDetails, matrixContext.scopeLabel, matrixContext.summaryLabel, mode, reviewItems]);
+  }, [
+    chatPendingProposal?.status,
+    chatSession?.metadata.chatState.activeRoute?.selectedAlias,
+    chatSession?.metadata.chatState.receipts.length,
+    expertMode,
+    githubAuthState.error,
+    githubAuthState.status,
+    githubContext.approvalLabel,
+    githubContext.expertDetails,
+    githubUnlocked,
+    matrixContext.approvalLabel,
+    matrixContext.connectionLabel,
+    matrixContext.expertDetails,
+    matrixContext.scopeLabel,
+    matrixContext.summaryLabel,
+    mode,
+    reviewItems,
+    settingsTruthSnapshot.backend.label,
+    settingsTruthSnapshot.github.sessionLabel,
+    settingsTruthSnapshot.matrix.identityLabel,
+    settingsTruthSnapshot.models.activeAlias,
+  ]);
 
   const currentExpertChildren = useMemo(() => {
     if (mode === "github") {
@@ -1237,7 +1439,18 @@ export default function App() {
     }
 
     return null;
-  }, [githubContext.expertDetails, matrixContext.expertDetails, matrixContext.approvalLabel, matrixContext.scopeLabel, matrixContext.summaryLabel, mode]);
+  }, [
+    githubContext.expertDetails,
+    matrixContext.expertDetails,
+    matrixContext.approvalLabel,
+    matrixContext.scopeLabel,
+    matrixContext.summaryLabel,
+    settingsTruthSnapshot.backend.label,
+    settingsTruthSnapshot.github.sessionLabel,
+    settingsTruthSnapshot.matrix.identityLabel,
+    settingsTruthSnapshot.models.activeAlias,
+    mode,
+  ]);
 
   const workspaceSurface = mode === "chat" ? (
     <ChatWorkspace
@@ -1290,6 +1503,7 @@ export default function App() {
       onExpertModeChange={setExpertMode}
       diagnostics={telemetry as DiagnosticEntry[]}
       onClearDiagnostics={() => setTelemetry([])}
+      truthSnapshot={settingsTruthSnapshot}
     />
   );
   const statusToneForBadge = currentStatusTone === "error" ? "error" : currentStatusTone === "ready" ? "ready" : "partial";

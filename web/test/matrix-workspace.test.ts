@@ -36,4 +36,8 @@ test("Matrix workspace review items map topic plans into the shared review langu
   assert.equal(pendingItems[0]?.sourceLabel, "Matrix Workspace");
   assert.match(pendingItems[0]?.summary ?? "", /Aktuell:/);
   assert.match(pendingItems[0]?.title ?? "", /Raumtopic/);
+  assert.deepEqual(pendingItems[0]?.provenanceRows?.[0], {
+    label: "Raum",
+    value: "!room:matrix.example",
+  });
 });

@@ -42,6 +42,9 @@ type WorkflowStatus = "loading" | "partial" | "ready" | "error";
 type LoadStatus = "idle" | "loading" | "ready" | "error";
 
 export type MatrixWorkspaceStatus = {
+  identityLabel: string;
+  connectionLabel: string;
+  homeserverLabel: string;
   scopeLabel: string;
   summaryLabel: string;
   approvalLabel: string;
@@ -109,6 +112,12 @@ export function buildMatrixReviewItems(topicPlan: MatrixRoomTopicAgentPlan | nul
       status: topicPlan.status === "executed" ? "executed" : "pending_review",
       stale: false,
       sourceLabel: "Matrix Workspace",
+      provenanceRows: [
+        { label: "Raum", value: topicPlan.roomId },
+        { label: "Scope", value: text(topicPlan.scopeId) },
+        { label: "Snapshot", value: text(topicPlan.snapshotId) },
+        { label: "Risiko", value: topicPlan.risk },
+      ],
     },
   ];
 }
@@ -212,6 +221,19 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   const activeComposerRoomId = roomId?.trim() || topicRoomId.trim() || selectedRoomIds[0]?.trim() || null;
   const threadOpenSourceId = selectedThreadRootId?.trim() || selectedEventId?.trim() || null;
   const activeThreadRootId = selectedThreadRootId?.trim() || null;
+  const identityLabel = whoami
+    ? whoami.userId
+    : identityError
+      ? "Identität nicht aufgelöst"
+      : "Identität wird geladen";
+  const connectionLabel = status === "ready"
+    ? "Verbunden"
+    : status === "partial"
+      ? "Teilweise verbunden"
+      : status === "error"
+        ? "Nicht verbunden"
+        : "Wird geprüft";
+  const homeserverLabel = whoami?.homeserver ?? "n/a";
   const matrixExpertDetails = useMemo(
     () => ({
       route: "/api/matrix/*",
@@ -252,6 +274,9 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   );
   const matrixContextPayload = useMemo<MatrixWorkspaceStatus>(
     () => ({
+      identityLabel,
+      connectionLabel,
+      homeserverLabel,
       scopeLabel: currentScope ? "Bereich gewählt" : "Noch kein Bereich gewählt",
       summaryLabel: scopeSummary ? "Zusammenfassung bereit" : "Noch keine Zusammenfassung",
       approvalLabel: topicPlan
@@ -265,7 +290,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       expertDetails: matrixExpertDetails,
       reviewItems: matrixReviewItems,
     }),
-    [currentScope, matrixExpertDetails, matrixReviewItems, scopeSummary, topicPlan],
+    [connectionLabel, currentScope, identityLabel, homeserverLabel, matrixExpertDetails, matrixReviewItems, scopeSummary, topicPlan],
   );
 
   useEffect(() => {

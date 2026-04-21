@@ -16,6 +16,10 @@ export type ReviewItem = {
   status: ReviewItemStatus;
   stale?: boolean;
   sourceLabel?: string;
+  provenanceRows?: Array<{
+    label: string;
+    value: string;
+  }>;
 };
 
 type ReviewWorkspaceProps = {
@@ -95,6 +99,16 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
       : items.length === 1
         ? "Eine offene Prüfung"
         : `${items.length} offene Prüfungen`;
+  const sourceLabelFor = (item: ReviewItem) =>
+    item.sourceLabel ?? (item.source === "github" ? "GitHub Workspace" : "Matrix Workspace");
+  const provenanceRowsFor = (item: ReviewItem) => item.provenanceRows ?? [];
+  const primaryMetadata = primaryItem
+    ? [
+        { label: "Quelle", value: sourceLabelFor(primaryItem) },
+        { label: "Status", value: statusLabel(primaryItem.status) },
+        ...provenanceRowsFor(primaryItem),
+      ]
+    : [];
 
   return (
     <section className="workspace-panel review-workspace" data-testid="review-workspace">
@@ -153,10 +167,7 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
                 title={primaryItem.title}
                 detail={primaryItem.summary}
                 outcome="executed"
-                metadata={[
-                  { label: "Quelle", value: primaryItem.sourceLabel ?? primaryItem.source },
-                  { label: "Status", value: statusLabel(primaryItem.status) },
-                ]}
+                metadata={primaryMetadata}
                 testId="review-primary-executed"
               />
             ) : primaryItem.status === "rejected" ? (
@@ -165,10 +176,7 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
                 title={primaryItem.title}
                 detail={primaryItem.summary}
                 outcome="rejected"
-                metadata={[
-                  { label: "Quelle", value: primaryItem.sourceLabel ?? primaryItem.source },
-                  { label: "Status", value: statusLabel(primaryItem.status) },
-                ]}
+                metadata={primaryMetadata}
                 testId="review-primary-rejected"
               />
             ) : primaryItem.status === "approved" ? (
@@ -187,13 +195,7 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
                 consequence="Review bleibt read-only; die Entscheidung wird im Quell-Workspace getroffen."
                 statusLabel={primaryItem.stale ? "Veraltete Prüfung" : "Freigabe ausstehend"}
                 statusTone={primaryItem.stale ? "error" : "partial"}
-                metadata={[
-                  {
-                    label: "Quelle",
-                    value: primaryItem.sourceLabel ?? (primaryItem.source === "github" ? "GitHub Workspace" : "Matrix Workspace"),
-                  },
-                  { label: "Status", value: statusLabel(primaryItem.status) },
-                ]}
+                metadata={primaryMetadata}
               />
             )
           ) : null}
@@ -211,7 +213,7 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
                 <article key={item.id} className="review-queue-item">
                   <div className="review-queue-item-header">
                     <div>
-                      <span>{item.sourceLabel ?? (item.source === "github" ? "GitHub Workspace" : "Matrix Workspace")}</span>
+                      <span>{sourceLabelFor(item)}</span>
                       <strong>{item.title}</strong>
                     </div>
                     <span className={`status-pill ${item.status === "stale" ? "status-error" : item.status === "approved" || item.status === "executed" ? "status-ready" : "status-partial"}`}>
@@ -219,6 +221,16 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
                     </span>
                   </div>
                   <p>{item.summary}</p>
+                  {provenanceRowsFor(item).length > 0 ? (
+                    <div className="review-queue-item-provenance">
+                      {provenanceRowsFor(item).map((row) => (
+                        <p key={`${item.id}-${row.label}`}>
+                          <span>{row.label}</span>
+                          <strong>{row.value}</strong>
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
                   {item.stale ? <p className="warning-banner" role="status">Dieser Vorschlag ist veraltet und muss neu geprüft werden.</p> : null}
                 </article>
               ))}
