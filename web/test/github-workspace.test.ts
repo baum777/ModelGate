@@ -58,6 +58,7 @@ test("GitHub workspace review items map proposal state into the shared review la
   } as GitHubExecuteResult;
 
   const pendingItems = buildGitHubReviewItems(plan, null, null);
+  const pendingItemsEn = buildGitHubReviewItems(plan, null, null, "en");
   const approvedItems = buildGitHubReviewItems(plan, execution, null);
   const executedItems = buildGitHubReviewItems(plan, execution, verified);
   const rejectedItems = buildGitHubReviewItems(plan, execution, mismatch);
@@ -68,11 +69,14 @@ test("GitHub workspace review items map proposal state into the shared review la
   assert.equal(executedItems[0]?.status, "executed");
   assert.equal(rejectedItems[0]?.status, "rejected");
   assert.equal(staleItems[0]?.status, "stale");
-  assert.equal(executedItems[0]?.sourceLabel, "GitHub Workspace");
+  assert.equal(executedItems[0]?.sourceLabel, "GitHub-Workspace");
   assert.deepEqual(pendingItems[0]?.provenanceRows?.[0], {
     label: "Acting identity",
     value: "not exposed by backend",
   });
+  assert.equal(pendingItemsEn[0]?.sourceLabel, "GitHub workspace");
   assert.equal(describeRepositoryAccess(plan.repo), "Schreibzugriff");
   assert.equal(describeRepositoryAccess({ ...plan.repo, permissions: { canWrite: false } }), "Nur Lesen");
+  assert.equal(describeRepositoryAccess(plan.repo, "en"), "Write access");
+  assert.equal(describeRepositoryAccess({ ...plan.repo, permissions: { canWrite: false } }, "en"), "Read only");
 });

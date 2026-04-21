@@ -29,6 +29,7 @@ import {
   buildGovernanceMetadataRows,
   mergeMetadataRows,
 } from "../lib/governance-metadata.js";
+import { useLocalization, type Locale } from "../lib/localization.js";
 
 export type GitHubWorkspaceStatus = {
   repositoryLabel: string;
@@ -69,35 +70,172 @@ const ANALYSIS_QUESTION =
 const PROPOSAL_OBJECTIVE =
   "Erstelle einen sicheren Änderungsvorschlag für das gewählte Repo.";
 
+type GitHubLocaleText = {
+  repoLoadFailed: string;
+  riskLabel: string;
+  branchLabel: string;
+  commitLabel: string;
+  pullRequestLabel: string;
+  pullRequestUrlLabel: string;
+  reviewSourceLabel: string;
+  reviewReceiptPending: string;
+  reviewReceiptExecutionPending: string;
+  reviewReceiptVerification: (status: string) => string;
+  authorityDomain: string;
+  executionDomain: string;
+  planSummary: (planId: string) => string;
+  verificationPending: string;
+  proposalConstraintReadOnly: string;
+  proposalConstraintNoDirectExecution: string;
+  telemetryRepoChanged: string;
+  telemetryAnalysisStarted: string;
+  telemetryAnalysisStartedDetail: (repoFullName: string) => string;
+  telemetryAnalysisReady: string;
+  telemetryAnalysisReadyDetail: (fileCount: number) => string;
+  telemetryAnalysisFailed: string;
+  telemetryProposalRequested: string;
+  telemetryProposalRequestedDetail: (repoFullName: string) => string;
+  telemetryProposalReady: string;
+  telemetryProposalReadyDetail: (planId: string) => string;
+  telemetryProposalFailed: string;
+  telemetryApprovalSubmitted: string;
+  telemetryApprovalSubmittedDetail: string;
+  telemetryExecutionReady: string;
+  telemetryExecutionReadyDetail: (prNumber: number) => string;
+  telemetryExecutionFailed: string;
+  telemetryVerificationReady: string;
+  telemetryVerificationReadyDetail: (status: string) => string;
+  telemetryVerificationFailed: string;
+  telemetryProposalRejected: string;
+  telemetryProposalRejectedDetail: string;
+  eventPullRequestCreated: (prNumber: number) => string;
+  eventPullRequestVerified: (status: string) => string;
+  verifyFallbackError: string;
+};
+
+function getGitHubLocaleText(locale: Locale): GitHubLocaleText {
+  if (locale === "de") {
+    return {
+      repoLoadFailed: "GitHub-Repos konnten nicht geladen werden.",
+      riskLabel: "Risiko",
+      branchLabel: "Branch",
+      commitLabel: "Commit",
+      pullRequestLabel: "Pull Request",
+      pullRequestUrlLabel: "Pull-Request-URL",
+      reviewSourceLabel: "GitHub-Workspace",
+      reviewReceiptPending: "Vorschlag wartet auf Freigabe",
+      reviewReceiptExecutionPending: "Ausführung protokolliert, Prüfung ausstehend",
+      reviewReceiptVerification: (status) => `Prüfung ${status}`,
+      authorityDomain: "GitHub-Backend-Aktionsrouten",
+      executionDomain: "GitHub-Pull-Request-Workflow",
+      planSummary: (planId) => `Plan ${planId}`,
+      verificationPending: "Prüfung ausstehend",
+      proposalConstraintReadOnly: "Nur lesend vorbereiten",
+      proposalConstraintNoDirectExecution: "Keine direkte Ausführung",
+      telemetryRepoChanged: "GitHub-Repo gewechselt",
+      telemetryAnalysisStarted: "GitHub-Analyse gestartet",
+      telemetryAnalysisStartedDetail: (repoFullName) => `Repo ${repoFullName} wird lesend untersucht.`,
+      telemetryAnalysisReady: "GitHub-Analyse bereit",
+      telemetryAnalysisReadyDetail: (fileCount) => `${fileCount} Datei(en) wurden gelesen.`,
+      telemetryAnalysisFailed: "GitHub-Analyse fehlgeschlagen",
+      telemetryProposalRequested: "GitHub-Vorschlag angefordert",
+      telemetryProposalRequestedDetail: (repoFullName) => `Vorschlag für ${repoFullName} wird vorbereitet.`,
+      telemetryProposalReady: "GitHub-Vorschlag bereit",
+      telemetryProposalReadyDetail: (planId) => `Plan ${planId} wurde im Backend vorbereitet.`,
+      telemetryProposalFailed: "GitHub-Vorschlag fehlgeschlagen",
+      telemetryApprovalSubmitted: "GitHub-Freigabe gesendet",
+      telemetryApprovalSubmittedDetail: "Freigabe wurde an das Backend gesendet.",
+      telemetryExecutionReady: "GitHub-Ausführung bereit",
+      telemetryExecutionReadyDetail: (prNumber) => `Pull Request ${prNumber} wurde erstellt.`,
+      telemetryExecutionFailed: "GitHub-Ausführung fehlgeschlagen",
+      telemetryVerificationReady: "GitHub-Prüfung bereit",
+      telemetryVerificationReadyDetail: (status) => `Pull Request wurde mit Status ${status} geprüft.`,
+      telemetryVerificationFailed: "GitHub-Prüfung fehlgeschlagen",
+      telemetryProposalRejected: "GitHub-Vorschlag abgelehnt",
+      telemetryProposalRejectedDetail: "Die lokale Freigabeabsicht wurde verworfen.",
+      eventPullRequestCreated: (prNumber) => `Pull Request erstellt · ${prNumber}`,
+      eventPullRequestVerified: (status) => `PR geprüft · ${status}`,
+      verifyFallbackError: "Die GitHub-Prüfung konnte nicht abgeschlossen werden.",
+    };
+  }
+
+  return {
+    repoLoadFailed: "GitHub repositories could not be loaded.",
+    riskLabel: "Risk",
+    branchLabel: "Branch",
+    commitLabel: "Commit",
+    pullRequestLabel: "Pull request",
+    pullRequestUrlLabel: "Pull request URL",
+    reviewSourceLabel: "GitHub workspace",
+    reviewReceiptPending: "Proposal pending approval",
+    reviewReceiptExecutionPending: "Execution recorded, verification pending",
+    reviewReceiptVerification: (status) => `verification ${status}`,
+    authorityDomain: "GitHub backend action routes",
+    executionDomain: "GitHub pull request workflow",
+    planSummary: (planId) => `plan ${planId}`,
+    verificationPending: "verification pending",
+    proposalConstraintReadOnly: "Prepare in read-only mode",
+    proposalConstraintNoDirectExecution: "No direct execution",
+    telemetryRepoChanged: "GitHub repository changed",
+    telemetryAnalysisStarted: "GitHub analysis started",
+    telemetryAnalysisStartedDetail: (repoFullName) => `Inspecting repository ${repoFullName} in read-only mode.`,
+    telemetryAnalysisReady: "GitHub analysis ready",
+    telemetryAnalysisReadyDetail: (fileCount) => `${fileCount} file(s) were read.`,
+    telemetryAnalysisFailed: "GitHub analysis failed",
+    telemetryProposalRequested: "GitHub proposal requested",
+    telemetryProposalRequestedDetail: (repoFullName) => `Preparing proposal for ${repoFullName}.`,
+    telemetryProposalReady: "GitHub proposal ready",
+    telemetryProposalReadyDetail: (planId) => `Plan ${planId} was prepared in the backend.`,
+    telemetryProposalFailed: "GitHub proposal failed",
+    telemetryApprovalSubmitted: "GitHub approval submitted",
+    telemetryApprovalSubmittedDetail: "Approval was sent to the backend.",
+    telemetryExecutionReady: "GitHub execution ready",
+    telemetryExecutionReadyDetail: (prNumber) => `Pull request ${prNumber} was created.`,
+    telemetryExecutionFailed: "GitHub execution failed",
+    telemetryVerificationReady: "GitHub verification ready",
+    telemetryVerificationReadyDetail: (status) => `Pull request was checked with status ${status}.`,
+    telemetryVerificationFailed: "GitHub verification failed",
+    telemetryProposalRejected: "GitHub proposal rejected",
+    telemetryProposalRejectedDetail: "The local approval intent was discarded.",
+    eventPullRequestCreated: (prNumber) => `Pull request created · ${prNumber}`,
+    eventPullRequestVerified: (status) => `PR checked · ${status}`,
+    verifyFallbackError: "GitHub verification could not be completed.",
+  };
+}
+
 function createId() {
   return crypto.randomUUID();
 }
 
-function formatRepoStatus(status: GitHubRepoSummary["status"]) {
+function formatRepoStatus(status: GitHubRepoSummary["status"], locale: Locale) {
   switch (status) {
     case "ready":
-      return "Bereit";
+      return locale === "de" ? "Bereit" : "Ready";
     case "blocked":
-      return "Gesperrt";
+      return locale === "de" ? "Gesperrt" : "Blocked";
     default:
-      return "Nicht verbunden";
+      return locale === "de" ? "Nicht verbunden" : "Not connected";
   }
 }
 
-function formatRepoVisibility(isPrivate: boolean) {
-  return isPrivate ? "Privat" : "Öffentlich";
+function formatRepoVisibility(isPrivate: boolean, locale: Locale) {
+  return isPrivate
+    ? locale === "de" ? "Privat" : "Private"
+    : locale === "de" ? "Öffentlich" : "Public";
 }
 
-function friendlyRepoLabel(index: number, expertMode: boolean, fullName: string) {
-  return expertMode ? fullName : `Repository ${index + 1}`;
+function friendlyRepoLabel(index: number, expertMode: boolean, fullName: string, locale: Locale) {
+  return expertMode ? fullName : locale === "de" ? `Repository ${index + 1}` : `Repository ${index + 1}`;
 }
 
-export function describeRepositoryAccess(repo: GitHubRepoSummary | null) {
+export function describeRepositoryAccess(repo: GitHubRepoSummary | null, locale: Locale = "de") {
   if (!repo) {
-    return "Kein Repo ausgewählt";
+    return locale === "de" ? "Kein Repo ausgewählt" : "No repository selected";
   }
 
-  return repo.permissions.canWrite ? "Schreibzugriff" : "Nur Lesen";
+  return repo.permissions.canWrite
+    ? locale === "de" ? "Schreibzugriff" : "Write access"
+    : locale === "de" ? "Nur Lesen" : "Read only";
 }
 
 function formatGitHubRiskLevel(riskLevel: GitHubChangePlan["riskLevel"]) {
@@ -128,37 +266,37 @@ function buildRawDiffPreview(plan: GitHubChangePlan | null) {
     .slice(0, 1600);
 }
 
-function verificationStatusCopy(result: GitHubVerifyResult | null) {
+function verificationStatusCopy(result: GitHubVerifyResult | null, locale: Locale) {
   switch (result?.status) {
     case "verified":
       return {
-        label: "Geprüft",
+        label: locale === "de" ? "Geprüft" : "Verified",
         tone: "ready" as const,
-        detail: "Der Pull Request wurde bestätigt.",
+        detail: locale === "de" ? "Der Pull Request wurde bestätigt." : "The pull request was verified.",
       };
     case "pending":
       return {
-        label: "Prüfung läuft oder ist noch nicht eindeutig",
+        label: locale === "de" ? "Prüfung läuft oder ist noch nicht eindeutig" : "Verification is still pending",
         tone: "partial" as const,
-        detail: "Die Backend-Prüfung ist noch nicht abgeschlossen.",
+        detail: locale === "de" ? "Die Backend-Prüfung ist noch nicht abgeschlossen." : "Backend verification is not complete yet.",
       };
     case "mismatch":
       return {
-        label: "Abweichung gefunden",
+        label: locale === "de" ? "Abweichung gefunden" : "Mismatch detected",
         tone: "error" as const,
-        detail: "Die Prüfung passt nicht zum freigegebenen Vorschlag.",
+        detail: locale === "de" ? "Die Prüfung passt nicht zum freigegebenen Vorschlag." : "Verification does not match the approved proposal.",
       };
     case "failed":
       return {
-        label: "Prüfung fehlgeschlagen",
+        label: locale === "de" ? "Prüfung fehlgeschlagen" : "Verification failed",
         tone: "error" as const,
-        detail: "Die Backend-Prüfung konnte nicht abgeschlossen werden.",
+        detail: locale === "de" ? "Die Backend-Prüfung konnte nicht abgeschlossen werden." : "Backend verification could not be completed.",
       };
     default:
       return {
-        label: "Bereit zur Prüfung auf GitHub",
+        label: locale === "de" ? "Bereit zur Prüfung auf GitHub" : "Ready for verification on GitHub",
         tone: "partial" as const,
-        detail: "Der Pull Request wurde erstellt.",
+        detail: locale === "de" ? "Der Pull Request wurde erstellt." : "The pull request has been created.",
       };
   }
 }
@@ -167,30 +305,31 @@ function resultStatusCopy(
   executionResult: GitHubExecuteResult | null,
   verificationResult: GitHubVerifyResult | null,
   verifying: boolean,
+  locale: Locale,
 ) {
   if (!executionResult) {
     return {
-      label: "Noch nicht gestartet",
+      label: locale === "de" ? "Noch nicht gestartet" : "Not started yet",
       tone: "partial" as const,
-      detail: "Noch kein Pull Request erstellt.",
+      detail: locale === "de" ? "Noch kein Pull Request erstellt." : "No pull request created yet.",
     };
   }
 
   if (!verificationResult) {
     return verifying
       ? {
-          label: "Prüfung läuft oder ist noch nicht eindeutig",
+          label: locale === "de" ? "Prüfung läuft oder ist noch nicht eindeutig" : "Verification is still pending",
           tone: "partial" as const,
-          detail: "Der Pull Request wird jetzt geprüft.",
+          detail: locale === "de" ? "Der Pull Request wird jetzt geprüft." : "The pull request is being verified.",
         }
       : {
-          label: "Bereit zur Prüfung auf GitHub",
+          label: locale === "de" ? "Bereit zur Prüfung auf GitHub" : "Ready for verification on GitHub",
           tone: "partial" as const,
-          detail: "Der Pull Request wurde erstellt.",
+          detail: locale === "de" ? "Der Pull Request wurde erstellt." : "The pull request has been created.",
         };
   }
 
-  const copy = verificationStatusCopy(verificationResult);
+  const copy = verificationStatusCopy(verificationResult, locale);
 
   return {
     label: copy.label,
@@ -199,23 +338,26 @@ function resultStatusCopy(
   };
 }
 
-function friendlyTargetBranchLabel(targetBranch: string | null, repo: GitHubRepoSummary | null) {
+function friendlyTargetBranchLabel(targetBranch: string | null, repo: GitHubRepoSummary | null, locale: Locale) {
   if (!targetBranch) {
-    return "Hauptzweig";
+    return locale === "de" ? "Hauptzweig" : "Default branch";
   }
 
   if (repo && targetBranch === repo.defaultBranch) {
-    return "Hauptzweig";
+    return locale === "de" ? "Hauptzweig" : "Default branch";
   }
 
-  return "Zielzweig";
+  return locale === "de" ? "Zielzweig" : "Target branch";
 }
 
 export function buildGitHubReviewItems(
   proposalPlan: GitHubChangePlan | null,
   executionResult: GitHubExecuteResult | null,
   verificationResult: GitHubVerifyResult | null,
+  locale: Locale = "de",
 ): ReviewItem[] {
+  const localText = getGitHubLocaleText(locale);
+
   if (!proposalPlan) {
     return [];
   }
@@ -230,10 +372,10 @@ export function buildGitHubReviewItems(
           ? "approved"
           : "pending_review";
   const receiptSummary = verificationResult
-    ? `verification ${verificationResult.status}`
+    ? localText.reviewReceiptVerification(verificationResult.status)
     : executionResult
-      ? "execution recorded, verification pending"
-      : "proposal pending approval";
+      ? localText.reviewReceiptExecutionPending
+      : localText.reviewReceiptPending;
 
   return [
     {
@@ -243,27 +385,29 @@ export function buildGitHubReviewItems(
       summary: `${proposalPlan.rationale} · ${receiptSummary}`,
       status,
       stale: proposalPlan.stale,
-      sourceLabel: "GitHub Workspace",
+      sourceLabel: localText.reviewSourceLabel,
       provenanceRows: mergeMetadataRows(
         buildGovernanceMetadataRows({
           actingIdentity: BACKEND_TRUTH_UNAVAILABLE,
           activeScope: `${proposalPlan.repo.fullName}@${proposalPlan.baseRef}`,
-          authorityDomain: "github backend action routes",
+          authorityDomain: localText.authorityDomain,
           targetScope: `${proposalPlan.repo.fullName}@${proposalPlan.targetBranch}`,
-          executionDomain: "github pull request workflow",
+          executionDomain: localText.executionDomain,
           executionTarget: executionResult
             ? `PR #${executionResult.prNumber}`
             : `${proposalPlan.branchName} -> ${proposalPlan.targetBranch}`,
-          provenanceSummary: `plan ${proposalPlan.planId}`,
+          provenanceSummary: localText.planSummary(proposalPlan.planId),
           receiptSummary
         }),
-        [{ label: "Risk", value: formatGitHubRiskLevel(proposalPlan.riskLevel) }]
+        [{ label: localText.riskLabel, value: formatGitHubRiskLevel(proposalPlan.riskLevel) }]
       ),
     },
   ];
 }
 
 export function GitHubWorkspace(props: GitHubWorkspaceProps) {
+  const { locale, copy: ui } = useLocalization();
+  const localText = useMemo(() => getGitHubLocaleText(locale), [locale]);
   const [repos, setRepos] = useState<GitHubRepoSummary[]>([]);
   const [reposLoading, setReposLoading] = useState(true);
   const [reposError, setReposError] = useState<string | null>(null);
@@ -368,7 +512,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
           return;
         }
 
-        setReposError(error instanceof Error ? error.message : "GitHub-Repos konnten nicht geladen werden.");
+        setReposError(error instanceof Error ? error.message : localText.repoLoadFailed);
       } finally {
         if (!cancelled) {
           setReposLoading(false);
@@ -381,7 +525,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [localText.repoLoadFailed]);
 
   const selectedRepo = useMemo(
     () => repos.find((repo) => repo.fullName === selectedRepoFullName) ?? null,
@@ -389,46 +533,46 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
   );
 
   const connectionLabel = props.backendHealthy === true
-    ? "Bereit"
+    ? ui.shell.statusReady
     : props.backendHealthy === false
-      ? "Nicht verbunden"
-      : "Wird geprüft";
-  const accessLabel = describeRepositoryAccess(selectedRepo);
+      ? ui.shell.statusError
+      : ui.shell.healthChecking;
+  const accessLabel = describeRepositoryAccess(selectedRepo, locale);
   const analysisLabel = proposalPlan
-    ? "Plan erstellt"
+    ? ui.github.nextStepProposal
     : analysisBundle
-      ? "Bereit"
-      : "Noch nicht gestartet";
+      ? ui.shell.statusReady
+      : ui.github.nextStepAnalysis;
   const proposalLabel = proposalPlan
     ? executionResult
       ? verificationResult?.status === "verified"
-        ? "Verifiziert"
-        : "Ausgeführt"
+        ? ui.matrix.topicStatusVerified
+        : ui.review.executing
       : proposalPlan.stale
-        ? "Veraltet"
-        : "Bereit zur Prüfung"
+        ? ui.review.warning
+        : ui.github.reviewTitle
     : analysisBundle
-      ? "Bereit"
-      : "Noch nicht erstellt";
+      ? ui.shell.statusReady
+      : ui.github.proposalEmpty;
   const approvalLabel = proposalPlan
     ? proposalPlan.stale
-      ? "Prüfung erforderlich"
+      ? ui.review.warning
       : verificationResult?.status === "verified"
-        ? "Beleg verifiziert"
+        ? ui.matrix.topicStatusVerified
         : verificationResult?.status === "failed" || verificationResult?.status === "mismatch"
-          ? "Beleg mit Abweichung"
+          ? ui.matrix.topicStatusMismatch
           : executionResult
-            ? "Ausführungsbeleg offen"
-            : "Freigabe erforderlich"
+            ? ui.matrix.topicStatusOpen
+            : ui.review.approvalNeeded
     : analysisBundle
-      ? "Lesestatus bereit"
-      : "Nicht erforderlich";
-  const resultCopy = resultStatusCopy(executionResult, verificationResult, verifying);
+      ? ui.github.readOnly
+      : ui.common.none;
+  const resultCopy = resultStatusCopy(executionResult, verificationResult, verifying, locale);
   const selectedRepoLabel = selectedRepo
     ? props.expertMode
       ? selectedRepo.fullName
-      : "Repo ausgewählt"
-    : "Noch kein GitHub-Repo ausgewählt";
+      : ui.github.repoSelected
+    : ui.github.noRepoSelected;
   const rawDiffPreview = props.expertMode ? buildRawDiffPreview(proposalPlan) : null;
   const currentRequestId = requestId;
   const stalePlanBlocked = Boolean(
@@ -462,12 +606,12 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       proposalLabel,
       approvalLabel,
       resultLabel: resultCopy.label,
-      safetyText: "Die App kann Informationen ansehen, aber nichts verändern.",
+      safetyText: ui.github.actionReadBody,
       expertDetails: {
         requestId: currentRequestId,
         planId: proposalPlan?.planId ?? null,
         branchName: proposalPlan?.branchName ?? null,
-        apiStatus: props.backendHealthy === false ? "Nicht verbunden" : "Backend-Routen aktiv",
+        apiStatus: props.backendHealthy === false ? ui.shell.statusError : ui.shell.statusReady,
         sseEvents: eventTrail,
         rawDiffPreview,
         selectedRepoSlug: selectedRepo?.fullName ?? null,
@@ -492,9 +636,9 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
 
   useEffect(() => {
     if (props.onReviewItemsChange) {
-      props.onReviewItemsChange(buildGitHubReviewItems(proposalPlan, executionResult, verificationResult));
+      props.onReviewItemsChange(buildGitHubReviewItems(proposalPlan, executionResult, verificationResult, locale));
     }
-  }, [executionResult, proposalPlan, props.onReviewItemsChange, verificationResult]);
+  }, [executionResult, locale, proposalPlan, props.onReviewItemsChange, verificationResult]);
 
   useEffect(() => {
     if (!proposalPlan || proposalPlan.stale) {
@@ -527,12 +671,12 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
   function handleRepoChange(nextFullName: string) {
     setSelectedRepoFullName(nextFullName);
     resetReviewState();
-    props.onTelemetry("info", "GitHub repo changed", nextFullName || "No repo selected.");
+    props.onTelemetry("info", localText.telemetryRepoChanged, nextFullName || ui.github.noRepoSelected);
   }
 
   async function runAnalysis() {
     if (!selectedRepo) {
-      setAnalysisError("Wähle zuerst ein erlaubtes Repo aus.");
+      setAnalysisError(ui.github.workspaceNoticeSelection);
       return;
     }
 
@@ -542,8 +686,8 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     setAnalysisError(null);
     setProposalError(null);
     setProposalPlan(null);
-    setEventTrail((current) => [...current, `Analyse gestartet · ${nextRequestId}`].slice(-4));
-    props.onTelemetry("info", "GitHub analysis started", `Repo ${selectedRepo.fullName} wird lesend untersucht.`);
+    setEventTrail((current) => [...current, `${ui.github.nextStepAnalysis} · ${nextRequestId}`].slice(-4));
+    props.onTelemetry("info", localText.telemetryAnalysisStarted, localText.telemetryAnalysisStartedDetail(selectedRepo.fullName));
 
     try {
       const response = await fetchGitHubContext({
@@ -558,13 +702,13 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       });
 
       setAnalysisBundle(response.context);
-      setEventTrail((current) => [...current, `Analyse bereit · ${response.context.files.length} Datei(en)`].slice(-4));
-      props.onTelemetry("info", "GitHub analysis ready", `${response.context.files.length} Datei(en) wurden gelesen.`);
+      setEventTrail((current) => [...current, `${ui.github.analysisTitle} · ${response.context.files.length}`].slice(-4));
+      props.onTelemetry("info", localText.telemetryAnalysisReady, localText.telemetryAnalysisReadyDetail(response.context.files.length));
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Die GitHub-Analyse konnte nicht gestartet werden.";
+      const message = error instanceof Error ? error.message : ui.github.workspaceNoticeAnalysis;
       setAnalysisError(message);
-      setEventTrail((current) => [...current, "Analyse fehlgeschlagen"].slice(-4));
-      props.onTelemetry("error", "GitHub analysis failed", message);
+      setEventTrail((current) => [...current, ui.github.workspaceNoticeAnalysis].slice(-4));
+      props.onTelemetry("error", localText.telemetryAnalysisFailed, message);
     } finally {
       setAnalysisLoading(false);
     }
@@ -572,12 +716,12 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
 
   async function createProposal() {
     if (!selectedRepo) {
-      setProposalError("Wähle zuerst ein erlaubtes Repo aus.");
+      setProposalError(ui.github.workspaceNoticeSelection);
       return;
     }
 
     if (!analysisBundle) {
-      setProposalError("Starte zuerst die Analyse.");
+      setProposalError(ui.github.reviewEmpty);
       return;
     }
 
@@ -592,8 +736,8 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     setVerificationResult(null);
     setExecutionError(null);
     setVerificationError(null);
-    setEventTrail((current) => [...current, `Vorschlag angefordert · ${nextRequestId}`].slice(-4));
-    props.onTelemetry("info", "GitHub proposal requested", `Ein Vorschlag für ${selectedRepo.fullName} wird vorbereitet.`);
+    setEventTrail((current) => [...current, `${ui.github.nextStepProposal} · ${nextRequestId}`].slice(-4));
+    props.onTelemetry("info", localText.telemetryProposalRequested, localText.telemetryProposalRequestedDetail(selectedRepo.fullName));
 
     try {
       const response = await proposeGitHubAction({
@@ -605,18 +749,18 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
         question: ANALYSIS_QUESTION,
         ref: selectedRepo.defaultBranch,
         selectedPaths: analysisBundle.files.slice(0, 4).map((file) => file.path),
-        constraints: ["Nur lesend vorbereiten", "Keine direkte Ausführung"],
+        constraints: [localText.proposalConstraintReadOnly, localText.proposalConstraintNoDirectExecution],
         baseBranch: selectedRepo.defaultBranch,
       });
 
       setProposalPlan(response.plan);
-      setEventTrail((current) => [...current, `Vorschlag bereit · ${response.plan.planId}`].slice(-4));
-      props.onTelemetry("info", "GitHub proposal ready", `Plan ${response.plan.planId} wurde im Backend vorbereitet.`);
+      setEventTrail((current) => [...current, `${ui.github.reviewTitle} · ${response.plan.planId}`].slice(-4));
+      props.onTelemetry("info", localText.telemetryProposalReady, localText.telemetryProposalReadyDetail(response.plan.planId));
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Der Änderungsvorschlag konnte nicht erstellt werden.";
+      const message = error instanceof Error ? error.message : ui.github.workspaceNoticeProposal;
       setProposalError(message);
-      setEventTrail((current) => [...current, "Vorschlag fehlgeschlagen"].slice(-4));
-      props.onTelemetry("error", "GitHub proposal failed", message);
+      setEventTrail((current) => [...current, ui.github.workspaceNoticeProposal].slice(-4));
+      props.onTelemetry("error", localText.telemetryProposalFailed, message);
     } finally {
       setProposalLoading(false);
     }
@@ -631,8 +775,8 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     setExecutionError(null);
     setVerificationError(null);
     setVerificationResult(null);
-    setEventTrail((current) => [...current, `Freigabe gesendet · ${proposalPlan.planId}`].slice(-4));
-    props.onTelemetry("info", "GitHub approval submitted", "Freigabe an das Backend gesendet.");
+    setEventTrail((current) => [...current, `${ui.review.approvalNeeded} · ${proposalPlan.planId}`].slice(-4));
+    props.onTelemetry("info", localText.telemetryApprovalSubmitted, localText.telemetryApprovalSubmittedDetail);
 
     try {
       const executionResponse = await executeGitHubPlan(proposalPlan.planId, { approval: true });
@@ -643,11 +787,11 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
         execution: executionResponse.result,
       } : current));
       setApprovalChecked(false);
-      setEventTrail((current) => [...current, `Pull Request erstellt · ${executionResponse.result.prNumber}`].slice(-4));
+      setEventTrail((current) => [...current, localText.eventPullRequestCreated(executionResponse.result.prNumber)].slice(-4));
       props.onTelemetry(
         "info",
-        "GitHub execution ready",
-        `Pull Request ${executionResponse.result.prNumber} wurde erstellt.`,
+        localText.telemetryExecutionReady,
+        localText.telemetryExecutionReadyDetail(executionResponse.result.prNumber),
       );
 
       setVerifying(true);
@@ -658,26 +802,26 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
           ...current,
           verification: verificationResponse.verification,
         } : current));
-        setEventTrail((current) => [...current, `PR geprüft · ${verificationResponse.verification.status}`].slice(-4));
+        setEventTrail((current) => [...current, localText.eventPullRequestVerified(verificationResponse.verification.status)].slice(-4));
         props.onTelemetry(
           "info",
-          "GitHub verification ready",
-          `PR wurde mit Status ${verificationResponse.verification.status} geprüft.`,
+          localText.telemetryVerificationReady,
+          localText.telemetryVerificationReadyDetail(verificationResponse.verification.status),
         );
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Die GitHub-Prüfung konnte nicht abgeschlossen werden.";
+        const message = error instanceof Error ? error.message : localText.verifyFallbackError;
         setVerificationError(message);
-        setEventTrail((current) => [...current, "PR-Prüfung fehlgeschlagen"].slice(-4));
-        props.onTelemetry("error", "GitHub verification failed", message);
+        setEventTrail((current) => [...current, ui.github.workspaceNoticeVerification].slice(-4));
+        props.onTelemetry("error", localText.telemetryVerificationFailed, message);
       } finally {
         setVerifying(false);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Die GitHub-Ausführung konnte nicht gestartet werden.";
+      const message = error instanceof Error ? error.message : ui.github.workspaceNoticeExecution;
       setExecutionError(message);
       setApprovalChecked(false);
-      setEventTrail((current) => [...current, "Ausführung fehlgeschlagen"].slice(-4));
-      props.onTelemetry("error", "GitHub execution failed", message);
+      setEventTrail((current) => [...current, ui.github.workspaceNoticeExecution].slice(-4));
+      props.onTelemetry("error", localText.telemetryExecutionFailed, message);
     } finally {
       setExecuting(false);
     }
@@ -690,7 +834,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
 
     setVerifying(true);
     setVerificationError(null);
-    setEventTrail((current) => [...current, `PR-Prüfung angefordert · ${proposalPlan.planId}`].slice(-4));
+    setEventTrail((current) => [...current, `${ui.github.verifyResult} · ${proposalPlan.planId}`].slice(-4));
 
     try {
       const verificationResponse = await verifyGitHubPlan(proposalPlan.planId);
@@ -701,14 +845,14 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       } : current));
       props.onTelemetry(
         "info",
-        "GitHub verification ready",
-        `PR wurde mit Status ${verificationResponse.verification.status} geprüft.`,
+        localText.telemetryVerificationReady,
+        localText.telemetryVerificationReadyDetail(verificationResponse.verification.status),
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Die GitHub-Prüfung konnte nicht abgeschlossen werden.";
+      const message = error instanceof Error ? error.message : ui.github.workspaceNoticeVerification;
       setVerificationError(message);
-      setEventTrail((current) => [...current, "PR-Prüfung fehlgeschlagen"].slice(-4));
-      props.onTelemetry("error", "GitHub verification failed", message);
+      setEventTrail((current) => [...current, ui.github.workspaceNoticeVerification].slice(-4));
+      props.onTelemetry("error", localText.telemetryVerificationFailed, message);
     } finally {
       setVerifying(false);
     }
@@ -721,40 +865,40 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
   const proposalHeadline = proposalPlan
     ? executionResult
       ? resultCopy.label
-      : "Bereit zur Freigabe"
+      : ui.review.approvalNeeded
     : analysisBundle
-      ? "Analyse abgeschlossen"
-      : "Noch keine Analyse";
+      ? ui.github.analysisTitle
+      : ui.github.nextStepAnalysis;
   const proposalBadge = proposalPlan
     ? executionResult
       ? resultCopy.label
-      : "Freigabe nötig"
+      : ui.review.approvalNeeded
     : analysisBundle
-      ? "Nur Lesen"
-      : "Noch nicht gestartet";
+      ? ui.github.readOnly
+      : ui.github.nextStepAnalysis;
   const nextStepTitle = !hasSelection
-    ? "Nächster Schritt: Wähle ein GitHub-Repo aus."
+    ? `${ui.github.nextStepLabel}: ${ui.github.nextStepChooseRepo}.`
     : proposalPlan
-      ? "Nächster Schritt: Vorschlag prüfen."
-      : "Nächster Schritt: Analyse starten.";
+      ? `${ui.github.nextStepLabel}: ${ui.github.nextStepProposal}.`
+      : `${ui.github.nextStepLabel}: ${ui.github.nextStepAnalysis}.`;
   const nextStepDescription = !hasSelection
-    ? "Die KI kann danach Dateien lesen, den Projektstand verstehen und einen sicheren Analyseplan vorbereiten."
+    ? ui.github.actionReadBody
     : proposalPlan
-      ? "Änderungen werden erst nach deiner Freigabe vorbereitet oder ausgeführt."
-      : "Die Analyse ist nur lesend. Es werden keine Dateien geändert.";
+      ? ui.github.approveHelper
+      : ui.github.actionReadBody;
 
   const workspaceNotice = proposalPlan && stalePlanBlocked
-    ? "Der Vorschlag ist veraltet und muss neu erstellt werden."
+    ? ui.github.workspaceNoticeStale
     : executionError && !stalePlanBlocked
-      ? "Die Ausführung konnte nicht abgeschlossen werden."
+      ? ui.github.workspaceNoticeExecution
       : verificationError
-        ? "Die Prüfung konnte nicht abgeschlossen werden."
+        ? ui.github.workspaceNoticeVerification
         : analysisError
-          ? "Die Analyse konnte nicht abgeschlossen werden."
+          ? ui.github.workspaceNoticeAnalysis
           : proposalError
-            ? "Der Vorschlag konnte nicht erstellt werden."
+            ? ui.github.workspaceNoticeProposal
             : reposError
-              ? "Die Repo-Liste konnte nicht geladen werden."
+              ? ui.github.workspaceNoticeRepos
               : null;
 
   return (
@@ -766,16 +910,16 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       <section className="workspace-hero github-hero">
         <div>
           <p className={`status-pill ${hasSelection ? "status-ready" : "status-partial"}`}>
-            {hasSelection ? "Nur Lesen aktiv" : "Repo auswählen"}
+            {hasSelection ? ui.github.readOnlyActive : ui.github.nextStepChooseRepo}
           </p>
-          <h1>GitHub Workspace</h1>
+          <h1>{ui.github.title}</h1>
           <p className="hero-copy">
-            Repo ansehen, Projektstruktur verstehen und sichere Änderungsvorschläge vorbereiten.
+            {ui.github.intro}
           </p>
         </div>
 
         <aside className="mini-panel github-mini-panel">
-          <label htmlFor="github-repo-select">Repo auswählen</label>
+          <label htmlFor="github-repo-select">{ui.github.repoSelectLabel}</label>
           <select
             id="github-repo-select"
             ref={repoSelectRef}
@@ -784,11 +928,11 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             disabled={reposLoading || repos.length === 0}
           >
             <option value="">
-              {reposLoading ? "Lade erlaubte Repos…" : "Repo auswählen"}
+              {reposLoading ? ui.github.loadingRepos : ui.github.repoSelectLabel}
             </option>
             {repos.map((repo, index) => (
               <option key={repo.fullName} value={repo.fullName}>
-                {friendlyRepoLabel(index, props.expertMode, repo.fullName)}
+                {friendlyRepoLabel(index, props.expertMode, repo.fullName, locale)}
               </option>
             ))}
           </select>
@@ -797,26 +941,26 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             <article className="github-repo-card">
               <div className="github-repo-card-header">
                 <div>
-                  <span>Verbundenes Repo</span>
-                  <strong>{props.expertMode ? selectedRepo.fullName : "Repo ausgewählt"}</strong>
+                  <span>{ui.github.connectedRepo}</span>
+                  <strong>{props.expertMode ? selectedRepo.fullName : ui.github.repoSelected}</strong>
                 </div>
                 <span className="status-pill status-ready">{accessLabel}</span>
               </div>
               <div className="github-repo-meta">
-                <span>{formatRepoVisibility(selectedRepo.isPrivate)}</span>
+                <span>{formatRepoVisibility(selectedRepo.isPrivate, locale)}</span>
                 <span>•</span>
-                <span>{props.expertMode ? `Hauptzweig: ${selectedRepo.defaultBranch}` : "Nur Lesestatus"}</span>
+                <span>{props.expertMode ? `${ui.github.defaultBranch}: ${selectedRepo.defaultBranch}` : ui.github.readOnly}</span>
                 <span>•</span>
-                <span>Status: {formatRepoStatus(selectedRepo.status)}</span>
+                <span>{ui.github.repositoryStatus}: {formatRepoStatus(selectedRepo.status, locale)}</span>
               </div>
-              <p>{selectedRepo.description ?? "Keine Beschreibung vorhanden."}</p>
+              <p>{selectedRepo.description ?? ui.common.none}</p>
             </article>
           ) : (
-            <p>{reposLoading ? "Erlaubte Repos werden geladen." : "Nur erlaubte Repos werden angezeigt."}</p>
+            <p>{reposLoading ? ui.github.loadingRepos : ui.github.noRepos}</p>
           )}
 
           <div className="github-hero-note">
-            <p className="info-label">Nächster Schritt</p>
+            <p className="info-label">{ui.github.nextStepLabel}</p>
             <strong>{nextStepTitle}</strong>
             <p>{nextStepDescription}</p>
             {workspaceNotice ? (
@@ -835,18 +979,18 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       {!hasSelection ? (
         <article className="empty-state-card">
           <div className="empty-state-card-copy">
-            <p className="info-label">GitHub Workspace</p>
-            <h2>Noch kein GitHub-Repo ausgewählt</h2>
+            <p className="info-label">{ui.github.title}</p>
+            <h2>{ui.github.noRepoSelected}</h2>
             <p>
-              Wähle ein erlaubtes Repo aus. Danach kann die KI Dateien lesen und einen sicheren Analyseplan erstellen.
+              {ui.github.workspaceNoticeSelection}
             </p>
           </div>
 
           <ol className="guided-steps">
-            <li>Repo auswählen</li>
-            <li>Analyse starten</li>
-            <li>Vorschlag prüfen</li>
-            <li>Erst nach Freigabe ändern</li>
+            <li>{ui.github.nextStepChooseRepo}</li>
+            <li>{ui.github.nextStepAnalysis}</li>
+            <li>{ui.github.nextStepProposal}</li>
+            <li>{ui.review.approvalNeeded}</li>
           </ol>
 
           <div className="action-row">
@@ -855,9 +999,9 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
               onClick={() => repoSelectRef.current?.focus()}
               disabled={reposLoading || repos.length === 0}
             >
-              Repo auswählen
+              {ui.github.repoSelectLabel}
             </button>
-            <span className="muted-copy">Nur erlaubte Repos werden angezeigt</span>
+            <span className="muted-copy">{ui.github.noRepos}</span>
           </div>
         </article>
       ) : (
@@ -866,12 +1010,12 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             <article className="workspace-card github-action-card">
               <header className="card-header">
                 <div>
-                  <span>Projekt lesen</span>
-                  <strong>Projektstruktur prüfen</strong>
+                  <span>{ui.github.actionReadTitle}</span>
+                  <strong>{ui.github.nextStepAnalysis}</strong>
                 </div>
-                <span className="status-pill status-ready">Nur Lesen</span>
+                <span className="status-pill status-ready">{ui.github.readOnly}</span>
               </header>
-              <p>Die KI liest Ordner und Dateien, um den Aufbau deines Projekts zu verstehen.</p>
+              <p>{ui.github.actionReadBody}</p>
               <div className="action-row">
                 <button
                   type="button"
@@ -880,21 +1024,21 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                   }}
                   disabled={analysisLoading}
                 >
-                  {analysisLoading ? "Analyse läuft…" : "Analyse starten"}
+                  {analysisLoading ? ui.common.loading : ui.github.nextStepAnalysis}
                 </button>
-                <span className="muted-copy">Keine Änderungen</span>
+                <span className="muted-copy">{ui.github.readOnlyActive}</span>
               </div>
             </article>
 
             <article className="workspace-card github-action-card">
               <header className="card-header">
                 <div>
-                  <span>Freigabe nötig</span>
-                  <strong>Änderungsvorschlag vorbereiten</strong>
+                  <span>{ui.github.actionProposalTitle}</span>
+                  <strong>{ui.github.nextStepProposal}</strong>
                 </div>
-                <span className="status-pill status-partial">Freigabe nötig</span>
+                <span className="status-pill status-partial">{ui.review.approvalNeeded}</span>
               </header>
-              <p>Die KI erstellt einen Plan, den du zuerst prüfen und freigeben musst.</p>
+              <p>{ui.github.actionProposalBody}</p>
               <div className="action-row">
                 <button
                   type="button"
@@ -903,9 +1047,9 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                   }}
                   disabled={proposalLoading || !analysisBundle}
                 >
-                  {proposalLoading ? "Vorschlag entsteht…" : "Vorschlag erstellen"}
+                  {proposalLoading ? ui.common.loading : ui.github.nextStepProposal}
                 </button>
-                <span className="muted-copy">Nur nach Freigabe</span>
+                <span className="muted-copy">{ui.review.approvalNeeded}</span>
               </div>
             </article>
           </div>
@@ -913,7 +1057,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
           <article className="workspace-card github-review-card">
             <header className="card-header">
               <div>
-                <span>Vorschlag prüfen</span>
+                <span>{ui.github.reviewTitle}</span>
                 <strong>{proposalHeadline}</strong>
               </div>
               <div className="plan-badges">
@@ -926,10 +1070,10 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             {analysisBundle ? (
               <div className="github-review-body">
                 <div className="github-review-summary">
-                  <p className="info-label">Letzte Analyse</p>
+                  <p className="info-label">{ui.github.analysisTitle}</p>
                   <strong>{analysisBundle.question}</strong>
                   <p className="muted-copy">
-                    {analysisBundle.files.length} Datei(en) gelesen · {analysisBundle.tokenBudget.truncated ? "Budget wurde ausgeschöpft" : "Budget eingehalten"}
+                    {analysisBundle.files.length} · {analysisBundle.tokenBudget.truncated ? ui.shell.statusPartial : ui.shell.statusReady}
                   </p>
                 </div>
 
@@ -958,17 +1102,17 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                     summary={proposalPlan.rationale}
                     consequence={
                       executionResult
-                        ? "Der Pull Request wurde bereits erstellt und bleibt backend-gesteuert."
-                        : "Der Pull Request wird erst nach expliziter Freigabe im Backend erstellt."
+                        ? ui.github.verifyResult
+                        : ui.github.approveHelper
                     }
                     statusLabel={
                       proposalPlan.stale
-                        ? "Veralteter Vorschlag"
+                        ? ui.github.staleProposal
                         : executionResult
                           ? verificationResult?.status === "verified"
-                            ? "Beleg verifiziert"
-                            : "Ausführungsbeleg offen"
-                          : "Freigabe erforderlich"
+                            ? ui.matrix.topicStatusVerified
+                            : ui.matrix.topicStatusOpen
+                          : ui.review.approvalNeeded
                     }
                     statusTone={
                       proposalPlan.stale
@@ -982,31 +1126,31 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                     metadata={mergeMetadataRows(
                       buildGovernanceMetadataRows({
                         actingIdentity: BACKEND_TRUTH_UNAVAILABLE,
-                        activeScope: `${selectedRepo?.fullName ?? selectedRepoFullName ?? "n/a"}@${proposalPlan.baseRef}`,
-                        authorityDomain: "github backend action routes",
-                        targetScope: `${selectedRepo?.fullName ?? selectedRepoFullName ?? "n/a"}@${proposalPlan.targetBranch}`,
-                        executionDomain: "github pull request workflow",
+                        activeScope: `${selectedRepo?.fullName ?? selectedRepoFullName ?? ui.common.na}@${proposalPlan.baseRef}`,
+                        authorityDomain: localText.authorityDomain,
+                        targetScope: `${selectedRepo?.fullName ?? selectedRepoFullName ?? ui.common.na}@${proposalPlan.targetBranch}`,
+                        executionDomain: localText.executionDomain,
                         executionTarget: `${proposalPlan.branchName} -> ${proposalPlan.targetBranch}`,
-                        provenanceSummary: `plan ${proposalPlan.planId}`,
+                        provenanceSummary: localText.planSummary(proposalPlan.planId),
                         receiptSummary: executionResult
-                          ? verificationResult?.status ?? "execution recorded"
-                          : "proposal pending approval",
+                          ? verificationResult?.status ?? localText.reviewReceiptExecutionPending
+                          : localText.reviewReceiptPending,
                       }),
-                      [{ label: "Risk", value: proposalPlan.riskLevel }]
+                      [{ label: localText.riskLabel, value: proposalPlan.riskLevel }]
                     )}
                   >
                     <div className="github-plan-file-grid">
                       {proposalFiles.map((file) => (
                         <article key={file.path} className="github-plan-file-card">
                           <strong>{file.path}</strong>
-                          <p>{file.changeType === "modified" ? "Datei wird angepasst." : "Datei wird geändert."}</p>
+                          <p>{file.changeType === "modified" ? ui.github.planFileModified : ui.github.planFileChanged}</p>
                         </article>
                       ))}
                     </div>
 
                     {proposalPlan.stale ? (
                       <p className="warning-banner" role="status" data-testid="github-stale-proposal">
-                        Der Vorschlag ist veraltet und muss neu erstellt werden.
+                        {ui.github.staleProposal}
                       </p>
                     ) : null}
 
@@ -1015,26 +1159,26 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                         {executing || verifying ? (
                           <ApprovalTransitionCard
                             testId="github-approval-transition"
-                            title="GitHub-Freigabe wird angewendet"
-                            detail="Backend-Ausführung und Verifikation laufen für das ausgewählte Repository."
+                            title={ui.github.approving}
+                            detail={ui.github.approveHelper}
                           />
                         ) : null}
                         <DecisionZone
                           testId="github-decision-zone"
-                          approveLabel={executing ? "Freigabe wird verarbeitet…" : "Freigeben und ausführen"}
-                          rejectLabel="Vorschlag ablehnen"
+                          approveLabel={executing ? ui.github.approving : ui.github.approveLabel}
+                          rejectLabel={ui.github.rejectLabel}
                           onApprove={() => {
                             void handleExecuteProposal();
                           }}
                           onReject={() => {
                             setApprovalChecked(false);
-                            setEventTrail((current) => [...current, "Freigabe abgelehnt"].slice(-4));
-                            props.onTelemetry("warning", "GitHub proposal rejected", "Die lokale Freigabeabsicht wurde verworfen.");
+                            setEventTrail((current) => [...current, ui.github.rejectLabel].slice(-4));
+                            props.onTelemetry("warning", localText.telemetryProposalRejected, localText.telemetryProposalRejectedDetail);
                           }}
                           approveDisabled={approvalLocked}
                           rejectDisabled={approvalLocked}
                           busy={executing || verifying}
-                          helperText="Freigeben startet die Backend-Ausführung. Ablehnen verwirft nur die lokale Freigabeabsicht."
+                          helperText={ui.github.approveHelper}
                         />
                       </>
                     ) : null}
@@ -1042,7 +1186,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                 ) : (
                   <div className="github-plan-empty">
                     <p className="muted-copy">
-                      Die nächste sichere Aktion ist bereit. Starte jetzt einen Vorschlag, wenn du Änderungen prüfen möchtest.
+                      {ui.github.proposalEmpty}
                     </p>
                   </div>
                 )}
@@ -1050,7 +1194,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             ) : (
               <div className="github-review-empty">
                 <p className="empty-state">
-                  Starte zuerst die Analyse. Danach kann die KI einen sicheren Vorschlag vorbereiten.
+                  {ui.github.reviewEmpty}
                 </p>
               </div>
             )}
@@ -1059,7 +1203,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
           {proposalPlan && executionResult ? (
                   <ExecutionReceiptCard
               title={resultCopy.detail}
-              detail="Bereit zur Prüfung auf GitHub."
+              detail={ui.github.verifyResult}
               outcome={
                 verificationResult?.status === "failed"
                   ? "failed"
@@ -1072,21 +1216,21 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
               metadata={mergeMetadataRows(
                 buildGovernanceMetadataRows({
                   actingIdentity: BACKEND_TRUTH_UNAVAILABLE,
-                  activeScope: `${selectedRepo?.fullName ?? selectedRepoFullName ?? "n/a"}@${proposalPlan.baseRef}`,
-                  authorityDomain: "github backend action routes",
-                  targetScope: `${selectedRepo?.fullName ?? selectedRepoFullName ?? "n/a"}@${executionResult.targetBranch}`,
-                  executionDomain: "github pull request workflow",
+                  activeScope: `${selectedRepo?.fullName ?? selectedRepoFullName ?? ui.common.na}@${proposalPlan.baseRef}`,
+                  authorityDomain: localText.authorityDomain,
+                  targetScope: `${selectedRepo?.fullName ?? selectedRepoFullName ?? ui.common.na}@${executionResult.targetBranch}`,
+                  executionDomain: localText.executionDomain,
                   executionTarget: `PR #${executionResult.prNumber}`,
-                  provenanceSummary: `plan ${executionResult.planId}`,
-                  receiptSummary: verificationResult?.status ?? "verification pending",
+                  provenanceSummary: localText.planSummary(executionResult.planId),
+                  receiptSummary: verificationResult?.status ?? localText.verificationPending,
                 }),
                 [
                   {
-                    label: "Zielzweig",
-                    value: props.expertMode ? executionResult.targetBranch : friendlyTargetBranchLabel(executionResult.targetBranch, selectedRepo),
+                    label: ui.github.targetBranch,
+                    value: props.expertMode ? executionResult.targetBranch : friendlyTargetBranchLabel(executionResult.targetBranch, selectedRepo, locale),
                   },
-                  { label: "Commit", value: executionResult.commitSha },
-                  { label: "Verifikation", value: verificationResult?.status ?? "ausstehend" },
+                  { label: localText.commitLabel, value: executionResult.commitSha },
+                  { label: ui.github.verifyResult, value: verificationResult?.status ?? ui.common.loading },
                 ]
               )}
               testId="github-pr-result"
@@ -1099,14 +1243,14 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                     rel="noreferrer"
                     className="secondary-button github-pr-link"
                   >
-                    Auf GitHub öffnen
+                    {ui.github.openInGitHub}
                   </a>
                 </p>
               ) : null}
 
               <div className="action-row">
                 <span className="muted-copy">
-                  {verificationResult ? verificationResult.status : "Ergebnis prüfen"}
+                  {verificationResult ? verificationResult.status : ui.github.verifyResult}
                 </span>
                 <button
                   type="button"
@@ -1116,7 +1260,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                   }}
                   disabled={verifyDisabled}
                 >
-                  {verifying ? "Prüfung läuft…" : "Ergebnis prüfen"}
+                  {verifying ? ui.github.verifyBusy : ui.github.verifyResult}
                 </button>
               </div>
             </ExecutionReceiptCard>
@@ -1125,21 +1269,21 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
           <ExpertDetails
             expertMode={props.expertMode}
             rows={[
-              { label: "Erlaubtes Repo", value: selectedRepo?.fullName ?? "n/a" },
-              { label: "Anfrage-ID", value: requestId ?? "n/a" },
-              { label: "Plan-ID", value: proposalPlan?.planId ?? "n/a" },
-              { label: "Branch", value: proposalPlan?.branchName ?? "n/a" },
-              { label: "Commit", value: executionResult?.commitSha ?? "n/a" },
-              { label: "Pull Request", value: executionResult?.prNumber ? `#${executionResult.prNumber}` : "n/a" },
-              { label: "Zielzweig", value: executionResult?.targetBranch ?? proposalPlan?.targetBranch ?? "n/a" },
-              { label: "GitHub API Status", value: props.backendHealthy === false ? "Nicht verbunden" : "Backend-Route aktiv" },
-              { label: "Verifikation", value: verificationResult?.status ?? "n/a" },
-              { label: "Laufzeit-Ereignisse", value: eventTrail.length > 0 ? eventTrail.join(" · ") : "Nicht relevant" },
+              { label: ui.github.connectedRepo, value: selectedRepo?.fullName ?? ui.common.na },
+              { label: ui.shell.sessionIdPrefix, value: requestId ?? ui.common.na },
+              { label: ui.github.reviewTitle, value: proposalPlan?.planId ?? ui.common.na },
+              { label: localText.branchLabel, value: proposalPlan?.branchName ?? ui.common.na },
+              { label: localText.commitLabel, value: executionResult?.commitSha ?? ui.common.na },
+              { label: localText.pullRequestLabel, value: executionResult?.prNumber ? `#${executionResult.prNumber}` : ui.common.na },
+              { label: ui.github.targetBranch, value: executionResult?.targetBranch ?? proposalPlan?.targetBranch ?? ui.common.na },
+              { label: ui.github.repositoryStatus, value: props.backendHealthy === false ? ui.shell.statusError : ui.shell.statusReady },
+              { label: ui.github.verifyResult, value: verificationResult?.status ?? ui.common.na },
+              { label: ui.shell.diagnosticsLabel, value: eventTrail.length > 0 ? eventTrail.join(" · ") : ui.common.none },
             ]}
           >
             {executionResult?.prUrl ? (
               <p>
-                Pull Request URL:{" "}
+                {localText.pullRequestUrlLabel}:{" "}
                 <a href={executionResult.prUrl} target="_blank" rel="noreferrer">
                   {executionResult.prUrl}
                 </a>
@@ -1154,7 +1298,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
               <pre className="github-diff-preview">{rawDiffPreview}</pre>
             ) : (
               <p className="muted-copy">
-                Diff erscheint erst nach einem vorbereiteten Vorschlag.
+                {ui.github.diffAppearsLater}
               </p>
             )}
           </ExpertDetails>

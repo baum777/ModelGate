@@ -1301,8 +1301,8 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 }
 
 .mode-toggle-button-active {
-  background: rgba(139, 124, 246, 0.14);
-  border-color: rgba(139, 124, 246, 0.22);
+  background: rgba(78, 222, 163, 0.16);
+  border-color: rgba(78, 222, 163, 0.28);
 }
 
 .mode-toggle-button:hover:not(:disabled) {
@@ -2152,7 +2152,31 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 
 .global-header-shell .header-actions {
   display: flex;
+  align-items: center;
+  gap: 10px;
   justify-content: flex-end;
+}
+
+.shell-language-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--shell-border-soft);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.shell-language-button {
+  min-width: 2.8rem;
+  padding: 0.48rem 0.72rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.shell-language-button-active {
+  border-color: rgba(78, 222, 163, 0.34);
+  background: rgba(78, 222, 163, 0.12);
 }
 
 .shell-left-rail,

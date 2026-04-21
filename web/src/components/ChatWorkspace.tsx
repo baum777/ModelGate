@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState, type FormEvent } from "react";
+import React, { useEffect, useReducer, useRef, useState, type FormEvent } from "react";
 import { streamChatCompletion, type ChatRouteMetadata } from "../lib/api.js";
 import {
   chatReducer,

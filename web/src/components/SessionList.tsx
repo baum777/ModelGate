@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import React, { type ReactNode } from "react";
 import type { SessionStatus, WorkspaceKind, WorkspaceSession } from "../lib/workspace-state.js";
 import { sortSessionsByUpdatedAt, workspaceLabel } from "../lib/workspace-state.js";
 import { SectionLabel, StatusBadge } from "./ShellPrimitives.js";

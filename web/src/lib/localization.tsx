@@ -1049,6 +1049,10 @@ export function normalizeLocale(value: string | null | undefined): Locale {
   return value?.toLowerCase().startsWith("de") ? "de" : "en";
 }
 
+export function toggleLocale(locale: Locale): Locale {
+  return locale === "de" ? "en" : "de";
+}
+
 export function resolveInitialLocale(options?: { storedLocale?: string | null; browserLanguage?: string | null }): Locale {
   const stored = normalizeLocale(options?.storedLocale);
   if (options?.storedLocale && (stored === "en" || stored === "de")) {

@@ -42,6 +42,7 @@ import {
   buildGovernanceMetadataRows,
   mergeMetadataRows,
 } from "../lib/governance-metadata.js";
+import { useLocalization, type Locale } from "../lib/localization.js";
 
 type WorkflowStatus = "loading" | "partial" | "ready" | "error";
 type LoadStatus = "idle" | "loading" | "ready" | "error";
@@ -100,15 +101,130 @@ const formatDate = (value: string) => {
 };
 const text = (value: string | null | undefined) =>
   value && value.trim() ? value : "n/a";
-const releaseScopeNotice =
-  "Backend-gesteuerte Matrix-Topic-Updates sind für Explore, Scope-Summary, read-only Provenienz, Analyse, Review, Freigabe, Ausführung und Verifikation verfügbar.";
+
+type MatrixLocaleText = {
+  reviewSourceLabel: string;
+  reviewReceiptPending: string;
+  reviewReceiptExecutionPending: string;
+  reviewReceiptVerification: (status: string) => string;
+  governanceAuthorityDomain: string;
+  governanceExecutionDomain: string;
+  governanceSnapshotSummary: (snapshotId: string | null) => string;
+  governanceExecutionTargetTransaction: (transactionId: string) => string;
+  metadataRiskLabel: string;
+  metadataExpiresLabel: string;
+  metadataTransactionIdLabel: string;
+  roomTypeFallback: string;
+  unknownRoomFallback: string;
+  runtimeTopicPlanReady: string;
+  runtimeNoTopicPlan: string;
+  operationWhoAmI: string;
+  operationJoinedRooms: string;
+  operationProvenance: string;
+  operationHierarchy: string;
+  operationScopeSummary: string;
+  operationScopeResolve: string;
+  operationTopicVerify: string;
+  operationTopicAnalyze: string;
+  operationTopicRefresh: string;
+  operationTopicExecute: string;
+  telemetryStateRestored: string;
+  telemetryStateRestoredDetail: string;
+  telemetryComposerBlocked: string;
+  telemetryComposerBlockedDetail: (mode: MatrixComposerMode) => string;
+  telemetryScopeResolved: string;
+  telemetryScopeResolvedDetail: string;
+  telemetryProposalRejected: string;
+  telemetryProposalRejectedDetail: string;
+};
+
+function getMatrixLocaleText(locale: Locale): MatrixLocaleText {
+  if (locale === "de") {
+    return {
+      reviewSourceLabel: "Matrix-Workspace",
+      reviewReceiptPending: "Vorschlag wartet auf Freigabe",
+      reviewReceiptExecutionPending: "Ausführung protokolliert, Prüfung ausstehend",
+      reviewReceiptVerification: (status) => `Prüfung ${status}`,
+      governanceAuthorityDomain: "Matrix-Backend-Aktionsrouten",
+      governanceExecutionDomain: "Matrix-Raumtopic-Ausführung/Prüfung",
+      governanceSnapshotSummary: (snapshotId) =>
+        snapshotId ? `Snapshot ${snapshotId}` : "Scope-Snapshot wurde vom Backend nicht geliefert",
+      governanceExecutionTargetTransaction: (transactionId) => `Transaktion ${transactionId}`,
+      metadataRiskLabel: "Risiko",
+      metadataExpiresLabel: "Läuft ab",
+      metadataTransactionIdLabel: "Transaktions-ID",
+      roomTypeFallback: "Raum",
+      unknownRoomFallback: "unbekannter Raum",
+      runtimeTopicPlanReady: "Topic-Plan bereit",
+      runtimeNoTopicPlan: "Kein Topic-Plan",
+      operationWhoAmI: "Matrix WhoAmI",
+      operationJoinedRooms: "Matrix beigetretene Räume",
+      operationProvenance: "Matrix Provenienz",
+      operationHierarchy: "Matrix Hierarchie",
+      operationScopeSummary: "Matrix Scope-Zusammenfassung",
+      operationScopeResolve: "Matrix Scope-Auflösung",
+      operationTopicVerify: "Matrix Raumtopic-Verifikation",
+      operationTopicAnalyze: "Matrix Raumtopic-Analyse",
+      operationTopicRefresh: "Matrix Raumtopic-Aktualisierung",
+      operationTopicExecute: "Matrix Raumtopic-Ausführung",
+      telemetryStateRestored: "Matrix-Zustand wiederhergestellt",
+      telemetryStateRestoredDetail: "Lokale Matrix-Auswahl und Modus wurden im Browser wiederhergestellt.",
+      telemetryComposerBlocked: "Matrix-Composer blockiert",
+      telemetryComposerBlockedDetail: (mode) => `Submit für ${mode} bleibt fail-closed, bis ein Write-Contract existiert.`,
+      telemetryScopeResolved: "Matrix-Scope aufgelöst",
+      telemetryScopeResolvedDetail: "Scope-Zusammenfassung und Provenienz sind bereit.",
+      telemetryProposalRejected: "Matrix-Vorschlag abgelehnt",
+      telemetryProposalRejectedDetail: "Die lokale Freigabeabsicht wurde verworfen.",
+    };
+  }
+
+  return {
+    reviewSourceLabel: "Matrix workspace",
+    reviewReceiptPending: "Proposal pending approval",
+    reviewReceiptExecutionPending: "Execution recorded, verification pending",
+    reviewReceiptVerification: (status) => `verification ${status}`,
+    governanceAuthorityDomain: "Matrix backend action routes",
+    governanceExecutionDomain: "Matrix room topic execute/verify routes",
+    governanceSnapshotSummary: (snapshotId) =>
+      snapshotId ? `snapshot ${snapshotId}` : "scope snapshot not provided by backend",
+    governanceExecutionTargetTransaction: (transactionId) => `transaction ${transactionId}`,
+    metadataRiskLabel: "Risk",
+    metadataExpiresLabel: "Expires",
+    metadataTransactionIdLabel: "Transaction ID",
+    roomTypeFallback: "room",
+    unknownRoomFallback: "unknown room",
+    runtimeTopicPlanReady: "Topic plan ready",
+    runtimeNoTopicPlan: "No topic plan",
+    operationWhoAmI: "Matrix whoami",
+    operationJoinedRooms: "Matrix joined rooms",
+    operationProvenance: "Matrix provenance",
+    operationHierarchy: "Matrix hierarchy",
+    operationScopeSummary: "Matrix scope summary",
+    operationScopeResolve: "Matrix scope resolve",
+    operationTopicVerify: "Matrix room topic verify",
+    operationTopicAnalyze: "Matrix room topic analyze",
+    operationTopicRefresh: "Matrix room topic refresh",
+    operationTopicExecute: "Matrix room topic execute",
+    telemetryStateRestored: "Matrix state restored",
+    telemetryStateRestoredDetail: "Local Matrix selection and mode were restored from the browser.",
+    telemetryComposerBlocked: "Matrix composer blocked",
+    telemetryComposerBlockedDetail: (mode) => `Submit for ${mode} stays fail-closed until a write contract exists.`,
+    telemetryScopeResolved: "Matrix scope resolved",
+    telemetryScopeResolvedDetail: "Scope summary and provenance are ready.",
+    telemetryProposalRejected: "Matrix proposal rejected",
+    telemetryProposalRejectedDetail: "The local approval intent was discarded.",
+  };
+}
 
 export function buildMatrixReviewItems(
   topicPlan: MatrixRoomTopicAgentPlan | null,
   topicExecution: MatrixRoomTopicExecutionResult | null,
   topicVerification: MatrixRoomTopicVerificationResult | null,
-  actingIdentity: string | null
+  actingIdentity: string | null,
+  locale: Locale = "de",
 ): ReviewItem[] {
+  const localText = getMatrixLocaleText(locale);
+
   if (!topicPlan) {
     return [];
   }
@@ -123,32 +239,34 @@ export function buildMatrixReviewItems(
           ? "approved"
           : "pending_review";
   const receiptSummary = topicVerification
-    ? `verification ${topicVerification.status}`
+    ? localText.reviewReceiptVerification(topicVerification.status)
     : topicExecution
-      ? "execution recorded, verification pending"
-      : "proposal pending approval";
+      ? localText.reviewReceiptExecutionPending
+      : localText.reviewReceiptPending;
 
   return [
     {
       id: topicPlan.planId,
       source: "matrix",
-      title: "Plan zur Raumtopic-Aktualisierung",
-      summary: `Aktuell: ${text(topicPlan.currentValue)} · Vorgeschlagen: ${text(topicPlan.proposedValue)} · Risiko: ${topicPlan.risk} · ${receiptSummary}`,
+      title: locale === "de" ? "Plan zur Raumtopic-Aktualisierung" : "Room topic update plan",
+      summary: locale === "de"
+        ? `Aktuell: ${text(topicPlan.currentValue)} · Vorgeschlagen: ${text(topicPlan.proposedValue)} · Risiko: ${topicPlan.risk} · ${receiptSummary}`
+        : `Current: ${text(topicPlan.currentValue)} · Proposed: ${text(topicPlan.proposedValue)} · Risk: ${topicPlan.risk} · ${receiptSummary}`,
       status,
       stale: false,
-      sourceLabel: "Matrix Workspace",
+      sourceLabel: localText.reviewSourceLabel,
       provenanceRows: mergeMetadataRows(
         buildGovernanceMetadataRows({
           actingIdentity: actingIdentity ?? BACKEND_TRUTH_UNAVAILABLE,
           activeScope: topicPlan.scopeId ?? BACKEND_TRUTH_UNAVAILABLE,
-          authorityDomain: "matrix backend action routes",
+          authorityDomain: localText.governanceAuthorityDomain,
           targetScope: topicPlan.roomId,
-          executionDomain: "matrix room topic execute/verify routes",
-          executionTarget: topicExecution ? `transaction ${topicExecution.transactionId}` : topicPlan.roomId,
-          provenanceSummary: topicPlan.snapshotId ? `snapshot ${topicPlan.snapshotId}` : "scope snapshot not provided by backend",
+          executionDomain: localText.governanceExecutionDomain,
+          executionTarget: topicExecution ? localText.governanceExecutionTargetTransaction(topicExecution.transactionId) : topicPlan.roomId,
+          provenanceSummary: localText.governanceSnapshotSummary(topicPlan.snapshotId ?? null),
           receiptSummary
         }),
-        [{ label: "Risk", value: topicPlan.risk }]
+        [{ label: localText.metadataRiskLabel, value: topicPlan.risk }]
       ),
     },
   ];
@@ -172,6 +290,8 @@ function describeMatrixError(operation: string, error: unknown) {
   return `${operation} failed`;
 }
 export function MatrixWorkspace(props: MatrixWorkspaceProps) {
+  const { locale, copy: ui } = useLocalization();
+  const localText = useMemo(() => getMatrixLocaleText(locale), [locale]);
   const persisted = props.session.metadata;
   const [status, setStatus] = useState<WorkflowStatus>("loading");
   const [whoami, setWhoami] = useState<MatrixWhoAmI | null>(null);
@@ -250,25 +370,26 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     [selectedSpaceIds],
   );
   const matrixReviewItems = useMemo<ReviewItem[]>(
-    () => buildMatrixReviewItems(topicPlan, topicExecution, topicVerification, whoami?.userId ?? null),
-    [topicExecution, topicPlan, topicVerification, whoami?.userId]
+    () => buildMatrixReviewItems(topicPlan, topicExecution, topicVerification, whoami?.userId ?? null, locale),
+    [locale, topicExecution, topicPlan, topicVerification, whoami?.userId]
   );
+  const releaseScopeNotice = ui.matrix.scopeNotice;
   const activeComposerRoomId = roomId?.trim() || topicRoomId.trim() || selectedRoomIds[0]?.trim() || null;
   const threadOpenSourceId = selectedThreadRootId?.trim() || selectedEventId?.trim() || null;
   const activeThreadRootId = selectedThreadRootId?.trim() || null;
   const identityLabel = whoami
     ? whoami.userId
     : identityError
-      ? "Identität nicht aufgelöst"
-      : "Identität wird geladen";
+      ? ui.shell.statusError
+      : ui.shell.healthChecking;
   const connectionLabel = status === "ready"
-    ? "Verbunden"
+    ? ui.shell.statusReady
     : status === "partial"
-      ? "Teilweise verbunden"
+      ? ui.shell.statusPartial
       : status === "error"
-        ? "Nicht verbunden"
-        : "Wird geprüft";
-  const homeserverLabel = whoami?.homeserver ?? "n/a";
+        ? ui.shell.statusError
+        : ui.shell.healthChecking;
+  const homeserverLabel = whoami?.homeserver ?? ui.common.na;
   const matrixExpertDetails = useMemo(
     () => ({
       route: "/api/matrix/*",
@@ -279,13 +400,13 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       eventId: null,
       httpStatus: null,
       latency: null,
-      backendRouteStatus: status === "error" ? "Nicht verfügbar" : "Aktiv",
+      backendRouteStatus: status === "error" ? ui.shell.statusError : ui.shell.statusReady,
       runtimeEventTrail: [
-        currentScope ? "Bereich gewählt" : "Noch kein Bereich gewählt",
-        scopeSummary ? "Zusammenfassung bereit" : "Zusammenfassung ausstehend",
-        topicPlan ? "Topic plan ready" : "No topic plan",
+        currentScope ? ui.matrix.scopeSelected : ui.matrix.scopeUnresolved,
+        scopeSummary ? ui.matrix.scopeSummaryReady : ui.matrix.scopeSummaryUnavailable,
+        topicPlan ? localText.runtimeTopicPlanReady : localText.runtimeNoTopicPlan,
       ],
-      sseLifecycle: "n/a",
+      sseLifecycle: ui.common.na,
       rawPayload: topicPlan ? JSON.stringify(topicPlan, null, 2) : null,
       composerMode,
       composerRoomId: activeComposerRoomId,
@@ -312,24 +433,24 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       identityLabel,
       connectionLabel,
       homeserverLabel,
-      scopeLabel: currentScope ? "Bereich gewählt" : "Noch kein Bereich gewählt",
-      summaryLabel: scopeSummary ? "Zusammenfassung bereit" : "Noch keine Zusammenfassung",
+      scopeLabel: currentScope ? ui.matrix.scopeSelected : ui.matrix.scopeUnresolved,
+      summaryLabel: scopeSummary ? ui.matrix.scopeSummaryReady : ui.matrix.scopeSummaryUnavailable,
       approvalLabel: topicPlan
         ? topicPlan.status === "pending_review"
-          ? "Freigabe erforderlich"
+          ? ui.matrix.topicStatusApproval
           : topicVerification?.status === "verified"
-            ? "Beleg verifiziert"
+            ? ui.matrix.topicStatusVerified
             : topicVerification?.status === "failed" || topicVerification?.status === "mismatch"
-              ? "Beleg mit Abweichung"
+              ? ui.matrix.topicStatusMismatch
               : topicExecution
-                ? "Ausführungsbeleg offen"
-                : "Prüfung gesperrt"
-        : "Nicht erforderlich",
-      safetyText: "Der Browser kann Daten ansehen und Freigabeabsichten senden; backend-gesteuerte Writes bleiben freigabegeschützt.",
+                ? ui.matrix.topicStatusOpen
+                : ui.matrix.topicStatusBlocked
+        : ui.common.none,
+      safetyText: ui.matrix.scopeNotice,
       expertDetails: matrixExpertDetails,
       reviewItems: matrixReviewItems,
     }),
-    [connectionLabel, currentScope, identityLabel, homeserverLabel, matrixExpertDetails, matrixReviewItems, scopeSummary, topicExecution, topicPlan, topicVerification],
+    [connectionLabel, currentScope, homeserverLabel, identityLabel, matrixExpertDetails, matrixReviewItems, scopeSummary, topicExecution, topicPlan, topicVerification, ui],
   );
 
   useEffect(() => {
@@ -459,18 +580,18 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       if (whoamiResult.status === "fulfilled") setWhoami(whoamiResult.value);
       else
         setIdentityError(
-          describeMatrixError("Matrix whoami", whoamiResult.reason),
+          describeMatrixError(localText.operationWhoAmI, whoamiResult.reason),
         );
       if (roomsResult.status === "fulfilled") setJoinedRooms(roomsResult.value);
       else
         setRoomsError(
-          describeMatrixError("Matrix joined rooms", roomsResult.reason),
+          describeMatrixError(localText.operationJoinedRooms, roomsResult.reason),
         );
       if (persisted) {
         props.onTelemetry(
           "info",
-          "Matrix state restored",
-          "Local Matrix selection and mode were restored from the browser.",
+          localText.telemetryStateRestored,
+          localText.telemetryStateRestoredDetail,
         );
       }
     }
@@ -478,7 +599,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     return () => {
       cancelled = true;
     };
-  }, [persisted, props.onTelemetry, props.restoredSession]);
+  }, [localText.operationJoinedRooms, localText.operationWhoAmI, localText.telemetryStateRestored, localText.telemetryStateRestoredDetail, persisted, props.onTelemetry, props.restoredSession]);
   async function loadProvenance(roomId: string) {
     setProvenanceLoading(true);
     setProvenanceError(null);
@@ -488,7 +609,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       setProvenanceRoomId(roomId);
     } catch (error) {
       setProvenance(null);
-      setProvenanceError(describeMatrixError("Matrix provenance", error));
+      setProvenanceError(describeMatrixError(localText.operationProvenance, error));
     } finally {
       setProvenanceLoading(false);
     }
@@ -501,7 +622,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       setSpaceHierarchy(await fetchRoomHierarchy(roomId));
     } catch (error) {
       setSpaceHierarchy(null);
-      setSpaceHierarchyError(describeMatrixError("Matrix hierarchy", error));
+      setSpaceHierarchyError(describeMatrixError(localText.operationHierarchy, error));
     } finally {
       setSpaceHierarchyLoading(false);
     }
@@ -542,31 +663,31 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   function describeComposerTarget(target: MatrixComposerTarget) {
     switch (target.kind) {
       case "post":
-        return target.previewLabel ?? `Neuer Post in Raum ${target.roomId}`;
+        return target.previewLabel ?? `${ui.matrix.newPost}: ${target.roomId}`;
       case "reply":
-        return target.previewLabel ?? `Antwort auf Beitrag ${target.postId}`;
+        return target.previewLabel ?? `${ui.matrix.reply}: ${target.postId}`;
       case "thread":
-        return target.previewLabel ?? `Antwort im Thread ${target.threadRootId}`;
+        return target.previewLabel ?? `${ui.matrix.replyInThread}: ${target.threadRootId}`;
       default:
-        return target.previewLabel ?? "Neuer Post";
+        return target.previewLabel ?? ui.matrix.newPost;
     }
   }
 
   function describeComposerMode(mode: MatrixComposerMode) {
     switch (mode) {
       case "reply":
-        return "Antwort auf einen Beitrag";
+        return ui.matrix.composerModeReply;
       case "thread":
-        return "Thread-Kontext";
+        return ui.matrix.composerModeThreadReply;
       default:
-        return "Neuer Post";
+        return ui.matrix.composerModePost;
     }
   }
 
   function startNewPost(nextRoomId?: string) {
     const room = (nextRoomId ?? getComposerRoomId()).trim();
     if (!room) {
-      setLastActionResult("Composer blockiert: kein Raum für einen neuen Post ausgewählt.");
+      setLastActionResult(ui.matrix.submitBlocked);
       return;
     }
 
@@ -581,15 +702,15 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       roomId: room,
       postId: null,
       threadRootId: null,
-      previewLabel: `Neuer Post in Raum ${room}`,
+      previewLabel: `${ui.matrix.newPost}: ${room}`,
     });
-    setLastActionResult(`Composer bereit: Neuer Post in Raum ${room}.`);
+    setLastActionResult(`${ui.matrix.composerTargetSet}: ${room}`);
   }
 
   function startReplyToPost(postId: string, nextRoomId?: string) {
     const room = (nextRoomId ?? getComposerRoomId()).trim();
     if (!room || !postId.trim()) {
-      setLastActionResult("Composer blockiert: Raum und Beitrag-ID sind für eine Antwort erforderlich.");
+      setLastActionResult(ui.matrix.submitBlocked);
       return;
     }
 
@@ -602,15 +723,15 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       roomId: room,
       postId,
       threadRootId: null,
-      previewLabel: `Antwort auf Beitrag ${postId}`,
+      previewLabel: `${ui.matrix.reply}: ${postId}`,
     });
-    setLastActionResult(`Composer bereit: Antwort auf Beitrag ${postId}.`);
+    setLastActionResult(`${ui.matrix.composerTargetSet}: ${postId}`);
   }
 
   function startThreadFromPost(postId: string, nextRoomId?: string) {
     const room = (nextRoomId ?? getComposerRoomId()).trim();
     if (!room || !postId.trim()) {
-      setLastActionResult("Composer blockiert: Raum und Beitrag-ID sind für einen Thread erforderlich.");
+      setLastActionResult(ui.matrix.submitBlocked);
       return;
     }
 
@@ -623,15 +744,15 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       roomId: room,
       postId: null,
       threadRootId: postId,
-      previewLabel: `Neuer Thread zu Beitrag ${postId}`,
+      previewLabel: `${ui.matrix.thread}: ${postId}`,
     });
-    setLastActionResult(`Composer bereit: Neuer Thread zu Beitrag ${postId}.`);
+    setLastActionResult(`${ui.matrix.composerTargetSet}: ${postId}`);
   }
 
   function startReplyInThread(threadRootId: string, eventId?: string, nextRoomId?: string) {
     const room = (nextRoomId ?? getComposerRoomId()).trim();
     if (!room || !threadRootId.trim()) {
-      setLastActionResult("Composer blockiert: Raum und Thread-Root sind für eine Thread-Antwort erforderlich.");
+      setLastActionResult(ui.matrix.submitBlocked);
       return;
     }
 
@@ -645,10 +766,10 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       postId: null,
       threadRootId,
       previewLabel: eventId?.trim()
-        ? `Antwort im Thread ${threadRootId} auf Ereignis ${eventId}`
-        : `Antwort im Thread ${threadRootId}`,
+        ? `${ui.matrix.replyInThread}: ${threadRootId} (${eventId})`
+        : `${ui.matrix.replyInThread}: ${threadRootId}`,
     });
-    setLastActionResult(`Composer bereit: Antwort im Thread ${threadRootId}.`);
+    setLastActionResult(`${ui.matrix.composerTargetSet}: ${threadRootId}`);
   }
 
   function openThreadContext(nextRoomId?: string) {
@@ -656,7 +777,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     const threadRootId = selectedThreadRootId?.trim() || selectedEventId?.trim() || "";
 
     if (!room || !threadRootId) {
-      setLastActionResult("Thread öffnen blockiert: Raum und Beitrag oder Thread-Root sind erforderlich.");
+      setLastActionResult(ui.matrix.threadOpenHint);
       return;
     }
 
@@ -667,10 +788,10 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       roomId: room,
       postId: null,
       threadRootId,
-      previewLabel: `Thread geöffnet zu Beitrag ${threadRootId}`,
+      previewLabel: `${ui.matrix.threadOpen}: ${threadRootId}`,
     });
     setSelectedThreadRootId(threadRootId);
-    setLastActionResult(`Thread-Kontext geöffnet: Beitrag ${threadRootId} im Raum ${room}.`);
+    setLastActionResult(`${ui.matrix.threadOpen}: ${threadRootId}`);
   }
 
   function leaveThreadContext() {
@@ -686,9 +807,9 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
         roomId: room,
         postId: null,
         threadRootId: null,
-        previewLabel: `Neuer Post in Raum ${room}`,
+        previewLabel: `${ui.matrix.newPost}: ${room}`,
       });
-      setLastActionResult(`Thread-Kontext verlassen: zurück im Raum ${room}.`);
+      setLastActionResult(`${ui.matrix.threadLeave}: ${room}`);
       return;
     }
 
@@ -697,7 +818,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       roomId: null,
       previewLabel: null,
     });
-    setLastActionResult("Thread-Kontext verlassen.");
+    setLastActionResult(ui.matrix.threadLeave);
   }
 
   function cancelComposerTarget() {
@@ -711,7 +832,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     setRoomName(null);
     setSelectedEventId(null);
     setSelectedThreadRootId(null);
-    setLastActionResult("Composer-Ziel zurückgesetzt.");
+    setLastActionResult(ui.matrix.clearTarget);
   }
 
   function buildComposerPayload() {
@@ -729,27 +850,27 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   function submitMatrixComposer() {
     const payload = buildComposerPayload();
     if (composerTarget.kind === "none") {
-      setLastActionResult("Composer blockiert: Kein explizites Ziel gesetzt.");
+      setLastActionResult(ui.matrix.submitBlocked);
       return false;
     }
 
     if (!payload.roomId) {
-      setLastActionResult("Composer blockiert: Kein Raum für den Submit verfügbar.");
+      setLastActionResult(ui.matrix.submitBlocked);
       return false;
     }
 
     if (!payload.draftContent) {
-      setLastActionResult("Composer blockiert: Inhalt fehlt.");
+      setLastActionResult(ui.matrix.submitBlocked);
       return false;
     }
 
     setLastActionResult(
-      `Composer-Submit blockiert: Kein Backend-Write-Contract für ${payload.composerMode} ist verdrahtet. fail-closed. Payload: ${JSON.stringify(payload)}`,
+      `${ui.matrix.submitFailClosed} Payload: ${JSON.stringify(payload)}`,
     );
     props.onTelemetry(
       "warning",
-      "Matrix composer blocked",
-      `Submit für ${payload.composerMode} bleibt fail-closed, bis ein Write-Contract existiert.`,
+      localText.telemetryComposerBlocked,
+      localText.telemetryComposerBlockedDetail(payload.composerMode),
     );
     return false;
   }
@@ -768,7 +889,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     } catch (error) {
       setScopeSummary(null);
       setScopeSummaryStatus("error");
-      setScopeSummaryError(describeMatrixError("Matrix scope summary", error));
+      setScopeSummaryError(describeMatrixError(localText.operationScopeSummary, error));
     }
   }
   async function resolveCurrentScope() {
@@ -791,7 +912,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       await loadSummary(scope.scopeId);
       return true;
     } catch (error) {
-      setScopeError(describeMatrixError("Matrix scope resolve", error));
+      setScopeError(describeMatrixError(localText.operationScopeResolve, error));
       return false;
     } finally {
       setScopeResolveLoading(false);
@@ -803,8 +924,8 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     if (resolved) {
       props.onTelemetry(
         "info",
-        "Matrix scope resolved",
-        "Scope summary and provenance are ready.",
+        localText.telemetryScopeResolved,
+        localText.telemetryScopeResolvedDetail,
       );
     }
   }
@@ -815,7 +936,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       setTopicVerification(await verifyRoomTopicUpdate(planId));
     } catch (error) {
       setTopicVerifyError(
-        describeMatrixError("Matrix room topic verify", error),
+        describeMatrixError(localText.operationTopicVerify, error),
       );
     } finally {
       setTopicVerifyLoading(false);
@@ -827,12 +948,12 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     const topic = topicText.trim();
 
     if (!roomId) {
-      setTopicPrepareError("Wähle zuerst einen Bereich.");
+      setTopicPrepareError(ui.matrix.roomPickerChoose);
       return;
     }
 
     if (!topic) {
-      setTopicPrepareError("Enter a proposed room topic.");
+      setTopicPrepareError(ui.matrix.draftPlaceholder);
       return;
     }
 
@@ -853,7 +974,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     } catch (error) {
       setTopicPlan(null);
       setTopicPrepareError(
-        describeMatrixError("Matrix room topic analyze", error),
+        describeMatrixError(localText.operationTopicAnalyze, error),
       );
     } finally {
       setTopicPrepareLoading(false);
@@ -863,7 +984,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   async function refreshTopicUpdatePlan() {
     if (!topicPlan) {
       setTopicPlanRefreshError(
-        "Analysiere zuerst ein Topic-Update, bevor du den Plan aktualisierst.",
+        ui.matrix.topicStatusLoading,
       );
       return;
     }
@@ -883,7 +1004,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       setTopicExecution(null);
       setTopicVerification(null);
       setTopicPlanRefreshError(
-        describeMatrixError("Matrix room topic refresh", error),
+        describeMatrixError(localText.operationTopicRefresh, error),
       );
     } finally {
       setTopicPlanRefreshLoading(false);
@@ -892,25 +1013,25 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
 
   async function executeTopicUpdate(approvalIntent = topicApprovalPending) {
     if (!topicPlan) {
-      setTopicExecuteError("Analyze a topic update before execution.");
+      setTopicExecuteError(ui.matrix.topicStatusPending);
       return;
     }
 
     if (topicPlan.status !== "pending_review") {
-      setTopicExecuteError("Refresh the plan before execution.");
+      setTopicExecuteError(ui.matrix.topicStatusLoading);
       return;
     }
 
     if (topicPlanRefreshLoading) {
       setTopicExecuteError(
-        "Wait for the plan refresh to finish before execution.",
+        ui.matrix.topicStatusLoading,
       );
       return;
     }
 
     if (!approvalIntent) {
       setTopicExecuteError(
-        "Explicit approval is required before execution.",
+        ui.matrix.topicStatusApproval,
       );
       return;
     }
@@ -934,7 +1055,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     } catch (error) {
       setTopicApprovalPending(false);
       setTopicExecuteError(
-        describeMatrixError("Matrix room topic execute", error),
+        describeMatrixError(localText.operationTopicExecute, error),
       );
     } finally {
       setTopicExecuteLoading(false);
@@ -953,41 +1074,37 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
           {" "}
           <p className={`status-pill status-${status}`} data-testid="matrix-status">
             {status === "ready"
-              ? "Matrix topic slice ready"
+              ? ui.matrix.topicStatusReady
               : status === "partial"
-                ? "Matrix topic slice partial"
+                ? ui.shell.statusPartial
                 : status === "error"
-                  ? "Matrix topic slice error"
-                  : "Loading matrix topic slice"}
+                  ? ui.shell.statusError
+                  : ui.matrix.topicStatusLoading}
           </p>{" "}
-          <h1>Matrix Workspace</h1>{" "}
+          <h1>{ui.matrix.title}</h1>{" "}
           <p className="hero-copy">
-            {" "}
-            Backend-gesteuerter Explore-, Scope-Summary-, Provenienz-, Analyse-,
-            Review-, Freigabe-, Ausführungs- und Verifikationsfluss für
-            Matrix-Topic-Updates.{" "}
+            {ui.matrix.intro}
           </p>{" "}
           {props.restoredSession ? (
             <div className="restored-banner" data-testid="matrix-restored-banner">
-              RESTORED_SESSION: lokale Matrix-Auswahl ist sichtbar, aber
-              Backend-Frische wird nicht angenommen.
+              RESTORED_SESSION: {ui.matrix.scopeNotice}
             </div>
           ) : null}
-          <div className="chip-row" aria-label="Matrix release scope">
-            <span className="workflow-chip workflow-chip-complete">Explore</span>
-            <span className="workflow-chip workflow-chip-complete">Scope summary</span>
-            <span className="workflow-chip workflow-chip-complete">Provenance</span>
+          <div className="chip-row" aria-label={ui.matrix.scopeNotice}>
+            <span className="workflow-chip workflow-chip-complete">{ui.matrix.scopeTitle}</span>
+            <span className="workflow-chip workflow-chip-complete">{ui.matrix.scopeSummaryTitle}</span>
+            <span className="workflow-chip workflow-chip-complete">{ui.matrix.scopePreview}</span>
             <span className={`workflow-chip ${topicPlan ? "workflow-chip-active" : "workflow-chip-idle"}`}>
-              Topic plan
+              {ui.matrix.topicTitle}
             </span>
             <span className={`workflow-chip ${topicPlan && !topicApprovalPending ? "workflow-chip-active" : "workflow-chip-idle"}`}>
-              Approval
+              {ui.matrix.topicStatusApproval}
             </span>
             <span className={`workflow-chip ${topicExecution ? "workflow-chip-complete" : "workflow-chip-idle"}`}>
-              Execute
+              {ui.approval.executionSection}
             </span>
             <span className={`workflow-chip ${topicVerification ? "workflow-chip-complete" : "workflow-chip-idle"}`}>
-              Verify
+              {ui.github.verifyResult}
             </span>
           </div>
         </div>{" "}
@@ -997,26 +1114,26 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             {currentScope
               ? props.expertMode
                 ? `${currentScope.type} scope`
-                : "Bereich gewählt"
-              : "Noch kein Bereich gewählt"}
+                : ui.matrix.scopeSelected
+              : ui.matrix.scopeUnresolved}
           </strong>{" "}
           <div className="summary-stack">
             {props.expertMode ? (
               <>
-                <span>User: {whoami?.userId ?? "unresolved"}</span>
-                <span>Homeserver: {whoami?.homeserver ?? "unresolved"}</span>
+                <span>User: {whoami?.userId ?? ui.common.na}</span>
+                <span>Homeserver: {whoami?.homeserver ?? ui.common.na}</span>
                 <span>Origin: {MATRIX_API_BASE_URL}</span>
-                <span>Slice: Topic update</span>
-                <span>Scope: {currentScope?.scopeId ?? "none"}</span>
+                <span>{ui.matrix.topicTitle}</span>
+                <span>Scope: {currentScope?.scopeId ?? ui.common.none}</span>
                 <span>Rooms: {scopeSummary?.items.length ?? 0}</span>
-                <span>Topic plan: {topicPlan ? (topicPlan.status === "executed" ? "Executed" : "Ready") : "None"}</span>
+                <span>{ui.matrix.topicTitle}: {topicPlan ? (topicPlan.status === "executed" ? ui.shell.statusReady : ui.matrix.topicStatusPending) : ui.common.none}</span>
               </>
             ) : (
               <>
-                <span>Bereichstatus: {currentScope ? "Bereit" : "Wartet"}</span>
-                <span>Zusammenfassung: {scopeSummary ? "Vorhanden" : "Noch nicht geladen"}</span>
-                <span>Freigabe: {topicPlan ? "Nötig" : "Nicht erforderlich"}</span>
-                <span>Sicherheit: Nur Lesen aktiv</span>
+                <span>{ui.matrix.scopeSelectedLabel}: {currentScope ? ui.shell.statusReady : ui.shell.healthChecking}</span>
+                <span>{ui.matrix.scopeSummaryTitle}: {scopeSummary ? ui.shell.statusReady : ui.matrix.scopeSummaryUnavailable}</span>
+                <span>{ui.matrix.topicStatusApproval}: {topicPlan ? ui.review.approvalNeeded : ui.common.none}</span>
+                <span>{ui.github.readOnlyActive}</span>
               </>
             )}
           </div>{" "}
@@ -1027,10 +1144,10 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
         <section className="alert-banner" role="status" aria-live="polite">
           <p>
             {props.expertMode
-              ? `Matrix bootstrap ${status}. Origin: ${MATRIX_API_BASE_URL}.`
-              : `Matrix bootstrap ${status}.`}
+              ? `${ui.matrix.title} bootstrap ${status}. Origin: ${MATRIX_API_BASE_URL}.`
+              : `${ui.matrix.title} bootstrap ${status}.`}
             {identityError || roomsError
-              ? ` ${identityError ? "Identity check failed." : ""}${identityError && roomsError ? " " : ""}${roomsError ? "Joined rooms could not be loaded." : ""}`
+              ? ` ${identityError ? ui.shell.statusError : ""}${identityError && roomsError ? " " : ""}${roomsError ? ui.matrix.roomPickerEmpty : ""}`
               : ""}
           </p>
         </section>
@@ -1044,21 +1161,19 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
           {" "}
           <header className="card-header">
             <div>
-              <span>Raumtopic-Aktualisierung</span>
-              <strong>
-                Analysieren, freigeben, ausführen und verifizieren eines backend-gesteuerten Topic-Wechsels
-              </strong>
+              <span>{ui.matrix.topicTitle}</span>
+              <strong>{ui.matrix.scopeNotice}</strong>
             </div>
           </header>{" "}
           <div className="info-block">
-            <p className="info-label">Target room</p>
+            <p className="info-label">{ui.matrix.roomId}</p>
             <div className="input-row">
               <input
                 type="text"
                 value={topicRoomId}
                 onChange={(event) => setTopicRoomId(event.target.value)}
-                placeholder={props.expertMode ? "!room:matrix.org" : "Bereich wählen"}
-                aria-label={props.expertMode ? "Room ID" : "Bereich"}
+                placeholder={props.expertMode ? "!room:matrix.org" : ui.matrix.roomPickerChoose}
+                aria-label={props.expertMode ? ui.matrix.roomId : ui.matrix.roomPickerChoose}
                 data-testid="matrix-topic-room-id"
               />
               <button
@@ -1067,19 +1182,19 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 onClick={() => setTopicRoomId(selectedRoomIds[0] ?? "")}
                 disabled={!selectedRoomIds[0]}
               >
-                {props.expertMode ? "Use selected room" : "Auswahl übernehmen"}
+                {props.expertMode ? ui.matrix.roomPickerRoom : ui.matrix.roomPickerChoose}
               </button>
             </div>
           </div>{" "}
           <div className="info-block">
-            <p className="info-label">Proposed topic</p>
+            <p className="info-label">{ui.matrix.topicTitle}</p>
             <textarea
               className="matrix-textarea"
               rows={3}
               value={topicText}
               onChange={(event) => setTopicText(event.target.value)}
-              placeholder="Propose a new Matrix room topic."
-              aria-label="Proposed topic"
+              placeholder={ui.matrix.draftPlaceholder}
+              aria-label={ui.matrix.topicTitle}
               data-testid="matrix-topic-text"
             />
           </div>{" "}
@@ -1091,10 +1206,10 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               }}
               disabled={topicPrepareLoading}
             >
-              {topicPrepareLoading ? "Analyzing…" : "Analyze topic update"}
+              {topicPrepareLoading ? ui.matrix.topicStatusLoading : ui.matrix.topicTitle}
             </button>
             <span className="muted-copy">
-              {props.expertMode ? "The browser only sends a room ID, proposed topic text, and approval intent. The backend reads the current room state and builds the plan." : "Nur nach Freigabe."}
+              {props.expertMode ? ui.matrix.scopeSummaryInfo : ui.review.approvalNeeded}
             </span>
           </div>{" "}
           {topicPrepareError ? (
@@ -1113,17 +1228,17 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
           {topicPlan ? (
             <ProposalCard
               testId="matrix-topic-plan"
-              title="Raumtopic aktualisieren"
+              title={ui.matrix.topicTitle}
               summary={topicPlan.proposedValue}
-              consequence="Der Backend-Readback aktualisiert das Raumtopic erst nach expliziter Freigabe."
+              consequence={ui.matrix.submitFailClosed}
               statusLabel={
                 topicPlan.status === "pending_review"
-                  ? "Freigabe erforderlich"
+                  ? ui.matrix.topicStatusApproval
                   : topicVerification?.status === "verified"
-                    ? "Beleg verifiziert"
+                    ? ui.matrix.topicStatusVerified
                     : topicExecution
-                      ? "Ausführungsbeleg offen"
-                      : "Plan ausgeführt"
+                      ? ui.matrix.topicStatusOpen
+                      : ui.matrix.topicStatusReady
               }
               statusTone={
                 topicPlan.status === "pending_review"
@@ -1138,16 +1253,16 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 buildGovernanceMetadataRows({
                   actingIdentity: whoami?.userId ?? BACKEND_TRUTH_UNAVAILABLE,
                   activeScope: topicPlan.scopeId ?? BACKEND_TRUTH_UNAVAILABLE,
-                  authorityDomain: "matrix backend action routes",
+                  authorityDomain: localText.governanceAuthorityDomain,
                   targetScope: topicPlan.roomId,
-                  executionDomain: "matrix room topic execute/verify routes",
+                  executionDomain: localText.governanceExecutionDomain,
                   executionTarget: topicPlan.roomId,
-                  provenanceSummary: topicPlan.snapshotId ? `snapshot ${topicPlan.snapshotId}` : "scope snapshot not provided by backend",
-                  receiptSummary: topicVerification?.status ?? "proposal pending approval",
+                  provenanceSummary: localText.governanceSnapshotSummary(topicPlan.snapshotId ?? null),
+                  receiptSummary: topicVerification?.status ?? localText.reviewReceiptPending,
                 }),
                 [
-                  { label: "Risk", value: topicPlan.risk },
-                  { label: "Expires", value: formatDate(topicPlan.expiresAt) },
+                  { label: localText.metadataRiskLabel, value: topicPlan.risk },
+                  { label: localText.metadataExpiresLabel, value: formatDate(topicPlan.expiresAt) },
                 ]
               )}
             >
@@ -1155,15 +1270,15 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 {props.expertMode ? (
                   <>
                     <div>
-                      <span>Status</span>
+                      <span>{ui.shell.statusReady}</span>
                       <strong>{topicPlan.status}</strong>
                     </div>
                     <div>
-                      <span>Requires approval</span>
+                      <span>{ui.matrix.topicStatusApproval}</span>
                       <strong>{String(topicPlan.requiresApproval)}</strong>
                     </div>
                     <div>
-                      <span>Actions</span>
+                      <span>{ui.review.rowOpen}</span>
                       <strong>{topicPlan.actions.length}</strong>
                     </div>
                   </>
@@ -1171,16 +1286,16 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               </div>
               <div className="delta-grid">
                 <div>
-                  <p className="info-label">Current value</p>
+                  <p className="info-label">{ui.matrix.topicStatusLoaded}</p>
                   <pre>{text(topicPlan.currentValue)}</pre>
                 </div>
                 <div>
-                  <p className="info-label">Proposed value</p>
+                  <p className="info-label">{ui.matrix.topicTitle}</p>
                   <pre>{text(topicPlan.proposedValue)}</pre>
                 </div>
               </div>
               <div className="list-block">
-                <p className="info-label">Actions</p>
+                <p className="info-label">{ui.review.rowOpen}</p>
                 <div className="chip-list">
                   {topicPlan.actions.map((action, index) => (
                     <span key={`${action.type}:${index}`} className="reference-chip">
@@ -1190,27 +1305,27 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 </div>
               </div>
 
-              {topicPlan.status === "pending_review" ? (
+                  {topicPlan.status === "pending_review" ? (
                 <>
                   {topicExecuteLoading || topicVerifyLoading ? (
                     <ApprovalTransitionCard
                       testId="matrix-topic-transition"
-                      title="Matrix topic approval is being applied"
-                      detail="Backend-Ausführung und Verifikation laufen für den ausgewählten Raum."
+                      title={ui.matrix.topicStatusApproval}
+                      detail={ui.approval.runningDetail}
                     />
                   ) : null}
                   <DecisionZone
                     testId="matrix-topic-decision"
-                    approveLabel={topicExecuteLoading ? "Ausführung läuft…" : "Freigeben und ausführen"}
-                    rejectLabel="Vorschlag ablehnen"
+                    approveLabel={topicExecuteLoading ? ui.approval.running : ui.github.approveLabel}
+                    rejectLabel={ui.github.rejectLabel}
                     onApprove={() => {
                       setTopicApprovalPending(true);
                       void executeTopicUpdate(true);
                     }}
                     onReject={() => {
                       setTopicApprovalPending(false);
-                      setLastActionResult("Freigabe verworfen: keine Ausführung gestartet.");
-                      props.onTelemetry("warning", "Matrix proposal rejected", "Die lokale Freigabeabsicht wurde verworfen.");
+                      setLastActionResult(ui.github.rejectLabel);
+                      props.onTelemetry("warning", localText.telemetryProposalRejected, localText.telemetryProposalRejectedDetail);
                     }}
                     approveDisabled={
                       topicExecuteLoading ||
@@ -1225,7 +1340,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                       topicPlan.status !== "pending_review"
                     }
                     busy={topicExecuteLoading || topicVerifyLoading}
-                    helperText="Freigeben sendet eine Backend-Freigabeabsicht. Ablehnen löscht nur die lokale Freigabeabsicht."
+                    helperText={ui.github.approveHelper}
                   />
                 </>
               ) : null}
@@ -1240,17 +1355,17 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                   disabled={topicPlanRefreshLoading}
                   data-testid="matrix-topic-refresh"
                 >
-                  {topicPlanRefreshLoading ? "Aktualisiere…" : "Plan aktualisieren"}
+                  {topicPlanRefreshLoading ? ui.matrix.topicStatusLoading : ui.matrix.topicStatusPending}
                 </button>
                 <span className="muted-copy">
-                  Die Verifikation läuft als Backend-Readback nach der Ausführung.
+                  {ui.matrix.scopeSummaryInfo}
                 </span>
               </div>
 
               {topicExecution ? (
                 <ExecutionReceiptCard
-                  title="Ausführungsbeleg für Raumtopic"
-                  detail="Der Backend-Readback bleibt die Quelle der Wahrheit."
+                  title={ui.approval.receiptSection}
+                  detail={ui.matrix.scopeNotice}
                   outcome={
                     topicVerification?.status === "failed"
                       ? "failed"
@@ -1262,23 +1377,23 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                     buildGovernanceMetadataRows({
                       actingIdentity: whoami?.userId ?? BACKEND_TRUTH_UNAVAILABLE,
                       activeScope: topicPlan.scopeId ?? BACKEND_TRUTH_UNAVAILABLE,
-                      authorityDomain: "matrix backend action routes",
+                      authorityDomain: localText.governanceAuthorityDomain,
                       targetScope: topicPlan.roomId,
-                      executionDomain: "matrix room topic execute/verify routes",
-                      executionTarget: `transaction ${topicExecution.transactionId}`,
-                      provenanceSummary: topicPlan.snapshotId ? `snapshot ${topicPlan.snapshotId}` : "scope snapshot not provided by backend",
+                      executionDomain: localText.governanceExecutionDomain,
+                      executionTarget: localText.governanceExecutionTargetTransaction(topicExecution.transactionId),
+                      provenanceSummary: localText.governanceSnapshotSummary(topicPlan.snapshotId ?? null),
                       receiptSummary: topicVerification?.status ?? topicExecution.status,
                     }),
                     [
-                      { label: "Transaction ID", value: topicExecution.transactionId },
-                      { label: "Executed at", value: formatDate(topicExecution.executedAt) },
-                      { label: "Status", value: topicExecution.status },
+                      { label: localText.metadataTransactionIdLabel, value: topicExecution.transactionId },
+                      { label: ui.approval.executionSection, value: formatDate(topicExecution.executedAt) },
+                      { label: ui.shell.statusReady, value: topicExecution.status },
                     ]
                   )}
                   testId="matrix-topic-execution"
                 >
                   {topicVerifyLoading ? (
-                    <p className="muted-copy">Backend-Readback wird verifiziert…</p>
+                    <p className="muted-copy">{ui.github.verifyBusy}</p>
                   ) : null}
                 </ExecutionReceiptCard>
               ) : null}
@@ -1290,19 +1405,19 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 >
                   <div className="detail-grid">
                     <div>
-                      <span>Status</span>
+                      <span>{ui.shell.statusReady}</span>
                       <strong>{topicVerification.status}</strong>
                     </div>
                     <div>
-                      <span>Expected</span>
+                      <span>{ui.matrix.topicStatusLoaded}</span>
                       <strong>{text(topicVerification.expected)}</strong>
                     </div>
                     <div>
-                      <span>Actual</span>
+                      <span>{ui.matrix.topicTitle}</span>
                       <strong>{text(topicVerification.actual)}</strong>
                     </div>
                     <div>
-                      <span>Checked at</span>
+                      <span>{ui.github.verifyResult}</span>
                       <strong>{formatDate(topicVerification.checkedAt)}</strong>
                     </div>
                   </div>
@@ -1328,8 +1443,8 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
           ) : (
               <p className="empty-state">
               {props.expertMode
-                ? "Raum-ID und Vorschlag eintragen, dann den backend-gesteuerten Topic-Update-Plan analysieren."
-                : "Bereich wählen, dann Topic Update analysieren."}
+                ? ui.matrix.scopeSummaryInfo
+                : ui.matrix.roomPickerChoose}
             </p>
           )}{" "}
         </section>{" "}
@@ -1337,28 +1452,28 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
           {" "}
           <header className="card-header">
             <div>
-              <span>Explore</span>
-              <strong>Identity, rooms, scope, and provenance</strong>
+              <span>{ui.matrix.scopeTitle}</span>
+              <strong>{ui.matrix.scopeNotice}</strong>
             </div>
           </header>{" "}
           <div className="explore-stack">
             {" "}
             <div className="info-block">
-              <p className="info-label">Who am I</p>
+              <p className="info-label">{ui.settings.matrixIdentity}</p>
               <p className="info-value">
                 {props.expertMode
-                  ? whoami?.userId ?? "Load backend identity to begin"
+                  ? whoami?.userId ?? ui.shell.healthChecking
                   : whoami
-                    ? "Identität geladen"
-                    : "Backend-Identität wird geladen"}
+                    ? ui.shell.statusReady
+                    : ui.shell.healthChecking}
               </p>
               {props.expertMode ? (
                 <p className="info-note">
-                  Device: {text(whoami?.deviceId)} · Homeserver:{" "}
+                  {ui.settings.matrixHomeserver}: {text(whoami?.deviceId)} · {ui.settings.matrixHomeserver}:{" "}
                   {text(whoami?.homeserver)}
                 </p>
               ) : (
-                <p className="info-note">Bereich wählen, um die Übersicht zu laden.</p>
+                <p className="info-note">{ui.matrix.scopeSummaryInfo}</p>
               )}
             </div>{" "}
             {identityError ? (
@@ -1366,11 +1481,11 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             ) : null}{" "}
             <div className="info-block">
               {" "}
-              <p className="info-label">Joined rooms</p>{" "}
+              <p className="info-label">{ui.matrix.joinedRoomsTitle}</p>{" "}
               <div className="room-picker" data-testid="matrix-rooms">
                 {" "}
                 {joinedRooms.length === 0 ? (
-                  <p className="empty-state">No joined rooms loaded yet.</p>
+                  <p className="empty-state">{ui.matrix.roomPickerEmpty}</p>
                 ) : (
                   joinedRooms.map((room) => {
                     const active = selectedRoomIds.includes(room.roomId);
@@ -1398,12 +1513,12 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                         <span className="room-picker-title">
                           {props.expertMode
                             ? room.name ?? room.canonicalAlias ?? room.roomId
-                            : room.name ?? "Bereich"}
+                            : room.name ?? ui.matrix.roomPickerRoom}
                         </span>{" "}
                         <span className="room-picker-meta">
                           {props.expertMode
-                            ? `${room.roomType ?? "room"} · ${room.roomId}`
-                            : "Bereich auswählen"}
+                            ? `${room.roomType ?? localText.roomTypeFallback} · ${room.roomId}`
+                            : ui.matrix.roomPickerChoose}
                         </span>{" "}
                       </button>
                     );
@@ -1416,14 +1531,14 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             </div>{" "}
             <div className="info-block">
               {" "}
-              <p className="info-label">Selected scope inputs</p>{" "}
+              <p className="info-label">{ui.matrix.selectedScopeTitle}</p>{" "}
               <div className="input-row">
                 {" "}
                 <input
                   type="text"
                   value={spaceInput}
                   onChange={(event) => setSpaceInput(event.target.value)}
-                  placeholder={props.expertMode ? "Add a space ID" : "Bereich ergänzen"}
+                  placeholder={props.expertMode ? ui.matrix.scopeAddSpace : ui.matrix.roomPickerChoose}
                 />{" "}
                 <button
                   type="button"
@@ -1438,19 +1553,19 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                     void loadHierarchy(next);
                   }}
                 >
-                  Add space
+                  {ui.matrix.scopeAddSpace}
                 </button>{" "}
               </div>{" "}
               <div className="chip-list">
                 {" "}
                 {selectedRoomIds.length === 0 && selectedSpaces.length === 0 ? (
                   <span className="empty-state">
-                    No scope inputs selected yet.
+                    {ui.matrix.scopeUnresolved}
                   </span>
                 ) : null}{" "}
                 {selectedRoomIds.map((roomId, index) => (
                   <span key={roomId} className="scope-chip">
-                    <span>{props.expertMode ? `Room: ${roomId}` : `Bereich ${index + 1}`}</span>
+                    <span>{props.expertMode ? `${ui.matrix.roomId}: ${roomId}` : `${ui.matrix.roomPickerRoom} ${index + 1}`}</span>
                     <button
                       type="button"
                       className="chip-action"
@@ -1460,20 +1575,20 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                         )
                       }
                     >
-                      Remove
+                      {ui.matrix.scopeRemove}
                     </button>
                   </span>
                 ))}{" "}
                 {selectedSpaces.map((spaceId, index) => (
                   <span key={spaceId} className="scope-chip">
-                    <span>{props.expertMode ? `Space: ${spaceId}` : `Bereich ${index + 1}`}</span>
+                    <span>{props.expertMode ? `${ui.matrix.roomPickerSpace}: ${spaceId}` : `${ui.matrix.roomPickerSpace} ${index + 1}`}</span>
                     {props.expertMode ? (
                       <button
                         type="button"
                         className="chip-action"
                         onClick={() => void loadHierarchy(spaceId)}
                       >
-                        Browser-Vorschau
+                        {ui.matrix.topicStatusBrowserPreview}
                       </button>
                     ) : null}
                     <button
@@ -1485,7 +1600,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                         )
                       }
                     >
-                      Remove
+                      {ui.matrix.scopeRemove}
                     </button>
                   </span>
                 ))}{" "}
@@ -1503,11 +1618,11 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                   }
                 >
                   {scopeResolveLoading
-                    ? "Resolving…"
-                    : "Resolve scope"}
+                    ? ui.matrix.resolvingScope
+                    : ui.matrix.resolveScope}
                 </button>
                 <span className="muted-copy">
-                  Backend resolves the scope and loads the current summary.
+                  {ui.matrix.scopeSummaryInfo}
                 </span>
               </div>{" "}
               {scopeError ? (
@@ -1516,13 +1631,13 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             </div>{" "}
             <div className="info-block">
               {" "}
-              <p className="info-label">Current scope summary</p>{" "}
+              <p className="info-label">{ui.matrix.scopeSummaryTitle}</p>{" "}
               {scopeSummary ? (
                 <div className="scope-summary">
                   <div className="scope-summary-meta">
                     {props.expertMode ? <span>Snapshot: {scopeSummary.snapshotId}</span> : null}
                     <span>
-                      Generated: {formatDate(scopeSummary.generatedAt)}
+                      {ui.common.ready}: {formatDate(scopeSummary.generatedAt)}
                     </span>
                   </div>
                   <div className="scope-summary-list">
@@ -1533,10 +1648,10 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                       >
                         <div>
                           <strong>{text(item.name)}</strong>
-                          <span>{props.expertMode ? text(item.canonicalAlias) : "Bereich bereit"}</span>
+                          <span>{props.expertMode ? text(item.canonicalAlias) : ui.matrix.scopeSummaryReady}</span>
                         </div>
                         <small>
-                          {props.expertMode ? `${item.members} members · ${item.lastEventSummary}` : "Übersicht bereit"}
+                          {props.expertMode ? `${item.members} · ${item.lastEventSummary}` : ui.matrix.scopeSummaryReady}
                         </small>
                         <div className="scope-summary-actions">
                           <button
@@ -1544,7 +1659,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                             className="secondary-button"
                             onClick={() => void loadProvenance(item.roomId)}
                           >
-                            {props.expertMode ? "View provenance" : "Übersicht ansehen"}
+                            {props.expertMode ? ui.matrix.scopePreview : ui.matrix.scopePreview}
                           </button>
                         </div>
                       </article>
@@ -1554,10 +1669,10 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               ) : (
                 <p className="empty-state">
                   {scopeSummaryStatus === "loading"
-                    ? "Loading summary…"
+                    ? ui.matrix.scopeSummaryLoading
                     : currentScope
-                      ? "Scope summary unavailable until the backend responds."
-                      : "Resolve a scope to begin analysis."}
+                      ? ui.matrix.scopeSummaryUnavailable
+                      : ui.matrix.resolveScope}
                 </p>
               )}{" "}
               {scopeSummaryError ? (
@@ -1567,18 +1682,18 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             {props.expertMode ? (
               <div className="info-block">
                 {" "}
-                <p className="info-label">Hierarchy preview (advisory)</p>{" "}
+                <p className="info-label">{ui.matrix.hierarchyTitle}</p>{" "}
                 <p className="muted-copy">
-                  Browser-side mock only. Not backend-verified or write-authoritative.
+                  {ui.matrix.hierarchyAdvisory}
                 </p>{" "}
                 {spaceHierarchySpace ? (
                   <div className="scope-summary">
                     {" "}
                     <div className="scope-summary-meta">
-                      <span>Space ID: {spaceHierarchySpace}</span>
+                      <span>{ui.matrix.hierarchySpaceId}: {spaceHierarchySpace}</span>
                     </div>{" "}
                     {spaceHierarchyLoading ? (
-                      <p className="muted-copy">Loading hierarchy…</p>
+                      <p className="muted-copy">{ui.matrix.scopeSummaryLoading}</p>
                     ) : null}{" "}
                     {spaceHierarchyError ? (
                       <p className="error-banner">{spaceHierarchyError}</p>
@@ -1595,20 +1710,20 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                               <span>{text(room.canonical_alias ?? null)}</span>
                             </div>
                             <small>
-                              {`${text(room.room_type ?? null)} · ${room.room_id ?? "unknown room"}`}
+                              {`${text(room.room_type ?? null)} · ${room.room_id ?? localText.unknownRoomFallback}`}
                             </small>
                           </article>
                         ))}
                       </div>
                     ) : (
                       <p className="empty-state">
-                        No preview rooms returned yet.
+                        {ui.matrix.hierarchyRoomsEmpty}
                       </p>
                     )}{" "}
                   </div>
                 ) : (
                   <p className="empty-state">
-                    Add or preview a space ID to inspect the browser-side hierarchy mock.
+                    {ui.matrix.hierarchyEmpty}
                   </p>
                 )}{" "}
               </div>
@@ -1618,29 +1733,29 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
         <section className="workspace-card" data-testid="matrix-composer-panel">
           <header className="card-header">
             <div>
-              <span>Composer</span>
-              <strong>Matrix post, reply, thread, or thread reply</strong>
+              <span>{ui.matrix.composerTitle}</span>
+              <strong>{ui.matrix.composerModeLabel}</strong>
             </div>
           </header>
 
           <div className="matrix-thread-context-card" data-testid="matrix-thread-context">
             <div className="matrix-thread-context-copy">
-              <p className="info-label">Thread-Kontext</p>
+              <p className="info-label">{ui.matrix.threadContextTitle}</p>
               <strong>
                 {activeThreadRootId
-                  ? `Thread zu Beitrag ${activeThreadRootId}`
-                  : "Noch kein Thread geöffnet"}
+                  ? `${ui.matrix.thread}: ${activeThreadRootId}`
+                  : ui.matrix.threadNone}
               </strong>
               <p className="muted-copy">
                 {activeThreadRootId
-                  ? "Der Composer schreibt in den geöffneten Thread. Mit Thread verlassen kehrst du in den Raumkontext zurück."
-                  : "Wähle einen Beitrag oder Root, um explizit in einen Thread-Kontext zu wechseln."}
+                  ? ui.matrix.threadLeaveHint
+                  : ui.matrix.threadOpenHint}
               </p>
             </div>
             <div className="matrix-thread-context-meta">
-              <span className="reference-chip">Raum: {activeComposerRoomId ?? "n/a"}</span>
-              <span className="reference-chip">Beitrag: {selectedEventId?.trim() || "n/a"}</span>
-              <span className="reference-chip">Root: {activeThreadRootId ?? "n/a"}</span>
+              <span className="reference-chip">{ui.matrix.roomId}: {activeComposerRoomId ?? ui.common.na}</span>
+              <span className="reference-chip">{ui.matrix.postId}: {selectedEventId?.trim() || ui.common.na}</span>
+              <span className="reference-chip">{ui.matrix.threadRootId}: {activeThreadRootId ?? ui.common.na}</span>
             </div>
             <div className="matrix-thread-context-actions">
               <button
@@ -1652,7 +1767,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 disabled={!threadOpenSourceId}
                 data-testid="matrix-thread-open"
               >
-                Thread öffnen
+                {ui.matrix.threadOpen}
               </button>
               <button
                 type="button"
@@ -1661,29 +1776,29 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 disabled={!selectedThreadRootId}
                 data-testid="matrix-thread-leave"
               >
-                Thread verlassen
+                {ui.matrix.threadLeave}
               </button>
             </div>
           </div>
 
           <div className="matrix-composer-banner">
             <div>
-              <p className="info-label">Composer-Kontext</p>
+              <p className="info-label">{ui.matrix.composerTargetLabel}</p>
               <strong>{describeComposerMode(composerMode)}</strong>
               <p className="muted-copy">{describeComposerTarget(composerTarget)}</p>
             </div>
             <div className="matrix-composer-banner-meta">
               <span className={`status-pill status-${composerTarget.kind === "none" ? "partial" : "ready"}`}>
-                {composerTarget.kind === "none" ? "Ziel fehlt" : "Ziel gesetzt"}
+                {composerTarget.kind === "none" ? ui.matrix.composerTargetMissing : ui.matrix.composerTargetSet}
               </span>
               <span className="reference-chip">
-                Raum: {roomName ?? roomId ?? topicRoomId ?? selectedRoomIds[0] ?? "n/a"}
+                {ui.matrix.roomId}: {roomName ?? roomId ?? topicRoomId ?? selectedRoomIds[0] ?? ui.common.na}
               </span>
             </div>
           </div>
 
           <div className="info-block">
-            <p className="info-label">Composer mode</p>
+            <p className="info-label">{ui.matrix.composerModeLabel}</p>
             <div className="chip-list" data-testid="matrix-composer-mode">
               <span className="workflow-chip workflow-chip-active" data-testid="matrix-composer-mode-label">
                 {composerMode}
@@ -1699,7 +1814,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               onClick={() => startNewPost()}
               data-testid="matrix-new-post"
             >
-              Neuer Post
+              {ui.matrix.newPost}
             </button>
             <button
               type="button"
@@ -1708,7 +1823,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               disabled={!selectedEventId}
               data-testid="matrix-reply"
             >
-              Antworten
+              {ui.matrix.reply}
             </button>
             <button
               type="button"
@@ -1717,7 +1832,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               disabled={!(selectedEventId || selectedThreadRootId)}
               data-testid="matrix-thread"
             >
-              Thread starten
+              {ui.matrix.thread}
             </button>
             <button
               type="button"
@@ -1726,7 +1841,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               disabled={!selectedThreadRootId}
               data-testid="matrix-reply-in-thread"
             >
-              Im Thread antworten
+              {ui.matrix.replyInThread}
             </button>
             <button
               type="button"
@@ -1734,15 +1849,15 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               onClick={cancelComposerTarget}
               data-testid="matrix-composer-cancel"
             >
-              Ziel löschen
+              {ui.matrix.clearTarget}
             </button>
           </div>
 
           <div className="info-block">
-            <p className="info-label">Target context</p>
+            <p className="info-label">{ui.matrix.targetContextTitle}</p>
             <div className="detail-grid">
               <div>
-                <span>Room ID</span>
+                <span>{ui.matrix.roomId}</span>
                 <input
                   type="text"
                   value={roomId ?? ""}
@@ -1752,32 +1867,32 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 />
               </div>
               <div>
-                <span>Room name</span>
+                <span>{ui.matrix.roomName}</span>
                 <input
                   type="text"
                   value={roomName ?? ""}
                   onChange={(event) => setRoomName(event.target.value.trim().length > 0 ? event.target.value : null)}
-                  placeholder="Room name"
+                  placeholder={ui.matrix.roomName}
                   data-testid="matrix-composer-room-name"
                 />
               </div>
               <div>
-                <span>Post ID</span>
+                <span>{ui.matrix.postId}</span>
                 <input
                   type="text"
                   value={selectedEventId ?? ""}
                   onChange={(event) => setSelectedEventId(event.target.value.trim().length > 0 ? event.target.value : null)}
-                  placeholder="event id"
+                  placeholder={ui.matrix.postId}
                   data-testid="matrix-composer-post-id"
                 />
               </div>
               <div>
-                <span>Thread root ID</span>
+                <span>{ui.matrix.threadRootId}</span>
                 <input
                   type="text"
                   value={selectedThreadRootId ?? ""}
                   onChange={(event) => setSelectedThreadRootId(event.target.value.trim().length > 0 ? event.target.value : null)}
-                  placeholder="thread root id"
+                  placeholder={ui.matrix.threadRootId}
                   data-testid="matrix-composer-thread-root-id"
                 />
               </div>
@@ -1785,26 +1900,26 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
           </div>
 
           <div className="info-block">
-            <p className="info-label">Draft</p>
+            <p className="info-label">{ui.matrix.draft}</p>
             <textarea
               className="matrix-textarea"
               rows={5}
               value={draftContent}
               onChange={(event) => setDraftContent(event.target.value)}
-              placeholder="Composer draft content"
-              aria-label="Matrix composer draft"
+              placeholder={ui.matrix.draftPlaceholder}
+              aria-label={ui.matrix.composerDraftLabel}
               data-testid="matrix-composer-draft"
             />
           </div>
 
           <div className="action-row">
             <button type="button" onClick={submitMatrixComposer} data-testid="matrix-composer-submit">
-              Submit (fail-closed)
+              {ui.matrix.submit}
             </button>
             <span className="muted-copy">
               {composerTarget.kind === "none"
-                ? "Der Submit bleibt blockiert, bis ein Ziel explizit gesetzt ist."
-                : "Der Submit ist derzeit fail-closed, weil kein Write-Contract im Backend verdrahtet ist."}
+                ? ui.matrix.submitBlocked
+                : ui.matrix.submitFailClosed}
             </span>
           </div>
 

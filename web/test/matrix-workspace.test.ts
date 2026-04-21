@@ -51,6 +51,7 @@ test("Matrix workspace review items map topic plans into the shared review langu
   } as MatrixRoomTopicVerificationResult;
 
   const pendingItems = buildMatrixReviewItems(plan, null, null, "@alice:matrix.example");
+  const pendingItemsEn = buildMatrixReviewItems(plan, null, null, "@alice:matrix.example", "en");
   const approvedItems = buildMatrixReviewItems(plan, execution, null, "@alice:matrix.example");
   const executedItems = buildMatrixReviewItems(plan, execution, verified, "@alice:matrix.example");
   const rejectedItems = buildMatrixReviewItems(plan, execution, mismatch, "@alice:matrix.example");
@@ -59,9 +60,11 @@ test("Matrix workspace review items map topic plans into the shared review langu
   assert.equal(approvedItems[0]?.status, "approved");
   assert.equal(executedItems[0]?.status, "executed");
   assert.equal(rejectedItems[0]?.status, "rejected");
-  assert.equal(pendingItems[0]?.sourceLabel, "Matrix Workspace");
+  assert.equal(pendingItems[0]?.sourceLabel, "Matrix-Workspace");
   assert.match(pendingItems[0]?.summary ?? "", /Aktuell:/);
   assert.match(pendingItems[0]?.title ?? "", /Raumtopic/);
+  assert.match(pendingItemsEn[0]?.summary ?? "", /Current:/);
+  assert.match(pendingItemsEn[0]?.title ?? "", /Room topic/);
   assert.deepEqual(pendingItems[0]?.provenanceRows?.[0], {
     label: "Acting identity",
     value: "@alice:matrix.example",

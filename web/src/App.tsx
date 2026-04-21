@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { ChatWorkspace } from "./components/ChatWorkspace.js";
 import { GitHubAdminLogin } from "./components/GitHubAdminLogin.js";
 import {
@@ -30,13 +30,9 @@ import {
   TruthRailSection,
 } from "./components/ShellPrimitives.js";
 import {
-  getConnectionStateLabel,
   getShellHealthCopy,
   getSessionStatusLabel,
-  getReviewStatusLabel,
-  resolveInitialLocale,
   useLocalization,
-  type Locale,
 } from "./lib/localization.js";
 import {
   fetchAuthSession,
@@ -49,7 +45,6 @@ import {
   createInitialGitHubAuthState,
   describeGitHubAuthError,
   githubAuthReducer,
-  type GitHubAuthState
 } from "./lib/github-auth.js";
 import {
   appendSession,
@@ -88,56 +83,6 @@ type PersistedShellState = {
 
 const SHELL_STORAGE_KEY = "modelgate.console.shell.v2";
 
-const DEFAULT_GITHUB_CONTEXT: GitHubWorkspaceStatus = {
-  repositoryLabel: "No GitHub repository selected yet",
-  connectionLabel: "Not connected",
-  accessLabel: "Read only",
-  analysisLabel: "Not started",
-  proposalLabel: "Not created yet",
-  approvalLabel: "Not required",
-  resultLabel: "Not started",
-  safetyText: "The app can inspect information, but it cannot change anything.",
-  expertDetails: {
-    requestId: null,
-    planId: null,
-    branchName: null,
-    apiStatus: "Backend routes active",
-    sseEvents: [],
-    rawDiffPreview: null,
-    selectedRepoSlug: null,
-  },
-};
-
-const DEFAULT_MATRIX_CONTEXT: MatrixWorkspaceStatus = {
-  identityLabel: "Identity is being checked",
-  connectionLabel: "Checking",
-  homeserverLabel: "n/a",
-  scopeLabel: "No scope selected yet",
-  summaryLabel: "No summary yet",
-  approvalLabel: "Not required",
-  safetyText: "The app can inspect information, but it cannot change anything.",
-  expertDetails: {
-    route: "Backend routes active",
-    requestId: null,
-    planId: null,
-    roomId: null,
-    spaceId: null,
-    eventId: null,
-    httpStatus: null,
-    latency: null,
-    backendRouteStatus: "Ready",
-    runtimeEventTrail: [],
-    sseLifecycle: "idle",
-    rawPayload: null,
-    composerMode: "post",
-    composerRoomId: null,
-    composerEventId: null,
-    composerThreadRootId: null,
-    composerTargetLabel: "New post",
-  },
-  reviewItems: [],
-};
-
 function createId() {
   return crypto.randomUUID();
 }
@@ -165,36 +110,6 @@ function persistShellState(state: PersistedShellState) {
 
 function appendTelemetry(current: TelemetryEntry[], entry: TelemetryEntry) {
   return [...current, entry].slice(-8);
-}
-
-function tabLabel(mode: WorkspaceMode) {
-  switch (mode) {
-    case "github":
-      return "GitHub Workspace";
-    case "matrix":
-      return "Matrix Workspace";
-    case "review":
-      return "Review";
-    case "settings":
-      return "Settings";
-    default:
-      return "Chat";
-  }
-}
-
-function tabDescription(mode: WorkspaceMode) {
-  switch (mode) {
-    case "github":
-      return "Repo lesen und Vorschläge prüfen";
-    case "matrix":
-      return "Scope, Provenienz und Topic Updates";
-    case "review":
-      return "Freigaben prüfen";
-    case "settings":
-      return "Ansicht und Diagnose";
-    default:
-      return "Fragen und Antworten";
-  }
 }
 
 const WORKSPACE_MODES: WorkspaceMode[] = ["chat", "github", "matrix", "review", "settings"];
@@ -293,24 +208,105 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function sessionStatusCopy(status: WorkspaceSession<unknown>["status"]) {
-  switch (status) {
-    case "in_progress":
-      return "In Arbeit";
-    case "review_required":
-      return "Freigabe nötig";
-    case "done":
-      return "Bereit";
-    case "failed":
-      return "Fehler";
-    default:
-      return "Entwurf";
-  }
-}
-
 export default function App() {
   const persisted = readPersistedShellState();
   const { locale, setLocale, copy: ui } = useLocalization();
+  const appText = useMemo(
+    () => locale === "de"
+      ? {
+          telemetryHealthLoaded: "Backend-Health geladen",
+          telemetryHealthLoadedDetail: (service: string, modeLabel: string, allowedModelCount: number) =>
+            `${service} meldet ${modeLabel} mit ${allowedModelCount} öffentlichen Modell(aliasen).`,
+          telemetryHealthFailed: "Backend-Health fehlgeschlagen",
+          telemetryHealthFailedDetail: "Kein Zugriff auf /health",
+          telemetryModelAliasLoaded: "Öffentlicher Modellalias geladen",
+          telemetryModelAliasLoadedDetail: (alias: string) =>
+            `Alias ${alias} ausgewählt; Provider-Ziele bleiben backend-owned.`,
+          telemetryModelListFailed: "Modellliste fehlgeschlagen",
+          telemetryModelListFailedDetail: "Kein Zugriff auf /models",
+          chatGovernancePendingApproval: "Freigabe ausstehend",
+          chatGovernanceExecutionRunning: "Ausführung läuft",
+          chatGovernanceLastExecutionConfirmed: "Letzte Ausführung bestätigt",
+          chatGovernanceProposalRejected: "Vorschlag verworfen",
+          chatGovernanceLastExecutionFailed: "Letzte Ausführung fehlgeschlagen",
+          chatGovernanceNoOpenProposal: "Kein offener Vorschlag",
+          sessionHeaderNote: "Wiederaufnehmbare Sessions pro Workspace",
+        }
+      : {
+          telemetryHealthLoaded: "Backend health loaded",
+          telemetryHealthLoadedDetail: (service: string, modeLabel: string, allowedModelCount: number) =>
+            `${service} reports ${modeLabel} mode with ${allowedModelCount} public model(s).`,
+          telemetryHealthFailed: "Backend health failed",
+          telemetryHealthFailedDetail: "Unable to reach /health",
+          telemetryModelAliasLoaded: "Public model alias loaded",
+          telemetryModelAliasLoadedDetail: (alias: string) =>
+            `Selected alias ${alias}; provider targets remain backend-owned.`,
+          telemetryModelListFailed: "Model list failed",
+          telemetryModelListFailedDetail: "Unable to reach /models",
+          chatGovernancePendingApproval: "Approval pending",
+          chatGovernanceExecutionRunning: "Execution running",
+          chatGovernanceLastExecutionConfirmed: "Last execution confirmed",
+          chatGovernanceProposalRejected: "Proposal rejected",
+          chatGovernanceLastExecutionFailed: "Last execution failed",
+          chatGovernanceNoOpenProposal: "No open proposal",
+          sessionHeaderNote: "Resumable sessions per workspace",
+        },
+    [locale],
+  );
+  const createDefaultGitHubContext = useCallback(
+    (): GitHubWorkspaceStatus => ({
+      repositoryLabel: ui.github.noRepoSelected,
+      connectionLabel: ui.shell.healthChecking,
+      accessLabel: ui.github.readOnly,
+      analysisLabel: ui.github.nextStepAnalysis,
+      proposalLabel: ui.github.proposalEmpty,
+      approvalLabel: ui.common.none,
+      resultLabel: ui.github.verifyResult,
+      safetyText: ui.github.actionReadBody,
+      expertDetails: {
+        requestId: null,
+        planId: null,
+        branchName: null,
+        apiStatus: ui.shell.healthChecking,
+        sseEvents: [],
+        rawDiffPreview: null,
+        selectedRepoSlug: null,
+      },
+    }),
+    [ui],
+  );
+  const createDefaultMatrixContext = useCallback(
+    (): MatrixWorkspaceStatus => ({
+      identityLabel: ui.shell.healthChecking,
+      connectionLabel: ui.shell.healthChecking,
+      homeserverLabel: ui.common.na,
+      scopeLabel: ui.matrix.scopeUnresolved,
+      summaryLabel: ui.matrix.scopeSummaryUnavailable,
+      approvalLabel: ui.common.none,
+      safetyText: ui.matrix.scopeNotice,
+      expertDetails: {
+        route: "/api/matrix/*",
+        requestId: null,
+        planId: null,
+        roomId: null,
+        spaceId: null,
+        eventId: null,
+        httpStatus: null,
+        latency: null,
+        backendRouteStatus: ui.shell.healthChecking,
+        runtimeEventTrail: [],
+        sseLifecycle: ui.common.loading,
+        rawPayload: null,
+        composerMode: "post",
+        composerRoomId: null,
+        composerEventId: null,
+        composerThreadRootId: null,
+        composerTargetLabel: ui.matrix.newPost,
+      },
+      reviewItems: [],
+    }),
+    [ui],
+  );
   const [mode, setMode] = useState<WorkspaceMode>(persisted?.activeTab ?? "chat");
   const [expertMode, setExpertMode] = useState(persisted?.expertMode ?? false);
   const [workspaceState, setWorkspaceState] = useState(() => loadWorkspaceState());
@@ -338,8 +334,8 @@ export default function App() {
     return window.localStorage.getItem("modelgate.console.workspaces.v1") !== null;
   });
   const [telemetry, setTelemetry] = useState<TelemetryEntry[]>([]);
-  const [githubContext, setGitHubContext] = useState<GitHubWorkspaceStatus>(DEFAULT_GITHUB_CONTEXT);
-  const [matrixContext, setMatrixContext] = useState<MatrixWorkspaceStatus>(DEFAULT_MATRIX_CONTEXT);
+  const [githubContext, setGitHubContext] = useState<GitHubWorkspaceStatus>(() => createDefaultGitHubContext());
+  const [matrixContext, setMatrixContext] = useState<MatrixWorkspaceStatus>(() => createDefaultMatrixContext());
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const githubUnlocked = githubAuthState.status === "authenticated";
@@ -364,8 +360,8 @@ export default function App() {
           appendTelemetry(current, {
             id: createId(),
             kind: "info",
-            label: "Backend health loaded",
-            detail: `${health.service} reports ${health.mode} mode with ${health.allowedModelCount} public model(s).`,
+            label: appText.telemetryHealthLoaded,
+            detail: appText.telemetryHealthLoadedDetail(health.service, health.mode, health.allowedModelCount),
           }),
         );
       } else {
@@ -374,11 +370,11 @@ export default function App() {
           appendTelemetry(current, {
             id: createId(),
             kind: "error",
-            label: "Backend health failed",
+            label: appText.telemetryHealthFailed,
             detail:
               healthResult.reason instanceof Error
                 ? healthResult.reason.message
-                : "Unable to reach /health",
+                : appText.telemetryHealthFailedDetail,
           }),
         );
       }
@@ -392,8 +388,8 @@ export default function App() {
           appendTelemetry(current, {
             id: createId(),
             kind: "info",
-            label: "Public model alias loaded",
-            detail: `Selected alias ${modelsResult.value.defaultModel}; provider targets remain backend-owned.`,
+            label: appText.telemetryModelAliasLoaded,
+            detail: appText.telemetryModelAliasLoadedDetail(modelsResult.value.defaultModel),
           }),
         );
       } else {
@@ -401,11 +397,11 @@ export default function App() {
           appendTelemetry(current, {
             id: createId(),
             kind: "error",
-            label: "Model list failed",
+            label: appText.telemetryModelListFailed,
             detail:
               modelsResult.reason instanceof Error
                 ? modelsResult.reason.message
-                : "Unable to reach /models",
+                : appText.telemetryModelListFailedDetail,
           }),
         );
       }
@@ -416,7 +412,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [appText]);
 
   useEffect(() => {
     let cancelled = false;
@@ -442,9 +438,9 @@ export default function App() {
           return;
         }
 
-        dispatchGitHubAuth({
+      dispatchGitHubAuth({
           type: "session_check_failed",
-          error: error instanceof Error ? error.message : "GitHub-Session konnte nicht geprüft werden."
+          error: error instanceof Error ? error.message : ui.shell.statusError
         });
       }
     }
@@ -454,7 +450,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ui.shell.statusError]);
 
   useEffect(() => {
     persistShellState({
@@ -479,10 +475,10 @@ export default function App() {
 
   useEffect(() => {
     if (!githubUnlocked) {
-      setGitHubContext(DEFAULT_GITHUB_CONTEXT);
+      setGitHubContext(createDefaultGitHubContext());
       setReviewItems((current) => current.filter((item) => item.source !== "github"));
     }
-  }, [githubUnlocked]);
+  }, [createDefaultGitHubContext, githubUnlocked]);
 
   const recordTelemetry = useCallback(
     (kind: TelemetryEntry["kind"], label: string, detail?: string) => {
@@ -630,11 +626,11 @@ export default function App() {
     } catch (error) {
       dispatchGitHubAuth({
         type: "login_failed",
-        error: error instanceof Error ? describeGitHubAuthError(error.message) : "GitHub login failed."
+        error: error instanceof Error ? describeGitHubAuthError(error.message) : ui.shell.statusError
       });
       setGitHubPassword("");
     }
-  }, [githubAuthState.busy, githubPassword]);
+  }, [githubAuthState.busy, githubPassword, ui.shell.statusError]);
 
   const handleGitHubLogout = useCallback(async () => {
     if (githubAuthState.busy) {
@@ -651,60 +647,60 @@ export default function App() {
         type: "logout_succeeded"
       });
       setGitHubPassword("");
-      setGitHubContext(DEFAULT_GITHUB_CONTEXT);
+      setGitHubContext(createDefaultGitHubContext());
       removeModeReviewItems("github");
     } catch (error) {
       dispatchGitHubAuth({
         type: "logout_failed",
-        error: error instanceof Error ? describeGitHubAuthError(error.message) : "GitHub logout failed."
+        error: error instanceof Error ? describeGitHubAuthError(error.message) : ui.shell.statusError
       });
     }
-  }, [githubAuthState.busy, removeModeReviewItems]);
+  }, [createDefaultGitHubContext, githubAuthState.busy, removeModeReviewItems, ui.shell.statusError]);
 
   const chatPendingProposal = chatSession?.metadata.chatState.pendingProposal ?? null;
   const chatLatestReceipt = chatSession?.metadata.chatState.receipts.at(-1) ?? null;
   const chatGovernanceState = chatPendingProposal
     ? chatPendingProposal.status === "pending"
-      ? "Freigabe ausstehend"
-      : "Ausführung läuft"
+      ? appText.chatGovernancePendingApproval
+      : appText.chatGovernanceExecutionRunning
     : chatLatestReceipt
       ? chatLatestReceipt.outcome === "executed"
-        ? "Letzte Ausführung bestätigt"
+        ? appText.chatGovernanceLastExecutionConfirmed
         : chatLatestReceipt.outcome === "rejected"
-          ? "Vorschlag verworfen"
-          : "Letzte Ausführung fehlgeschlagen"
-      : "Kein offener Vorschlag";
+          ? appText.chatGovernanceProposalRejected
+          : appText.chatGovernanceLastExecutionFailed
+      : appText.chatGovernanceNoOpenProposal;
 
   const chatRows: StatusPanelRow[] = [
-    { label: "Modell", value: activeModelAlias ?? "Noch nicht gewählt" },
-    { label: "Governance", value: chatGovernanceState },
+    { label: ui.github.modelLabel, value: activeModelAlias ?? ui.common.none },
+    { label: ui.review.rowClassification, value: chatGovernanceState },
     {
-      label: "Verfügbarkeit",
+      label: ui.shell.healthTitle,
       value:
         backendHealthy === true
-          ? "Bereit"
+          ? ui.shell.healthReady
           : backendHealthy === false
-            ? "Nicht verfügbar"
-            : "Wird geprüft",
+            ? ui.shell.healthUnavailable
+            : ui.shell.healthChecking,
     },
   ];
 
   const githubRows: StatusPanelRow[] = [
-    { label: "Repository", value: githubContext.repositoryLabel },
-    { label: "Verbindung", value: githubContext.connectionLabel },
-    { label: "Zugriff", value: githubUnlocked ? githubContext.accessLabel : "Nicht angemeldet" },
-    ...(githubUnlocked && githubContext.approvalLabel !== "Nicht erforderlich"
-      ? [{ label: "Freigabe", value: githubContext.approvalLabel }]
+    { label: ui.github.connectedRepo, value: githubContext.repositoryLabel },
+    { label: ui.settings.githubConnection, value: githubContext.connectionLabel },
+    { label: ui.github.readOnly, value: githubUnlocked ? githubContext.accessLabel : ui.auth.statusLocked },
+    ...(githubUnlocked && githubContext.approvalLabel !== ui.common.none
+      ? [{ label: ui.review.approvalNeeded, value: githubContext.approvalLabel }]
       : []),
   ];
 
   const matrixRows: StatusPanelRow[] = [
-    { label: "Identität", value: matrixContext.identityLabel },
-    { label: "Verbindung", value: matrixContext.connectionLabel },
-    { label: "Bereich", value: matrixContext.scopeLabel },
-    { label: "Zusammenfassung", value: matrixContext.summaryLabel },
-    ...(matrixContext.approvalLabel !== "Nicht erforderlich"
-      ? [{ label: "Freigabe", value: matrixContext.approvalLabel }]
+    { label: ui.settings.matrixIdentity, value: matrixContext.identityLabel },
+    { label: ui.settings.matrixConnection, value: matrixContext.connectionLabel },
+    { label: ui.matrix.scopeSelectedLabel, value: matrixContext.scopeLabel },
+    { label: ui.matrix.scopeSummaryTitle, value: matrixContext.summaryLabel },
+    ...(matrixContext.approvalLabel !== ui.common.none
+      ? [{ label: ui.review.approvalNeeded, value: matrixContext.approvalLabel }]
       : []),
   ];
   const reviewHasStale = reviewItems.some((item) => item.status === "stale");
@@ -774,8 +770,8 @@ export default function App() {
 
   const settingsRows: StatusPanelRow[] = [
     { label: ui.settings.backend, value: settingsTruthSnapshot.backend.label },
-    { label: "GitHub", value: `${settingsTruthSnapshot.github.sessionLabel} · ${settingsTruthSnapshot.github.accessLabel}` },
-    { label: "Matrix", value: `${settingsTruthSnapshot.matrix.identityLabel} · ${settingsTruthSnapshot.matrix.connectionLabel}` },
+    { label: ui.shell.workspaceTabs.github.label, value: `${settingsTruthSnapshot.github.sessionLabel} · ${settingsTruthSnapshot.github.accessLabel}` },
+    { label: ui.shell.workspaceTabs.matrix.label, value: `${settingsTruthSnapshot.matrix.identityLabel} · ${settingsTruthSnapshot.matrix.connectionLabel}` },
     { label: ui.settings.modelCardTitle, value: settingsTruthSnapshot.models.activeAlias },
   ];
 
@@ -809,13 +805,13 @@ export default function App() {
           return ui.review.approvalNeeded;
         }
 
-        if (githubContext.repositoryLabel.startsWith("No ") || githubContext.repositoryLabel.startsWith("Noch kein")) {
+        if (githubContext.repositoryLabel === ui.github.noRepoSelected) {
           return ui.github.repoSelectLabel;
         }
 
         return githubContext.connectionLabel;
       case "matrix":
-        if (matrixContext.connectionLabel !== "Connected" && matrixContext.connectionLabel !== "Verbunden") {
+        if (matrixContext.connectionLabel !== ui.shell.statusReady) {
           return matrixContext.connectionLabel;
         }
 
@@ -823,11 +819,11 @@ export default function App() {
           return ui.review.approvalNeeded;
         }
 
-        if (matrixContext.scopeLabel.startsWith("No ") || matrixContext.scopeLabel.startsWith("Noch kein")) {
+        if (matrixContext.scopeLabel === ui.matrix.scopeUnresolved) {
           return ui.matrix.scopeSelected;
         }
 
-        if (matrixContext.summaryLabel.startsWith("No ") || matrixContext.summaryLabel.startsWith("Noch keine")) {
+        if (matrixContext.summaryLabel === ui.matrix.scopeSummaryUnavailable) {
           return ui.matrix.scopeSummaryReady;
         }
 
@@ -871,7 +867,7 @@ export default function App() {
           return ui.auth.statusLocked;
         }
 
-        if (matrixContext.connectionLabel === "Not connected" || matrixContext.connectionLabel === "Nicht verbunden") {
+        if (matrixContext.connectionLabel === ui.shell.statusError) {
           return ui.shell.statusError;
         }
 
@@ -929,15 +925,7 @@ export default function App() {
   }, [chatPendingProposal?.status, reviewItems]);
   const workspaceName = ui.shell.workspaceTabs[mode].label;
   const workspaceContextTitle = `${workspaceName} ${ui.shell.workspaceContextSuffix}`;
-  const diagnosticsTitle = mode === "github"
-    ? `${ui.shell.workspaceTabs.github.label} ${ui.shell.diagnosticsLabel}`
-    : mode === "matrix"
-      ? `${ui.shell.workspaceTabs.matrix.label} ${ui.shell.diagnosticsLabel}`
-      : mode === "review"
-        ? `${ui.shell.workspaceTabs.review.label} ${ui.shell.diagnosticsLabel}`
-        : mode === "settings"
-          ? `${ui.shell.workspaceTabs.settings.label} ${ui.shell.diagnosticsLabel}`
-          : `${ui.shell.workspaceTabs.chat.label} ${ui.shell.diagnosticsLabel}`;
+  const diagnosticsTitle = `${ui.shell.workspaceTabs[mode].label} ${ui.shell.diagnosticsLabel}`;
   const showBeginnerDiagnostics = !expertMode && healthState.tone === "error";
   const diagnosticsAccessible = expertMode || showBeginnerDiagnostics;
 
@@ -952,7 +940,7 @@ export default function App() {
           return githubContext.connectionLabel === ui.shell.statusError ? "error" : "partial";
         }
 
-        return githubContext.approvalLabel !== ui.common.none || githubContext.repositoryLabel.includes(ui.github.noRepoSelected)
+        return githubContext.approvalLabel !== ui.common.none || githubContext.repositoryLabel === ui.github.noRepoSelected
           ? "partial"
           : "ready";
       case "matrix":
@@ -964,7 +952,7 @@ export default function App() {
           return "partial";
         }
 
-        return matrixContext.approvalLabel !== ui.common.none || matrixContext.scopeLabel.includes(ui.matrix.threadNone) || matrixContext.summaryLabel.includes(ui.matrix.scopeSummaryUnavailable)
+        return matrixContext.approvalLabel !== ui.common.none || matrixContext.scopeLabel === ui.matrix.scopeUnresolved || matrixContext.summaryLabel === ui.matrix.scopeSummaryUnavailable
           ? "partial"
           : "ready";
       case "review":
@@ -1047,7 +1035,7 @@ export default function App() {
           return ui.review.approvalNeeded;
         }
 
-        if (githubContext.repositoryLabel.includes(ui.github.noRepoSelected)) {
+        if (githubContext.repositoryLabel === ui.github.noRepoSelected) {
           return ui.github.nextStepChooseRepo;
         }
 
@@ -1059,7 +1047,7 @@ export default function App() {
             : ui.shell.healthCheckingDetail;
         }
 
-        if (matrixContext.scopeLabel.includes(ui.matrix.scopeSelected)) {
+        if (matrixContext.scopeLabel === ui.matrix.scopeSelected) {
           return ui.matrix.resolveScope;
         }
 
@@ -1067,7 +1055,7 @@ export default function App() {
           return ui.matrix.topicStatusApproval;
         }
 
-        if (matrixContext.summaryLabel.includes(ui.matrix.scopeSummaryUnavailable)) {
+        if (matrixContext.summaryLabel === ui.matrix.scopeSummaryUnavailable) {
           return ui.matrix.scopeSummaryLoading;
         }
 
@@ -1167,13 +1155,13 @@ export default function App() {
           return ui.github.approveHelper;
         }
 
-        if (githubContext.repositoryLabel.includes(ui.github.noRepoSelected)) {
+        if (githubContext.repositoryLabel === ui.github.noRepoSelected) {
           return ui.github.workspaceNoticeSelection;
         }
 
         return ui.github.actionReadBody;
       case "matrix":
-        if (matrixContext.scopeLabel.includes(ui.matrix.scopeSelected)) {
+        if (matrixContext.scopeLabel === ui.matrix.scopeSelected) {
           return ui.matrix.scopeSummaryInfo;
         }
 
@@ -1181,7 +1169,7 @@ export default function App() {
           return ui.matrix.topicStatusApproval;
         }
 
-        if (matrixContext.summaryLabel.includes(ui.matrix.scopeSummaryUnavailable)) {
+        if (matrixContext.summaryLabel === ui.matrix.scopeSummaryUnavailable) {
           return ui.matrix.scopeSummaryInfo;
         }
 
@@ -1387,7 +1375,7 @@ export default function App() {
           </section>
 
           <section className="expert-detail-section">
-            <p className="info-label">Diff</p>
+            <p className="info-label">{ui.github.verifyResult}</p>
             {githubContext.expertDetails.rawDiffPreview ? (
               <pre className="github-diff-preview">{githubContext.expertDetails.rawDiffPreview}</pre>
             ) : (
@@ -1453,7 +1441,7 @@ export default function App() {
                 <strong>{matrixContext.expertDetails.backendRouteStatus}</strong>
               </div>
               <div>
-                <span>HTTP</span>
+                <span>{ui.shell.healthTitle}</span>
                 <strong>{matrixContext.expertDetails.httpStatus ?? ui.common.na}</strong>
               </div>
               <div>
@@ -1474,7 +1462,7 @@ export default function App() {
           </section>
 
           <section className="expert-detail-section">
-            <p className="info-label">Payload</p>
+            <p className="info-label">{ui.shell.diagnosticsLabel}</p>
             {matrixContext.expertDetails.rawPayload ? (
               <pre className="github-diff-preview">{matrixContext.expertDetails.rawPayload}</pre>
             ) : (
@@ -1667,7 +1655,7 @@ export default function App() {
             onSelect={(sessionId) => handleWorkspaceSessionSelect(sessionWorkspace, sessionId)}
             onArchive={(sessionId) => handleWorkspaceSessionArchive(sessionWorkspace, sessionId)}
             onDelete={(sessionId) => handleWorkspaceSessionDelete(sessionWorkspace, sessionId)}
-            headerNote={locale === "de" ? "Wiederaufnehmbare Sessions pro Workspace" : "Resumable sessions per workspace"}
+            headerNote={appText.sessionHeaderNote}
           />
         </aside>
 
