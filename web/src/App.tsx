@@ -924,7 +924,7 @@ export default function App() {
     };
   }, [chatPendingProposal?.status, reviewItems]);
   const workspaceName = ui.shell.workspaceTabs[mode].label;
-  const workspaceContextTitle = `${workspaceName} ${ui.shell.workspaceContextSuffix}`;
+  const nextStepTitle = ui.review.nextStepLabel;
   const diagnosticsTitle = `${ui.shell.workspaceTabs[mode].label} ${ui.shell.diagnosticsLabel}`;
   const showBeginnerDiagnostics = !expertMode && healthState.tone === "error";
   const diagnosticsAccessible = expertMode || showBeginnerDiagnostics;
@@ -1009,130 +1009,6 @@ export default function App() {
     githubContext.repositoryLabel,
     githubUnlocked,
     backendHealthy,
-    activeModelAlias,
-    matrixContext.connectionLabel,
-    matrixContext.approvalLabel,
-    matrixContext.scopeLabel,
-    matrixContext.summaryLabel,
-    mode,
-    reviewItems,
-  ]);
-
-  const currentStatusHeadline = useMemo(() => {
-    switch (mode) {
-      case "github":
-        if (!githubUnlocked) {
-          return githubAuthState.error ? ui.github.workspaceNoticeRepos : ui.auth.footerNote;
-        }
-
-        if (githubContext.connectionLabel !== ui.shell.statusReady) {
-          return githubContext.connectionLabel === ui.shell.statusError
-            ? ui.github.workspaceNoticeRepos
-            : ui.shell.healthCheckingDetail;
-        }
-
-        if (githubContext.approvalLabel !== ui.common.none) {
-          return ui.review.approvalNeeded;
-        }
-
-        if (githubContext.repositoryLabel === ui.github.noRepoSelected) {
-          return ui.github.nextStepChooseRepo;
-        }
-
-        return ui.github.intro;
-      case "matrix":
-        if (matrixContext.connectionLabel !== ui.shell.statusReady) {
-          return matrixContext.connectionLabel === ui.shell.statusError
-            ? ui.matrix.topicStatusUnavailable
-            : ui.shell.healthCheckingDetail;
-        }
-
-        if (matrixContext.scopeLabel === ui.matrix.scopeSelected) {
-          return ui.matrix.resolveScope;
-        }
-
-        if (matrixContext.approvalLabel !== ui.common.none) {
-          return ui.matrix.topicStatusApproval;
-        }
-
-        if (matrixContext.summaryLabel === ui.matrix.scopeSummaryUnavailable) {
-          return ui.matrix.scopeSummaryLoading;
-        }
-
-        return ui.matrix.scopeNotice;
-      case "review":
-        if (reviewItems.length === 0) {
-          return ui.review.emptyTitle;
-        }
-
-        if (reviewHasStale) {
-          return ui.review.warning;
-        }
-
-        if (reviewHasPending) {
-          return ui.review.approvalNeeded;
-        }
-
-        if (reviewHasExecuting) {
-          return ui.review.executing;
-        }
-
-    if (reviewHasTerminal) {
-          return ui.review.terminalDeviation;
-        }
-
-        return ui.review.ready;
-      case "settings":
-        if (backendHealthy === false) {
-          return ui.shell.healthUnavailableDetail;
-        }
-
-        if (githubAuthState.error) {
-          return ui.github.workspaceNoticeRepos;
-        }
-
-        if (githubAuthState.status === "loading") {
-          return ui.auth.statusChecking;
-        }
-
-        if (!githubUnlocked) {
-          return ui.shell.accountLoginRequired;
-        }
-
-        if (matrixContext.connectionLabel === ui.shell.statusError) {
-          return ui.matrix.topicStatusUnavailable;
-        }
-
-        if (!activeModelAlias) {
-          return ui.settings.modelChoiceNote;
-        }
-
-        return ui.settings.connectionTruthNote;
-      default:
-        if (chatPendingProposal?.status === "pending") {
-          return ui.chat.composerLocked.approval;
-        }
-
-        if (chatPendingProposal?.status === "executing") {
-          return ui.chat.composerLocked.execution;
-        }
-
-        if (chatLatestReceipt?.outcome === "failed" || chatLatestReceipt?.outcome === "unverifiable") {
-          return ui.shell.statusError;
-        }
-
-        return backendHealthy === false ? ui.shell.healthUnavailableDetail : backendHealthy === true ? ui.shell.healthReadyDetail : ui.shell.healthCheckingDetail;
-    }
-  }, [
-    backendHealthy,
-    chatLatestReceipt?.outcome,
-    chatPendingProposal?.status,
-    githubAuthState.error,
-    githubAuthState.status,
-    githubContext.approvalLabel,
-    githubContext.connectionLabel,
-    githubContext.repositoryLabel,
-    githubUnlocked,
     activeModelAlias,
     matrixContext.connectionLabel,
     matrixContext.approvalLabel,
@@ -1562,6 +1438,7 @@ export default function App() {
               onClick={() => setLocale("en")}
               aria-pressed={locale === "en"}
               aria-label={locale === "de" ? "Sprache: Englisch" : "Language: English"}
+              data-testid="locale-en"
             >
               {ui.shell.languageOptionEnglish}
             </button>
@@ -1571,6 +1448,7 @@ export default function App() {
               onClick={() => setLocale("de")}
               aria-pressed={locale === "de"}
               aria-label={locale === "de" ? "Sprache: Deutsch" : "Language: German"}
+              data-testid="locale-de"
             >
               {ui.shell.languageOptionGerman}
             </button>
@@ -1581,12 +1459,6 @@ export default function App() {
 
       <section className="console-layout">
         <aside className="workspace-sidebar shell-left-rail">
-          <ShellCard variant="rail" className="shell-left-brand">
-            <p className="app-kicker">{ui.shell.workspaceConsoleKicker}</p>
-            <strong>{ui.shell.workspaceConsoleTitle}</strong>
-            <MutedSystemCopy>{ui.shell.workspaceConsoleNote}</MutedSystemCopy>
-          </ShellCard>
-
           <ShellCard variant="rail" className="shell-nav-card">
             <SectionLabel>{ui.shell.workspacesLabel}</SectionLabel>
             <nav className="sidebar-nav" aria-label={ui.shell.workspacesLabel}>
@@ -1664,13 +1536,8 @@ export default function App() {
         <section className="console-main shell-center-main">
           <ShellCard variant="base" className="workspace-frame-card">
             <header className="workspace-frame-header">
-              <div>
-                <SectionLabel>{workspaceName}</SectionLabel>
-                <h2>{activeSession?.title ?? ui.shell.currentSessionFallback}</h2>
-              </div>
-              <StatusBadge tone={statusToneForBadge}>{currentStatusBadge}</StatusBadge>
+              <SectionLabel>{workspaceName}</SectionLabel>
             </header>
-            <MutedSystemCopy className="workspace-frame-note">{currentStatusHeadline}</MutedSystemCopy>
             <div className="workspace-frame-body">{workspaceSurface}</div>
           </ShellCard>
         </section>
@@ -1696,19 +1563,6 @@ export default function App() {
             ) : null}
           </TruthRailSection>
 
-          <TruthRailSection
-            title={ui.shell.sessionLabel}
-            testId="truth-rail-session"
-            badge={<StatusBadge tone={statusToneForBadge}>{getSessionStatusLabel(locale, activeSession?.status ?? "draft")}</StatusBadge>}
-          >
-            <p className="truth-rail-keyline">{activeSession?.title ?? ui.shell.noActiveSession}</p>
-            <MutedSystemCopy>
-              {ui.shell.workspacesLabel}: {workspaceName}
-              {activeSession?.updatedAt ? ` · ${ui.sessionList.updated} ${new Date(activeSession.updatedAt).toLocaleString()}` : ""}
-            </MutedSystemCopy>
-            {expertMode && activeSession?.id ? <MutedSystemCopy>{ui.shell.sessionIdPrefix}: {activeSession.id}</MutedSystemCopy> : null}
-          </TruthRailSection>
-
           {approvalSummary.hasApprovals ? (
             <TruthRailSection
               title={ui.shell.pendingApprovalsTitle}
@@ -1725,8 +1579,8 @@ export default function App() {
           ) : null}
 
           <TruthRailSection
-            title={workspaceContextTitle}
-            testId="truth-rail-workspace-context"
+            title={nextStepTitle}
+            testId="truth-rail-next-step"
             badge={<StatusBadge tone={statusToneForBadge}>{currentStatusBadge}</StatusBadge>}
           >
             <div className="truth-rail-pairs">

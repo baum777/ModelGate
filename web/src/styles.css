@@ -2556,3 +2556,109 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
     width: 100%;
   }
 }
+
+/* Workspace-first shell refresh */
+.console-layout {
+  grid-template-columns: minmax(258px, 288px) minmax(0, 1fr) minmax(300px, 340px);
+  gap: 16px;
+}
+
+.workspace-frame-card {
+  padding: 14px;
+}
+
+.workspace-frame-header {
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.workspace-frame-header .shell-section-label {
+  font-size: 0.75rem;
+}
+
+/* Chat: compact toolbar, thread + composer as primary surface */
+.chat-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--shell-border-soft);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.chat-toolbar-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.chat-toolbar-copy strong {
+  font-size: 0.94rem;
+}
+
+.chat-toolbar-controls {
+  display: grid;
+  gap: 6px;
+  min-width: min(360px, 100%);
+}
+
+.chat-toolbar-controls label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.chat-toolbar-controls select {
+  min-height: 42px;
+}
+
+.governed-thread {
+  min-height: 54vh;
+  max-height: 66vh;
+}
+
+.governed-composer {
+  margin-top: 6px;
+}
+
+/* Matrix: composer first, scope/topic secondary */
+.matrix-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.matrix-composer-focus-card {
+  order: 0;
+  grid-column: 1 / -1;
+}
+
+.matrix-topic-card {
+  order: 1;
+}
+
+.matrix-scope-card {
+  order: 2;
+}
+
+.matrix-secondary-panel {
+  border-color: rgba(255, 255, 255, 0.07);
+  background: linear-gradient(180deg, rgba(7, 14, 35, 0.74), rgba(6, 12, 28, 0.82));
+}
+
+.matrix-target-context {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 10px;
+}
+
+@media (max-width: 900px) {
+  .chat-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .chat-toolbar-controls {
+    min-width: 0;
+  }
+}

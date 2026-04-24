@@ -1,5 +1,5 @@
 import React, { useEffect, useReducer, useRef, useState, type FormEvent } from "react";
-import { streamChatCompletion, type ChatRouteMetadata } from "../lib/api.js";
+import { streamChatCompletion } from "../lib/api.js";
 import {
   chatReducer,
   createInitialChatState,
@@ -53,26 +53,6 @@ function createId() {
   return crypto.randomUUID();
 }
 
-function formatRouteBadge(route: ChatRouteMetadata | null) {
-  if (!route) {
-    return "Route pending";
-  }
-
-  const markers: string[] = [];
-
-  if (route.fallbackUsed) {
-    markers.push("fallback");
-  }
-
-  if (route.degraded) {
-    markers.push("degraded");
-  }
-
-  return markers.length > 0
-    ? `${route.selectedAlias} · ${route.taskClass} · ${markers.join("/")}`
-    : `${route.selectedAlias} · ${route.taskClass}`;
-}
-
 function formatTimestamp(locale: "en" | "de", value: string | undefined) {
   if (!value) {
     return "n/a";
@@ -96,22 +76,16 @@ function buildProposalConsequence(locale: "en" | "de", modelAlias: string | null
 function buildChatGovernanceRows(options: {
   modelAlias: string | null;
   receiptSummary?: string | null;
-  routeSummary?: string | null;
 }) {
-  return mergeMetadataRows(
-    buildGovernanceMetadataRows({
-      actingIdentity: BACKEND_TRUTH_UNAVAILABLE,
-      activeScope: "session-local chat thread (browser)",
-      authorityDomain: "chat backend route (/chat)",
-      targetScope: options.modelAlias ? `public alias ${options.modelAlias}` : "public alias unresolved",
-      executionDomain: "backend SSE stream",
-      executionTarget: options.modelAlias ? `public alias ${options.modelAlias}` : null,
-      receiptSummary: options.receiptSummary ?? null,
-    }),
-    options.routeSummary
-      ? [{ label: "Route", value: options.routeSummary }]
-      : []
-  );
+  return buildGovernanceMetadataRows({
+    actingIdentity: BACKEND_TRUTH_UNAVAILABLE,
+    activeScope: "session-local chat thread (browser)",
+    authorityDomain: "chat backend route (/chat)",
+    targetScope: options.modelAlias ? `public alias ${options.modelAlias}` : "public alias unresolved",
+    executionDomain: "backend SSE stream",
+    executionTarget: options.modelAlias ? `public alias ${options.modelAlias}` : null,
+    receiptSummary: options.receiptSummary ?? null,
+  });
 }
 
 export function ChatWorkspace(props: ChatWorkspaceProps) {
@@ -327,8 +301,6 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const warning = chatState.lastStreamWarning;
   const error = chatState.lastError;
   const draft = chatState.currentAssistantDraft;
-  const latestRoute = chatState.activeRoute;
-
   const awaitingApproval = pendingProposal?.status === "pending";
   const executionRunning =
     pendingProposal?.status === "executing"
@@ -363,14 +335,13 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       data-testid="chat-workspace"
       aria-busy={executionRunning}
     >
-      <section className="workspace-hero chat-hero">
-        <div>
-          <h1>{ui.chat.title}</h1>
-          <p className="hero-copy">{ui.chat.intro}</p>
-          <p className="workspace-session-title">{props.session.title}</p>
+      <section className="chat-toolbar">
+        <div className="chat-toolbar-copy">
+          <SectionLabel>{ui.chat.title}</SectionLabel>
+          <strong>{props.session.title}</strong>
         </div>
 
-        <aside className="mini-panel">
+        <div className="chat-toolbar-controls">
           <label htmlFor="model-select">{ui.chat.modelSelectLabel}</label>
           <select
             id="model-select"
@@ -393,13 +364,10 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               ))
             )}
           </select>
-          <p>{ui.chat.onlyPublicAlias}</p>
-          {selectedModelEntry ? (
-            <p className="hint">{selectedModelEntry.label}: {selectedModelEntry.description}</p>
-          ) : (
-            <p className="hint">{ui.chat.modelHintFallback}</p>
-          )}
-        </aside>
+          <p className="hint">
+            {selectedModelEntry ? `${selectedModelEntry.label}: ${selectedModelEntry.description}` : ui.chat.modelHintFallback}
+          </p>
+        </div>
       </section>
 
       <section className="chat-card governed-chat-card">
@@ -407,7 +375,6 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           <div className="runtime-stack">
             <SectionLabel>{ui.chat.conversationState}</SectionLabel>
             <strong data-testid="chat-connection-state">{getConnectionStateLabel(locale, chatState.connectionState)}</strong>
-            <span className="runtime-note">{formatRouteBadge(latestRoute)}</span>
           </div>
           <div className="runtime-actions">
             {executionRunning ? (
@@ -474,7 +441,6 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
                 {message.modelAlias ? <StatusBadge tone="muted">{message.modelAlias}</StatusBadge> : null}
               </header>
               <p>{message.content}</p>
-              {message.route ? <p className="shell-muted-copy">{formatRouteBadge(message.route)}</p> : null}
             </ShellCard>
           ))}
 
@@ -499,7 +465,6 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
                 buildChatGovernanceRows({
                   modelAlias: receipt.modelAlias ?? null,
                   receiptSummary: receipt.outcome,
-                  routeSummary: receipt.route ? formatRouteBadge(receipt.route) : null,
                 }),
                 [{ label: ui.sessionList.updated, value: formatTimestamp(locale, receipt.createdAt) }]
               )}

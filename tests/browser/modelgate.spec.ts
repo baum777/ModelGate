@@ -460,7 +460,7 @@ async function loadConsole(page: Page) {
 }
 
 async function setLocale(page: Page, locale: "en" | "de") {
-  const button = page.getByRole("button", { name: locale.toUpperCase(), exact: true });
+  const button = locale === "en" ? page.getByTestId("locale-en") : page.getByTestId("locale-de");
   const pressed = await button.getAttribute("aria-pressed");
   if (pressed !== "true") {
     await button.click();
@@ -480,7 +480,7 @@ test("shell renders core governed surfaces and keeps secrets out of the DOM", as
   await loadConsole(page);
 
   await expect(page.getByTestId("truth-rail-health")).toBeVisible();
-  await expect(page.getByTestId("truth-rail-session")).toBeVisible();
+  await expect(page.getByTestId("truth-rail-next-step")).toBeVisible();
   await expect(page.locator("nav.sidebar-nav")).toHaveAttribute("aria-label", "Workspaces");
 
   const body = page.locator("body");
