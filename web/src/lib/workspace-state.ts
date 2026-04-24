@@ -772,7 +772,7 @@ export function createChatSessionMetadata(): ChatSessionMetadata {
   return {
     chatState: createInitialChatState(),
     selectedModelAlias: null,
-    executionMode: "direct"
+    executionMode: "governed"
   };
 }
 

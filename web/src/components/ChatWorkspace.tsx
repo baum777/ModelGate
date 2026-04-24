@@ -180,7 +180,6 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const scrollFrameRef = useRef<number | null>(null);
   const tokenBatcherRef = useRef<ReturnType<typeof createTokenBatcher> | null>(null);
-  const selectedModelEntry = props.modelRegistry.find((entry) => entry.alias === selectedModel) ?? null;
 
   useEffect(() => {
     if (props.activeModelAlias && props.activeModelAlias !== selectedModel) {
@@ -601,77 +600,66 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       <section className="chat-toolbar">
         <div className="chat-toolbar-copy">
           <SectionLabel>{ui.chat.title}</SectionLabel>
-          <strong>{props.session.title}</strong>
+          <strong data-testid="chat-connection-state">{getConnectionStateLabel(locale, chatState.connectionState)}</strong>
+          <span className="chat-stream-status">{streamStatusLabel}</span>
         </div>
 
         <div className="chat-toolbar-controls">
-          <label>{ui.chat.modeLabel}</label>
-          <div className="mode-toggle" role="group" aria-label={ui.chat.modeLabel}>
-            <button
-              type="button"
-              className={executionMode === "direct" ? "mode-toggle-button mode-toggle-button-active" : "mode-toggle-button"}
-              aria-pressed={executionMode === "direct"}
-              disabled={executionRunning}
-              onClick={() => {
-                setExecutionMode("direct");
-                dispatch({ type: "clear_pending_proposal" });
-                props.onTelemetry("info", "Chat mode changed", "Direct chat mode enabled.");
-              }}
-            >
-              {ui.chat.modeDirect}
-            </button>
-            <button
-              type="button"
-              className={executionMode === "governed" ? "mode-toggle-button mode-toggle-button-active" : "mode-toggle-button"}
-              aria-pressed={executionMode === "governed"}
-              disabled={executionRunning}
-              onClick={() => {
-                setExecutionMode("governed");
-                props.onTelemetry("info", "Chat mode changed", "Governed execution mode enabled.");
-              }}
-            >
-              {ui.chat.modeGoverned}
-            </button>
+          <div className="chat-toolbar-control-group">
+            <label>{ui.chat.modeLabel}</label>
+            <div className="mode-toggle" role="group" aria-label={ui.chat.modeLabel}>
+              <button
+                type="button"
+                className={executionMode === "direct" ? "mode-toggle-button mode-toggle-button-active" : "mode-toggle-button"}
+                aria-pressed={executionMode === "direct"}
+                disabled={executionRunning}
+                onClick={() => {
+                  setExecutionMode("direct");
+                  dispatch({ type: "clear_pending_proposal" });
+                  props.onTelemetry("info", "Chat mode changed", "Direct chat mode enabled.");
+                }}
+              >
+                {ui.chat.modeDirect}
+              </button>
+              <button
+                type="button"
+                className={executionMode === "governed" ? "mode-toggle-button mode-toggle-button-active" : "mode-toggle-button"}
+                aria-pressed={executionMode === "governed"}
+                disabled={executionRunning}
+                onClick={() => {
+                  setExecutionMode("governed");
+                  props.onTelemetry("info", "Chat mode changed", "Governed execution mode enabled.");
+                }}
+              >
+                {ui.chat.modeGoverned}
+              </button>
+            </div>
           </div>
-          <p className="hint">
-            {executionMode === "direct" ? ui.chat.modeDirectHint : ui.chat.modeGovernedHint}
-          </p>
-          <label htmlFor="model-select">{ui.chat.modelSelectLabel}</label>
-          <select
-            id="model-select"
-            value={selectedModel}
-            onChange={(event) => {
-              const nextModel = event.target.value;
-              setSelectedModel(nextModel);
-              props.onActiveModelAliasChange(nextModel);
-              props.onTelemetry("info", "Model alias changed", `Selected public alias ${nextModel || "unresolved"}.`);
-            }}
-            disabled={props.availableModels.length === 0 || (executionMode === "governed" && Boolean(pendingProposal))}
-          >
-            {props.availableModels.length === 0 ? (
-              <option value="">{ui.chat.noModels}</option>
-            ) : (
-              props.availableModels.map((model) => (
-                <option key={model} value={model}>
-                  {model}
-                </option>
-              ))
-            )}
-          </select>
-          <p className="hint">
-            {selectedModelEntry ? `${selectedModelEntry.label}: ${selectedModelEntry.description}` : ui.chat.modelHintFallback}
-          </p>
-        </div>
-      </section>
-
-      <section className="chat-card governed-chat-card">
-        <header className="chat-runtime-bar governed-chat-runtime">
-          <div className="runtime-stack">
-            <SectionLabel>{ui.chat.conversationState}</SectionLabel>
-            <strong data-testid="chat-connection-state">{getConnectionStateLabel(locale, chatState.connectionState)}</strong>
-            <span className="chat-stream-status">{streamStatusLabel}</span>
+          <div className="chat-toolbar-control-group chat-toolbar-model-group">
+            <label htmlFor="model-select">{ui.chat.modelSelectLabel}</label>
+            <select
+              id="model-select"
+              value={selectedModel}
+              onChange={(event) => {
+                const nextModel = event.target.value;
+                setSelectedModel(nextModel);
+                props.onActiveModelAliasChange(nextModel);
+                props.onTelemetry("info", "Model alias changed", `Selected public alias ${nextModel || "unresolved"}.`);
+              }}
+              disabled={props.availableModels.length === 0 || (executionMode === "governed" && Boolean(pendingProposal))}
+            >
+              {props.availableModels.length === 0 ? (
+                <option value="">{ui.chat.noModels}</option>
+              ) : (
+                props.availableModels.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))
+              )}
+            </select>
           </div>
-          <div className="runtime-actions">
+          <div className="runtime-actions chat-toolbar-actions">
             {executionRunning ? (
               <button type="button" className="ghost-button" onClick={stopExecution}>
                 {ui.chat.stopExecution}
@@ -683,8 +671,10 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               </button>
             ) : null}
           </div>
-        </header>
+        </div>
+      </section>
 
+      <section className="chat-card governed-chat-card">
         {executionMode === "governed" && pendingProposal?.status === "pending" ? (
           <ProposalCard
             testId="chat-proposal-card"

@@ -273,12 +273,12 @@ test("saveWorkspaceState strips legacy Matrix fields from persisted payload", ()
   assert.equal(persistedMetadata.promotionError, undefined);
 });
 
-test("chat session defaults to direct mode and legacy sessions normalize safely", () => {
+test("chat session defaults to governed mode and legacy sessions normalize safely", () => {
   const state = createDefaultWorkspaceState();
   const chatSession = state.sessionsByWorkspace.chat[0];
 
   assert.ok(chatSession);
-  assert.equal(chatSession.metadata.executionMode, "direct");
+  assert.equal(chatSession.metadata.executionMode, "governed");
 
   const storage = new Map<string, string>();
   storage.set("modelgate.console.workspaces.v1", JSON.stringify({

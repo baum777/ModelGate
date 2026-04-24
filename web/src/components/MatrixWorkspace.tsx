@@ -1168,7 +1168,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             </div>
           </header>{" "}
           <div className="info-block">
-            <p className="info-label">{ui.matrix.roomId}</p>
+            <p className="info-label">{props.expertMode ? ui.matrix.roomId : ui.matrix.roomPickerRoom}</p>
             <div className="input-row">
               <input
                 type="text"
@@ -1301,7 +1301,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 <div className="chip-list">
                   {topicPlan.actions.map((action, index) => (
                     <span key={`${action.type}:${index}`} className="reference-chip">
-                      {action.type} · {action.roomId}
+                      {props.expertMode ? `${action.type} · ${action.roomId}` : `${ui.review.rowOpen} ${index + 1}`}
                     </span>
                   ))}
                 </div>
@@ -1800,7 +1800,9 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 {composerTarget.kind === "none" ? ui.matrix.composerTargetMissing : ui.matrix.composerTargetSet}
               </span>
               <span className="reference-chip">
-                {ui.matrix.roomId}: {roomName ?? roomId ?? topicRoomId ?? selectedRoomIds[0] ?? ui.common.na}
+                {props.expertMode
+                  ? `${ui.matrix.roomId}: ${roomId ?? topicRoomId ?? selectedRoomIds[0] ?? ui.common.na}`
+                  : `${ui.matrix.roomPickerRoom}: ${roomName ?? (activeComposerRoomId ? ui.matrix.composerTargetSet : ui.common.na)}`}
               </span>
             </div>
           </div>
@@ -1869,12 +1871,12 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             <p className="info-label">{ui.matrix.targetContextTitle}</p>
             <div className="detail-grid">
               <div>
-                <span>{ui.matrix.roomId}</span>
+                <span>{props.expertMode ? ui.matrix.roomId : ui.matrix.roomPickerRoom}</span>
                 <input
                   type="text"
                   value={roomId ?? ""}
                   onChange={(event) => setRoomId(event.target.value.trim().length > 0 ? event.target.value : null)}
-                  placeholder="!room:matrix.example"
+                  placeholder={props.expertMode ? "!room:matrix.example" : ui.matrix.roomPickerChoose}
                   data-testid="matrix-composer-room-id"
                 />
               </div>

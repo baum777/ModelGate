@@ -1558,22 +1558,17 @@ export default function App() {
             </nav>
           </ShellCard>
 
-          <ShellCard variant="muted" className="shell-session-identity-card">
-            <SectionLabel>{ui.shell.sessionLabel}</SectionLabel>
-            <strong>{activeSession?.title ?? ui.shell.noActiveSession}</strong>
-            <MutedSystemCopy>{workspaceName}</MutedSystemCopy>
-            <div className="shell-session-meta">
+          <ShellCard variant="muted" className="shell-session-identity-card shell-controls-card">
+            <div className="shell-control-row">
+              <div>
+                <SectionLabel>{ui.shell.disclosureLabel}</SectionLabel>
+                <BeginnerExpertToggle expertMode={expertMode} setExpertMode={setExpertMode} />
+              </div>
               <StatusBadge tone={statusToneForBadge}>{getSessionStatusLabel(locale, activeSession?.status ?? "draft")}</StatusBadge>
-              {activeSession?.archived ? <StatusBadge tone="muted">{ui.shell.archivedBadge}</StatusBadge> : null}
             </div>
             {expertMode && activeSession?.id ? (
               <MutedSystemCopy className="shell-session-id">{ui.shell.sessionIdPrefix}: {activeSession.id}</MutedSystemCopy>
             ) : null}
-
-            <div className="shell-disclosure-control">
-              <SectionLabel>{ui.shell.disclosureLabel}</SectionLabel>
-              <BeginnerExpertToggle expertMode={expertMode} setExpertMode={setExpertMode} />
-            </div>
 
             <div className="shell-account-block">
               <SectionLabel>{ui.shell.accountLabel}</SectionLabel>
@@ -1612,9 +1607,6 @@ export default function App() {
 
         <section className="console-main shell-center-main">
           <ShellCard variant="base" className="workspace-frame-card">
-            <header className="workspace-frame-header">
-              <SectionLabel>{workspaceName}</SectionLabel>
-            </header>
             <div className="workspace-frame-body">{workspaceSurface}</div>
           </ShellCard>
         </section>
@@ -1640,20 +1632,20 @@ export default function App() {
             ) : null}
           </TruthRailSection>
 
-          {approvalSummary.hasApprovals ? (
-            <TruthRailSection
-              title={ui.shell.pendingApprovalsTitle}
-              testId="truth-rail-approvals"
-              badge={<StatusBadge tone={approvalSummary.stale > 0 ? "error" : "partial"}>{approvalSummary.pending}</StatusBadge>}
-            >
-              <p className="truth-rail-keyline">
-                {ui.shell.pendingApprovalsSummary(approvalSummary.pending, approvalSummary.stale)}
-              </p>
-              <MutedSystemCopy>
-                {approvalSummary.chatPending > 0 ? ui.shell.pendingApprovalsChat : ui.shell.pendingApprovalsSeparate}
-              </MutedSystemCopy>
-            </TruthRailSection>
-          ) : null}
+          <TruthRailSection
+            title={ui.shell.pendingApprovalsTitle}
+            testId="truth-rail-approvals"
+            badge={<StatusBadge tone={approvalSummary.stale > 0 ? "error" : approvalSummary.pending > 0 ? "partial" : "muted"}>{approvalSummary.pending}</StatusBadge>}
+          >
+            <p className="truth-rail-keyline">
+              {ui.shell.pendingApprovalsSummary(approvalSummary.pending, approvalSummary.stale)}
+            </p>
+            <MutedSystemCopy>
+              {approvalSummary.hasApprovals
+                ? approvalSummary.chatPending > 0 ? ui.shell.pendingApprovalsChat : ui.shell.pendingApprovalsSeparate
+                : ui.common.none}
+            </MutedSystemCopy>
+          </TruthRailSection>
 
           <TruthRailSection
             title={nextStepTitle}
@@ -1661,7 +1653,7 @@ export default function App() {
             badge={<StatusBadge tone={statusToneForBadge}>{currentStatusBadge}</StatusBadge>}
           >
             <div className="truth-rail-pairs">
-              {currentRows.map((row) => (
+              {currentRows.slice(0, 2).map((row) => (
                 <div key={row.label}>
                   <span>{row.label}</span>
                   <strong>{row.value}</strong>
