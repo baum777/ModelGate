@@ -8,7 +8,6 @@ import type {
   GitHubVerifyResult
 } from "./github-contract.js";
 import type { GitHubConfig } from "./github-env.js";
-import { assertExecuteFallbackBlocked } from "./workflow-model-router.js";
 
 type GitHubActionExecutionOptions = {
   config: GitHubConfig;
@@ -20,6 +19,10 @@ const EXECUTION_AUTHOR = {
   name: "ModelGate",
   email: "modelgate@users.noreply.github.com"
 };
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
 
 function normalizeLineEndings(value: string) {
   return value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -411,6 +414,57 @@ function buildExecutionFreshnessError(plan: GitHubActionStoreEntry) {
   });
 }
 
+function buildExecutionPolicyError(message: string) {
+  return new GitHubClientError({
+    code: "github_execute_policy_blocked",
+    status: 409,
+    operation: "GitHub execution",
+    path: "/api/github/actions/execute",
+    baseUrl: "unavailable",
+    message
+  });
+}
+
+function isDeterministicSmokePlan(plan: GitHubActionStoreEntry) {
+  return plan.request.mode === "smoke";
+}
+
+function assertExecutePolicyForPlan(plan: GitHubActionStoreEntry) {
+  if (isDeterministicSmokePlan(plan)) {
+    return;
+  }
+
+  const metadata = plan.routingMetadata;
+
+  if (!isObject(metadata)) {
+    throw buildExecutionPolicyError("GitHub routing metadata is required before execute");
+  }
+
+  if (metadata.workflowRole !== "github_code_agent") {
+    throw buildExecutionPolicyError("GitHub routing workflow role is invalid for execute");
+  }
+
+  if (metadata.mayWriteExternalState) {
+    throw buildExecutionPolicyError("GitHub routing policy disallows external state writes on execute");
+  }
+
+  if (metadata.mayExecuteExternalTools) {
+    throw buildExecutionPolicyError("GitHub routing policy disallows external tool execution on execute");
+  }
+
+  if (metadata.approvalRequired !== true) {
+    throw buildExecutionPolicyError("GitHub routing policy must require approval before execute");
+  }
+
+  if (metadata.structuredOutputRequired !== true) {
+    throw buildExecutionPolicyError("GitHub routing policy must require structured output for execute");
+  }
+
+  if (metadata.fallbackUsed) {
+    throw buildExecutionPolicyError("GitHub execute path does not allow fallback-routed proposals");
+  }
+}
+
 function buildVerificationFreshnessReason(summary: GitHubRepoSummary, plan: GitHubActionStoreEntry) {
   if (summary.status !== "ready") {
     return `Repository status is ${summary.status}`;
@@ -434,6 +488,8 @@ export function createGitHubActionExecutionService(options: GitHubActionExecutio
         return plan.execution;
       }
 
+      assertExecutePolicyForPlan(plan);
+
       const summary = await options.client.readRepositorySummary(plan.repo.owner, plan.repo.repo);
 
       if (!buildFreshnessCheck(summary, plan)) {
@@ -450,12 +506,6 @@ export function createGitHubActionExecutionService(options: GitHubActionExecutio
           message: "GitHub execution requires approval"
         });
       }
-
-      assertExecuteFallbackBlocked({
-        workflow: "github_code_agent",
-        fallbackUsed: false,
-        allowFallbackOnExecute: false
-      });
 
       const treeEntries = await loadPlannedTreeEntries(options.client, plan);
       const baseCommit = await options.client.readRepositoryCommit(plan.repo.owner, plan.repo.repo, plan.baseSha);

@@ -50,6 +50,8 @@ export const EnvSchema = z.object({
   GITHUB_BRANCH_PREFIX: z.string().trim().default("modelgate/github"),
   GITHUB_REQUEST_TIMEOUT_MS: z.string().trim().default("8000"),
   GITHUB_PLAN_TTL_MS: z.string().trim().default("720000"),
+  GITHUB_ACTION_STORE_MODE: z.string().trim().default("memory"),
+  GITHUB_ACTION_STORE_FILE_PATH: z.string().trim().default(".local-ai/state/github-action-store.json"),
   GITHUB_MAX_CONTEXT_FILES: z.string().trim().default("6"),
   GITHUB_MAX_CONTEXT_BYTES: z.string().trim().default("32768"),
   GITHUB_SMOKE_REPO: z.string().trim().default(""),
@@ -102,6 +104,8 @@ export type AppEnv = {
   GITHUB_BRANCH_PREFIX: string;
   GITHUB_REQUEST_TIMEOUT_MS: number;
   GITHUB_PLAN_TTL_MS: number;
+  GITHUB_ACTION_STORE_MODE: string;
+  GITHUB_ACTION_STORE_FILE_PATH: string;
   GITHUB_MAX_CONTEXT_FILES: number;
   GITHUB_MAX_CONTEXT_BYTES: number;
   GITHUB_SMOKE_REPO: string;
@@ -176,6 +180,8 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     GITHUB_BRANCH_PREFIX: parsed.GITHUB_BRANCH_PREFIX.trim() || "modelgate/github",
     GITHUB_REQUEST_TIMEOUT_MS: Number.parseInt(parsed.GITHUB_REQUEST_TIMEOUT_MS.trim(), 10),
     GITHUB_PLAN_TTL_MS: Number.parseInt(parsed.GITHUB_PLAN_TTL_MS.trim(), 10),
+    GITHUB_ACTION_STORE_MODE: parsed.GITHUB_ACTION_STORE_MODE.trim() || "memory",
+    GITHUB_ACTION_STORE_FILE_PATH: parsed.GITHUB_ACTION_STORE_FILE_PATH.trim() || ".local-ai/state/github-action-store.json",
     GITHUB_MAX_CONTEXT_FILES: Number.parseInt(parsed.GITHUB_MAX_CONTEXT_FILES.trim(), 10),
     GITHUB_MAX_CONTEXT_BYTES: Number.parseInt(parsed.GITHUB_MAX_CONTEXT_BYTES.trim(), 10),
     GITHUB_SMOKE_REPO: parsed.GITHUB_SMOKE_REPO.trim(),

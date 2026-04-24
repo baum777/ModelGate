@@ -193,6 +193,22 @@ export type GitHubChangePlan = {
   }>;
   generatedAt: string;
   expiresAt: string;
+  routingMetadata?: {
+    workflowRole: "github_code_agent";
+    selectedModel: string;
+    candidateModels: string[];
+    fallbackUsed: boolean;
+    selectionSource: "env" | "legacy_openrouter_model" | "fallback_env" | "recommended_model";
+    routingMode: "policy";
+    allowFallback: boolean;
+    failClosed: boolean;
+    structuredOutputRequired: boolean;
+    approvalRequired: boolean;
+    mayExecuteExternalTools: boolean;
+    mayWriteExternalState: boolean;
+    policySectionKey: string | null;
+    recordedAt: string;
+  };
   execution?: GitHubExecuteResult;
   verification?: GitHubVerifyResult;
 };

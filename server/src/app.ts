@@ -2,7 +2,11 @@ import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import type { AppEnv } from "./lib/env.js";
 import { createGitHubClient, type GitHubClient } from "./lib/github-client.js";
 import { createGitHubConfig, type GitHubConfig } from "./lib/github-env.js";
-import { createGitHubActionStore, type GitHubActionStore } from "./lib/github-action-store.js";
+import {
+  createConfigurableGitHubActionStore,
+  createGitHubActionStoreSelection,
+  type GitHubActionStore
+} from "./lib/github-action-store.js";
 import { createAuthConfig, type AuthConfig } from "./lib/auth.js";
 import { createDisabledMatrixConfig, type MatrixConfig } from "./lib/matrix-env.js";
 import { buildCorsHeaders } from "./lib/http.js";
@@ -56,7 +60,11 @@ export function createApp(deps: AppDependencies) {
   const authConfig = deps.authConfig ?? createAuthConfig(deps.env);
   const githubConfig = deps.githubConfig ?? createGitHubConfig(deps.env);
   const githubClient = deps.githubClient ?? createGitHubClient({ config: githubConfig });
-  const githubActionStore = deps.githubActionStore ?? createGitHubActionStore(githubConfig.planTtlMs);
+  const githubActionStoreSelection = createGitHubActionStoreSelection(deps.env);
+  const githubActionStore = deps.githubActionStore ?? createConfigurableGitHubActionStore({
+    ...githubActionStoreSelection,
+    ttlMs: githubConfig.planTtlMs
+  });
   const matrixConfig = deps.matrixConfig ?? createDisabledMatrixConfig();
   const matrixClient = deps.matrixClient ?? createMatrixClient({ config: matrixConfig });
   const matrixStore = deps.matrixStore ?? createMatrixScopeStore();

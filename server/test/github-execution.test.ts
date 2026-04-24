@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createApp } from "../src/app.js";
+import { createInMemoryGitHubActionStore } from "../src/lib/github-action-store.js";
 import { createGitHubClient } from "../src/lib/github-client.js";
 import { createTestEnv, createMockOpenRouterClient, createTestGitHubConfig, createTestSessionCookie, withTestSession } from "../test-support/helpers.js";
 
@@ -44,6 +45,112 @@ function injectWithSession(
       ...(request.headers ?? {})
     }
   });
+}
+
+function createPolicyTestPlan(options: {
+  planId: string;
+  mode?: "smoke";
+  routingMetadata?: {
+    workflowRole: "github_code_agent";
+    selectedModel: string;
+    candidateModels: string[];
+    fallbackUsed: boolean;
+    selectionSource: "env" | "legacy_openrouter_model" | "fallback_env" | "recommended_model";
+    routingMode: "policy";
+    allowFallback: boolean;
+    failClosed: boolean;
+    structuredOutputRequired: boolean;
+    approvalRequired: boolean;
+    mayExecuteExternalTools: boolean;
+    mayWriteExternalState: boolean;
+    policySectionKey: string | null;
+    recordedAt: string;
+  };
+}) {
+  return {
+    planId: options.planId,
+    repo: {
+      owner: "acme",
+      repo: "widget",
+      fullName: "acme/widget",
+      defaultBranch: "main",
+      defaultBranchSha: "commit-sha-1",
+      description: "Widget repo",
+      isPrivate: false,
+      status: "ready" as const,
+      permissions: { canWrite: true },
+      checkedAt: "2026-01-01T00:00:00.000Z"
+    },
+    baseRef: "main",
+    baseSha: "commit-sha-1",
+    branchName: `modelgate/github/${options.planId}`,
+    targetBranch: "main",
+    status: "pending_review" as const,
+    stale: false,
+    requiresApproval: true as const,
+    summary: "Policy test plan",
+    rationale: "Policy test rationale",
+    riskLevel: "low_surface" as const,
+    citations: [],
+    diff: [],
+    generatedAt: "2026-01-01T00:00:00.000Z",
+    expiresAt: "2026-01-01T00:12:00.000Z",
+    ...(options.routingMetadata ? { routingMetadata: options.routingMetadata } : {}),
+    request: {
+      repo: {
+        owner: "acme",
+        repo: "widget"
+      },
+      objective: "Policy execute test objective",
+      baseBranch: "main",
+      ...(options.mode ? { mode: options.mode } : {})
+    },
+    context: {
+      repo: {
+        owner: "acme",
+        repo: "widget",
+        fullName: "acme/widget",
+        defaultBranch: "main",
+        defaultBranchSha: "commit-sha-1",
+        description: "Widget repo",
+        isPrivate: false,
+        status: "ready" as const,
+        permissions: { canWrite: true },
+        checkedAt: "2026-01-01T00:00:00.000Z"
+      },
+      ref: "main",
+      baseSha: "commit-sha-1",
+      question: "Policy execute test",
+      files: [],
+      citations: [],
+      tokenBudget: {
+        maxTokens: 0,
+        usedTokens: 0,
+        truncated: false
+      },
+      warnings: [],
+      generatedAt: "2026-01-01T00:00:00.000Z"
+    }
+  };
+}
+
+function createSafeRoutingMetadata() {
+  return {
+    workflowRole: "github_code_agent" as const,
+    selectedModel: "qwen/qwen3-coder:free",
+    candidateModels: ["qwen/qwen3-coder:free"],
+    fallbackUsed: false,
+    selectionSource: "env" as const,
+    routingMode: "policy" as const,
+    allowFallback: true,
+    failClosed: true,
+    structuredOutputRequired: true,
+    approvalRequired: true,
+    mayExecuteExternalTools: false,
+    mayWriteExternalState: false,
+    policySectionKey: "github_code_agent",
+    recordedAt: "2026-01-01T00:00:00.000Z"
+  };
 }
 
 test("github execution routes create a branch, commit, pull request, and verify the result", async (t) => {
@@ -1338,4 +1445,187 @@ test("github execution routes fail closed when the approved branch diverges", as
       message: `GitHub branch already exists with a different head: modelgate/github/${planId}`
     }
   });
+});
+
+test("github execution fails closed when routing metadata is missing for a non-smoke plan", async (t) => {
+  const actionStore = createInMemoryGitHubActionStore(60_000, () => Date.now());
+  const plan = createPolicyTestPlan({
+    planId: "plan_missing_routing"
+  });
+  actionStore.createPlan(plan);
+
+  let repoSummaryCalled = false;
+  const githubClient = createGitHubClient({
+    config: createTestGitHubConfig({
+      agentApiKey: TEST_ADMIN_KEY
+    }),
+    fetchImpl: async () => {
+      repoSummaryCalled = true;
+      throw new Error("GitHub upstream should not be called when execute policy is blocked");
+    }
+  });
+
+  const app = withTestSession(createApp({
+    env: createTestEnv(),
+    openRouter: createMockOpenRouterClient(),
+    githubConfig: createTestGitHubConfig({
+      agentApiKey: TEST_ADMIN_KEY
+    }),
+    githubClient,
+    githubActionStore: actionStore,
+    logger: false
+  }));
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/github/actions/plan_missing_routing/execute",
+    headers: {
+      "x-modelgate-admin-key": TEST_ADMIN_KEY
+    },
+    payload: {
+      approval: true
+    }
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.deepEqual(JSON.parse(response.body), {
+    ok: false,
+    error: {
+      code: "github_execute_policy_blocked",
+      message: "GitHub routing metadata is required before execute"
+    }
+  });
+  assert.equal(repoSummaryCalled, false);
+});
+
+test("github execution fails closed for unsafe routing metadata and allows smoke plans without routing metadata", async (t) => {
+  const actionStore = createInMemoryGitHubActionStore(60_000, () => Date.now());
+  const unsafeCases = [
+    {
+      planId: "plan_fallback_used",
+      metadata: {
+        ...createSafeRoutingMetadata(),
+        fallbackUsed: true
+      },
+      expectedMessage: "GitHub execute path does not allow fallback-routed proposals"
+    },
+    {
+      planId: "plan_wrong_role",
+      metadata: {
+        ...createSafeRoutingMetadata(),
+        workflowRole: "chat" as unknown as "github_code_agent"
+      },
+      expectedMessage: "GitHub routing workflow role is invalid for execute"
+    },
+    {
+      planId: "plan_external_tools",
+      metadata: {
+        ...createSafeRoutingMetadata(),
+        mayExecuteExternalTools: true
+      },
+      expectedMessage: "GitHub routing policy disallows external tool execution on execute"
+    },
+    {
+      planId: "plan_external_writes",
+      metadata: {
+        ...createSafeRoutingMetadata(),
+        mayWriteExternalState: true
+      },
+      expectedMessage: "GitHub routing policy disallows external state writes on execute"
+    },
+    {
+      planId: "plan_no_approval",
+      metadata: {
+        ...createSafeRoutingMetadata(),
+        approvalRequired: false
+      },
+      expectedMessage: "GitHub routing policy must require approval before execute"
+    },
+    {
+      planId: "plan_no_structured_output",
+      metadata: {
+        ...createSafeRoutingMetadata(),
+        structuredOutputRequired: false
+      },
+      expectedMessage: "GitHub routing policy must require structured output for execute"
+    }
+  ];
+
+  for (const item of unsafeCases) {
+    actionStore.createPlan(createPolicyTestPlan({
+      planId: item.planId,
+      routingMetadata: item.metadata as ReturnType<typeof createSafeRoutingMetadata>
+    }));
+  }
+
+  actionStore.createPlan(createPolicyTestPlan({
+    planId: "plan_smoke_without_routing",
+    mode: "smoke"
+  }));
+
+  const githubConfig = createTestGitHubConfig({
+    agentApiKey: TEST_ADMIN_KEY
+  });
+  let fetchCount = 0;
+  const githubClient = createGitHubClient({
+    config: githubConfig,
+    fetchImpl: async () => {
+      fetchCount += 1;
+      throw new Error("GitHub upstream should not be called for policy-blocked tests");
+    }
+  });
+
+  const app = withTestSession(createApp({
+    env: createTestEnv(),
+    openRouter: createMockOpenRouterClient(),
+    githubConfig,
+    githubClient,
+    githubActionStore: actionStore,
+    logger: false
+  }));
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  for (const item of unsafeCases) {
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/github/actions/${item.planId}/execute`,
+      headers: {
+        "x-modelgate-admin-key": TEST_ADMIN_KEY
+      },
+      payload: {
+        approval: true
+      }
+    });
+
+    assert.equal(response.statusCode, 409);
+    assert.deepEqual(JSON.parse(response.body), {
+      ok: false,
+      error: {
+        code: "github_execute_policy_blocked",
+        message: item.expectedMessage
+      }
+    });
+  }
+
+  const smokeResponse = await app.inject({
+    method: "POST",
+    url: "/api/github/actions/plan_smoke_without_routing/execute",
+    headers: {
+      "x-modelgate-admin-key": TEST_ADMIN_KEY
+    },
+    payload: {
+      approval: true
+    }
+  });
+
+  const smokeBody = JSON.parse(smokeResponse.body) as { ok?: boolean; error?: { code?: string } };
+  assert.notEqual(smokeBody.error?.code, "github_execute_policy_blocked");
+  assert.equal(fetchCount, 1);
 });

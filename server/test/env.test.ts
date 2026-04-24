@@ -32,6 +32,8 @@ test("env parsing allows Matrix-only startup without an OpenRouter key", () => {
     MATRIX_VERIFY_AFTER_EXECUTE: "true",
     MATRIX_ALLOWED_ACTION_TYPES: "set_room_topic",
     MATRIX_FAIL_CLOSED: "true",
+    GITHUB_ACTION_STORE_MODE: "file",
+    GITHUB_ACTION_STORE_FILE_PATH: ".local-ai/state/github-action-store.test.json",
     MODEL_GATE_ADMIN_PASSWORD: "admin-password",
     MODEL_GATE_SESSION_SECRET: "session-secret",
     MODEL_GATE_SESSION_TTL_SECONDS: "43200"
@@ -60,6 +62,8 @@ test("env parsing allows Matrix-only startup without an OpenRouter key", () => {
   assert.equal(env.MATRIX_VERIFY_AFTER_EXECUTE, true);
   assert.deepEqual(env.MATRIX_ALLOWED_ACTION_TYPES, ["set_room_topic"]);
   assert.equal(env.MATRIX_FAIL_CLOSED, true);
+  assert.equal(env.GITHUB_ACTION_STORE_MODE, "file");
+  assert.equal(env.GITHUB_ACTION_STORE_FILE_PATH, ".local-ai/state/github-action-store.test.json");
   assert.equal(env.MODEL_GATE_ADMIN_PASSWORD, "admin-password");
   assert.equal(env.MODEL_GATE_SESSION_SECRET, "session-secret");
   assert.equal(env.MODEL_GATE_SESSION_TTL_SECONDS, 43200);

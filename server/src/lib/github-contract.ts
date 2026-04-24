@@ -21,7 +21,8 @@ export type GitHubErrorCode =
   | "invalid_request"
   | "github_plan_not_found"
   | "github_plan_expired"
-  | "github_plan_already_executed";
+  | "github_plan_already_executed"
+  | "github_execute_policy_blocked";
 
 export type GitHubErrorEnvelope = {
   ok: false;
@@ -37,6 +38,23 @@ export type GitHubPlanStatus = "pending_review" | "executed";
 export type GitHubVerificationStatus = "verified" | "mismatch" | "pending" | "failed";
 export type GitHubDiffChangeType = "added" | "modified" | "deleted" | "renamed";
 export type GitHubFileEncoding = "utf-8" | "base64";
+
+export type GitHubRoutingMetadata = {
+  workflowRole: "github_code_agent";
+  selectedModel: string;
+  candidateModels: string[];
+  fallbackUsed: boolean;
+  selectionSource: "env" | "legacy_openrouter_model" | "fallback_env" | "recommended_model";
+  routingMode: "policy";
+  allowFallback: boolean;
+  failClosed: boolean;
+  structuredOutputRequired: boolean;
+  approvalRequired: boolean;
+  mayExecuteExternalTools: boolean;
+  mayWriteExternalState: boolean;
+  policySectionKey: string | null;
+  recordedAt: string;
+};
 
 export type GitHubRepoSummary = {
   owner: string;
@@ -221,6 +239,7 @@ export type GitHubChangePlan = {
   diff: GitHubDiffFile[];
   generatedAt: string;
   expiresAt: string;
+  routingMetadata?: GitHubRoutingMetadata;
   execution?: GitHubExecuteResult;
   verification?: GitHubVerifyResult;
 };
@@ -311,7 +330,8 @@ const GITHUB_ERROR_MESSAGES: Record<GitHubErrorCode, string> = {
   invalid_request: "Invalid GitHub request",
   github_plan_not_found: "GitHub plan was not found",
   github_plan_expired: "GitHub plan expired",
-  github_plan_already_executed: "GitHub plan was already executed"
+  github_plan_already_executed: "GitHub plan was already executed",
+  github_execute_policy_blocked: "GitHub execute policy blocked this plan"
 };
 
 const GITHUB_ERROR_STATUS: Record<GitHubErrorCode, number> = {
@@ -335,7 +355,8 @@ const GITHUB_ERROR_STATUS: Record<GitHubErrorCode, number> = {
   invalid_request: 400,
   github_plan_not_found: 404,
   github_plan_expired: 410,
-  github_plan_already_executed: 409
+  github_plan_already_executed: 409,
+  github_execute_policy_blocked: 409
 };
 
 export function buildGitHubErrorResponse(code: GitHubErrorCode, message?: string, retryAfterSeconds?: number): GitHubErrorEnvelope {

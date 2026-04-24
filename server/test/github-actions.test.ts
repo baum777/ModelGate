@@ -227,6 +227,22 @@ test("github proposal routes create a review-only plan scaffold and keep it read
       diff: unknown[];
       generatedAt: string;
       expiresAt: string;
+      routingMetadata?: {
+        workflowRole: string;
+        selectedModel: string;
+        candidateModels: string[];
+        fallbackUsed: boolean;
+        selectionSource: string;
+        routingMode: string;
+        allowFallback: boolean;
+        failClosed: boolean;
+        structuredOutputRequired: boolean;
+        approvalRequired: boolean;
+        mayExecuteExternalTools: boolean;
+        mayWriteExternalState: boolean;
+        policySectionKey: string | null;
+        recordedAt: string;
+      };
     };
   };
 
@@ -260,6 +276,23 @@ test("github proposal routes create a review-only plan scaffold and keep it read
   assert.match(proposeBody.plan.diff[1]?.patch ?? "", /\+  return 'flow through utils v2';/);
   assert.match(proposeBody.plan.generatedAt, /^\d{4}-\d{2}-\d{2}T/);
   assert.match(proposeBody.plan.expiresAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(proposeBody.plan.routingMetadata?.workflowRole, "github_code_agent");
+  assert.equal(proposeBody.plan.routingMetadata?.selectedModel, "qwen/qwen3-coder:free");
+  assert.deepEqual(proposeBody.plan.routingMetadata?.candidateModels, [
+    "qwen/qwen3-coder:free",
+    "qwen/qwen3-next-80b-a3b-instruct:free"
+  ]);
+  assert.equal(proposeBody.plan.routingMetadata?.fallbackUsed, false);
+  assert.equal(proposeBody.plan.routingMetadata?.selectionSource, "env");
+  assert.equal(proposeBody.plan.routingMetadata?.routingMode, "policy");
+  assert.equal(proposeBody.plan.routingMetadata?.allowFallback, true);
+  assert.equal(proposeBody.plan.routingMetadata?.failClosed, true);
+  assert.equal(proposeBody.plan.routingMetadata?.structuredOutputRequired, true);
+  assert.equal(proposeBody.plan.routingMetadata?.approvalRequired, true);
+  assert.equal(proposeBody.plan.routingMetadata?.mayExecuteExternalTools, false);
+  assert.equal(proposeBody.plan.routingMetadata?.mayWriteExternalState, false);
+  assert.equal(proposeBody.plan.routingMetadata?.policySectionKey, "github_code_agent");
+  assert.match(proposeBody.plan.routingMetadata?.recordedAt ?? "", /^\d{4}-\d{2}-\d{2}T/);
 
   currentCommitSha = "commit-sha-2";
 
@@ -426,6 +459,7 @@ test("github proposal routes create a deterministic smoke plan without the LLM",
       targetBranch: string;
       summary: string;
       rationale: string;
+      routingMetadata?: unknown;
       diff: Array<{
         path: string;
         changeType: string;
@@ -439,6 +473,7 @@ test("github proposal routes create a deterministic smoke plan without the LLM",
   assert.equal(body.plan.targetBranch, "main");
   assert.equal(body.plan.summary, "Smoke proposal for acme/widget");
   assert.match(body.plan.rationale, /Deterministic smoke proposal for acme\/widget/i);
+  assert.equal(body.plan.routingMetadata, undefined);
   assert.deepEqual(body.plan.diff.map((file) => file.path), [
     "docs/modelgate-smoke.md"
   ]);

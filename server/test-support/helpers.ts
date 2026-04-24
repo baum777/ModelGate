@@ -44,6 +44,8 @@ export function createTestEnv(overrides: Partial<AppEnv> = {}): AppEnv {
     GITHUB_BRANCH_PREFIX: overrides.GITHUB_BRANCH_PREFIX ?? "modelgate/github",
     GITHUB_REQUEST_TIMEOUT_MS: overrides.GITHUB_REQUEST_TIMEOUT_MS ?? 8000,
     GITHUB_PLAN_TTL_MS: overrides.GITHUB_PLAN_TTL_MS ?? 720000,
+    GITHUB_ACTION_STORE_MODE: overrides.GITHUB_ACTION_STORE_MODE ?? "memory",
+    GITHUB_ACTION_STORE_FILE_PATH: overrides.GITHUB_ACTION_STORE_FILE_PATH ?? ".local-ai/state/github-action-store.json",
     GITHUB_MAX_CONTEXT_FILES: overrides.GITHUB_MAX_CONTEXT_FILES ?? 6,
     GITHUB_MAX_CONTEXT_BYTES: overrides.GITHUB_MAX_CONTEXT_BYTES ?? 32768,
     GITHUB_SMOKE_REPO: overrides.GITHUB_SMOKE_REPO ?? "",
