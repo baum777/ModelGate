@@ -15,10 +15,19 @@ import { createMatrixClient, type MatrixClient } from "./lib/matrix-client.js";
 import { createMatrixActionStore, type MatrixActionStore } from "./lib/matrix-action-store.js";
 import { createMatrixScopeStore, type MatrixScopeStore } from "./lib/matrix-scope-store.js";
 import type { OpenRouterClient } from "./lib/openrouter.js";
+import { createAppRateLimiter, createRateLimitConfig, type AppRateLimiter } from "./lib/rate-limit.js";
+import {
+  createRuntimeJournal,
+  createRuntimeJournalSelection,
+  type RuntimeJournal
+} from "./lib/runtime-journal.js";
+import { createRuntimeObservability, type RuntimeObservability } from "./lib/runtime-observability.js";
 import { loadModelCapabilitiesConfig, type ModelCapabilitiesConfig } from "./lib/workflow-model-router.js";
 import { authRoutes } from "./routes/auth.js";
 import { chatRoutes } from "./routes/chat.js";
+import { diagnosticsRoutes } from "./routes/diagnostics.js";
 import { githubRoutes } from "./routes/github.js";
+import { journalRoutes } from "./routes/journal.js";
 import { matrixRoutes } from "./routes/matrix.js";
 import { healthRoutes } from "./routes/health.js";
 import { modelRoutes } from "./routes/models.js";
@@ -34,6 +43,9 @@ export type AppDependencies = {
   matrixClient?: MatrixClient;
   matrixStore?: MatrixScopeStore;
   matrixActionStore?: MatrixActionStore;
+  rateLimiter?: AppRateLimiter;
+  runtimeJournal?: RuntimeJournal;
+  runtimeObservability?: RuntimeObservability;
   modelRegistry?: ModelRegistry;
   modelCapabilitiesConfig?: ModelCapabilitiesConfig;
   logger?: boolean;
@@ -69,6 +81,29 @@ export function createApp(deps: AppDependencies) {
   const matrixClient = deps.matrixClient ?? createMatrixClient({ config: matrixConfig });
   const matrixStore = deps.matrixStore ?? createMatrixScopeStore();
   const matrixActionStore = deps.matrixActionStore ?? createMatrixActionStore();
+  const runtimeJournalSelection = createRuntimeJournalSelection(deps.env);
+  const runtimeJournal = deps.runtimeJournal ?? createRuntimeJournal({
+    enabled: runtimeJournalSelection.enabled,
+    mode: runtimeJournalSelection.mode,
+    filePath: runtimeJournalSelection.filePath,
+    maxEntries: runtimeJournalSelection.maxEntries,
+    exposeRecentLimit: runtimeJournalSelection.exposeRecentLimit
+  });
+  const rateLimiter = deps.rateLimiter ?? createAppRateLimiter(createRateLimitConfig(deps.env), undefined, (blocked) => {
+    runtimeJournal.append({
+      source: "rate_limit",
+      eventType: "rate_limit_blocked",
+      authorityDomain: "backend",
+      severity: "warning",
+      outcome: "blocked",
+      summary: `Rate limit blocked for scope ${blocked.scope}`,
+      safeMetadata: {
+        scope: blocked.scope,
+        retryAfterSeconds: blocked.retryAfterSeconds
+      }
+    });
+  });
+  const runtimeObservability = deps.runtimeObservability ?? createRuntimeObservability();
   const app = Fastify({
     logger: deps.logger ?? true,
     bodyLimit: 1_048_576
@@ -78,14 +113,31 @@ export function createApp(deps: AppDependencies) {
 
   healthRoutes(app, deps.env, modelRegistry);
   modelRoutes(app, modelRegistry);
+  diagnosticsRoutes(app, {
+    env: deps.env,
+    modelRegistry,
+    modelCapabilitiesConfig,
+    rateLimiter,
+    runtimeObservability,
+    githubConfig,
+    matrixConfig,
+    actionStoreSelection: githubActionStoreSelection,
+    runtimeJournal
+  });
+  journalRoutes(app, {
+    runtimeJournal
+  });
   authRoutes(app, {
-    config: authConfig
+    config: authConfig,
+    rateLimiter
   });
   matrixRoutes(app, {
     config: matrixConfig,
     client: matrixClient,
     store: matrixStore,
-    actionStore: matrixActionStore
+    actionStore: matrixActionStore,
+    rateLimiter,
+    runtimeJournal
   });
   githubRoutes(app, {
     config: githubConfig,
@@ -95,13 +147,19 @@ export function createApp(deps: AppDependencies) {
     modelRegistry,
     modelCapabilitiesConfig,
     env: deps.env,
-    actionStore: githubActionStore
+    actionStore: githubActionStore,
+    rateLimiter,
+    runtimeJournal
   });
   chatRoutes(app, {
     env: deps.env,
     openRouter: deps.openRouter,
     modelRegistry,
-    modelCapabilitiesConfig
+    modelCapabilitiesConfig,
+    authConfig,
+    rateLimiter,
+    runtimeObservability,
+    runtimeJournal
   });
 
   return app;

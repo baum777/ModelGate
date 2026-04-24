@@ -246,6 +246,21 @@ test("github proposal routes create a review-only plan scaffold and keep it read
     };
   };
 
+  const journalResponse = await app.inject({
+    method: "GET",
+    url: "/journal/recent?source=github&limit=10"
+  });
+  assert.equal(journalResponse.statusCode, 200);
+  const journalPayload = JSON.parse(journalResponse.body) as {
+    ok: true;
+    entries: Array<{
+      eventType: string;
+      planId: string | null;
+    }>;
+  };
+  assert.equal(journalPayload.ok, true);
+  assert.ok(journalPayload.entries.some((entry) => entry.eventType === "github_proposal_created"));
+
   assert.equal(proposeBody.ok, true);
   assert.match(proposeBody.plan.planId, /^plan_[0-9a-f-]{36}$/);
   assert.equal(proposeBody.plan.repo.fullName, "acme/widget");
@@ -1098,4 +1113,161 @@ test("github proposal routes reject malformed model drafts", async (t) => {
       message: "GitHub proposal response was invalid"
     }
   });
+});
+
+test("github proposal routes return 429 and skip OpenRouter when rate-limited", async (t) => {
+  let openRouterCalls = 0;
+  const githubConfig = createTestGitHubConfig({
+    allowedRepos: ["acme/widget"],
+    allowedRepoSet: new Set(["acme/widget"]),
+    planTtlMs: 60_000
+  });
+
+  const githubClient = createGitHubClient({
+    config: githubConfig,
+    fetchImpl: async (input) => {
+      const url = new URL(String(input));
+
+      if (url.pathname === "/repos/acme/widget") {
+        return makeJsonResponse({
+          full_name: "acme/widget",
+          name: "widget",
+          default_branch: "main",
+          description: "Widget repo",
+          private: false,
+          archived: false,
+          disabled: false,
+          permissions: {
+            push: true
+          },
+          owner: {
+            login: "acme"
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/commits/main") {
+        return makeJsonResponse({
+          sha: "commit-sha-1",
+          commit: {
+            tree: {
+              sha: "tree-sha-1"
+            }
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/git/trees/tree-sha-1") {
+        return makeJsonResponse({
+          sha: "tree-sha-1",
+          truncated: false,
+          tree: [
+            {
+              path: "README.md",
+              type: "blob",
+              sha: "blob-readme",
+              size: 70,
+              mode: "100644"
+            }
+          ]
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/contents/README.md") {
+        return makeJsonResponse({
+          type: "file",
+          path: "README.md",
+          sha: "blob-readme",
+          size: 70,
+          encoding: "base64",
+          content: encodeText("widget repo\n")
+        });
+      }
+
+      throw new Error(`unexpected path: ${url.pathname}${url.search}`);
+    }
+  });
+
+  const openRouter = createMockOpenRouterClient({
+    createChatCompletion: async (request, selection) => {
+      openRouterCalls += 1;
+      return {
+        model: selection.publicModelId,
+        text: JSON.stringify({
+          summary: request.messages[0]?.content.includes("INPUT:") ? "Update widget" : "Update",
+          rationale: "Keep it reviewable.",
+          riskLevel: "low_surface",
+          files: [
+            {
+              path: "README.md",
+              changeType: "modified",
+              afterContent: "widget repo updated\n"
+            }
+          ]
+        })
+      };
+    }
+  });
+
+  const app = createApp({
+    env: createTestEnv({
+      RATE_LIMIT_WINDOW_MS: 60_000,
+      RATE_LIMIT_GITHUB_PROPOSE_MAX: 1
+    }),
+    openRouter,
+    githubConfig,
+    githubClient,
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const firstResponse = await app.inject({
+    method: "POST",
+    url: "/api/github/actions/propose",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    },
+    payload: {
+      repo: {
+        owner: "acme",
+        repo: "widget"
+      },
+      objective: "Update widget",
+      ref: "main",
+      selectedPaths: ["README.md"]
+    }
+  });
+  assert.equal(firstResponse.statusCode, 200);
+
+  const secondResponse = await app.inject({
+    method: "POST",
+    url: "/api/github/actions/propose",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    },
+    payload: {
+      repo: {
+        owner: "acme",
+        repo: "widget"
+      },
+      objective: "Update widget again",
+      ref: "main",
+      selectedPaths: ["README.md"]
+    }
+  });
+
+  assert.equal(secondResponse.statusCode, 429);
+  assert.equal(secondResponse.headers["retry-after"], "60");
+  assert.deepEqual(JSON.parse(secondResponse.body), {
+    ok: false,
+    error: {
+      code: "github_rate_limited",
+      message: "GitHub rate limit was hit",
+      retryAfterSeconds: 60
+    }
+  });
+  assert.equal(openRouterCalls, 1);
 });

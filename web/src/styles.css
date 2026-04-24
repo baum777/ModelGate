@@ -762,6 +762,13 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
   color: var(--muted);
 }
 
+.chat-stream-status {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
 .stream-draft-card {
   margin-top: 12px;
   padding: 14px 16px;
@@ -2661,4 +2668,121 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
   .chat-toolbar-controls {
     min-width: 0;
   }
+}
+
+/* Phase 6 chat markdown rendering */
+.markdown-message {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.markdown-message > :first-child {
+  margin-top: 0;
+}
+
+.markdown-message > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-message p,
+.markdown-message ul,
+.markdown-message ol,
+.markdown-message blockquote,
+.markdown-message table,
+.markdown-message pre,
+.markdown-message h1,
+.markdown-message h2,
+.markdown-message h3,
+.markdown-message h4 {
+  margin: 0.52rem 0;
+}
+
+.markdown-message ul,
+.markdown-message ol {
+  padding-left: 1.25rem;
+}
+
+.markdown-message blockquote {
+  border-left: 2px solid rgba(255, 255, 255, 0.18);
+  padding-left: 0.7rem;
+  color: var(--muted);
+}
+
+.markdown-message a {
+  color: #89c6ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.chat-inline-code {
+  padding: 0.08rem 0.38rem;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.88em;
+}
+
+.chat-code-block {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(3, 8, 17, 0.74);
+  overflow: hidden;
+}
+
+.chat-code-block-diff {
+  border-color: rgba(120, 224, 170, 0.3);
+}
+
+.chat-code-block-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.chat-code-language {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+}
+
+.chat-code-copy-button {
+  padding: 0.42rem 0.64rem;
+  border-radius: 10px;
+  font-size: 0.8rem;
+}
+
+.chat-code-block pre {
+  margin: 0;
+  padding: 11px 12px;
+  overflow: auto;
+}
+
+.chat-code-block code {
+  display: block;
+  min-width: max-content;
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.markdown-message table {
+  width: 100%;
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+
+.markdown-message th,
+.markdown-message td {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.34rem 0.5rem;
+  text-align: left;
+  white-space: nowrap;
 }

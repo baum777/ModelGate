@@ -16,7 +16,7 @@
     "typecheck:web": "npm run typecheck --workspace web",
     "typecheck": "npm run typecheck:server && npm run typecheck:web",
     "test:server": "npm run test --workspace server",
-    "test:web": "node --test --import tsx web/test/chat-workflow.test.ts web/test/matrix-gates.test.ts web/test/matrix-api.test.ts web/test/github-auth.test.ts web/test/workspace-state.test.ts web/test/shell-view-model.test.ts web/test/approval-primitives.test.ts web/test/github-workspace.test.ts web/test/matrix-workspace.test.ts web/test/review-workspace.test.ts web/test/settings-workspace.test.ts web/test/localization.test.ts web/test/app-localization.test.ts",
+    "test:web": "node --test --import tsx web/test/chat-workflow.test.ts web/test/markdown-message.test.ts web/test/matrix-gates.test.ts web/test/matrix-api.test.ts web/test/diagnostics-api.test.ts web/test/github-auth.test.ts web/test/workspace-state.test.ts web/test/shell-view-model.test.ts web/test/approval-primitives.test.ts web/test/github-workspace.test.ts web/test/matrix-workspace.test.ts web/test/review-workspace.test.ts web/test/settings-workspace.test.ts web/test/localization.test.ts web/test/app-localization.test.ts",
     "test:browser": "playwright test",
     "smoke:matrix": "node scripts/matrix-smoke.mjs",
     "test:matrix-live": "node --test --import tsx tests/live/matrix-smoke-live.test.ts",

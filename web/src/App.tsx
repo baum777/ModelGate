@@ -35,11 +35,15 @@ import {
   useLocalization,
 } from "./lib/localization.js";
 import {
+  fetchDiagnostics,
   fetchAuthSession,
   fetchHealth,
+  fetchJournalRecent,
   fetchModels,
   loginAdmin,
-  logoutAdmin
+  logoutAdmin,
+  type DiagnosticsResponse,
+  type JournalEntry
 } from "./lib/api.js";
 import {
   createInitialGitHubAuthState,
@@ -224,6 +228,8 @@ export default function App() {
             `Alias ${alias} ausgewählt; Provider-Ziele bleiben backend-seitig.`,
           telemetryModelListFailed: "Modellliste fehlgeschlagen",
           telemetryModelListFailedDetail: "Kein Zugriff auf /models",
+          telemetryDiagnosticsFailed: "Diagnostik nicht verfügbar",
+          telemetryDiagnosticsFailedDetail: "Kein Zugriff auf /diagnostics",
           chatGovernancePendingApproval: "Freigabe ausstehend",
           chatGovernanceExecutionRunning: "Ausführung läuft",
           chatGovernanceLastExecutionConfirmed: "Letzte Ausführung bestätigt",
@@ -243,6 +249,8 @@ export default function App() {
             `Selected alias ${alias}; provider targets remain backend-owned.`,
           telemetryModelListFailed: "Model list failed",
           telemetryModelListFailedDetail: "Unable to reach /models",
+          telemetryDiagnosticsFailed: "Diagnostics unavailable",
+          telemetryDiagnosticsFailedDetail: "Unable to reach /diagnostics",
           chatGovernancePendingApproval: "Approval pending",
           chatGovernanceExecutionRunning: "Execution running",
           chatGovernanceLastExecutionConfirmed: "Last execution confirmed",
@@ -326,6 +334,8 @@ export default function App() {
     default?: boolean;
     available?: boolean;
   }>>([]);
+  const [runtimeDiagnostics, setRuntimeDiagnostics] = useState<DiagnosticsResponse | null>(null);
+  const [runtimeJournalEntries, setRuntimeJournalEntries] = useState<JournalEntry[]>([]);
   const [restoredSession] = useState(() => {
     if (typeof window === "undefined") {
       return false;
@@ -344,9 +354,11 @@ export default function App() {
     let cancelled = false;
 
     async function loadConsoleState() {
-      const [healthResult, modelsResult] = await Promise.allSettled([
+      const [healthResult, modelsResult, diagnosticsResult, journalResult] = await Promise.allSettled([
         fetchHealth(),
         fetchModels(),
+        fetchDiagnostics(),
+        fetchJournalRecent(),
       ]);
 
       if (cancelled) {
@@ -404,6 +416,29 @@ export default function App() {
                 : appText.telemetryModelListFailedDetail,
           }),
         );
+      }
+
+      if (diagnosticsResult.status === "fulfilled") {
+        setRuntimeDiagnostics(diagnosticsResult.value);
+      } else {
+        setRuntimeDiagnostics(null);
+        setTelemetry((current) =>
+          appendTelemetry(current, {
+            id: createId(),
+            kind: "warning",
+            label: appText.telemetryDiagnosticsFailed,
+            detail:
+              diagnosticsResult.reason instanceof Error
+                ? diagnosticsResult.reason.message
+                : appText.telemetryDiagnosticsFailedDetail,
+          }),
+        );
+      }
+
+      if (journalResult.status === "fulfilled") {
+        setRuntimeJournalEntries(journalResult.value.entries);
+      } else {
+        setRuntimeJournalEntries([]);
       }
     }
 
@@ -766,6 +801,48 @@ export default function App() {
       availableCount: availableModels.length,
       registrySourceLabel: modelRegistry.length > 0 ? "backend-policy" : ui.common.na,
     },
+    diagnostics: {
+      runtimeMode: runtimeDiagnostics?.runtimeMode ?? ui.settings.unavailable,
+      defaultPublicAlias: runtimeDiagnostics?.models.defaultPublicAlias ?? ui.settings.unavailable,
+      publicAliases: runtimeDiagnostics?.models.publicAliases.join(", ") || ui.settings.unavailable,
+      routingMode: runtimeDiagnostics?.routing.mode ?? ui.settings.unavailable,
+      fallbackEnabled: runtimeDiagnostics
+        ? (runtimeDiagnostics.routing.allowFallback ? ui.common.active : ui.common.inactive)
+        : ui.settings.unavailable,
+      failClosed: runtimeDiagnostics
+        ? (runtimeDiagnostics.routing.failClosed ? ui.common.active : ui.common.inactive)
+        : ui.settings.unavailable,
+      rateLimitEnabled: runtimeDiagnostics
+        ? (runtimeDiagnostics.rateLimit.enabled ? ui.common.active : ui.common.inactive)
+        : ui.settings.unavailable,
+      actionStoreMode: runtimeDiagnostics?.actionStore.mode ?? ui.settings.unavailable,
+      githubConfigured: runtimeDiagnostics
+        ? (runtimeDiagnostics.github.configured ? ui.settings.configured : ui.settings.notConfigured)
+        : ui.settings.unavailable,
+      matrixConfigured: runtimeDiagnostics
+        ? (runtimeDiagnostics.matrix.configured ? ui.settings.configured : ui.settings.notConfigured)
+        : ui.settings.unavailable,
+      generatedAt: runtimeDiagnostics?.diagnosticsGeneratedAt ?? ui.settings.unavailable,
+      uptimeMs: runtimeDiagnostics ? String(runtimeDiagnostics.uptimeMs) : ui.settings.unavailable,
+      chatRequests: runtimeDiagnostics ? String(runtimeDiagnostics.counters.chatRequests) : ui.settings.unavailable,
+      chatStreamStarted: runtimeDiagnostics ? String(runtimeDiagnostics.counters.chatStreamStarted) : ui.settings.unavailable,
+      chatStreamCompleted: runtimeDiagnostics ? String(runtimeDiagnostics.counters.chatStreamCompleted) : ui.settings.unavailable,
+      chatStreamError: runtimeDiagnostics ? String(runtimeDiagnostics.counters.chatStreamError) : ui.settings.unavailable,
+      chatStreamAborted: runtimeDiagnostics ? String(runtimeDiagnostics.counters.chatStreamAborted) : ui.settings.unavailable,
+      upstreamError: runtimeDiagnostics ? String(runtimeDiagnostics.counters.upstreamError) : ui.settings.unavailable,
+      rateLimitBlocked: runtimeDiagnostics
+        ? `chat:${runtimeDiagnostics.rateLimit.blockedByScope.chat}, auth:${runtimeDiagnostics.rateLimit.blockedByScope.auth_login}, gh-propose:${runtimeDiagnostics.rateLimit.blockedByScope.github_propose}, gh-exec:${runtimeDiagnostics.rateLimit.blockedByScope.github_execute}, matrix-exec:${runtimeDiagnostics.rateLimit.blockedByScope.matrix_execute}`
+        : ui.settings.unavailable,
+    },
+    journal: {
+      status: runtimeDiagnostics?.journal.enabled ? ui.settings.configured : ui.settings.journalUnavailable,
+      mode: runtimeDiagnostics?.journal.mode ?? ui.settings.unavailable,
+      retention: runtimeDiagnostics
+        ? `${runtimeDiagnostics.journal.recentCount}/${runtimeDiagnostics.journal.maxEntries}`
+        : ui.settings.unavailable,
+      recentCount: runtimeDiagnostics ? String(runtimeDiagnostics.journal.recentCount) : ui.settings.unavailable,
+      entries: runtimeJournalEntries.slice(0, 12)
+    }
   };
 
   const settingsRows: StatusPanelRow[] = [

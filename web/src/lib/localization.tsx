@@ -147,6 +147,43 @@ type SettingsCopy = {
   clearDiagnostics: string;
   connectionTruthNote: string;
   modelSourceLabel: string;
+  diagnosticsSummary: string;
+  runtimeModeLabel: string;
+  defaultPublicAliasLabel: string;
+  publicAliasesLabel: string;
+  routingModeLabel: string;
+  fallbackLabel: string;
+  failClosedLabel: string;
+  rateLimitLabel: string;
+  actionStoreLabel: string;
+  githubConfiguredLabel: string;
+  matrixConfiguredLabel: string;
+  diagnosticsGeneratedAtLabel: string;
+  uptimeLabel: string;
+  chatRequestsLabel: string;
+  chatStreamStartedLabel: string;
+  chatStreamCompletedLabel: string;
+  chatStreamErrorLabel: string;
+  chatStreamAbortedLabel: string;
+  upstreamErrorLabel: string;
+  rateLimitBlockedLabel: string;
+  diagnosticsSafetyNote: string;
+  journalLabel: string;
+  journalCardTitle: string;
+  journalRecentEventsLabel: string;
+  journalRetentionLabel: string;
+  journalRecentCountLabel: string;
+  journalOutcomeLabel: string;
+  journalSeverityLabel: string;
+  journalNoEntries: string;
+  journalUnavailable: string;
+  journalOutcomeBlocked: string;
+  journalOutcomeExecuted: string;
+  journalOutcomeVerified: string;
+  journalOutcomeUnverifiable: string;
+  configured: string;
+  notConfigured: string;
+  unavailable: string;
 };
 
 type AuthCopy = {
@@ -168,6 +205,11 @@ type ChatCopy = {
   title: string;
   intro: string;
   sessionLabel: string;
+  modeLabel: string;
+  modeDirect: string;
+  modeGoverned: string;
+  modeDirectHint: string;
+  modeGovernedHint: string;
   modelSelectLabel: string;
   noModels: string;
   onlyPublicAlias: string;
@@ -188,8 +230,22 @@ type ChatCopy = {
   noticeError: string;
   noticeSystem: string;
   composerPlaceholder: string;
+  sendDirect: string;
   prepareProposal: string;
+  composerHelperDirect: string;
   composerHelper: string;
+  emptyStateDirect: string;
+  copyCode: string;
+  copyCodeCopied: string;
+  copyCodeFailed: string;
+  codeLanguageFallback: string;
+  streamStatus: {
+    ready: string;
+    streaming: string;
+    interrupted: string;
+    cancelled: string;
+    unverifiable: string;
+  };
   composerLocked: {
     backend: string;
     model: string;
@@ -505,6 +561,43 @@ const EN_COPY: LocalizationCopy = {
     clearDiagnostics: "Clear diagnostics",
     connectionTruthNote: "Backend truth and connection truth stay separated from advisory copy.",
     modelSourceLabel: "Source",
+    diagnosticsSummary: "Safe runtime diagnostics",
+    runtimeModeLabel: "Runtime mode",
+    defaultPublicAliasLabel: "Default public alias",
+    publicAliasesLabel: "Public aliases",
+    routingModeLabel: "Model routing",
+    fallbackLabel: "Fallback",
+    failClosedLabel: "Fail-closed",
+    rateLimitLabel: "Rate limits",
+    actionStoreLabel: "Action store",
+    githubConfiguredLabel: "GitHub configured",
+    matrixConfiguredLabel: "Matrix configured",
+    diagnosticsGeneratedAtLabel: "Diagnostics generated",
+    uptimeLabel: "Uptime (ms)",
+    chatRequestsLabel: "Chat requests",
+    chatStreamStartedLabel: "Chat streams started",
+    chatStreamCompletedLabel: "Chat streams completed",
+    chatStreamErrorLabel: "Chat streams errored",
+    chatStreamAbortedLabel: "Chat streams aborted",
+    upstreamErrorLabel: "Upstream errors",
+    rateLimitBlockedLabel: "Rate-limit blocked",
+    diagnosticsSafetyNote: "Diagnostics contain aggregate counters only; no prompts, tokens, cookies, or provider credentials.",
+    journalLabel: "Journal",
+    journalCardTitle: "Recent events",
+    journalRecentEventsLabel: "Backend-owned receipts",
+    journalRetentionLabel: "Retention",
+    journalRecentCountLabel: "Recent count",
+    journalOutcomeLabel: "Outcome",
+    journalSeverityLabel: "Severity",
+    journalNoEntries: "No recent journal entries.",
+    journalUnavailable: "Journal unavailable",
+    journalOutcomeBlocked: "Blocked",
+    journalOutcomeExecuted: "Executed",
+    journalOutcomeVerified: "Verified",
+    journalOutcomeUnverifiable: "Unverifiable",
+    configured: "Configured",
+    notConfigured: "Not configured",
+    unavailable: "Unavailable",
   },
   auth: {
     statusAuthenticated: "Unlocked",
@@ -524,6 +617,11 @@ const EN_COPY: LocalizationCopy = {
     title: "Chat workspace",
     intro: "Conversation stays separate from governed work objects. The backend remains the execution authority.",
     sessionLabel: "Conversation state",
+    modeLabel: "Execution mode",
+    modeDirect: "Read-only · no external writes",
+    modeGoverned: "Approval required · execution receipt",
+    modeDirectHint: "Direct Chat stays read-only and still uses backend-owned routing.",
+    modeGovernedHint: "Governed Execution is required for action-bearing workflows.",
     modelSelectLabel: "Public model alias",
     noModels: "No public aliases available",
     onlyPublicAlias: "Only public alias metadata is exposed. Provider targets stay backend-only.",
@@ -544,8 +642,22 @@ const EN_COPY: LocalizationCopy = {
     noticeError: "Error",
     noticeSystem: "Notice",
     composerPlaceholder: "Write operator input to prepare the next governed proposal...",
+    sendDirect: "Send direct chat",
     prepareProposal: "Prepare proposal",
+    composerHelperDirect: "Direct Chat runs immediately in read-only mode via /chat.",
     composerHelper: "Submit prepares a proposal. Backend execution starts only after approval.",
+    emptyStateDirect: "No direct chat messages yet. Send a read-only prompt to start.",
+    copyCode: "Copy code",
+    copyCodeCopied: "Copied",
+    copyCodeFailed: "Copy failed",
+    codeLanguageFallback: "text",
+    streamStatus: {
+      ready: "Ready",
+      streaming: "Streaming",
+      interrupted: "Interrupted",
+      cancelled: "Cancelled",
+      unverifiable: "Unverifiable",
+    },
     composerLocked: {
       backend: "Backend unreachable. Composer is fail-closed.",
       model: "No public model alias selected.",
@@ -834,6 +946,43 @@ const DE_COPY: LocalizationCopy = {
     clearDiagnostics: "Diagnostik leeren",
     connectionTruthNote: "Backend-Wahrheit und Verbindungswahrheit bleiben von Advisory-Text getrennt.",
     modelSourceLabel: "Quelle",
+    diagnosticsSummary: "Sichere Runtime-Diagnostik",
+    runtimeModeLabel: "Runtime-Modus",
+    defaultPublicAliasLabel: "Standard-öffentlicher Alias",
+    publicAliasesLabel: "Öffentliche Aliase",
+    routingModeLabel: "Model-Routing",
+    fallbackLabel: "Fallback",
+    failClosedLabel: "Fail-closed",
+    rateLimitLabel: "Rate-Limits",
+    actionStoreLabel: "Action-Store",
+    githubConfiguredLabel: "GitHub konfiguriert",
+    matrixConfiguredLabel: "Matrix konfiguriert",
+    diagnosticsGeneratedAtLabel: "Diagnostik erzeugt",
+    uptimeLabel: "Uptime (ms)",
+    chatRequestsLabel: "Chat-Anfragen",
+    chatStreamStartedLabel: "Chat-Streams gestartet",
+    chatStreamCompletedLabel: "Chat-Streams abgeschlossen",
+    chatStreamErrorLabel: "Chat-Streams mit Fehler",
+    chatStreamAbortedLabel: "Chat-Streams abgebrochen",
+    upstreamErrorLabel: "Upstream-Fehler",
+    rateLimitBlockedLabel: "Rate-Limit blockiert",
+    diagnosticsSafetyNote: "Diagnostik enthält nur aggregierte Zähler; keine Prompts, Tokens, Cookies oder Provider-Credentials.",
+    journalLabel: "Journal",
+    journalCardTitle: "Letzte Ereignisse",
+    journalRecentEventsLabel: "Backend-owned Belege",
+    journalRetentionLabel: "Aufbewahrung",
+    journalRecentCountLabel: "Aktuelle Anzahl",
+    journalOutcomeLabel: "Ergebnis",
+    journalSeverityLabel: "Schweregrad",
+    journalNoEntries: "Keine aktuellen Journal-Einträge.",
+    journalUnavailable: "Journal nicht verfügbar",
+    journalOutcomeBlocked: "Blockiert",
+    journalOutcomeExecuted: "Ausgeführt",
+    journalOutcomeVerified: "Verifiziert",
+    journalOutcomeUnverifiable: "Nicht verifizierbar",
+    configured: "Konfiguriert",
+    notConfigured: "Nicht konfiguriert",
+    unavailable: "Nicht verfügbar",
   },
   auth: {
     statusAuthenticated: "Freigeschaltet",
@@ -853,6 +1002,11 @@ const DE_COPY: LocalizationCopy = {
     title: "Chat-Arbeitsbereich",
     intro: "Konversation bleibt getrennt von gouvernierten Arbeitsobjekten. Das Backend bleibt Ausführungsautorität.",
     sessionLabel: "Konversationszustand",
+    modeLabel: "Ausführungsmodus",
+    modeDirect: "Nur Lesen · keine externen Writes",
+    modeGoverned: "Freigabe nötig · Ausführungsbeleg",
+    modeDirectHint: "Direct Chat bleibt read-only und nutzt weiterhin backend-owned Routing.",
+    modeGovernedHint: "Governed Execution ist für action-bearing Workflows erforderlich.",
     modelSelectLabel: "Öffentlicher Modellalias",
     noModels: "Keine öffentlichen Aliase verfügbar",
     onlyPublicAlias: "Nur öffentliche Alias-Metadaten sind sichtbar. Provider-Ziele bleiben backend-seitig.",
@@ -873,8 +1027,22 @@ const DE_COPY: LocalizationCopy = {
     noticeError: "Fehler",
     noticeSystem: "Hinweis",
     composerPlaceholder: "Operator-Eingabe schreiben, um den nächsten gouvernierten Vorschlag vorzubereiten...",
+    sendDirect: "Direct Chat senden",
     prepareProposal: "Vorschlag vorbereiten",
+    composerHelperDirect: "Direct Chat wird sofort read-only über /chat ausgeführt.",
     composerHelper: "Senden bereitet einen Vorschlag vor. Die Backend-Ausführung startet erst nach Freigabe.",
+    emptyStateDirect: "Noch keine Direct-Chat-Nachrichten. Sende einen read-only Prompt zum Start.",
+    copyCode: "Code kopieren",
+    copyCodeCopied: "Kopiert",
+    copyCodeFailed: "Kopieren fehlgeschlagen",
+    codeLanguageFallback: "text",
+    streamStatus: {
+      ready: "Bereit",
+      streaming: "Streaming",
+      interrupted: "Unterbrochen",
+      cancelled: "Abgebrochen",
+      unverifiable: "Nicht verifizierbar",
+    },
     composerLocked: {
       backend: "Backend nicht erreichbar. Composer bleibt fail-closed.",
       model: "Kein öffentlicher Modellalias ausgewählt.",

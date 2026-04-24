@@ -61,6 +61,19 @@ export const EnvSchema = z.object({
   GITHUB_APP_ID: z.string().trim().default(""),
   GITHUB_APP_PRIVATE_KEY: z.string().trim().default(""),
   GITHUB_APP_INSTALLATION_ID: z.string().trim().default(""),
+  RATE_LIMIT_ENABLED: z.string().trim().default("true"),
+  RATE_LIMIT_WINDOW_MS: z.string().trim().default("60000"),
+  RATE_LIMIT_CHAT_MAX: z.string().trim().default("30"),
+  RATE_LIMIT_AUTH_LOGIN_MAX: z.string().trim().default("8"),
+  RATE_LIMIT_GITHUB_PROPOSE_MAX: z.string().trim().default("10"),
+  RATE_LIMIT_GITHUB_EXECUTE_MAX: z.string().trim().default("6"),
+  RATE_LIMIT_MATRIX_EXECUTE_MAX: z.string().trim().default("6"),
+  RATE_LIMIT_FAIL_CLOSED: z.string().trim().default("true"),
+  JOURNAL_ENABLED: z.string().trim().default("true"),
+  JOURNAL_STORE_MODE: z.string().trim().default("memory"),
+  JOURNAL_FILE_PATH: z.string().trim().default(".local-ai/state/runtime-journal.json"),
+  JOURNAL_MAX_ENTRIES: z.string().trim().default("500"),
+  JOURNAL_EXPOSE_RECENT_LIMIT: z.string().trim().default("50"),
   MODEL_GATE_ADMIN_PASSWORD: z.string().trim().default(""),
   MODEL_GATE_SESSION_SECRET: z.string().trim().default(""),
   MODEL_GATE_SESSION_TTL_SECONDS: z.string().trim().default("86400")
@@ -115,6 +128,19 @@ export type AppEnv = {
   GITHUB_APP_ID: string;
   GITHUB_APP_PRIVATE_KEY: string;
   GITHUB_APP_INSTALLATION_ID: string;
+  RATE_LIMIT_ENABLED: boolean;
+  RATE_LIMIT_WINDOW_MS: number;
+  RATE_LIMIT_CHAT_MAX: number;
+  RATE_LIMIT_AUTH_LOGIN_MAX: number;
+  RATE_LIMIT_GITHUB_PROPOSE_MAX: number;
+  RATE_LIMIT_GITHUB_EXECUTE_MAX: number;
+  RATE_LIMIT_MATRIX_EXECUTE_MAX: number;
+  RATE_LIMIT_FAIL_CLOSED: boolean;
+  JOURNAL_ENABLED: boolean;
+  JOURNAL_STORE_MODE: string;
+  JOURNAL_FILE_PATH: string;
+  JOURNAL_MAX_ENTRIES: number;
+  JOURNAL_EXPOSE_RECENT_LIMIT: number;
   MODEL_GATE_ADMIN_PASSWORD: string;
   MODEL_GATE_SESSION_SECRET: string;
   MODEL_GATE_SESSION_TTL_SECONDS: number;
@@ -124,6 +150,24 @@ function parsePositiveIntOrDefault(input: string, fallback: number) {
   const value = Number.parseInt(input.trim(), 10);
 
   if (!Number.isFinite(value) || Number.isNaN(value) || value < 1) {
+    return fallback;
+  }
+
+  return value;
+}
+
+function parseBoolean(input: string) {
+  return /^(1|true|yes|on)$/i.test(input.trim());
+}
+
+function parsePositiveIntWithPolicy(input: string, fallback: number, failClosed: boolean, name: string) {
+  const value = Number.parseInt(input.trim(), 10);
+
+  if (!Number.isFinite(value) || Number.isNaN(value) || value < 1) {
+    if (failClosed) {
+      throw new Error(`${name} must be a positive integer`);
+    }
+
     return fallback;
   }
 
@@ -141,6 +185,7 @@ function parseCsvList(input: string): string[] {
 
 export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   const parsed = EnvSchema.parse(source);
+  const rateLimitFailClosed = parseBoolean(parsed.RATE_LIMIT_FAIL_CLOSED.trim());
 
   const normalized: AppEnv = {
     PORT: parsed.PORT,
@@ -163,15 +208,15 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     FAST_FALLBACK_MODEL: parsed.FAST_FALLBACK_MODEL.trim(),
     DIALOG_FALLBACK_MODEL: parsed.DIALOG_FALLBACK_MODEL.trim(),
     MODEL_ROUTING_MODE: parsed.MODEL_ROUTING_MODE.trim() || "policy",
-    ALLOW_MODEL_FALLBACK: /^(1|true|yes|on)$/i.test(parsed.ALLOW_MODEL_FALLBACK.trim()),
-    MODEL_ROUTING_FAIL_CLOSED: /^(1|true|yes|on)$/i.test(parsed.MODEL_ROUTING_FAIL_CLOSED.trim()),
-    MODEL_ROUTING_LOG_ENABLED: /^(1|true|yes|on)$/i.test(parsed.MODEL_ROUTING_LOG_ENABLED.trim()),
+    ALLOW_MODEL_FALLBACK: parseBoolean(parsed.ALLOW_MODEL_FALLBACK.trim()),
+    MODEL_ROUTING_FAIL_CLOSED: parseBoolean(parsed.MODEL_ROUTING_FAIL_CLOSED.trim()),
+    MODEL_ROUTING_LOG_ENABLED: parseBoolean(parsed.MODEL_ROUTING_LOG_ENABLED.trim()),
     MODEL_ROUTING_LOG_PATH: parsed.MODEL_ROUTING_LOG_PATH.trim() || ".local-ai/logs/WORKFLOW_MODEL_ROUTING.log.md",
-    MATRIX_ANALYZE_LLM_ENABLED: /^(1|true|yes|on)$/i.test(parsed.MATRIX_ANALYZE_LLM_ENABLED.trim()),
-    MATRIX_EXECUTE_APPROVAL_REQUIRED: /^(1|true|yes|on)$/i.test(parsed.MATRIX_EXECUTE_APPROVAL_REQUIRED.trim()),
-    MATRIX_VERIFY_AFTER_EXECUTE: /^(1|true|yes|on)$/i.test(parsed.MATRIX_VERIFY_AFTER_EXECUTE.trim()),
+    MATRIX_ANALYZE_LLM_ENABLED: parseBoolean(parsed.MATRIX_ANALYZE_LLM_ENABLED.trim()),
+    MATRIX_EXECUTE_APPROVAL_REQUIRED: parseBoolean(parsed.MATRIX_EXECUTE_APPROVAL_REQUIRED.trim()),
+    MATRIX_VERIFY_AFTER_EXECUTE: parseBoolean(parsed.MATRIX_VERIFY_AFTER_EXECUTE.trim()),
     MATRIX_ALLOWED_ACTION_TYPES: parseCsvList(parsed.MATRIX_ALLOWED_ACTION_TYPES),
-    MATRIX_FAIL_CLOSED: /^(1|true|yes|on)$/i.test(parsed.MATRIX_FAIL_CLOSED.trim()),
+    MATRIX_FAIL_CLOSED: parseBoolean(parsed.MATRIX_FAIL_CLOSED.trim()),
     GITHUB_TOKEN: parsed.GITHUB_TOKEN.trim(),
     GITHUB_ALLOWED_REPOS: parseCsvList(parsed.GITHUB_ALLOWED_REPOS),
     GITHUB_AGENT_API_KEY: parsed.GITHUB_AGENT_API_KEY.trim(),
@@ -187,10 +232,53 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     GITHUB_SMOKE_REPO: parsed.GITHUB_SMOKE_REPO.trim(),
     GITHUB_SMOKE_BASE_BRANCH: parsed.GITHUB_SMOKE_BASE_BRANCH.trim(),
     GITHUB_SMOKE_TARGET_BRANCH: parsed.GITHUB_SMOKE_TARGET_BRANCH.trim(),
-    GITHUB_SMOKE_ENABLED: /^(1|true|yes|on)$/i.test(parsed.GITHUB_SMOKE_ENABLED.trim()),
+    GITHUB_SMOKE_ENABLED: parseBoolean(parsed.GITHUB_SMOKE_ENABLED.trim()),
     GITHUB_APP_ID: parsed.GITHUB_APP_ID.trim(),
     GITHUB_APP_PRIVATE_KEY: parsed.GITHUB_APP_PRIVATE_KEY.trim(),
     GITHUB_APP_INSTALLATION_ID: parsed.GITHUB_APP_INSTALLATION_ID.trim(),
+    RATE_LIMIT_ENABLED: parseBoolean(parsed.RATE_LIMIT_ENABLED.trim()),
+    RATE_LIMIT_WINDOW_MS: parsePositiveIntWithPolicy(
+      parsed.RATE_LIMIT_WINDOW_MS,
+      60_000,
+      rateLimitFailClosed,
+      "RATE_LIMIT_WINDOW_MS"
+    ),
+    RATE_LIMIT_CHAT_MAX: parsePositiveIntWithPolicy(
+      parsed.RATE_LIMIT_CHAT_MAX,
+      30,
+      rateLimitFailClosed,
+      "RATE_LIMIT_CHAT_MAX"
+    ),
+    RATE_LIMIT_AUTH_LOGIN_MAX: parsePositiveIntWithPolicy(
+      parsed.RATE_LIMIT_AUTH_LOGIN_MAX,
+      8,
+      rateLimitFailClosed,
+      "RATE_LIMIT_AUTH_LOGIN_MAX"
+    ),
+    RATE_LIMIT_GITHUB_PROPOSE_MAX: parsePositiveIntWithPolicy(
+      parsed.RATE_LIMIT_GITHUB_PROPOSE_MAX,
+      10,
+      rateLimitFailClosed,
+      "RATE_LIMIT_GITHUB_PROPOSE_MAX"
+    ),
+    RATE_LIMIT_GITHUB_EXECUTE_MAX: parsePositiveIntWithPolicy(
+      parsed.RATE_LIMIT_GITHUB_EXECUTE_MAX,
+      6,
+      rateLimitFailClosed,
+      "RATE_LIMIT_GITHUB_EXECUTE_MAX"
+    ),
+    RATE_LIMIT_MATRIX_EXECUTE_MAX: parsePositiveIntWithPolicy(
+      parsed.RATE_LIMIT_MATRIX_EXECUTE_MAX,
+      6,
+      rateLimitFailClosed,
+      "RATE_LIMIT_MATRIX_EXECUTE_MAX"
+    ),
+    RATE_LIMIT_FAIL_CLOSED: rateLimitFailClosed,
+    JOURNAL_ENABLED: parseBoolean(parsed.JOURNAL_ENABLED.trim()),
+    JOURNAL_STORE_MODE: parsed.JOURNAL_STORE_MODE.trim() || "memory",
+    JOURNAL_FILE_PATH: parsed.JOURNAL_FILE_PATH.trim() || ".local-ai/state/runtime-journal.json",
+    JOURNAL_MAX_ENTRIES: parsePositiveIntOrDefault(parsed.JOURNAL_MAX_ENTRIES, 500),
+    JOURNAL_EXPOSE_RECENT_LIMIT: parsePositiveIntOrDefault(parsed.JOURNAL_EXPOSE_RECENT_LIMIT, 50),
     MODEL_GATE_ADMIN_PASSWORD: parsed.MODEL_GATE_ADMIN_PASSWORD.trim(),
     MODEL_GATE_SESSION_SECRET: parsed.MODEL_GATE_SESSION_SECRET.trim(),
     MODEL_GATE_SESSION_TTL_SECONDS: parsePositiveIntOrDefault(parsed.MODEL_GATE_SESSION_TTL_SECONDS, 86_400)

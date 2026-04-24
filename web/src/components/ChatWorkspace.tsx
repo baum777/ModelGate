@@ -1,9 +1,15 @@
 import React, { useEffect, useReducer, useRef, useState, type FormEvent } from "react";
 import { streamChatCompletion } from "../lib/api.js";
 import {
+  buildGovernedChatProposal,
+  buildOutboundChatMessages,
   chatReducer,
+  createTokenBatcher,
+  createChatUserMessage,
   createInitialChatState,
+  runDirectChatStream,
   type ChatMessage,
+  type ChatExecutionMode,
   type ChatProposal,
   type ConnectionState
 } from "../lib/chat-workflow.js";
@@ -19,6 +25,7 @@ import {
   ExecutionReceiptCard,
   ProposalCard,
 } from "./ApprovalPrimitives.js";
+import { MarkdownMessage, hasRichTextContent } from "./MarkdownMessage.js";
 import { SectionLabel, ShellCard, StatusBadge } from "./ShellPrimitives.js";
 import {
   BACKEND_TRUTH_UNAVAILABLE,
@@ -48,6 +55,73 @@ type ChatWorkspaceProps = {
   onTelemetry: (kind: "info" | "warning" | "error", label: string, detail?: string) => void;
   onSessionChange: (session: ChatSession) => void;
 };
+
+export function resolveChatComposerBlockReason(options: {
+  executionMode: ChatExecutionMode;
+  backendUnreachable: boolean;
+  modelUnresolved: boolean;
+  awaitingApproval: boolean;
+  executionRunning: boolean;
+  copy: {
+    backend: string;
+    model: string;
+    approval: string;
+    execution: string;
+  };
+}) {
+  if (options.backendUnreachable) {
+    return options.copy.backend;
+  }
+
+  if (options.modelUnresolved) {
+    return options.copy.model;
+  }
+
+  if (options.executionMode === "governed" && options.awaitingApproval) {
+    return options.copy.approval;
+  }
+
+  if (options.executionRunning) {
+    return options.copy.execution;
+  }
+
+  return null;
+}
+
+export function resolveChatScrollBehavior(connectionState: ConnectionState): ScrollBehavior {
+  return connectionState === "streaming" || connectionState === "submitting" ? "auto" : "smooth";
+}
+
+export function resolveChatStreamStatusLabel(options: {
+  streamState: {
+    interrupted: boolean;
+    cancelled: boolean;
+    malformed: boolean;
+  };
+  connectionState: ConnectionState;
+  copy: {
+    streaming: string;
+    interrupted: string;
+    cancelled: string;
+    unverifiable: string;
+    ready: string;
+  };
+}) {
+  if (options.streamState.malformed) {
+    return options.copy.unverifiable;
+  }
+  if (options.streamState.cancelled) {
+    return options.copy.cancelled;
+  }
+  if (options.streamState.interrupted) {
+    return options.copy.interrupted;
+  }
+  if (options.connectionState === "streaming" || options.connectionState === "submitting") {
+    return options.copy.streaming;
+  }
+
+  return options.copy.ready;
+}
 
 function createId() {
   return crypto.randomUUID();
@@ -98,9 +172,14 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const [selectedModel, setSelectedModel] = useState(
     props.session.metadata.selectedModelAlias ?? props.activeModelAlias ?? "",
   );
+  const [executionMode, setExecutionMode] = useState<ChatExecutionMode>(
+    props.session.metadata.executionMode
+  );
   const abortRef = useRef<AbortController | null>(null);
   const malformedAbortRef = useRef(false);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
+  const scrollFrameRef = useRef<number | null>(null);
+  const tokenBatcherRef = useRef<ReturnType<typeof createTokenBatcher> | null>(null);
   const selectedModelEntry = props.modelRegistry.find((entry) => entry.alias === selectedModel) ?? null;
 
   useEffect(() => {
@@ -126,6 +205,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           ...props.session.metadata,
           chatState,
           selectedModelAlias: selectedModel || null,
+          executionMode,
         },
       }),
       updatedAt: new Date().toISOString(),
@@ -135,6 +215,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           ...props.session.metadata,
           chatState,
           selectedModelAlias: selectedModel || null,
+          executionMode,
         },
       }),
       resumable: true,
@@ -142,17 +223,76 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
         ...props.session.metadata,
         chatState,
         selectedModelAlias: selectedModel || null,
+        executionMode,
       },
     };
 
     props.onSessionChange(nextSession);
-  }, [chatState, props.onSessionChange, props.session.id, selectedModel]);
+  }, [chatState, executionMode, props.onSessionChange, props.session.id, selectedModel]);
 
   useEffect(() => {
-    messageEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [chatState.messages, chatState.pendingProposal, chatState.receipts, chatState.notices, chatState.currentAssistantDraft]);
+    const schedule = (callback: () => void) => {
+      if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+        return window.requestAnimationFrame(() => callback());
+      }
+
+      return setTimeout(callback, 16) as unknown as number;
+    };
+    const cancel = (handle: number) => {
+      if (typeof window !== "undefined" && typeof window.cancelAnimationFrame === "function") {
+        window.cancelAnimationFrame(handle);
+        return;
+      }
+
+      clearTimeout(handle);
+    };
+
+    if (scrollFrameRef.current !== null) {
+      cancel(scrollFrameRef.current);
+      scrollFrameRef.current = null;
+    }
+
+    scrollFrameRef.current = schedule(() => {
+      scrollFrameRef.current = null;
+      messageEndRef.current?.scrollIntoView({
+        behavior: resolveChatScrollBehavior(chatState.connectionState),
+        block: "end"
+      });
+    });
+
+    return () => {
+      if (scrollFrameRef.current !== null) {
+        cancel(scrollFrameRef.current);
+        scrollFrameRef.current = null;
+      }
+    };
+  }, [
+    chatState.connectionState,
+    chatState.messages.length,
+    chatState.pendingProposal?.status,
+    chatState.receipts.length,
+    chatState.notices.length,
+    chatState.currentAssistantDraft?.text
+  ]);
+
+  function createTokenDispatcher() {
+    tokenBatcherRef.current?.cancel();
+    tokenBatcherRef.current = createTokenBatcher({
+      onFlush: (batchedDelta) => {
+        dispatch({
+          type: "stream_token",
+          delta: batchedDelta
+        });
+      }
+    });
+  }
+
+  function flushBatchedTokens() {
+    tokenBatcherRef.current?.flush();
+  }
 
   function stopExecution() {
+    flushBatchedTokens();
     abortRef.current?.abort();
   }
 
@@ -165,25 +305,125 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
 
     dispatch({
       type: "create_proposal",
-      proposal: {
-        id: createId(),
+      proposal: buildGovernedChatProposal({
         prompt: trimmed,
         modelAlias: selectedModel || null,
         consequence: buildProposalConsequence(locale, selectedModel || null),
         createdAt: new Date().toISOString(),
-        status: "pending"
-      }
+        createId
+      })
     });
     props.onTelemetry("info", "Chat proposal created", "Awaiting operator approval before backend execution.");
   }
 
+  async function executeDirectPrompt(prompt: string) {
+    const userMessage = createChatUserMessage(prompt, createId);
+
+    dispatch({
+      type: "submit_message",
+      message: userMessage
+    });
+    props.onTelemetry("info", "Direct chat submitted", "Read-only chat request sent to backend /chat.");
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+    malformedAbortRef.current = false;
+    createTokenDispatcher();
+
+    try {
+      await runDirectChatStream({
+        prompt,
+        modelAlias: selectedModel || null,
+        messages: chatState.messages,
+        stream: streamChatCompletion,
+        signal: controller.signal,
+        userMessage,
+        handlers: {
+          onStart: (payload) => {
+            dispatch({
+              type: "stream_start",
+              model: payload.model
+            });
+            props.onTelemetry("info", "Direct chat started", `Backend accepted stream for alias ${payload.model}.`);
+          },
+          onRoute: (payload) => {
+            dispatch({
+              type: "stream_route",
+              route: payload.route
+            });
+            props.onTelemetry(
+              "info",
+              "Chat route metadata",
+              `${payload.route.selectedAlias} (${payload.route.taskClass}), fallback=${payload.route.fallbackUsed ? "yes" : "no"}`
+            );
+          },
+          onToken: (delta) => {
+            tokenBatcherRef.current?.push(delta);
+          },
+          onDone: (payload) => {
+            flushBatchedTokens();
+            dispatch({
+              type: "stream_done",
+              model: payload.model,
+              text: payload.text,
+              route: payload.route
+            });
+            props.onTelemetry("info", "Direct chat completed", `Execution finalized via alias ${payload.model}.`);
+          },
+          onError: (message) => {
+            flushBatchedTokens();
+            dispatch({
+              type: "stream_error",
+              message
+            });
+            props.onTelemetry("error", "Direct chat failed", message);
+          },
+          onMalformed: (message) => {
+            malformedAbortRef.current = true;
+            flushBatchedTokens();
+            dispatch({
+              type: "stream_malformed",
+              message
+            });
+            props.onTelemetry("warning", "Chat stream unverifiable", message);
+            controller.abort();
+          }
+        }
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError" && malformedAbortRef.current) {
+        return;
+      }
+
+      if (error instanceof DOMException && error.name === "AbortError") {
+        flushBatchedTokens();
+        dispatch({
+          type: "stream_error",
+          message: "Execution cancelled by operator."
+        });
+        dispatch({
+          type: "mark_stream_cancelled"
+        });
+        props.onTelemetry("warning", "Chat execution cancelled", "Active execution was aborted by the operator.");
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : "Streaming request failed";
+      flushBatchedTokens();
+      dispatch({
+        type: "stream_error",
+        message
+      });
+      props.onTelemetry("error", "Chat request failed", message);
+    } finally {
+      abortRef.current = null;
+      tokenBatcherRef.current?.cancel();
+      tokenBatcherRef.current = null;
+    }
+  }
+
   async function executeProposal(proposal: ChatProposal) {
-    const userMessage: ChatMessage = {
-      id: createId(),
-      role: "user",
-      content: proposal.prompt,
-      createdAt: new Date().toISOString()
-    };
+    const userMessage: ChatMessage = createChatUserMessage(proposal.prompt, createId);
 
     dispatch({
       type: "start_proposal_execution"
@@ -197,8 +437,9 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     const controller = new AbortController();
     abortRef.current = controller;
     malformedAbortRef.current = false;
+    createTokenDispatcher();
 
-    const outboundMessages = [...chatState.messages, userMessage].map(({ role, content }) => ({ role, content }));
+    const outboundMessages = buildOutboundChatMessages(chatState.messages, userMessage);
 
     try {
       await streamChatCompletion(
@@ -227,12 +468,10 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             );
           },
           onToken: (delta) => {
-            dispatch({
-              type: "stream_token",
-              delta
-            });
+            tokenBatcherRef.current?.push(delta);
           },
           onDone: (payload) => {
+            flushBatchedTokens();
             dispatch({
               type: "stream_done",
               model: payload.model,
@@ -242,6 +481,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             props.onTelemetry("info", "Chat execution completed", `Execution finalized via alias ${payload.model}.`);
           },
           onError: (message) => {
+            flushBatchedTokens();
             dispatch({
               type: "stream_error",
               message
@@ -250,6 +490,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           },
           onMalformed: (message) => {
             malformedAbortRef.current = true;
+            flushBatchedTokens();
             dispatch({
               type: "stream_malformed",
               message
@@ -266,15 +507,20 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       }
 
       if (error instanceof DOMException && error.name === "AbortError") {
+        flushBatchedTokens();
         dispatch({
           type: "stream_error",
           message: "Execution cancelled by operator."
+        });
+        dispatch({
+          type: "mark_stream_cancelled"
         });
         props.onTelemetry("warning", "Chat execution cancelled", "Active execution was aborted by the operator.");
         return;
       }
 
       const message = error instanceof Error ? error.message : "Streaming request failed";
+      flushBatchedTokens();
       dispatch({
         type: "stream_error",
         message
@@ -282,6 +528,8 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       props.onTelemetry("error", "Chat request failed", message);
     } finally {
       abortRef.current = null;
+      tokenBatcherRef.current?.cancel();
+      tokenBatcherRef.current = null;
     }
   }
 
@@ -294,30 +542,45 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    createProposal();
+    const trimmed = chatState.input.trim();
+
+    if (!trimmed) {
+      return;
+    }
+
+    if (executionMode === "governed") {
+      createProposal();
+      return;
+    }
+
+    await executeDirectPrompt(trimmed);
   }
 
   const pendingProposal = chatState.pendingProposal;
   const warning = chatState.lastStreamWarning;
   const error = chatState.lastError;
   const draft = chatState.currentAssistantDraft;
-  const awaitingApproval = pendingProposal?.status === "pending";
+  const awaitingApproval = executionMode === "governed" && pendingProposal?.status === "pending";
   const executionRunning =
     pendingProposal?.status === "executing"
     || chatState.connectionState === "submitting"
     || chatState.connectionState === "streaming";
   const modelUnresolved = selectedModel.trim().length === 0;
   const backendUnreachable = props.backendHealthy === false;
+  const streamStatusLabel = resolveChatStreamStatusLabel({
+    streamState: chatState.streamState,
+    connectionState: chatState.connectionState,
+    copy: ui.chat.streamStatus
+  });
 
-  const composerBlockReason = backendUnreachable
-    ? ui.chat.composerLocked.backend
-    : modelUnresolved
-      ? ui.chat.composerLocked.model
-      : awaitingApproval
-        ? ui.chat.composerLocked.approval
-        : executionRunning
-          ? ui.chat.composerLocked.execution
-          : null;
+  const composerBlockReason = resolveChatComposerBlockReason({
+    executionMode,
+    backendUnreachable,
+    modelUnresolved,
+    awaitingApproval: Boolean(awaitingApproval),
+    executionRunning,
+    copy: ui.chat.composerLocked
+  });
 
   const notices = [
     ...chatState.notices,
@@ -342,6 +605,37 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
         </div>
 
         <div className="chat-toolbar-controls">
+          <label>{ui.chat.modeLabel}</label>
+          <div className="mode-toggle" role="group" aria-label={ui.chat.modeLabel}>
+            <button
+              type="button"
+              className={executionMode === "direct" ? "mode-toggle-button mode-toggle-button-active" : "mode-toggle-button"}
+              aria-pressed={executionMode === "direct"}
+              disabled={executionRunning}
+              onClick={() => {
+                setExecutionMode("direct");
+                dispatch({ type: "clear_pending_proposal" });
+                props.onTelemetry("info", "Chat mode changed", "Direct chat mode enabled.");
+              }}
+            >
+              {ui.chat.modeDirect}
+            </button>
+            <button
+              type="button"
+              className={executionMode === "governed" ? "mode-toggle-button mode-toggle-button-active" : "mode-toggle-button"}
+              aria-pressed={executionMode === "governed"}
+              disabled={executionRunning}
+              onClick={() => {
+                setExecutionMode("governed");
+                props.onTelemetry("info", "Chat mode changed", "Governed execution mode enabled.");
+              }}
+            >
+              {ui.chat.modeGoverned}
+            </button>
+          </div>
+          <p className="hint">
+            {executionMode === "direct" ? ui.chat.modeDirectHint : ui.chat.modeGovernedHint}
+          </p>
           <label htmlFor="model-select">{ui.chat.modelSelectLabel}</label>
           <select
             id="model-select"
@@ -352,7 +646,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               props.onActiveModelAliasChange(nextModel);
               props.onTelemetry("info", "Model alias changed", `Selected public alias ${nextModel || "unresolved"}.`);
             }}
-            disabled={props.availableModels.length === 0 || Boolean(pendingProposal)}
+            disabled={props.availableModels.length === 0 || (executionMode === "governed" && Boolean(pendingProposal))}
           >
             {props.availableModels.length === 0 ? (
               <option value="">{ui.chat.noModels}</option>
@@ -375,6 +669,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           <div className="runtime-stack">
             <SectionLabel>{ui.chat.conversationState}</SectionLabel>
             <strong data-testid="chat-connection-state">{getConnectionStateLabel(locale, chatState.connectionState)}</strong>
+            <span className="chat-stream-status">{streamStatusLabel}</span>
           </div>
           <div className="runtime-actions">
             {executionRunning ? (
@@ -390,7 +685,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           </div>
         </header>
 
-        {pendingProposal?.status === "pending" ? (
+        {executionMode === "governed" && pendingProposal?.status === "pending" ? (
           <ProposalCard
             testId="chat-proposal-card"
             title={ui.chat.proposalTitle}
@@ -415,7 +710,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           </ProposalCard>
         ) : null}
 
-        {pendingProposal?.status === "executing" ? (
+        {executionMode === "governed" && pendingProposal?.status === "executing" ? (
           <ApprovalTransitionCard
             testId="chat-executing-card"
             title={ui.chat.executingTitle}
@@ -426,7 +721,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
         <div className="governed-thread" aria-live="polite">
           {chatState.messages.length === 0 && chatState.receipts.length === 0 && !pendingProposal ? (
             <p className="empty-state" role="status">
-              {ui.chat.emptyState}
+              {executionMode === "direct" ? ui.chat.emptyStateDirect : ui.chat.emptyState}
             </p>
           ) : null}
 
@@ -440,7 +735,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
                 <SectionLabel>{message.role === "user" ? ui.chat.operatorInput : ui.chat.agentResponse}</SectionLabel>
                 {message.modelAlias ? <StatusBadge tone="muted">{message.modelAlias}</StatusBadge> : null}
               </header>
-              <p>{message.content}</p>
+              <MarkdownMessage content={message.content} />
             </ShellCard>
           ))}
 
@@ -450,7 +745,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
                 <SectionLabel>{ui.chat.agentDraft}</SectionLabel>
                 <StatusBadge tone="partial">{draft.model ?? "pending"}</StatusBadge>
               </header>
-              <p>{draft.text || ui.chat.composerLocked.approval}</p>
+              <MarkdownMessage content={draft.text || ui.chat.composerLocked.approval} />
             </ShellCard>
           ) : null}
 
@@ -468,7 +763,11 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
                 }),
                 [{ label: ui.sessionList.updated, value: formatTimestamp(locale, receipt.createdAt) }]
               )}
-            />
+            >
+              {hasRichTextContent(receipt.detail) ? (
+                <MarkdownMessage content={receipt.detail} />
+              ) : null}
+            </ExecutionReceiptCard>
           ))}
 
           {notices.map((notice) => (
@@ -503,14 +802,14 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
 
           <div className="composer-footer">
             <p className="hint">
-              {composerBlockReason ?? ui.chat.composerHelper}
+              {composerBlockReason ?? (executionMode === "direct" ? ui.chat.composerHelperDirect : ui.chat.composerHelper)}
             </p>
             <button
               type="submit"
               data-testid="chat-send"
               disabled={Boolean(composerBlockReason) || chatState.input.trim().length === 0}
             >
-              {ui.chat.prepareProposal}
+              {executionMode === "direct" ? ui.chat.sendDirect : ui.chat.prepareProposal}
             </button>
           </div>
         </form>

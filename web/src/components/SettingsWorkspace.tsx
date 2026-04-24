@@ -1,5 +1,6 @@
 import React from "react";
 import { useLocalization } from "../lib/localization.js";
+import type { JournalEntry } from "../lib/api.js";
 
 export type DiagnosticEntry = {
   kind: "info" | "warning" | "error";
@@ -28,6 +29,34 @@ export type SettingsTruthSnapshot = {
     activeAlias: string;
     availableCount: number;
     registrySourceLabel: string;
+  };
+  diagnostics: {
+    runtimeMode: string;
+    defaultPublicAlias: string;
+    publicAliases: string;
+    routingMode: string;
+    fallbackEnabled: string;
+    failClosed: string;
+    rateLimitEnabled: string;
+    actionStoreMode: string;
+    githubConfigured: string;
+    matrixConfigured: string;
+    generatedAt: string;
+    uptimeMs: string;
+    chatRequests: string;
+    chatStreamStarted: string;
+    chatStreamCompleted: string;
+    chatStreamError: string;
+    chatStreamAborted: string;
+    upstreamError: string;
+    rateLimitBlocked: string;
+  };
+  journal: {
+    status: string;
+    mode: string;
+    retention: string;
+    recentCount: string;
+    entries: JournalEntry[];
   };
 };
 
@@ -159,6 +188,138 @@ export function SettingsWorkspace({
             </div>
           </div>
           <p className="muted-copy">{ui.settings.modelChoiceNote}</p>
+        </article>
+
+        <article className="workspace-card">
+          <header className="card-header">
+            <div>
+              <span>{ui.settings.diagnosticsCardTitle}</span>
+              <strong>{ui.settings.diagnosticsSummary}</strong>
+            </div>
+          </header>
+          <div className="detail-grid">
+            <div>
+              <span>{ui.settings.runtimeModeLabel}</span>
+              <strong>{truthSnapshot.diagnostics.runtimeMode}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.defaultPublicAliasLabel}</span>
+              <strong>{truthSnapshot.diagnostics.defaultPublicAlias}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.publicAliasesLabel}</span>
+              <strong>{truthSnapshot.diagnostics.publicAliases}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.routingModeLabel}</span>
+              <strong>{truthSnapshot.diagnostics.routingMode}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.fallbackLabel}</span>
+              <strong>{truthSnapshot.diagnostics.fallbackEnabled}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.failClosedLabel}</span>
+              <strong>{truthSnapshot.diagnostics.failClosed}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.rateLimitLabel}</span>
+              <strong>{truthSnapshot.diagnostics.rateLimitEnabled}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.actionStoreLabel}</span>
+              <strong>{truthSnapshot.diagnostics.actionStoreMode}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.githubConfiguredLabel}</span>
+              <strong>{truthSnapshot.diagnostics.githubConfigured}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.matrixConfiguredLabel}</span>
+              <strong>{truthSnapshot.diagnostics.matrixConfigured}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.diagnosticsGeneratedAtLabel}</span>
+              <strong>{truthSnapshot.diagnostics.generatedAt}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.uptimeLabel}</span>
+              <strong>{truthSnapshot.diagnostics.uptimeMs}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.chatRequestsLabel}</span>
+              <strong>{truthSnapshot.diagnostics.chatRequests}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.chatStreamStartedLabel}</span>
+              <strong>{truthSnapshot.diagnostics.chatStreamStarted}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.chatStreamCompletedLabel}</span>
+              <strong>{truthSnapshot.diagnostics.chatStreamCompleted}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.chatStreamErrorLabel}</span>
+              <strong>{truthSnapshot.diagnostics.chatStreamError}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.chatStreamAbortedLabel}</span>
+              <strong>{truthSnapshot.diagnostics.chatStreamAborted}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.upstreamErrorLabel}</span>
+              <strong>{truthSnapshot.diagnostics.upstreamError}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.rateLimitBlockedLabel}</span>
+              <strong>{truthSnapshot.diagnostics.rateLimitBlocked}</strong>
+            </div>
+          </div>
+          <p className="muted-copy">{ui.settings.diagnosticsSafetyNote}</p>
+        </article>
+
+        <article className="workspace-card">
+          <header className="card-header">
+            <div>
+              <span>{ui.settings.journalCardTitle}</span>
+              <strong>{ui.settings.journalRecentEventsLabel}</strong>
+            </div>
+          </header>
+          <div className="detail-grid">
+            <div>
+              <span>{ui.settings.journalLabel}</span>
+              <strong>{truthSnapshot.journal.status}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.actionStoreLabel}</span>
+              <strong>{truthSnapshot.journal.mode}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.journalRetentionLabel}</span>
+              <strong>{truthSnapshot.journal.retention}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.journalRecentCountLabel}</span>
+              <strong>{truthSnapshot.journal.recentCount}</strong>
+            </div>
+          </div>
+          {truthSnapshot.journal.entries.length === 0 ? (
+            <p className="empty-state">{ui.settings.journalNoEntries}</p>
+          ) : (
+            <div className="diagnostic-feed" aria-live="polite">
+              {truthSnapshot.journal.entries.map((entry) => (
+                <article key={entry.id} className={`telemetry-item telemetry-item-${entry.severity}`}>
+                  <strong>{entry.summary}</strong>
+                  <p>
+                    {entry.timestamp} · {entry.source} · {entry.eventType}
+                  </p>
+                  <p>
+                    {ui.settings.journalOutcomeLabel}: {entry.outcome} · {ui.settings.journalSeverityLabel}: {entry.severity}
+                  </p>
+                </article>
+              ))}
+            </div>
+          )}
         </article>
 
         <article className="workspace-card">

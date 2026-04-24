@@ -1580,7 +1580,9 @@ test("github execution fails closed for unsafe routing metadata and allows smoke
   });
 
   const app = withTestSession(createApp({
-    env: createTestEnv(),
+    env: createTestEnv({
+      RATE_LIMIT_GITHUB_EXECUTE_MAX: 20
+    }),
     openRouter: createMockOpenRouterClient(),
     githubConfig,
     githubClient,
@@ -1628,4 +1630,75 @@ test("github execution fails closed for unsafe routing metadata and allows smoke
   const smokeBody = JSON.parse(smokeResponse.body) as { ok?: boolean; error?: { code?: string } };
   assert.notEqual(smokeBody.error?.code, "github_execute_policy_blocked");
   assert.equal(fetchCount, 1);
+});
+
+test("github execute returns 429 before GitHub writes when rate-limited", async (t) => {
+  const actionStore = createInMemoryGitHubActionStore(60_000, () => Date.now());
+  actionStore.createPlan(createPolicyTestPlan({
+    planId: "plan_rate_limit_execute",
+    routingMetadata: createSafeRoutingMetadata()
+  }));
+
+  let fetchCalls = 0;
+  const githubConfig = createTestGitHubConfig({
+    agentApiKey: TEST_ADMIN_KEY
+  });
+  const githubClient = createGitHubClient({
+    config: githubConfig,
+    fetchImpl: async () => {
+      fetchCalls += 1;
+      throw new Error("GitHub writes should not be called when execute is rate-limited");
+    }
+  });
+
+  const app = withTestSession(createApp({
+    env: createTestEnv({
+      RATE_LIMIT_WINDOW_MS: 60_000,
+      RATE_LIMIT_GITHUB_EXECUTE_MAX: 1
+    }),
+    openRouter: createMockOpenRouterClient(),
+    githubConfig,
+    githubClient,
+    githubActionStore: actionStore,
+    logger: false
+  }));
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const consumeResponse = await app.inject({
+    method: "POST",
+    url: "/api/github/actions/plan_missing/execute",
+    headers: {
+      "x-modelgate-admin-key": TEST_ADMIN_KEY
+    },
+    payload: {
+      approval: true
+    }
+  });
+  assert.equal(consumeResponse.statusCode, 404);
+
+  const blockedResponse = await app.inject({
+    method: "POST",
+    url: "/api/github/actions/plan_rate_limit_execute/execute",
+    headers: {
+      "x-modelgate-admin-key": TEST_ADMIN_KEY
+    },
+    payload: {
+      approval: true
+    }
+  });
+
+  assert.equal(blockedResponse.statusCode, 429);
+  assert.equal(blockedResponse.headers["retry-after"], "60");
+  assert.deepEqual(JSON.parse(blockedResponse.body), {
+    ok: false,
+    error: {
+      code: "github_rate_limited",
+      message: "GitHub rate limit was hit",
+      retryAfterSeconds: 60
+    }
+  });
+  assert.equal(fetchCalls, 0);
 });
