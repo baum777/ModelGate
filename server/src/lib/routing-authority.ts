@@ -83,7 +83,8 @@ export function resolveChatRouteDecision(options: {
   const resolution = options.modelRegistry.resolveModel(requestedAlias);
 
   if (!resolution.ok) {
-    throw new Error(`Chat route resolution failed: ${resolution.reason}`);
+    const reason = "reason" in resolution ? resolution.reason : "unknown";
+    throw new Error(`Chat route resolution failed: ${reason}`);
   }
 
   const policy = resolveChatModel(options.env, options.modelCapabilitiesConfig);

@@ -44,6 +44,8 @@ self.addEventListener("fetch", (event) => {
     || url.pathname === "/health"
     || url.pathname === "/models"
     || url.pathname === "/chat"
+    || url.pathname === "/diagnostics"
+    || url.pathname === "/journal/recent"
   ) {
     return;
   }

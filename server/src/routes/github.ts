@@ -31,6 +31,8 @@ import { normalizeGitHubRelativePath } from "../lib/github-paths.js";
 import { OpenRouterError, type OpenRouterClient } from "../lib/openrouter.js";
 import { verifySessionFromRequest, type AuthConfig } from "../lib/auth.js";
 import type { ModelRegistry } from "../lib/model-policy.js";
+import type { AppRateLimiter } from "../lib/rate-limit.js";
+import type { RuntimeJournal } from "../lib/runtime-journal.js";
 import type { ModelCapabilitiesConfig } from "../lib/workflow-model-router.js";
 
 type GitHubRouteDependencies = {
@@ -42,12 +44,18 @@ type GitHubRouteDependencies = {
   modelRegistry: ModelRegistry;
   modelCapabilitiesConfig: ModelCapabilitiesConfig;
   actionStore?: GitHubActionStore;
+  rateLimiter: AppRateLimiter;
+  runtimeJournal: RuntimeJournal;
 };
 
 const GITHUB_ADMIN_KEY_HEADER = "x-modelgate-admin-key";
 const DEFAULT_SMOKE_BRANCH_PREFIX = "modelgate/github-smoke";
 
 function sendGitHubError(reply: FastifyReply, code: GitHubErrorCode, message?: string, retryAfterSeconds?: number | null) {
+  if (typeof retryAfterSeconds === "number" && retryAfterSeconds > 0) {
+    reply.header("Retry-After", String(Math.ceil(retryAfterSeconds)));
+  }
+
   return reply.status(githubErrorStatus(code)).send(
     buildGitHubErrorResponse(code, message, retryAfterSeconds === null ? undefined : retryAfterSeconds)
   );
@@ -698,6 +706,12 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
       return sendGitHubError(reply, "github_repo_not_allowed");
     }
 
+    const limit = deps.rateLimiter.check("github_propose", request, deps.authConfig);
+
+    if (!limit.allowed) {
+      return sendGitHubError(reply, "github_rate_limited", undefined, limit.retryAfterSeconds);
+    }
+
     try {
       const plan = await runWithTimeout((async () => {
         const proposalRequest = {
@@ -807,6 +821,27 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
           request: proposalRequest,
           context
         });
+        deps.runtimeJournal.append({
+          source: "github",
+          eventType: "github_proposal_created",
+          authorityDomain: "github",
+          severity: "info",
+          outcome: "accepted",
+          summary: "GitHub proposal created",
+          planId: builtPlan.planId,
+          modelRouteSummary: builtPlan.routingMetadata
+            ? {
+                selectedAlias: builtPlan.routingMetadata.selectedModel,
+                workflowRole: builtPlan.routingMetadata.workflowRole,
+                fallbackUsed: builtPlan.routingMetadata.fallbackUsed
+              }
+            : null,
+          safeMetadata: {
+            repo: builtPlan.repo.fullName,
+            targetBranch: builtPlan.targetBranch,
+            mode: proposalRequest.mode ?? "standard"
+          }
+        });
 
         return builtPlan;
       })(), deps.config.requestTimeoutMs);
@@ -899,6 +934,12 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
       return sendGitHubError(reply, "invalid_request");
     }
 
+    const limit = deps.rateLimiter.check("github_execute", request, deps.authConfig);
+
+    if (!limit.allowed) {
+      return sendGitHubError(reply, "github_rate_limited", undefined, limit.retryAfterSeconds);
+    }
+
     const lookup = actionStore.readPlan(parsedPlanId.data);
 
     if (lookup.state === "missing") {
@@ -910,13 +951,50 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
 
     try {
+      deps.runtimeJournal.append({
+        source: "github",
+        eventType: "github_execute_attempted",
+        authorityDomain: "github",
+        severity: "info",
+        outcome: "observed",
+        planId: lookup.plan.planId,
+        summary: "GitHub execute attempted",
+        safeMetadata: {
+          repo: lookup.plan.repo.fullName,
+          targetBranch: lookup.plan.targetBranch
+        }
+      });
       const execution: GitHubExecuteResult = await actionExecutor.executePlan(lookup.plan);
+      deps.runtimeJournal.append({
+        source: "github",
+        eventType: "github_execute_completed",
+        authorityDomain: "github",
+        severity: "info",
+        outcome: "executed",
+        planId: execution.planId,
+        executionId: execution.commitSha,
+        summary: "GitHub execute completed",
+        safeMetadata: {
+          branchName: execution.branchName,
+          targetBranch: execution.targetBranch,
+          prNumber: execution.prNumber
+        }
+      });
 
       return reply.status(200).send({
         ok: true,
         result: execution
       });
     } catch (error) {
+      deps.runtimeJournal.append({
+        source: "github",
+        eventType: "github_execute_failed",
+        authorityDomain: "github",
+        severity: "error",
+        outcome: "failed",
+        planId: lookup.plan.planId,
+        summary: "GitHub execute failed"
+      });
       return handleGitHubError(reply, error);
     }
   });
@@ -963,6 +1041,20 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     if (recoveredFromGitHub) {
       try {
         const verification = await verifyRecoveredRoutePlan(lookup.plan, deps.client);
+        deps.runtimeJournal.append({
+          source: "github",
+          eventType: "github_verify_result",
+          authorityDomain: "github",
+          severity: verification.status === "mismatch" ? "warning" : "info",
+          outcome: verification.status === "verified" ? "verified" : verification.status === "mismatch" ? "unverifiable" : "observed",
+          planId: verification.planId,
+          verificationId: verification.checkedAt,
+          summary: `GitHub verify ${verification.status}`,
+          safeMetadata: {
+            branchName: verification.branchName,
+            targetBranch: verification.targetBranch
+          }
+        });
 
         return reply.status(200).send({
           ok: true,
@@ -975,6 +1067,20 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
 
     try {
       const verification: GitHubVerifyResult = await actionExecutor.verifyPlan(lookup.plan);
+      deps.runtimeJournal.append({
+        source: "github",
+        eventType: "github_verify_result",
+        authorityDomain: "github",
+        severity: verification.status === "mismatch" ? "warning" : "info",
+        outcome: verification.status === "verified" ? "verified" : verification.status === "mismatch" ? "unverifiable" : "observed",
+        planId: verification.planId,
+        verificationId: verification.checkedAt,
+        summary: `GitHub verify ${verification.status}`,
+        safeMetadata: {
+          branchName: verification.branchName,
+          targetBranch: verification.targetBranch
+        }
+      });
 
       return reply.status(200).send({
         ok: true,

@@ -44,6 +44,9 @@ test("GitHub workspace review items map proposal state into the shared review la
   const mismatch = {
     status: "mismatch",
   } as GitHubVerifyResult;
+  const failed = {
+    status: "failed",
+  } as GitHubVerifyResult;
   const execution = {
     planId: "plan-1",
     status: "executed",
@@ -61,12 +64,14 @@ test("GitHub workspace review items map proposal state into the shared review la
   const pendingItemsEn = buildGitHubReviewItems(plan, null, null, "en");
   const approvedItems = buildGitHubReviewItems(plan, execution, null);
   const executedItems = buildGitHubReviewItems(plan, execution, verified);
+  const failedItems = buildGitHubReviewItems(plan, execution, failed);
   const rejectedItems = buildGitHubReviewItems(plan, execution, mismatch);
   const staleItems = buildGitHubReviewItems({ ...plan, stale: true }, null, null);
 
   assert.equal(pendingItems[0]?.status, "pending_review");
   assert.equal(approvedItems[0]?.status, "approved");
   assert.equal(executedItems[0]?.status, "executed");
+  assert.equal(failedItems[0]?.status, "failed");
   assert.equal(rejectedItems[0]?.status, "rejected");
   assert.equal(staleItems[0]?.status, "stale");
   assert.equal(executedItems[0]?.sourceLabel, "GitHub-Workspace");

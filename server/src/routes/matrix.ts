@@ -28,6 +28,8 @@ import {
   type MatrixScopeSnapshot,
   type MatrixScopeStore
 } from "../lib/matrix-scope-store.js";
+import type { AppRateLimiter } from "../lib/rate-limit.js";
+import type { RuntimeJournal } from "../lib/runtime-journal.js";
 import { assertExecuteFallbackBlocked } from "../lib/workflow-model-router.js";
 
 type MatrixRouteDependencies = {
@@ -35,6 +37,8 @@ type MatrixRouteDependencies = {
   client: MatrixClient;
   store?: MatrixScopeStore;
   actionStore?: MatrixActionStore;
+  rateLimiter: AppRateLimiter;
+  runtimeJournal: RuntimeJournal;
 };
 
 function sendMatrixError(reply: FastifyReply, code: MatrixErrorCode, message?: string) {
@@ -594,6 +598,13 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
       return sendMatrixError(reply, "invalid_request");
     }
 
+    const limit = deps.rateLimiter.check("matrix_execute", request);
+
+    if (!limit.allowed) {
+      reply.header("Retry-After", String(limit.retryAfterSeconds));
+      return sendMatrixError(reply, "matrix_rate_limited");
+    }
+
     const lookup = actionStore.readPlan(planIdResult.data);
 
     if (lookup.state === "missing") {
@@ -617,6 +628,18 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
     });
 
     try {
+      deps.runtimeJournal.append({
+        source: "matrix",
+        eventType: "matrix_execute_attempted",
+        authorityDomain: "matrix",
+        severity: "info",
+        outcome: "observed",
+        planId: plan.planId,
+        summary: "Matrix execute attempted",
+        safeMetadata: {
+          roomId: plan.roomId
+        }
+      });
       await assertMatrixRoomTopicUpdateReady(deps, plan.roomId);
       const currentTopic = await deps.client.readRoomTopic(plan.roomId);
 
@@ -642,6 +665,19 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
             transactionId: transaction.transactionId
           }
         }));
+        deps.runtimeJournal.append({
+          source: "matrix",
+          eventType: "matrix_execute_completed",
+          authorityDomain: "matrix",
+          severity: "info",
+          outcome: "executed",
+          planId: plan.planId,
+          executionId: transaction.transactionId,
+          summary: "Matrix execute completed",
+          safeMetadata: {
+            roomId: plan.roomId
+          }
+        });
 
         return reply.status(200).send({
           ok: true,
@@ -671,6 +707,19 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
           transactionId: transaction.transactionId
         }
       }));
+      deps.runtimeJournal.append({
+        source: "matrix",
+        eventType: "matrix_execute_completed",
+        authorityDomain: "matrix",
+        severity: "info",
+        outcome: "executed",
+        planId: plan.planId,
+        executionId: transaction.transactionId,
+        summary: "Matrix execute completed",
+        safeMetadata: {
+          roomId: plan.roomId
+        }
+      });
 
       return reply.status(200).send({
         ok: true,
@@ -682,6 +731,18 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
         }
       });
     } catch (error) {
+      deps.runtimeJournal.append({
+        source: "matrix",
+        eventType: "matrix_execute_failed",
+        authorityDomain: "matrix",
+        severity: "error",
+        outcome: "failed",
+        planId: plan.planId,
+        summary: "Matrix execute failed",
+        safeMetadata: {
+          roomId: plan.roomId
+        }
+      });
       return handleMatrixError(reply, error);
     }
   });
@@ -742,6 +803,19 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
           actual
         }
       }));
+      deps.runtimeJournal.append({
+        source: "matrix",
+        eventType: "matrix_verify_result",
+        authorityDomain: "matrix",
+        severity: status === "verified" ? "info" : status === "mismatch" ? "warning" : "warning",
+        outcome: status === "verified" ? "verified" : status === "mismatch" ? "unverifiable" : status === "failed" ? "failed" : "observed",
+        planId: plan.planId,
+        verificationId: checkedAt,
+        summary: `Matrix verify ${status}`,
+        safeMetadata: {
+          roomId: plan.roomId
+        }
+      });
 
       return reply.status(200).send({
         ok: true,

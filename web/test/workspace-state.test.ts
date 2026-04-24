@@ -272,3 +272,128 @@ test("saveWorkspaceState strips legacy Matrix fields from persisted payload", ()
   assert.equal(persistedMetadata.promotionLoading, undefined);
   assert.equal(persistedMetadata.promotionError, undefined);
 });
+
+test("chat session defaults to direct mode and legacy sessions normalize safely", () => {
+  const state = createDefaultWorkspaceState();
+  const chatSession = state.sessionsByWorkspace.chat[0];
+
+  assert.ok(chatSession);
+  assert.equal(chatSession.metadata.executionMode, "direct");
+
+  const storage = new Map<string, string>();
+  storage.set("modelgate.console.workspaces.v1", JSON.stringify({
+    ...state,
+    sessionsByWorkspace: {
+      ...state.sessionsByWorkspace,
+      chat: [
+        {
+          ...chatSession,
+          metadata: {
+            ...chatSession?.metadata,
+            executionMode: undefined
+          }
+        }
+      ]
+    }
+  }));
+
+  const fakeWindow = {
+    localStorage: {
+      getItem(key: string) {
+        return storage.get(key) ?? null;
+      },
+      setItem(key: string, value: string) {
+        storage.set(key, value);
+      },
+      removeItem(key: string) {
+        storage.delete(key);
+      }
+    }
+  } as Partial<Window>;
+
+  const loaded = withWindow(fakeWindow, () => loadWorkspaceState());
+  assert.equal(loaded.sessionsByWorkspace.chat[0]?.metadata.executionMode, "direct");
+});
+
+test("chat execution mode persists in workspace state", () => {
+  const storage = new Map<string, string>();
+  const fakeWindow = {
+    localStorage: {
+      getItem(key: string) {
+        return storage.get(key) ?? null;
+      },
+      setItem(key: string, value: string) {
+        storage.set(key, value);
+      },
+      removeItem(key: string) {
+        storage.delete(key);
+      }
+    }
+  } as Partial<Window>;
+
+  const state = createDefaultWorkspaceState();
+  const chatSession = state.sessionsByWorkspace.chat[0];
+  assert.ok(chatSession);
+
+  chatSession.metadata.executionMode = "governed";
+  withWindow(fakeWindow, () => saveWorkspaceState(state));
+
+  const loaded = withWindow(fakeWindow, () => loadWorkspaceState());
+  assert.equal(loaded.sessionsByWorkspace.chat[0]?.metadata.executionMode, "governed");
+});
+
+test("in-progress chat streams normalize to interrupted state after reload with partial draft preserved", () => {
+  const base = createDefaultWorkspaceState();
+  const chatSession = base.sessionsByWorkspace.chat[0];
+  assert.ok(chatSession);
+
+  const storage = new Map<string, string>();
+  storage.set("modelgate.console.workspaces.v1", JSON.stringify({
+    ...base,
+    sessionsByWorkspace: {
+      ...base.sessionsByWorkspace,
+      chat: [
+        {
+          ...chatSession,
+          metadata: {
+            ...chatSession.metadata,
+            chatState: {
+              ...chatSession.metadata.chatState,
+              connectionState: "streaming",
+              currentAssistantDraft: {
+                text: "Partial stream",
+                model: "default",
+                started: true
+              }
+            }
+          }
+        }
+      ]
+    }
+  }));
+
+  const fakeWindow = {
+    localStorage: {
+      getItem(key: string) {
+        return storage.get(key) ?? null;
+      },
+      setItem(key: string, value: string) {
+        storage.set(key, value);
+      },
+      removeItem(key: string) {
+        storage.delete(key);
+      }
+    }
+  } as Partial<Window>;
+
+  const loaded = withWindow(fakeWindow, () => loadWorkspaceState());
+  const restored = loaded.sessionsByWorkspace.chat[0]?.metadata.chatState;
+  assert.ok(restored);
+  assert.equal(restored?.connectionState, "error");
+  assert.equal(restored?.currentAssistantDraft?.text, "Partial stream");
+  assert.equal(restored?.currentAssistantDraft?.started, false);
+  assert.equal(restored?.streamState.interrupted, true);
+  assert.equal(restored?.lastStreamWarning, "A chat stream was interrupted before completion and was not resumed.");
+  assert.equal(restored?.pendingProposal, null);
+  assert.equal(restored?.notices.at(-1)?.level, "system");
+});

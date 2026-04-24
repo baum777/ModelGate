@@ -231,8 +231,10 @@ export function buildMatrixReviewItems(
 
   const status = topicVerification?.status === "verified"
     ? "executed"
-    : topicVerification?.status === "failed" || topicVerification?.status === "mismatch"
-      ? "rejected"
+    : topicVerification?.status === "failed"
+      ? "failed"
+      : topicVerification?.status === "mismatch"
+        ? "rejected"
       : topicExecution
         ? "approved"
         : topicPlan.status === "executed"
@@ -1155,7 +1157,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       <section className="matrix-grid">
         {" "}
         <section
-          className="workspace-card"
+          className="workspace-card matrix-topic-card matrix-secondary-panel"
           data-testid="matrix-topic-update-panel"
         >
           {" "}
@@ -1448,7 +1450,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             </p>
           )}{" "}
         </section>{" "}
-        <section className="workspace-card">
+        <section className="workspace-card matrix-scope-card matrix-secondary-panel">
           {" "}
           <header className="card-header">
             <div>
@@ -1730,7 +1732,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             ) : null}{" "}
           </div>{" "}
         </section>{" "}
-        <section className="workspace-card" data-testid="matrix-composer-panel">
+        <section className="workspace-card matrix-composer-panel matrix-composer-focus-card" data-testid="matrix-composer-panel">
           <header className="card-header">
             <div>
               <span>{ui.matrix.composerTitle}</span>
@@ -1743,7 +1745,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               <p className="info-label">{ui.matrix.threadContextTitle}</p>
               <strong>
                 {activeThreadRootId
-                  ? `${ui.matrix.thread}: ${activeThreadRootId}`
+                  ? (props.expertMode ? `${ui.matrix.thread}: ${activeThreadRootId}` : ui.matrix.thread)
                   : ui.matrix.threadNone}
               </strong>
               <p className="muted-copy">
@@ -1752,11 +1754,13 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                   : ui.matrix.threadOpenHint}
               </p>
             </div>
-            <div className="matrix-thread-context-meta">
-              <span className="reference-chip">{ui.matrix.roomId}: {activeComposerRoomId ?? ui.common.na}</span>
-              <span className="reference-chip">{ui.matrix.postId}: {selectedEventId?.trim() || ui.common.na}</span>
-              <span className="reference-chip">{ui.matrix.threadRootId}: {activeThreadRootId ?? ui.common.na}</span>
-            </div>
+            {props.expertMode ? (
+              <div className="matrix-thread-context-meta">
+                <span className="reference-chip">{ui.matrix.roomId}: {activeComposerRoomId ?? ui.common.na}</span>
+                <span className="reference-chip">{ui.matrix.postId}: {selectedEventId?.trim() || ui.common.na}</span>
+                <span className="reference-chip">{ui.matrix.threadRootId}: {activeThreadRootId ?? ui.common.na}</span>
+              </div>
+            ) : null}
             <div className="matrix-thread-context-actions">
               <button
                 type="button"
@@ -1785,7 +1789,11 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             <div>
               <p className="info-label">{ui.matrix.composerTargetLabel}</p>
               <strong>{describeComposerMode(composerMode)}</strong>
-              <p className="muted-copy">{describeComposerTarget(composerTarget)}</p>
+              <p className="muted-copy">
+                {props.expertMode
+                  ? describeComposerTarget(composerTarget)
+                  : (composerTarget.kind === "none" ? ui.matrix.composerTargetMissing : ui.matrix.composerTargetSet)}
+              </p>
             </div>
             <div className="matrix-composer-banner-meta">
               <span className={`status-pill status-${composerTarget.kind === "none" ? "partial" : "ready"}`}>
@@ -1803,7 +1811,11 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               <span className="workflow-chip workflow-chip-active" data-testid="matrix-composer-mode-label">
                 {composerMode}
               </span>
-              <span className="reference-chip">{describeComposerTarget(composerTarget)}</span>
+              <span className="reference-chip">
+                {props.expertMode
+                  ? describeComposerTarget(composerTarget)
+                  : (composerTarget.kind === "none" ? ui.matrix.composerTargetMissing : ui.matrix.composerTargetSet)}
+              </span>
             </div>
           </div>
 
@@ -1853,7 +1865,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             </button>
           </div>
 
-          <div className="info-block">
+          <div className="info-block matrix-target-context">
             <p className="info-label">{ui.matrix.targetContextTitle}</p>
             <div className="detail-grid">
               <div>
@@ -1876,26 +1888,30 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                   data-testid="matrix-composer-room-name"
                 />
               </div>
-              <div>
-                <span>{ui.matrix.postId}</span>
-                <input
-                  type="text"
-                  value={selectedEventId ?? ""}
-                  onChange={(event) => setSelectedEventId(event.target.value.trim().length > 0 ? event.target.value : null)}
-                  placeholder={ui.matrix.postId}
-                  data-testid="matrix-composer-post-id"
-                />
-              </div>
-              <div>
-                <span>{ui.matrix.threadRootId}</span>
-                <input
-                  type="text"
-                  value={selectedThreadRootId ?? ""}
-                  onChange={(event) => setSelectedThreadRootId(event.target.value.trim().length > 0 ? event.target.value : null)}
-                  placeholder={ui.matrix.threadRootId}
-                  data-testid="matrix-composer-thread-root-id"
-                />
-              </div>
+              {props.expertMode ? (
+                <div>
+                  <span>{ui.matrix.postId}</span>
+                  <input
+                    type="text"
+                    value={selectedEventId ?? ""}
+                    onChange={(event) => setSelectedEventId(event.target.value.trim().length > 0 ? event.target.value : null)}
+                    placeholder={ui.matrix.postId}
+                    data-testid="matrix-composer-post-id"
+                  />
+                </div>
+              ) : null}
+              {props.expertMode ? (
+                <div>
+                  <span>{ui.matrix.threadRootId}</span>
+                  <input
+                    type="text"
+                    value={selectedThreadRootId ?? ""}
+                    onChange={(event) => setSelectedThreadRootId(event.target.value.trim().length > 0 ? event.target.value : null)}
+                    placeholder={ui.matrix.threadRootId}
+                    data-testid="matrix-composer-thread-root-id"
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
 

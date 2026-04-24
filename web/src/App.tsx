@@ -35,11 +35,15 @@ import {
   useLocalization,
 } from "./lib/localization.js";
 import {
+  fetchDiagnostics,
   fetchAuthSession,
   fetchHealth,
+  fetchJournalRecent,
   fetchModels,
   loginAdmin,
-  logoutAdmin
+  logoutAdmin,
+  type DiagnosticsResponse,
+  type JournalEntry
 } from "./lib/api.js";
 import {
   createInitialGitHubAuthState,
@@ -216,21 +220,23 @@ export default function App() {
       ? {
           telemetryHealthLoaded: "Backend-Health geladen",
           telemetryHealthLoadedDetail: (service: string, modeLabel: string, allowedModelCount: number) =>
-            `${service} meldet ${modeLabel} mit ${allowedModelCount} öffentlichen Modell(aliasen).`,
+            `${service} meldet ${modeLabel} mit ${allowedModelCount} öffentlichen Modellen.`,
           telemetryHealthFailed: "Backend-Health fehlgeschlagen",
           telemetryHealthFailedDetail: "Kein Zugriff auf /health",
           telemetryModelAliasLoaded: "Öffentlicher Modellalias geladen",
           telemetryModelAliasLoadedDetail: (alias: string) =>
-            `Alias ${alias} ausgewählt; Provider-Ziele bleiben backend-owned.`,
+            `Alias ${alias} ausgewählt; Provider-Ziele bleiben backend-seitig.`,
           telemetryModelListFailed: "Modellliste fehlgeschlagen",
           telemetryModelListFailedDetail: "Kein Zugriff auf /models",
+          telemetryDiagnosticsFailed: "Diagnostik nicht verfügbar",
+          telemetryDiagnosticsFailedDetail: "Kein Zugriff auf /diagnostics",
           chatGovernancePendingApproval: "Freigabe ausstehend",
           chatGovernanceExecutionRunning: "Ausführung läuft",
           chatGovernanceLastExecutionConfirmed: "Letzte Ausführung bestätigt",
           chatGovernanceProposalRejected: "Vorschlag verworfen",
           chatGovernanceLastExecutionFailed: "Letzte Ausführung fehlgeschlagen",
           chatGovernanceNoOpenProposal: "Kein offener Vorschlag",
-          sessionHeaderNote: "Wiederaufnehmbare Sessions pro Workspace",
+          sessionHeaderNote: "Wiederaufnehmbare Sessions pro Arbeitsbereich",
         }
       : {
           telemetryHealthLoaded: "Backend health loaded",
@@ -243,6 +249,8 @@ export default function App() {
             `Selected alias ${alias}; provider targets remain backend-owned.`,
           telemetryModelListFailed: "Model list failed",
           telemetryModelListFailedDetail: "Unable to reach /models",
+          telemetryDiagnosticsFailed: "Diagnostics unavailable",
+          telemetryDiagnosticsFailedDetail: "Unable to reach /diagnostics",
           chatGovernancePendingApproval: "Approval pending",
           chatGovernanceExecutionRunning: "Execution running",
           chatGovernanceLastExecutionConfirmed: "Last execution confirmed",
@@ -326,6 +334,8 @@ export default function App() {
     default?: boolean;
     available?: boolean;
   }>>([]);
+  const [runtimeDiagnostics, setRuntimeDiagnostics] = useState<DiagnosticsResponse | null>(null);
+  const [runtimeJournalEntries, setRuntimeJournalEntries] = useState<JournalEntry[]>([]);
   const [restoredSession] = useState(() => {
     if (typeof window === "undefined") {
       return false;
@@ -344,9 +354,11 @@ export default function App() {
     let cancelled = false;
 
     async function loadConsoleState() {
-      const [healthResult, modelsResult] = await Promise.allSettled([
+      const [healthResult, modelsResult, diagnosticsResult, journalResult] = await Promise.allSettled([
         fetchHealth(),
         fetchModels(),
+        fetchDiagnostics(),
+        fetchJournalRecent(),
       ]);
 
       if (cancelled) {
@@ -404,6 +416,29 @@ export default function App() {
                 : appText.telemetryModelListFailedDetail,
           }),
         );
+      }
+
+      if (diagnosticsResult.status === "fulfilled") {
+        setRuntimeDiagnostics(diagnosticsResult.value);
+      } else {
+        setRuntimeDiagnostics(null);
+        setTelemetry((current) =>
+          appendTelemetry(current, {
+            id: createId(),
+            kind: "warning",
+            label: appText.telemetryDiagnosticsFailed,
+            detail:
+              diagnosticsResult.reason instanceof Error
+                ? diagnosticsResult.reason.message
+                : appText.telemetryDiagnosticsFailedDetail,
+          }),
+        );
+      }
+
+      if (journalResult.status === "fulfilled") {
+        setRuntimeJournalEntries(journalResult.value.entries);
+      } else {
+        setRuntimeJournalEntries([]);
       }
     }
 
@@ -706,7 +741,7 @@ export default function App() {
   const reviewHasStale = reviewItems.some((item) => item.status === "stale");
   const reviewHasPending = reviewItems.some((item) => item.status === "pending_review");
   const reviewHasExecuting = reviewItems.some((item) => item.status === "approved");
-  const reviewHasRejected = reviewItems.some((item) => item.status === "rejected");
+  const reviewHasTerminal = reviewItems.some((item) => item.status === "rejected" || item.status === "failed");
 
   const reviewRows: StatusPanelRow[] = [
     { label: ui.review.openReviews, value: String(reviewItems.length) },
@@ -721,7 +756,7 @@ export default function App() {
               ? ui.review.approvalNeeded
               : reviewHasExecuting
                 ? ui.review.executing
-                : reviewHasRejected
+                : reviewHasTerminal
                   ? ui.review.terminalDeviation
                   : ui.review.ready,
     },
@@ -766,6 +801,48 @@ export default function App() {
       availableCount: availableModels.length,
       registrySourceLabel: modelRegistry.length > 0 ? "backend-policy" : ui.common.na,
     },
+    diagnostics: {
+      runtimeMode: runtimeDiagnostics?.runtimeMode ?? ui.settings.unavailable,
+      defaultPublicAlias: runtimeDiagnostics?.models.defaultPublicAlias ?? ui.settings.unavailable,
+      publicAliases: runtimeDiagnostics?.models.publicAliases.join(", ") || ui.settings.unavailable,
+      routingMode: runtimeDiagnostics?.routing.mode ?? ui.settings.unavailable,
+      fallbackEnabled: runtimeDiagnostics
+        ? (runtimeDiagnostics.routing.allowFallback ? ui.common.active : ui.common.inactive)
+        : ui.settings.unavailable,
+      failClosed: runtimeDiagnostics
+        ? (runtimeDiagnostics.routing.failClosed ? ui.common.active : ui.common.inactive)
+        : ui.settings.unavailable,
+      rateLimitEnabled: runtimeDiagnostics
+        ? (runtimeDiagnostics.rateLimit.enabled ? ui.common.active : ui.common.inactive)
+        : ui.settings.unavailable,
+      actionStoreMode: runtimeDiagnostics?.actionStore.mode ?? ui.settings.unavailable,
+      githubConfigured: runtimeDiagnostics
+        ? (runtimeDiagnostics.github.configured ? ui.settings.configured : ui.settings.notConfigured)
+        : ui.settings.unavailable,
+      matrixConfigured: runtimeDiagnostics
+        ? (runtimeDiagnostics.matrix.configured ? ui.settings.configured : ui.settings.notConfigured)
+        : ui.settings.unavailable,
+      generatedAt: runtimeDiagnostics?.diagnosticsGeneratedAt ?? ui.settings.unavailable,
+      uptimeMs: runtimeDiagnostics ? String(runtimeDiagnostics.uptimeMs) : ui.settings.unavailable,
+      chatRequests: runtimeDiagnostics ? String(runtimeDiagnostics.counters.chatRequests) : ui.settings.unavailable,
+      chatStreamStarted: runtimeDiagnostics ? String(runtimeDiagnostics.counters.chatStreamStarted) : ui.settings.unavailable,
+      chatStreamCompleted: runtimeDiagnostics ? String(runtimeDiagnostics.counters.chatStreamCompleted) : ui.settings.unavailable,
+      chatStreamError: runtimeDiagnostics ? String(runtimeDiagnostics.counters.chatStreamError) : ui.settings.unavailable,
+      chatStreamAborted: runtimeDiagnostics ? String(runtimeDiagnostics.counters.chatStreamAborted) : ui.settings.unavailable,
+      upstreamError: runtimeDiagnostics ? String(runtimeDiagnostics.counters.upstreamError) : ui.settings.unavailable,
+      rateLimitBlocked: runtimeDiagnostics
+        ? `chat:${runtimeDiagnostics.rateLimit.blockedByScope.chat}, auth:${runtimeDiagnostics.rateLimit.blockedByScope.auth_login}, gh-propose:${runtimeDiagnostics.rateLimit.blockedByScope.github_propose}, gh-exec:${runtimeDiagnostics.rateLimit.blockedByScope.github_execute}, matrix-exec:${runtimeDiagnostics.rateLimit.blockedByScope.matrix_execute}`
+        : ui.settings.unavailable,
+    },
+    journal: {
+      status: runtimeDiagnostics?.journal.enabled ? ui.settings.configured : ui.settings.journalUnavailable,
+      mode: runtimeDiagnostics?.journal.mode ?? ui.settings.unavailable,
+      retention: runtimeDiagnostics
+        ? `${runtimeDiagnostics.journal.recentCount}/${runtimeDiagnostics.journal.maxEntries}`
+        : ui.settings.unavailable,
+      recentCount: runtimeDiagnostics ? String(runtimeDiagnostics.journal.recentCount) : ui.settings.unavailable,
+      entries: runtimeJournalEntries.slice(0, 12)
+    }
   };
 
   const settingsRows: StatusPanelRow[] = [
@@ -845,7 +922,7 @@ export default function App() {
           return ui.review.executing;
         }
 
-        if (reviewHasRejected) {
+    if (reviewHasTerminal) {
           return ui.review.terminalDeviation;
         }
 
@@ -924,7 +1001,7 @@ export default function App() {
     };
   }, [chatPendingProposal?.status, reviewItems]);
   const workspaceName = ui.shell.workspaceTabs[mode].label;
-  const workspaceContextTitle = `${workspaceName} ${ui.shell.workspaceContextSuffix}`;
+  const nextStepTitle = ui.review.nextStepLabel;
   const diagnosticsTitle = `${ui.shell.workspaceTabs[mode].label} ${ui.shell.diagnosticsLabel}`;
   const showBeginnerDiagnostics = !expertMode && healthState.tone === "error";
   const diagnosticsAccessible = expertMode || showBeginnerDiagnostics;
@@ -960,7 +1037,7 @@ export default function App() {
           return "partial";
         }
 
-        if (reviewHasStale || reviewHasRejected) {
+    if (reviewHasStale || reviewHasTerminal) {
           return "error";
         }
 
@@ -1009,130 +1086,6 @@ export default function App() {
     githubContext.repositoryLabel,
     githubUnlocked,
     backendHealthy,
-    activeModelAlias,
-    matrixContext.connectionLabel,
-    matrixContext.approvalLabel,
-    matrixContext.scopeLabel,
-    matrixContext.summaryLabel,
-    mode,
-    reviewItems,
-  ]);
-
-  const currentStatusHeadline = useMemo(() => {
-    switch (mode) {
-      case "github":
-        if (!githubUnlocked) {
-          return githubAuthState.error ? ui.github.workspaceNoticeRepos : ui.auth.footerNote;
-        }
-
-        if (githubContext.connectionLabel !== ui.shell.statusReady) {
-          return githubContext.connectionLabel === ui.shell.statusError
-            ? ui.github.workspaceNoticeRepos
-            : ui.shell.healthCheckingDetail;
-        }
-
-        if (githubContext.approvalLabel !== ui.common.none) {
-          return ui.review.approvalNeeded;
-        }
-
-        if (githubContext.repositoryLabel === ui.github.noRepoSelected) {
-          return ui.github.nextStepChooseRepo;
-        }
-
-        return ui.github.intro;
-      case "matrix":
-        if (matrixContext.connectionLabel !== ui.shell.statusReady) {
-          return matrixContext.connectionLabel === ui.shell.statusError
-            ? ui.matrix.topicStatusUnavailable
-            : ui.shell.healthCheckingDetail;
-        }
-
-        if (matrixContext.scopeLabel === ui.matrix.scopeSelected) {
-          return ui.matrix.resolveScope;
-        }
-
-        if (matrixContext.approvalLabel !== ui.common.none) {
-          return ui.matrix.topicStatusApproval;
-        }
-
-        if (matrixContext.summaryLabel === ui.matrix.scopeSummaryUnavailable) {
-          return ui.matrix.scopeSummaryLoading;
-        }
-
-        return ui.matrix.scopeNotice;
-      case "review":
-        if (reviewItems.length === 0) {
-          return ui.review.emptyTitle;
-        }
-
-        if (reviewHasStale) {
-          return ui.review.warning;
-        }
-
-        if (reviewHasPending) {
-          return ui.review.approvalNeeded;
-        }
-
-        if (reviewHasExecuting) {
-          return ui.review.executing;
-        }
-
-        if (reviewHasRejected) {
-          return ui.review.terminalDeviation;
-        }
-
-        return ui.review.ready;
-      case "settings":
-        if (backendHealthy === false) {
-          return ui.shell.healthUnavailableDetail;
-        }
-
-        if (githubAuthState.error) {
-          return ui.github.workspaceNoticeRepos;
-        }
-
-        if (githubAuthState.status === "loading") {
-          return ui.auth.statusChecking;
-        }
-
-        if (!githubUnlocked) {
-          return ui.shell.accountLoginRequired;
-        }
-
-        if (matrixContext.connectionLabel === ui.shell.statusError) {
-          return ui.matrix.topicStatusUnavailable;
-        }
-
-        if (!activeModelAlias) {
-          return ui.settings.modelChoiceNote;
-        }
-
-        return ui.settings.connectionTruthNote;
-      default:
-        if (chatPendingProposal?.status === "pending") {
-          return ui.chat.composerLocked.approval;
-        }
-
-        if (chatPendingProposal?.status === "executing") {
-          return ui.chat.composerLocked.execution;
-        }
-
-        if (chatLatestReceipt?.outcome === "failed" || chatLatestReceipt?.outcome === "unverifiable") {
-          return ui.shell.statusError;
-        }
-
-        return backendHealthy === false ? ui.shell.healthUnavailableDetail : backendHealthy === true ? ui.shell.healthReadyDetail : ui.shell.healthCheckingDetail;
-    }
-  }, [
-    backendHealthy,
-    chatLatestReceipt?.outcome,
-    chatPendingProposal?.status,
-    githubAuthState.error,
-    githubAuthState.status,
-    githubContext.approvalLabel,
-    githubContext.connectionLabel,
-    githubContext.repositoryLabel,
-    githubUnlocked,
     activeModelAlias,
     matrixContext.connectionLabel,
     matrixContext.approvalLabel,
@@ -1191,7 +1144,7 @@ export default function App() {
           return ui.review.executing;
         }
 
-        if (reviewHasRejected) {
+    if (reviewHasTerminal) {
           return ui.review.terminalDeviation;
         }
 
@@ -1286,7 +1239,7 @@ export default function App() {
                   ? ui.review.approvalNeeded
                   : reviewHasExecuting
                     ? ui.review.executing
-                    : reviewHasRejected
+                    : reviewHasTerminal
                       ? ui.review.terminalDeviation
                       : ui.review.ready,
           },
@@ -1561,6 +1514,8 @@ export default function App() {
               className={locale === "en" ? "secondary-button shell-language-button shell-language-button-active" : "secondary-button shell-language-button"}
               onClick={() => setLocale("en")}
               aria-pressed={locale === "en"}
+              aria-label={locale === "de" ? "Sprache: Englisch" : "Language: English"}
+              data-testid="locale-en"
             >
               {ui.shell.languageOptionEnglish}
             </button>
@@ -1569,6 +1524,8 @@ export default function App() {
               className={locale === "de" ? "secondary-button shell-language-button shell-language-button-active" : "secondary-button shell-language-button"}
               onClick={() => setLocale("de")}
               aria-pressed={locale === "de"}
+              aria-label={locale === "de" ? "Sprache: Deutsch" : "Language: German"}
+              data-testid="locale-de"
             >
               {ui.shell.languageOptionGerman}
             </button>
@@ -1579,12 +1536,6 @@ export default function App() {
 
       <section className="console-layout">
         <aside className="workspace-sidebar shell-left-rail">
-          <ShellCard variant="rail" className="shell-left-brand">
-            <p className="app-kicker">{ui.shell.workspaceConsoleKicker}</p>
-            <strong>{ui.shell.workspaceConsoleTitle}</strong>
-            <MutedSystemCopy>{ui.shell.workspaceConsoleNote}</MutedSystemCopy>
-          </ShellCard>
-
           <ShellCard variant="rail" className="shell-nav-card">
             <SectionLabel>{ui.shell.workspacesLabel}</SectionLabel>
             <nav className="sidebar-nav" aria-label={ui.shell.workspacesLabel}>
@@ -1662,13 +1613,8 @@ export default function App() {
         <section className="console-main shell-center-main">
           <ShellCard variant="base" className="workspace-frame-card">
             <header className="workspace-frame-header">
-              <div>
-                <SectionLabel>{workspaceName}</SectionLabel>
-                <h2>{activeSession?.title ?? ui.shell.currentSessionFallback}</h2>
-              </div>
-              <StatusBadge tone={statusToneForBadge}>{currentStatusBadge}</StatusBadge>
+              <SectionLabel>{workspaceName}</SectionLabel>
             </header>
-            <MutedSystemCopy className="workspace-frame-note">{currentStatusHeadline}</MutedSystemCopy>
             <div className="workspace-frame-body">{workspaceSurface}</div>
           </ShellCard>
         </section>
@@ -1694,19 +1640,6 @@ export default function App() {
             ) : null}
           </TruthRailSection>
 
-          <TruthRailSection
-            title={ui.shell.sessionLabel}
-            testId="truth-rail-session"
-            badge={<StatusBadge tone={statusToneForBadge}>{getSessionStatusLabel(locale, activeSession?.status ?? "draft")}</StatusBadge>}
-          >
-            <p className="truth-rail-keyline">{activeSession?.title ?? ui.shell.noActiveSession}</p>
-            <MutedSystemCopy>
-              {ui.shell.workspacesLabel}: {workspaceName}
-              {activeSession?.updatedAt ? ` · ${ui.sessionList.updated} ${new Date(activeSession.updatedAt).toLocaleString()}` : ""}
-            </MutedSystemCopy>
-            {expertMode && activeSession?.id ? <MutedSystemCopy>{ui.shell.sessionIdPrefix}: {activeSession.id}</MutedSystemCopy> : null}
-          </TruthRailSection>
-
           {approvalSummary.hasApprovals ? (
             <TruthRailSection
               title={ui.shell.pendingApprovalsTitle}
@@ -1723,8 +1656,8 @@ export default function App() {
           ) : null}
 
           <TruthRailSection
-            title={workspaceContextTitle}
-            testId="truth-rail-workspace-context"
+            title={nextStepTitle}
+            testId="truth-rail-next-step"
             badge={<StatusBadge tone={statusToneForBadge}>{currentStatusBadge}</StatusBadge>}
           >
             <div className="truth-rail-pairs">

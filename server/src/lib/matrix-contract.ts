@@ -20,6 +20,7 @@ export type MatrixErrorCode =
   | "matrix_plan_not_found"
   | "matrix_plan_expired"
   | "matrix_plan_already_executed"
+  | "matrix_rate_limited"
   | "matrix_stale_plan"
   | "matrix_verification_failed"
   | "matrix_internal_error";
@@ -118,6 +119,7 @@ const MATRIX_ERROR_MESSAGES: Record<MatrixErrorCode, string> = {
   matrix_plan_not_found: "Matrix plan was not found",
   matrix_plan_expired: "Matrix plan expired",
   matrix_plan_already_executed: "Matrix plan was already executed",
+  matrix_rate_limited: "Matrix rate limit was hit",
   matrix_stale_plan: "Matrix plan is stale and must be refreshed",
   matrix_verification_failed: "Matrix verification failed",
   matrix_internal_error: "Matrix backend failed"
@@ -143,6 +145,7 @@ const MATRIX_ERROR_STATUS: Record<MatrixErrorCode, number> = {
   matrix_plan_not_found: 404,
   matrix_plan_expired: 410,
   matrix_plan_already_executed: 409,
+  matrix_rate_limited: 429,
   matrix_stale_plan: 409,
   matrix_verification_failed: 500,
   matrix_internal_error: 500

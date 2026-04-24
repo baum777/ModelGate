@@ -11,18 +11,26 @@ type VercelConfig = {
   }>;
 };
 
+function assertIncludeFiles(entry: string | string[] | undefined) {
+  assert.ok(entry, "includeFiles must be configured");
+
+  if (Array.isArray(entry)) {
+    assert.deepEqual(entry, [
+      "config/llm-router.yml",
+      "config/model-capabilities.yml"
+    ]);
+    return;
+  }
+
+  assert.equal(entry, "config/*.yml");
+}
+
 test("vercel config bundles runtime-loaded config files for both api entrypoints", () => {
   const vercelConfigPath = fileURLToPath(new URL("../../vercel.json", import.meta.url));
   const vercelConfig = JSON.parse(fs.readFileSync(vercelConfigPath, "utf8")) as VercelConfig;
 
   assert.equal(vercelConfig.functions?.["api/[...path].ts"]?.maxDuration, 60);
-  assert.deepEqual(vercelConfig.functions?.["api/[...path].ts"]?.includeFiles, [
-    "config/llm-router.yml",
-    "config/model-capabilities.yml"
-  ]);
+  assertIncludeFiles(vercelConfig.functions?.["api/[...path].ts"]?.includeFiles);
   assert.equal(vercelConfig.functions?.["api/matrix/[...path].ts"]?.maxDuration, 60);
-  assert.deepEqual(vercelConfig.functions?.["api/matrix/[...path].ts"]?.includeFiles, [
-    "config/llm-router.yml",
-    "config/model-capabilities.yml"
-  ]);
+  assertIncludeFiles(vercelConfig.functions?.["api/matrix/[...path].ts"]?.includeFiles);
 });
