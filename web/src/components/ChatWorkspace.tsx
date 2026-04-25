@@ -26,6 +26,7 @@ import {
   ProposalCard,
 } from "./ApprovalPrimitives.js";
 import { MarkdownMessage, hasRichTextContent } from "./MarkdownMessage.js";
+import { GuideOverlay, getWorkspaceGuide } from "./GuideOverlay.js";
 import { SectionLabel, ShellCard, StatusBadge } from "./ShellPrimitives.js";
 import {
   BACKEND_TRUTH_UNAVAILABLE,
@@ -660,6 +661,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             </select>
           </div>
           <div className="runtime-actions chat-toolbar-actions">
+            <GuideOverlay content={getWorkspaceGuide(locale, "chat")} testId="guide-chat" />
             {executionRunning ? (
               <button type="button" className="ghost-button" onClick={stopExecution}>
                 {ui.chat.stopExecution}

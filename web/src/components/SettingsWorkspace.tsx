@@ -1,6 +1,7 @@
 import React from "react";
 import { useLocalization } from "../lib/localization.js";
 import type { JournalEntry } from "../lib/api.js";
+import { GuideOverlay, getWorkspaceGuide } from "./GuideOverlay.js";
 
 export type DiagnosticEntry = {
   kind: "info" | "warning" | "error";
@@ -75,7 +76,7 @@ export function SettingsWorkspace({
   onClearDiagnostics,
   truthSnapshot,
 }: SettingsWorkspaceProps) {
-  const { copy: ui } = useLocalization();
+  const { locale, copy: ui } = useLocalization();
 
   return (
     <section className="workspace-panel settings-workspace" data-testid="settings-workspace">
@@ -83,7 +84,10 @@ export function SettingsWorkspace({
         <div>
           <p className="status-pill status-partial">{ui.settings.heroStatus}</p>
           <h1>{ui.settings.title}</h1>
-          <p className="hero-copy">{ui.settings.intro}</p>
+          {expertMode ? <p className="hero-copy">{ui.settings.intro}</p> : null}
+          <div className="workspace-hero-actions">
+            <GuideOverlay content={getWorkspaceGuide(locale, "settings")} testId="guide-settings" />
+          </div>
         </div>
       </section>
 

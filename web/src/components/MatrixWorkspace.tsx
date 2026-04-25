@@ -43,6 +43,7 @@ import {
   mergeMetadataRows,
 } from "../lib/governance-metadata.js";
 import { useLocalization, type Locale } from "../lib/localization.js";
+import { GuideOverlay, getWorkspaceGuide } from "./GuideOverlay.js";
 
 type WorkflowStatus = "loading" | "partial" | "ready" | "error";
 type LoadStatus = "idle" | "loading" | "ready" | "error";
@@ -1084,31 +1085,38 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                   : ui.matrix.topicStatusLoading}
           </p>{" "}
           <h1>{ui.matrix.title}</h1>{" "}
-          <p className="hero-copy">
-            {ui.matrix.intro}
-          </p>{" "}
+          {props.expertMode ? (
+            <p className="hero-copy">
+              {ui.matrix.intro}
+            </p>
+          ) : null}{" "}
+          <div className="workspace-hero-actions">
+            <GuideOverlay content={getWorkspaceGuide(locale, "matrix")} testId="guide-matrix" />
+          </div>{" "}
           {props.restoredSession ? (
             <div className="restored-banner" data-testid="matrix-restored-banner">
               RESTORED_SESSION: {ui.matrix.scopeNotice}
             </div>
           ) : null}
-          <div className="chip-row" aria-label={ui.matrix.scopeNotice}>
-            <span className="workflow-chip workflow-chip-complete">{ui.matrix.scopeTitle}</span>
-            <span className="workflow-chip workflow-chip-complete">{ui.matrix.scopeSummaryTitle}</span>
-            <span className="workflow-chip workflow-chip-complete">{ui.matrix.scopePreview}</span>
-            <span className={`workflow-chip ${topicPlan ? "workflow-chip-active" : "workflow-chip-idle"}`}>
-              {ui.matrix.topicTitle}
-            </span>
-            <span className={`workflow-chip ${topicPlan && !topicApprovalPending ? "workflow-chip-active" : "workflow-chip-idle"}`}>
-              {ui.matrix.topicStatusApproval}
-            </span>
-            <span className={`workflow-chip ${topicExecution ? "workflow-chip-complete" : "workflow-chip-idle"}`}>
-              {ui.approval.executionSection}
-            </span>
-            <span className={`workflow-chip ${topicVerification ? "workflow-chip-complete" : "workflow-chip-idle"}`}>
-              {ui.github.verifyResult}
-            </span>
-          </div>
+          {props.expertMode ? (
+            <div className="chip-row" aria-label={ui.matrix.scopeNotice}>
+              <span className="workflow-chip workflow-chip-complete">{ui.matrix.scopeTitle}</span>
+              <span className="workflow-chip workflow-chip-complete">{ui.matrix.scopeSummaryTitle}</span>
+              <span className="workflow-chip workflow-chip-complete">{ui.matrix.scopePreview}</span>
+              <span className={`workflow-chip ${topicPlan ? "workflow-chip-active" : "workflow-chip-idle"}`}>
+                {ui.matrix.topicTitle}
+              </span>
+              <span className={`workflow-chip ${topicPlan && !topicApprovalPending ? "workflow-chip-active" : "workflow-chip-idle"}`}>
+                {ui.matrix.topicStatusApproval}
+              </span>
+              <span className={`workflow-chip ${topicExecution ? "workflow-chip-complete" : "workflow-chip-idle"}`}>
+                {ui.approval.executionSection}
+              </span>
+              <span className={`workflow-chip ${topicVerification ? "workflow-chip-complete" : "workflow-chip-idle"}`}>
+                {ui.github.verifyResult}
+              </span>
+            </div>
+          ) : null}
         </div>{" "}
         <aside className="workspace-summary-card">
           {" "}

@@ -237,6 +237,9 @@ export default function App() {
           chatGovernanceLastExecutionFailed: "Letzte Ausführung fehlgeschlagen",
           chatGovernanceNoOpenProposal: "Kein offener Vorschlag",
           sessionHeaderNote: "Wiederaufnehmbare Sessions pro Arbeitsbereich",
+          processGoReview: "Review öffnen",
+          processGoWorkspace: "Workspace öffnen",
+          processCreateSession: "Neue Session",
         }
       : {
           telemetryHealthLoaded: "Backend health loaded",
@@ -258,6 +261,9 @@ export default function App() {
           chatGovernanceLastExecutionFailed: "Last execution failed",
           chatGovernanceNoOpenProposal: "No open proposal",
           sessionHeaderNote: "Resumable sessions per workspace",
+          processGoReview: "Open review",
+          processGoWorkspace: "Open workspace",
+          processCreateSession: "New session",
         },
     [locale],
   );
@@ -1551,7 +1557,7 @@ export default function App() {
                   <WorkspaceIcon mode={workspaceMode} />
                   <span>
                     <strong>{ui.shell.workspaceTabs[workspaceMode].label}</strong>
-                    <small>{ui.shell.workspaceTabs[workspaceMode].description}</small>
+                    {expertMode ? <small>{ui.shell.workspaceTabs[workspaceMode].description}</small> : null}
                   </span>
                 </button>
               ))}
@@ -1570,6 +1576,7 @@ export default function App() {
               <MutedSystemCopy className="shell-session-id">{ui.shell.sessionIdPrefix}: {activeSession.id}</MutedSystemCopy>
             ) : null}
 
+            {expertMode || mode === "github" || githubUnlocked || githubAuthState.error ? (
             <div className="shell-account-block">
               <SectionLabel>{ui.shell.accountLabel}</SectionLabel>
               <div className="shell-account-row">
@@ -1591,6 +1598,7 @@ export default function App() {
               </div>
               {githubAuthState.error ? <MutedSystemCopy>{githubAuthState.error}</MutedSystemCopy> : null}
             </div>
+            ) : null}
           </ShellCard>
 
           <SessionList
@@ -1601,7 +1609,8 @@ export default function App() {
             onSelect={(sessionId) => handleWorkspaceSessionSelect(sessionWorkspace, sessionId)}
             onArchive={(sessionId) => handleWorkspaceSessionArchive(sessionWorkspace, sessionId)}
             onDelete={(sessionId) => handleWorkspaceSessionDelete(sessionWorkspace, sessionId)}
-            headerNote={appText.sessionHeaderNote}
+            headerNote={expertMode ? appText.sessionHeaderNote : undefined}
+            showManagement={expertMode}
           />
         </aside>
 
@@ -1617,7 +1626,9 @@ export default function App() {
             testId="truth-rail-health"
             badge={<StatusBadge tone={healthState.tone}>{healthState.label}</StatusBadge>}
           >
-            <MutedSystemCopy>{healthState.detail}</MutedSystemCopy>
+            {expertMode || healthState.tone !== "ready" ? (
+              <MutedSystemCopy>{healthState.detail}</MutedSystemCopy>
+            ) : null}
             {expertMode ? (
               <div className="truth-rail-pairs">
                 <div>
@@ -1632,20 +1643,22 @@ export default function App() {
             ) : null}
           </TruthRailSection>
 
-          <TruthRailSection
-            title={ui.shell.pendingApprovalsTitle}
-            testId="truth-rail-approvals"
-            badge={<StatusBadge tone={approvalSummary.stale > 0 ? "error" : approvalSummary.pending > 0 ? "partial" : "muted"}>{approvalSummary.pending}</StatusBadge>}
-          >
-            <p className="truth-rail-keyline">
-              {ui.shell.pendingApprovalsSummary(approvalSummary.pending, approvalSummary.stale)}
-            </p>
-            <MutedSystemCopy>
-              {approvalSummary.hasApprovals
-                ? approvalSummary.chatPending > 0 ? ui.shell.pendingApprovalsChat : ui.shell.pendingApprovalsSeparate
-                : ui.common.none}
-            </MutedSystemCopy>
-          </TruthRailSection>
+          {approvalSummary.hasApprovals || expertMode ? (
+            <TruthRailSection
+              title={ui.shell.pendingApprovalsTitle}
+              testId="truth-rail-approvals"
+              badge={<StatusBadge tone={approvalSummary.stale > 0 ? "error" : approvalSummary.pending > 0 ? "partial" : "muted"}>{approvalSummary.pending}</StatusBadge>}
+            >
+              <p className="truth-rail-keyline">
+                {ui.shell.pendingApprovalsSummary(approvalSummary.pending, approvalSummary.stale)}
+              </p>
+              {approvalSummary.hasApprovals ? (
+                <MutedSystemCopy>
+                  {approvalSummary.chatPending > 0 ? ui.shell.pendingApprovalsChat : ui.shell.pendingApprovalsSeparate}
+                </MutedSystemCopy>
+              ) : null}
+            </TruthRailSection>
+          ) : null}
 
           <TruthRailSection
             title={nextStepTitle}
@@ -1653,7 +1666,7 @@ export default function App() {
             badge={<StatusBadge tone={statusToneForBadge}>{currentStatusBadge}</StatusBadge>}
           >
             <div className="truth-rail-pairs">
-              {currentRows.slice(0, 2).map((row) => (
+              {currentRows.slice(0, expertMode ? 2 : 1).map((row) => (
                 <div key={row.label}>
                   <span>{row.label}</span>
                   <strong>{row.value}</strong>
@@ -1661,8 +1674,24 @@ export default function App() {
               ))}
             </div>
             <MutedSystemCopy>{currentHelperText}</MutedSystemCopy>
+            <div className="truth-rail-actions">
+              {approvalSummary.hasApprovals && mode !== "review" ? (
+                <button type="button" className="secondary-button" onClick={() => handleWorkspaceTabSelect("review")}>
+                  {appText.processGoReview}
+                </button>
+              ) : mode === "review" && reviewItems.length === 0 ? (
+                <button type="button" className="secondary-button" onClick={() => handleWorkspaceTabSelect(workspaceState.activeWorkspace)}>
+                  {appText.processGoWorkspace}
+                </button>
+              ) : isSessionWorkspace(mode) ? (
+                <button type="button" className="secondary-button" onClick={() => handleWorkspaceSessionCreate(sessionWorkspace)}>
+                  {appText.processCreateSession}
+                </button>
+              ) : null}
+            </div>
           </TruthRailSection>
 
+          {diagnosticsAccessible || expertMode ? (
           <TruthRailSection title={ui.shell.diagnosticsLabel} testId="truth-rail-diagnostics">
             <MutedSystemCopy>
               {diagnosticsAccessible ? ui.shell.diagnosticsAvailable : ui.shell.diagnosticsHidden}
@@ -1692,6 +1721,7 @@ export default function App() {
               {currentExpertChildren}
             </DiagnosticsDrawer>
           </TruthRailSection>
+          ) : null}
         </aside>
       </section>
     </main>

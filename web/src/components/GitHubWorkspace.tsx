@@ -30,6 +30,7 @@ import {
   mergeMetadataRows,
 } from "../lib/governance-metadata.js";
 import { useLocalization, type Locale } from "../lib/localization.js";
+import { GuideOverlay, getWorkspaceGuide } from "./GuideOverlay.js";
 
 export type GitHubWorkspaceStatus = {
   repositoryLabel: string;
@@ -915,9 +916,14 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             {hasSelection ? ui.github.readOnlyActive : ui.github.nextStepChooseRepo}
           </p>
           <h1>{ui.github.title}</h1>
-          <p className="hero-copy">
-            {ui.github.intro}
-          </p>
+          {props.expertMode ? (
+            <p className="hero-copy">
+              {ui.github.intro}
+            </p>
+          ) : null}
+          <div className="workspace-hero-actions">
+            <GuideOverlay content={getWorkspaceGuide(locale, "github")} testId="guide-github" />
+          </div>
         </div>
 
         <aside className="mini-panel github-mini-panel">
@@ -988,12 +994,14 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             </p>
           </div>
 
-          <ol className="guided-steps">
-            <li>{ui.github.nextStepChooseRepo}</li>
-            <li>{ui.github.nextStepAnalysis}</li>
-            <li>{ui.github.nextStepProposal}</li>
-            <li>{ui.review.approvalNeeded}</li>
-          </ol>
+          {props.expertMode ? (
+            <ol className="guided-steps">
+              <li>{ui.github.nextStepChooseRepo}</li>
+              <li>{ui.github.nextStepAnalysis}</li>
+              <li>{ui.github.nextStepProposal}</li>
+              <li>{ui.review.approvalNeeded}</li>
+            </ol>
+          ) : null}
 
           <div className="action-row">
             <button

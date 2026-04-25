@@ -4,6 +4,7 @@ import {
   ExecutionReceiptCard,
   ProposalCard,
 } from "./ApprovalPrimitives.js";
+import { GuideOverlay, getWorkspaceGuide } from "./GuideOverlay.js";
 import { StatusPanel } from "./StatusPanel.js";
 import { getReviewStatusLabel, useLocalization, type Locale } from "../lib/localization.js";
 
@@ -130,7 +131,10 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
         <div>
           <p className="status-pill status-partial">{ui.review.heroStatus}</p>
           <h1>{ui.review.title}</h1>
-          <p className="hero-copy">{ui.review.intro}</p>
+          {expertMode ? <p className="hero-copy">{ui.review.intro}</p> : null}
+          <div className="workspace-hero-actions">
+            <GuideOverlay content={getWorkspaceGuide(locale, "review")} testId="guide-review" />
+          </div>
         </div>
       </section>
 
@@ -151,7 +155,7 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
           },
         ]}
         safetyTitle={ui.review.panelTitle}
-        safetyText={ui.review.intro}
+        safetyText={expertMode ? ui.review.intro : ui.review.emptyBody}
         expertMode={expertMode}
         expertRows={[
           {
@@ -222,7 +226,7 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
                 testId="review-primary-proposal"
                 title={primaryItem.title}
                 summary={primaryItem.summary}
-                consequence={ui.review.intro}
+                consequence={expertMode ? ui.review.intro : ui.review.approvalNeeded}
                 statusLabel={primaryItem.stale ? ui.review.warning : ui.review.approvalNeeded}
                 statusTone={primaryItem.stale ? "error" : "partial"}
                 metadata={primaryMetadata}
