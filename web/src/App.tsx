@@ -1576,7 +1576,7 @@ export default function App() {
               <MutedSystemCopy className="shell-session-id">{ui.shell.sessionIdPrefix}: {activeSession.id}</MutedSystemCopy>
             ) : null}
 
-            {expertMode || mode === "github" || githubUnlocked || githubAuthState.error ? (
+            {expertMode || mode === "github" || githubUnlocked ? (
             <div className="shell-account-block">
               <SectionLabel>{ui.shell.accountLabel}</SectionLabel>
               <div className="shell-account-row">

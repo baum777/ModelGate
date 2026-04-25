@@ -2801,8 +2801,8 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 }
 
 .governed-thread {
-  min-height: 52vh;
-  max-height: 62vh;
+  min-height: clamp(150px, 24vh, 320px);
+  max-height: 50vh;
 }
 
 .governed-composer {
@@ -3292,5 +3292,132 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 
   .guide-overlay-header .ghost-button {
     align-self: flex-start;
+  }
+}
+
+@media (min-width: 1181px) and (max-width: 1280px) {
+  .app-shell {
+    padding: 20px;
+  }
+
+  .global-header-shell {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .global-header-shell .brand-block {
+    display: flex;
+    align-items: baseline;
+    flex-direction: row;
+  }
+
+  .console-layout {
+    grid-template-columns: minmax(210px, 236px) minmax(0, 1fr) minmax(252px, 286px);
+    gap: 12px;
+  }
+
+  .workspace-sidebar,
+  .workspace-context {
+    position: sticky;
+    top: 16px;
+  }
+
+  .shell-card,
+  .truth-rail-section {
+    padding: 12px;
+  }
+
+  .workspace-tab-vertical {
+    padding: 9px;
+  }
+
+  .truth-rail-section-header {
+    gap: 6px;
+  }
+
+  .truth-rail-section-header .shell-badge {
+    max-width: 52%;
+  }
+
+  .chat-toolbar-controls {
+    grid-template-columns: minmax(0, 1fr) minmax(130px, 180px) auto;
+  }
+
+  .chat-toolbar-actions,
+  .chat-toolbar-actions .guide-cta {
+    width: auto;
+    max-width: 92px;
+  }
+
+  .governed-thread {
+    min-height: 80px;
+  }
+
+  .governed-chat-card {
+    min-height: 0;
+  }
+
+  .governed-composer textarea {
+    height: 96px;
+    min-height: 96px;
+  }
+}
+
+/* Next UX gate: keep non-chat workspaces action-led instead of hero-led. */
+.github-workspace > .workspace-hero,
+.matrix-workspace > .matrix-hero,
+.review-workspace > .workspace-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--shell-border-soft);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.github-workspace > .workspace-hero h1,
+.matrix-workspace > .matrix-hero h1,
+.review-workspace > .workspace-hero h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.15;
+}
+
+.github-workspace > .workspace-hero .status-pill,
+.matrix-workspace > .matrix-hero .status-pill,
+.review-workspace > .workspace-hero .status-pill {
+  margin: 0 0 4px;
+}
+
+.github-workspace > .workspace-hero .hero-copy,
+.matrix-workspace > .matrix-hero .hero-copy,
+.review-workspace > .workspace-hero .hero-copy {
+  display: none;
+}
+
+.github-workspace > .workspace-hero .workspace-hero-actions,
+.matrix-workspace > .matrix-hero .workspace-hero-actions,
+.review-workspace > .workspace-hero .workspace-hero-actions {
+  margin-top: 0;
+  flex: 0 0 auto;
+}
+
+.review-workspace .status-panel-card {
+  gap: 10px;
+}
+
+.review-workspace .empty-state-card h2 {
+  font-size: clamp(1.35rem, 2.6vw, 2rem);
+  line-height: 1.16;
+}
+
+@media (max-width: 720px) {
+  .github-workspace > .workspace-hero,
+  .matrix-workspace > .matrix-hero,
+  .review-workspace > .workspace-hero {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
