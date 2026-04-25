@@ -3364,8 +3364,10 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 
 /* Next UX gate: keep non-chat workspaces action-led instead of hero-led. */
 .github-workspace > .workspace-hero,
+.github-admin-login > .workspace-hero,
 .matrix-workspace > .matrix-hero,
-.review-workspace > .workspace-hero {
+.review-workspace > .workspace-hero,
+.settings-workspace > .workspace-hero {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3378,28 +3380,36 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 }
 
 .github-workspace > .workspace-hero h1,
+.github-admin-login > .workspace-hero h1,
 .matrix-workspace > .matrix-hero h1,
-.review-workspace > .workspace-hero h1 {
+.review-workspace > .workspace-hero h1,
+.settings-workspace > .workspace-hero h1 {
   margin: 0;
   font-size: 1.35rem;
   line-height: 1.15;
 }
 
 .github-workspace > .workspace-hero .status-pill,
+.github-admin-login > .workspace-hero .status-pill,
 .matrix-workspace > .matrix-hero .status-pill,
-.review-workspace > .workspace-hero .status-pill {
+.review-workspace > .workspace-hero .status-pill,
+.settings-workspace > .workspace-hero .status-pill {
   margin: 0 0 4px;
 }
 
 .github-workspace > .workspace-hero .hero-copy,
+.github-admin-login > .workspace-hero .hero-copy,
 .matrix-workspace > .matrix-hero .hero-copy,
-.review-workspace > .workspace-hero .hero-copy {
+.review-workspace > .workspace-hero .hero-copy,
+.settings-workspace > .workspace-hero .hero-copy {
   display: none;
 }
 
 .github-workspace > .workspace-hero .workspace-hero-actions,
+.github-admin-login > .workspace-hero .workspace-hero-actions,
 .matrix-workspace > .matrix-hero .workspace-hero-actions,
-.review-workspace > .workspace-hero .workspace-hero-actions {
+.review-workspace > .workspace-hero .workspace-hero-actions,
+.settings-workspace > .workspace-hero .workspace-hero-actions {
   margin-top: 0;
   flex: 0 0 auto;
 }
@@ -3413,10 +3423,21 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
   line-height: 1.16;
 }
 
+.settings-workspace .settings-grid {
+  grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
+  align-items: start;
+}
+
+.settings-workspace .workspace-card {
+  border-radius: 8px;
+}
+
 @media (max-width: 720px) {
   .github-workspace > .workspace-hero,
+  .github-admin-login > .workspace-hero,
   .matrix-workspace > .matrix-hero,
-  .review-workspace > .workspace-hero {
+  .review-workspace > .workspace-hero,
+  .settings-workspace > .workspace-hero {
     align-items: stretch;
     flex-direction: column;
   }

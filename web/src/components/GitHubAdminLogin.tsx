@@ -2,6 +2,7 @@ import React from "react";
 import type { FormEvent } from "react";
 import type { GitHubAuthState } from "../lib/github-auth.js";
 import { useLocalization } from "../lib/localization.js";
+import { GuideOverlay, getWorkspaceGuide } from "./GuideOverlay.js";
 
 type GitHubAdminLoginProps = {
   authState: GitHubAuthState;
@@ -16,7 +17,7 @@ export function GitHubAdminLogin({
   onPasswordChange,
   onSubmit
 }: GitHubAdminLoginProps) {
-  const { copy: ui } = useLocalization();
+  const { locale, copy: ui } = useLocalization();
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -36,6 +37,9 @@ export function GitHubAdminLogin({
           </p>
           <h1>{ui.auth.title}</h1>
           <p className="hero-copy">{ui.auth.intro}</p>
+          <div className="workspace-hero-actions">
+            <GuideOverlay content={getWorkspaceGuide(locale, "github")} testId="guide-github" />
+          </div>
         </div>
       </section>
 

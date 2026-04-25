@@ -129,45 +129,53 @@ export function SettingsWorkspace({
               <span>{ui.settings.githubConnection}</span>
               <strong>{truthSnapshot.github.connectionLabel}</strong>
             </div>
-            <div>
-              <span>{ui.settings.githubAuthority}</span>
-              <strong>{truthSnapshot.github.accessLabel}</strong>
-            </div>
-            <div>
-              <span>{ui.settings.githubScope}</span>
-              <strong>{truthSnapshot.github.repositoryLabel}</strong>
-            </div>
+            {expertMode ? (
+              <>
+                <div>
+                  <span>{ui.settings.githubAuthority}</span>
+                  <strong>{truthSnapshot.github.accessLabel}</strong>
+                </div>
+                <div>
+                  <span>{ui.settings.githubScope}</span>
+                  <strong>{truthSnapshot.github.repositoryLabel}</strong>
+                </div>
+              </>
+            ) : null}
             <div>
               <span>{ui.settings.matrixIdentity}</span>
               <strong>{truthSnapshot.matrix.identityLabel}</strong>
             </div>
-            <div>
-              <span>{ui.settings.matrixConnection}</span>
-              <strong>{truthSnapshot.matrix.connectionLabel}</strong>
-            </div>
-            <div>
-              <span>{ui.settings.matrixHomeserver}</span>
-              <strong>{truthSnapshot.matrix.homeserverLabel}</strong>
-            </div>
-            <div>
-              <span>{ui.settings.matrixScope}</span>
-              <strong>{truthSnapshot.matrix.scopeLabel}</strong>
-            </div>
-            <div>
-              <span>{ui.settings.chatIdentity}</span>
-              <strong>{ui.settings.chatIdentity}</strong>
-            </div>
-            <div>
-              <span>{ui.settings.chatScope}</span>
-              <strong>{ui.settings.chatScope}</strong>
-            </div>
-            <div>
-              <span>{ui.settings.chatAuthority}</span>
-              <strong>{ui.settings.chatAuthority}</strong>
-            </div>
+            {expertMode ? (
+              <>
+                <div>
+                  <span>{ui.settings.matrixConnection}</span>
+                  <strong>{truthSnapshot.matrix.connectionLabel}</strong>
+                </div>
+                <div>
+                  <span>{ui.settings.matrixHomeserver}</span>
+                  <strong>{truthSnapshot.matrix.homeserverLabel}</strong>
+                </div>
+                <div>
+                  <span>{ui.settings.matrixScope}</span>
+                  <strong>{truthSnapshot.matrix.scopeLabel}</strong>
+                </div>
+                <div>
+                  <span>{ui.settings.chatIdentity}</span>
+                  <strong>{ui.settings.chatIdentity}</strong>
+                </div>
+                <div>
+                  <span>{ui.settings.chatScope}</span>
+                  <strong>{ui.settings.chatScope}</strong>
+                </div>
+                <div>
+                  <span>{ui.settings.chatAuthority}</span>
+                  <strong>{ui.settings.chatAuthority}</strong>
+                </div>
+              </>
+            ) : null}
           </div>
           <p className="muted-copy">{truthSnapshot.backend.detail}</p>
-          <p className="muted-copy">{ui.settings.backendTruth}</p>
+          {expertMode ? <p className="muted-copy">{ui.settings.backendTruth}</p> : null}
         </article>
 
         <article className="workspace-card">
@@ -194,6 +202,7 @@ export function SettingsWorkspace({
           <p className="muted-copy">{ui.settings.modelChoiceNote}</p>
         </article>
 
+        {expertMode ? (
         <article className="workspace-card">
           <header className="card-header">
             <div>
@@ -281,7 +290,9 @@ export function SettingsWorkspace({
           </div>
           <p className="muted-copy">{ui.settings.diagnosticsSafetyNote}</p>
         </article>
+        ) : null}
 
+        {expertMode ? (
         <article className="workspace-card">
           <header className="card-header">
             <div>
@@ -325,7 +336,9 @@ export function SettingsWorkspace({
             </div>
           )}
         </article>
+        ) : null}
 
+        {expertMode ? (
         <article className="workspace-card">
           <header className="card-header">
             <div>
@@ -354,6 +367,7 @@ export function SettingsWorkspace({
             </div>
           ) : null}
         </article>
+        ) : null}
       </div>
 
     </section>
