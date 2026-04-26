@@ -503,6 +503,25 @@ test("locale toggle switches key copy and persists across reload", async ({ page
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
 });
 
+test("workspace guide presents three navigable cards", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await loadConsole(page);
+  await setLocale(page, "de");
+
+  await page.getByTestId("guide-chat").click();
+  const dialog = page.getByRole("dialog", { name: "Chat-Guide" });
+  await expect(dialog).toBeVisible();
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Composer zuerst");
+
+  await dialog.getByRole("button", { name: "Weiter" }).click();
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Best Practice");
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Vorschlag vor Ausführung");
+
+  await dialog.getByRole("button", { name: "Weiter" }).click();
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Logik");
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Backend-eigener Stream");
+});
+
 test("chat enforces proposal-first execution and sends backend request only on approve", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
 
@@ -797,11 +816,18 @@ test("Settings keeps diagnostics behind Expert mode and allows clearing local en
   await page.getByTestId("tab-settings").click();
   const settingsWorkspace = page.getByTestId("settings-workspace");
   await expect(settingsWorkspace).toBeVisible();
+  await expect(settingsWorkspace).toContainText("Beginner mode");
+  await expect(settingsWorkspace).toContainText("Guided and quiet");
   await expect(settingsWorkspace.getByRole("button", { name: "Clear diagnostics" })).toHaveCount(0);
 
   await settingsWorkspace.getByRole("button", { name: "Expert" }).click();
+  await expect(settingsWorkspace).toContainText("Expert mode");
+  await expect(settingsWorkspace).toContainText("Full context and control");
   await expect(settingsWorkspace.getByText("Backend health loaded")).toBeVisible();
   await expect(settingsWorkspace.getByRole("button", { name: "Clear diagnostics" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByTestId("settings-workspace")).toContainText("Expert mode");
+
   await settingsWorkspace.getByRole("button", { name: "Clear diagnostics" }).click();
 
   await expect(settingsWorkspace).toContainText("No local diagnostic events yet.");

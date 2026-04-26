@@ -1312,6 +1312,19 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
   border-color: rgba(78, 222, 163, 0.28);
 }
 
+.work-mode-control {
+  display: grid;
+  gap: 6px;
+}
+
+.work-mode-hint {
+  max-width: 18rem;
+}
+
+.work-mode-guidance-card {
+  margin-bottom: 12px;
+}
+
 .mode-toggle-button:hover:not(:disabled) {
   transform: none;
 }
@@ -2137,6 +2150,58 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 
 .settings-workspace .workspace-card .action-row {
   justify-content: flex-start;
+}
+
+.settings-adapter-list {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-adapter-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.settings-adapter-main {
+  display: grid;
+  gap: 6px;
+}
+
+.settings-adapter-main > div {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.settings-adapter-main h2 {
+  font-size: 1rem;
+  letter-spacing: 0;
+  margin: 0;
+}
+
+.settings-adapter-main p {
+  margin: 0;
+}
+
+.settings-adapter-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.settings-admin-login-form {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.settings-admin-login-form label {
+  grid-column: 1 / -1;
+}
+
+.settings-adapter-details {
+  margin-top: 2px;
 }
 
 /* Phase 1 shell foundations: left rail/nav/session identity, workspace frame, truth rail stack. */
@@ -3080,6 +3145,7 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
   gap: 12px;
 }
 
+.guide-card,
 .guide-overlay-section {
   display: grid;
   gap: 8px;
@@ -3087,8 +3153,16 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.03);
+  touch-action: pan-y;
 }
 
+.guide-card h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  letter-spacing: 0;
+}
+
+.guide-card ul,
 .guide-overlay-section ol,
 .guide-overlay-section ul {
   margin: 0;
@@ -3096,8 +3170,44 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
   color: var(--text);
 }
 
+.guide-card li + li,
 .guide-overlay-section li + li {
   margin-top: 6px;
+}
+
+.guide-carousel-controls {
+  display: grid;
+  grid-template-columns: minmax(86px, auto) minmax(0, 1fr) minmax(86px, auto);
+  align-items: center;
+  gap: 10px;
+}
+
+.guide-carousel-controls .secondary-button {
+  min-height: 36px;
+  padding: 0.56rem 0.74rem;
+}
+
+.guide-card-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.guide-card-dot {
+  width: 9px;
+  height: 9px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+}
+
+.guide-card-dot-active {
+  border-color: rgba(78, 222, 163, 0.7);
+  background: rgba(78, 222, 163, 0.8);
 }
 
 .truth-rail-actions {

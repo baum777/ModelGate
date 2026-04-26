@@ -2,6 +2,12 @@ import React from "react";
 import { useLocalization } from "../lib/localization.js";
 import type { JournalEntry } from "../lib/api.js";
 import { GuideOverlay, getWorkspaceGuide } from "./GuideOverlay.js";
+import {
+  getWorkModeCopy,
+  isExpertMode,
+  type WorkMode,
+} from "../lib/work-mode.js";
+import type { SettingsLoginAdapter } from "../lib/settings-login-adapters.js";
 
 export type DiagnosticEntry = {
   kind: "info" | "warning" | "error";
@@ -62,21 +68,101 @@ export type SettingsTruthSnapshot = {
 };
 
 type SettingsWorkspaceProps = {
-  expertMode: boolean;
-  onExpertModeChange: (value: boolean) => void;
+  workMode: WorkMode;
+  onWorkModeChange: (value: WorkMode) => void;
   diagnostics: DiagnosticEntry[];
   onClearDiagnostics: () => void;
   truthSnapshot: SettingsTruthSnapshot;
+  loginAdapters: SettingsLoginAdapter[];
+  adminPassword: string;
+  adminBusy: boolean;
+  onAdminPasswordChange: (value: string) => void;
+  onAdminLogin: () => void;
+  onAdminLogout: () => void;
+  onOpenWorkspace: (workspace: "chat" | "github" | "matrix") => void;
 };
 
 export function SettingsWorkspace({
-  expertMode,
-  onExpertModeChange,
+  workMode,
+  onWorkModeChange,
   diagnostics,
   onClearDiagnostics,
   truthSnapshot,
+  loginAdapters,
+  adminPassword,
+  adminBusy,
+  onAdminPasswordChange,
+  onAdminLogin,
+  onAdminLogout,
+  onOpenWorkspace,
 }: SettingsWorkspaceProps) {
   const { locale, copy: ui } = useLocalization();
+  const expertMode = isExpertMode(workMode);
+  const beginnerCopy = getWorkModeCopy(locale, "beginner");
+  const expertCopy = getWorkModeCopy(locale, "expert");
+  const activeCopy = getWorkModeCopy(locale, workMode);
+  const adapterCopy = locale === "de"
+    ? {
+        accessTitle: "Zugänge",
+        actionLabel: "Aktion",
+        requirementsLabel: "Voraussetzungen",
+        noRequirements: "Keine offenen Voraussetzungen",
+        passwordLabel: "Admin-Passwort",
+        signIn: "Anmelden",
+        signingIn: "Anmelden...",
+        status: {
+          available: "Bereit",
+          connected: "Verbunden",
+          locked: "Gesperrt",
+          checking: "Wird geprüft",
+          unavailable: "Nicht verfügbar",
+          error: "Fehler",
+        },
+        action: {
+          connect: "Verbinden",
+          disconnect: "Trennen",
+          open: "Öffnen",
+          retry: "Erneut prüfen",
+          configure: "Server konfigurieren",
+        },
+      }
+    : {
+        accessTitle: "Access",
+        actionLabel: "Action",
+        requirementsLabel: "Requirements",
+        noRequirements: "No open requirements",
+        passwordLabel: "Admin password",
+        signIn: "Sign in",
+        signingIn: "Signing in...",
+        status: {
+          available: "Ready",
+          connected: "Connected",
+          locked: "Locked",
+          checking: "Checking",
+          unavailable: "Unavailable",
+          error: "Error",
+        },
+        action: {
+          connect: "Connect",
+          disconnect: "Disconnect",
+          open: "Open",
+          retry: "Retry",
+          configure: "Configure server",
+        },
+      };
+
+  function handleAdapterAction(adapter: SettingsLoginAdapter) {
+    if (adapter.id === "admin") {
+      if (adapter.primaryAction === "disconnect") {
+        onAdminLogout();
+      }
+      return;
+    }
+
+    if (adapter.primaryAction === "open") {
+      onOpenWorkspace(adapter.id);
+    }
+  }
 
   return (
     <section className="workspace-panel settings-workspace" data-testid="settings-workspace">
@@ -84,7 +170,7 @@ export function SettingsWorkspace({
         <div>
           <p className="status-pill status-partial">{ui.settings.heroStatus}</p>
           <h1>{ui.settings.title}</h1>
-          {expertMode ? <p className="hero-copy">{ui.settings.intro}</p> : null}
+          <p className="hero-copy">{activeCopy.description}</p>
           <div className="workspace-hero-actions">
             <GuideOverlay content={getWorkspaceGuide(locale, "settings")} testId="guide-settings" />
           </div>
@@ -96,16 +182,101 @@ export function SettingsWorkspace({
           <header className="card-header">
             <div>
               <span>{ui.settings.viewCardTitle}</span>
-              <strong>{ui.settings.beginner} / {ui.settings.expert}</strong>
+              <strong>{activeCopy.label}</strong>
             </div>
           </header>
+          <p className="muted-copy">{activeCopy.riskHint}</p>
           <div className="action-row">
-            <button type="button" className={expertMode ? "secondary-button" : ""} onClick={() => onExpertModeChange(false)}>
-              {ui.settings.beginner}
+            <button type="button" className={workMode === "beginner" ? "" : "secondary-button"} onClick={() => onWorkModeChange("beginner")}>
+              {beginnerCopy.shortLabel}
             </button>
-            <button type="button" className={expertMode ? "" : "secondary-button"} onClick={() => onExpertModeChange(true)}>
-              {ui.settings.expert}
+            <button type="button" className={workMode === "expert" ? "" : "secondary-button"} onClick={() => onWorkModeChange("expert")}>
+              {expertCopy.shortLabel}
             </button>
+          </div>
+        </article>
+
+        <article className="workspace-card settings-access-card">
+          <header className="card-header">
+            <div>
+              <span>{adapterCopy.accessTitle}</span>
+              <strong>{ui.settings.backendTruth}</strong>
+            </div>
+          </header>
+
+          <div className="settings-adapter-list">
+            {loginAdapters.map((adapter) => (
+              <section key={adapter.id} className={`settings-adapter-row settings-adapter-row-${adapter.status}`}>
+                <div className="settings-adapter-main">
+                  <div>
+                    <span className={`status-pill status-${adapter.status === "connected" || adapter.status === "available" ? "ready" : adapter.status === "error" || adapter.status === "unavailable" ? "error" : "partial"}`}>
+                      {adapterCopy.status[adapter.status]}
+                    </span>
+                    <h2>{adapter.label}</h2>
+                  </div>
+                  <p className="muted-copy">{adapter.safeIdentityLabel}</p>
+                  <p>{adapter.scopeSummary}</p>
+                </div>
+
+                <div className="settings-adapter-actions">
+                  <button
+                    type="button"
+                    className={adapter.primaryAction === "configure" ? "secondary-button" : ""}
+                    onClick={() => handleAdapterAction(adapter)}
+                    disabled={adapter.primaryAction === "configure" || adapter.primaryAction === "retry" || adapter.status === "checking"}
+                  >
+                    {adapterCopy.action[adapter.primaryAction]}
+                  </button>
+                </div>
+
+                {adapter.id === "admin" && adapter.primaryAction === "connect" ? (
+                  <form
+                    className="github-login-form settings-admin-login-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      onAdminLogin();
+                    }}
+                  >
+                    <label htmlFor="settings-admin-password">{adapterCopy.passwordLabel}</label>
+                    <input
+                      id="settings-admin-password"
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                      value={adminPassword}
+                      onChange={(event) => onAdminPasswordChange(event.target.value)}
+                      disabled={adminBusy}
+                    />
+                    <button type="submit" disabled={adminBusy || adminPassword.trim().length === 0}>
+                      {adminBusy ? adapterCopy.signingIn : adapterCopy.signIn}
+                    </button>
+                  </form>
+                ) : null}
+
+                {expertMode ? (
+                  <div className="detail-grid settings-adapter-details">
+                    <div>
+                      <span>{adapterCopy.actionLabel}</span>
+                      <strong>{adapterCopy.action[adapter.primaryAction]}</strong>
+                    </div>
+                    <div>
+                      <span>{adapterCopy.requirementsLabel}</span>
+                      <strong>{adapter.requirements.length > 0 ? adapter.requirements.join(", ") : adapterCopy.noRequirements}</strong>
+                    </div>
+                    <div>
+                      <span>{ui.settings.chatAuthority}</span>
+                      <strong>{adapter.authority}</strong>
+                    </div>
+                    {adapter.expertDetails.map((detail) => (
+                      <div key={`${adapter.id}-${detail.label}`}>
+                        <span>{detail.label}</span>
+                        <strong>{detail.value}</strong>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+            ))}
           </div>
         </article>
 

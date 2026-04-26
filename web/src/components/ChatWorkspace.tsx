@@ -33,6 +33,12 @@ import {
   buildGovernanceMetadataRows,
   mergeMetadataRows,
 } from "../lib/governance-metadata.js";
+import {
+  getWorkModeCopy,
+  isBeginnerMode,
+  isExpertMode,
+  type WorkMode,
+} from "../lib/work-mode.js";
 
 type PublicModelEntry = {
   alias: string;
@@ -48,6 +54,7 @@ type PublicModelEntry = {
 
 type ChatWorkspaceProps = {
   session: ChatSession;
+  workMode: WorkMode;
   backendHealthy: boolean | null;
   activeModelAlias: string | null;
   availableModels: string[];
@@ -165,6 +172,9 @@ function buildChatGovernanceRows(options: {
 
 export function ChatWorkspace(props: ChatWorkspaceProps) {
   const { locale, copy: ui } = useLocalization();
+  const beginnerMode = isBeginnerMode(props.workMode);
+  const expertMode = isExpertMode(props.workMode);
+  const workModeCopy = getWorkModeCopy(locale, props.workMode);
   const [chatState, dispatch] = useReducer(
     chatReducer,
     props.session.metadata.chatState,
@@ -603,6 +613,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           <SectionLabel>{ui.chat.title}</SectionLabel>
           <strong data-testid="chat-connection-state">{getConnectionStateLabel(locale, chatState.connectionState)}</strong>
           <span className="chat-stream-status">{streamStatusLabel}</span>
+          {beginnerMode ? <span className="chat-stream-status">{workModeCopy.controlHint}</span> : null}
         </div>
 
         <div className="chat-toolbar-controls">
@@ -636,6 +647,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               </button>
             </div>
           </div>
+          {expertMode ? (
           <div className="chat-toolbar-control-group chat-toolbar-model-group">
             <label htmlFor="model-select">{ui.chat.modelSelectLabel}</label>
             <select
@@ -660,6 +672,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               )}
             </select>
           </div>
+          ) : null}
           <div className="runtime-actions chat-toolbar-actions">
             <GuideOverlay content={getWorkspaceGuide(locale, "chat")} testId="guide-chat" />
             {executionRunning ? (
@@ -677,6 +690,18 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       </section>
 
       <section className="chat-card governed-chat-card">
+        {beginnerMode ? (
+          <ShellCard variant="muted" className="work-mode-guidance-card">
+            <SectionLabel>{workModeCopy.label}</SectionLabel>
+            <p>{locale === "de" ? "Schreibe dein Ziel. ModelGate erstellt im geführten Modus zuerst einen Vorschlag, danach entscheidest du." : "Write the goal. In guided mode ModelGate prepares a proposal first, then you decide."}</p>
+          </ShellCard>
+        ) : null}
+        {expertMode && chatState.activeRoute ? (
+          <ShellCard variant="muted" className="work-mode-guidance-card">
+            <SectionLabel>{locale === "de" ? "Route und Runtime" : "Route and runtime"}</SectionLabel>
+            <p>{`${chatState.activeRoute.selectedAlias} · ${chatState.activeRoute.taskClass} · fallback=${chatState.activeRoute.fallbackUsed ? "yes" : "no"}`}</p>
+          </ShellCard>
+        ) : null}
         {executionMode === "governed" && pendingProposal?.status === "pending" ? (
           <ProposalCard
             testId="chat-proposal-card"
@@ -725,7 +750,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             >
               <header className="thread-block-header">
                 <SectionLabel>{message.role === "user" ? ui.chat.operatorInput : ui.chat.agentResponse}</SectionLabel>
-                {message.modelAlias ? <StatusBadge tone="muted">{message.modelAlias}</StatusBadge> : null}
+                {expertMode && message.modelAlias ? <StatusBadge tone="muted">{message.modelAlias}</StatusBadge> : null}
               </header>
               <MarkdownMessage content={message.content} />
             </ShellCard>
@@ -735,7 +760,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             <ShellCard variant="muted" className="thread-block thread-block-agent-draft">
               <header className="thread-block-header">
                 <SectionLabel>{ui.chat.agentDraft}</SectionLabel>
-                <StatusBadge tone="partial">{draft.model ?? "pending"}</StatusBadge>
+                {expertMode ? <StatusBadge tone="partial">{draft.model ?? "pending"}</StatusBadge> : null}
               </header>
               <MarkdownMessage content={draft.text || ui.chat.composerLocked.approval} />
             </ShellCard>

@@ -7,6 +7,7 @@ import {
   type SettingsTruthSnapshot,
 } from "../src/components/SettingsWorkspace.js";
 import type { JournalEntry } from "../src/lib/api.js";
+import { deriveSettingsLoginAdapters } from "../src/lib/settings-login-adapters.js";
 
 test("Settings workspace renders backend, connection, and model truth without inventing authority", () => {
   const truthSnapshot: SettingsTruthSnapshot = {
@@ -105,14 +106,64 @@ test("Settings workspace renders backend, connection, and model truth without in
       ] as JournalEntry[],
     },
   };
+  const loginAdapters = deriveSettingsLoginAdapters({
+    copy: {
+      authenticated: "Unlocked",
+      checking: "Checking",
+      locked: "Locked",
+      ready: "Ready",
+      unavailable: "Unavailable",
+      error: "Error",
+      none: "None",
+      configureBackend: "Configure server",
+      connect: "Connect",
+      disconnect: "Disconnect",
+      open: "Open",
+      retry: "Retry",
+    },
+    authSession: {
+      status: "authenticated",
+      error: null,
+    },
+    backend: {
+      healthy: true,
+      label: "Bereit",
+    },
+    github: {
+      configured: true,
+      ready: true,
+      connectionLabel: "Bereit",
+      repositoryLabel: "acme/console",
+      accessLabel: "Schreibzugriff",
+    },
+    matrix: {
+      configured: true,
+      ready: true,
+      identityLabel: "@alice:matrix.example",
+      connectionLabel: "Verbunden",
+      homeserverLabel: "matrix.example",
+      scopeLabel: "Bereich gewählt",
+    },
+    chat: {
+      activeAlias: "gpt-4.1",
+      availableCount: 3,
+    },
+  });
 
   const markup = renderToStaticMarkup(
     React.createElement(SettingsWorkspace, {
-      expertMode: true,
-      onExpertModeChange: () => undefined,
+      workMode: "expert",
+      onWorkModeChange: () => undefined,
       diagnostics: [],
       onClearDiagnostics: () => undefined,
       truthSnapshot,
+      loginAdapters,
+      adminPassword: "",
+      adminBusy: false,
+      onAdminPasswordChange: () => undefined,
+      onAdminLogin: () => undefined,
+      onAdminLogout: () => undefined,
+      onOpenWorkspace: () => undefined,
     }),
   );
 
@@ -126,4 +177,66 @@ test("Settings workspace renders backend, connection, and model truth without in
   assert.match(markup, /chat:1, auth:0/);
   assert.match(markup, /chat_stream_completed/);
   assert.match(markup, /github_proposal_created/);
+  assert.match(markup, /Admin session/);
+  assert.match(markup, /GitHub/);
+  assert.match(markup, /Matrix/);
+  assert.match(markup, /\/api\/matrix\/\*/);
+});
+
+test("Settings login adapters keep GitHub behind admin session and Matrix server-configured", () => {
+  const adapters = deriveSettingsLoginAdapters({
+    copy: {
+      authenticated: "Unlocked",
+      checking: "Checking",
+      locked: "Locked",
+      ready: "Ready",
+      unavailable: "Unavailable",
+      error: "Error",
+      none: "None",
+      configureBackend: "Configure server",
+      connect: "Connect",
+      disconnect: "Disconnect",
+      open: "Open",
+      retry: "Retry",
+    },
+    authSession: {
+      status: "locked",
+      error: null,
+    },
+    backend: {
+      healthy: true,
+      label: "Ready",
+    },
+    github: {
+      configured: true,
+      ready: true,
+      connectionLabel: "Ready",
+      repositoryLabel: "No repo selected",
+      accessLabel: "Read only",
+    },
+    matrix: {
+      configured: false,
+      ready: false,
+      identityLabel: "Checking",
+      connectionLabel: "Checking",
+      homeserverLabel: "n/a",
+      scopeLabel: "No scope",
+    },
+    chat: {
+      activeAlias: "default",
+      availableCount: 1,
+    },
+  });
+
+  const admin = adapters.find((adapter) => adapter.id === "admin");
+  const github = adapters.find((adapter) => adapter.id === "github");
+  const matrix = adapters.find((adapter) => adapter.id === "matrix");
+
+  assert.equal(admin?.status, "locked");
+  assert.equal(admin?.primaryAction, "connect");
+  assert.equal(github?.status, "locked");
+  assert.deepEqual(github?.requirements, ["Admin session"]);
+  assert.equal(matrix?.status, "unavailable");
+  assert.equal(matrix?.primaryAction, "configure");
+  assert.ok(matrix?.requirements.includes("MATRIX_ACCESS_TOKEN"));
 });

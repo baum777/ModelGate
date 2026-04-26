@@ -44,6 +44,7 @@ import {
 } from "../lib/governance-metadata.js";
 import { useLocalization, type Locale } from "../lib/localization.js";
 import { GuideOverlay, getWorkspaceGuide } from "./GuideOverlay.js";
+import { getWorkModeCopy, type WorkMode } from "../lib/work-mode.js";
 
 type WorkflowStatus = "loading" | "partial" | "ready" | "error";
 type LoadStatus = "idle" | "loading" | "ready" | "error";
@@ -81,6 +82,7 @@ export type MatrixWorkspaceStatus = {
 type MatrixWorkspaceProps = {
   session: MatrixSession;
   restoredSession: boolean;
+  workMode: WorkMode;
   expertMode: boolean;
   onTelemetry: (
     kind: "info" | "warning" | "error",
@@ -295,6 +297,7 @@ function describeMatrixError(operation: string, error: unknown) {
 export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   const { locale, copy: ui } = useLocalization();
   const localText = useMemo(() => getMatrixLocaleText(locale), [locale]);
+  const workModeCopy = getWorkModeCopy(locale, props.workMode);
   const persisted = props.session.metadata;
   const [status, setStatus] = useState<WorkflowStatus>("loading");
   const [whoami, setWhoami] = useState<MatrixWhoAmI | null>(null);
@@ -1089,7 +1092,9 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             <p className="hero-copy">
               {ui.matrix.intro}
             </p>
-          ) : null}{" "}
+          ) : (
+            <p className="hero-copy">{workModeCopy.controlHint}</p>
+          )}{" "}
           <div className="workspace-hero-actions">
             <GuideOverlay content={getWorkspaceGuide(locale, "matrix")} testId="guide-matrix" />
           </div>{" "}

@@ -31,6 +31,7 @@ import {
 } from "../lib/governance-metadata.js";
 import { useLocalization, type Locale } from "../lib/localization.js";
 import { GuideOverlay, getWorkspaceGuide } from "./GuideOverlay.js";
+import { getWorkModeCopy, isExpertMode, type WorkMode } from "../lib/work-mode.js";
 
 export type GitHubWorkspaceStatus = {
   repositoryLabel: string;
@@ -55,7 +56,7 @@ export type GitHubWorkspaceStatus = {
 type GitHubWorkspaceProps = {
   session: GitHubSession;
   backendHealthy: boolean | null;
-  expertMode: boolean;
+  workMode: WorkMode;
   onTelemetry: (
     kind: "info" | "warning" | "error",
     label: string,
@@ -411,6 +412,8 @@ export function buildGitHubReviewItems(
 export function GitHubWorkspace(props: GitHubWorkspaceProps) {
   const { locale, copy: ui } = useLocalization();
   const localText = useMemo(() => getGitHubLocaleText(locale), [locale]);
+  const expertMode = isExpertMode(props.workMode);
+  const workModeCopy = getWorkModeCopy(locale, props.workMode);
   const [repos, setRepos] = useState<GitHubRepoSummary[]>([]);
   const [reposLoading, setReposLoading] = useState(true);
   const [reposError, setReposError] = useState<string | null>(null);
@@ -572,11 +575,11 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       : ui.common.none;
   const resultCopy = resultStatusCopy(executionResult, verificationResult, verifying, locale);
   const selectedRepoLabel = selectedRepo
-    ? props.expertMode
+    ? expertMode
       ? selectedRepo.fullName
       : ui.github.repoSelected
     : ui.github.noRepoSelected;
-  const rawDiffPreview = props.expertMode ? buildRawDiffPreview(proposalPlan) : null;
+  const rawDiffPreview = expertMode ? buildRawDiffPreview(proposalPlan) : null;
   const currentRequestId = requestId;
   const stalePlanBlocked = Boolean(
     proposalPlan?.stale
@@ -628,7 +631,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     proposalPlan,
     props.backendHealthy,
     props.onContextChange,
-    props.expertMode,
+    expertMode,
     eventTrail,
     rawDiffPreview,
     selectedRepo,
@@ -916,11 +919,13 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             {hasSelection ? ui.github.readOnlyActive : ui.github.nextStepChooseRepo}
           </p>
           <h1>{ui.github.title}</h1>
-          {props.expertMode ? (
+          {expertMode ? (
             <p className="hero-copy">
               {ui.github.intro}
             </p>
-          ) : null}
+          ) : (
+            <p className="hero-copy">{workModeCopy.controlHint}</p>
+          )}
           <div className="workspace-hero-actions">
             <GuideOverlay content={getWorkspaceGuide(locale, "github")} testId="guide-github" />
           </div>
@@ -940,7 +945,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             </option>
             {repos.map((repo, index) => (
               <option key={repo.fullName} value={repo.fullName}>
-                {friendlyRepoLabel(index, props.expertMode, repo.fullName, locale)}
+                {friendlyRepoLabel(index, expertMode, repo.fullName, locale)}
               </option>
             ))}
           </select>
@@ -950,14 +955,14 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
               <div className="github-repo-card-header">
                 <div>
                   <span>{ui.github.connectedRepo}</span>
-                  <strong>{props.expertMode ? selectedRepo.fullName : ui.github.repoSelected}</strong>
+                  <strong>{expertMode ? selectedRepo.fullName : ui.github.repoSelected}</strong>
                 </div>
                 <span className="status-pill status-ready">{accessLabel}</span>
               </div>
               <div className="github-repo-meta">
                 <span>{formatRepoVisibility(selectedRepo.isPrivate, locale)}</span>
                 <span>•</span>
-                <span>{props.expertMode ? `${ui.github.defaultBranch}: ${selectedRepo.defaultBranch}` : ui.github.readOnly}</span>
+                <span>{expertMode ? `${ui.github.defaultBranch}: ${selectedRepo.defaultBranch}` : ui.github.readOnly}</span>
                 <span>•</span>
                 <span>{ui.github.repositoryStatus}: {formatRepoStatus(selectedRepo.status, locale)}</span>
               </div>
@@ -994,7 +999,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             </p>
           </div>
 
-          {props.expertMode ? (
+          {expertMode ? (
             <ol className="guided-steps">
               <li>{ui.github.nextStepChooseRepo}</li>
               <li>{ui.github.nextStepAnalysis}</li>
@@ -1237,7 +1242,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                 [
                   {
                     label: ui.github.targetBranch,
-                    value: props.expertMode ? executionResult.targetBranch : friendlyTargetBranchLabel(executionResult.targetBranch, selectedRepo, locale),
+                    value: expertMode ? executionResult.targetBranch : friendlyTargetBranchLabel(executionResult.targetBranch, selectedRepo, locale),
                   },
                   { label: localText.commitLabel, value: executionResult.commitSha },
                   { label: ui.github.verifyResult, value: verificationResult?.status ?? ui.common.loading },
@@ -1277,7 +1282,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
           ) : null}
 
           <ExpertDetails
-            expertMode={props.expertMode}
+            expertMode={expertMode}
             rows={[
               { label: ui.github.connectedRepo, value: selectedRepo?.fullName ?? ui.common.na },
               { label: ui.shell.sessionIdPrefix, value: requestId ?? ui.common.na },
