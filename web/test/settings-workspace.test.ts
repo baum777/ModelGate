@@ -108,9 +108,7 @@ test("Settings workspace renders backend, connection, and model truth without in
   };
   const loginAdapters = deriveSettingsLoginAdapters({
     copy: {
-      authenticated: "Unlocked",
       checking: "Checking",
-      locked: "Locked",
       ready: "Ready",
       unavailable: "Unavailable",
       error: "Error",
@@ -120,10 +118,6 @@ test("Settings workspace renders backend, connection, and model truth without in
       disconnect: "Disconnect",
       open: "Open",
       retry: "Retry",
-    },
-    authSession: {
-      status: "authenticated",
-      error: null,
     },
     backend: {
       healthy: true,
@@ -158,11 +152,6 @@ test("Settings workspace renders backend, connection, and model truth without in
       onClearDiagnostics: () => undefined,
       truthSnapshot,
       loginAdapters,
-      adminPassword: "",
-      adminBusy: false,
-      onAdminPasswordChange: () => undefined,
-      onAdminLogin: () => undefined,
-      onAdminLogout: () => undefined,
       onOpenWorkspace: () => undefined,
     }),
   );
@@ -177,18 +166,16 @@ test("Settings workspace renders backend, connection, and model truth without in
   assert.match(markup, /chat:1, auth:0/);
   assert.match(markup, /chat_stream_completed/);
   assert.match(markup, /github_proposal_created/);
-  assert.match(markup, /Admin session/);
+  assert.doesNotMatch(markup, /Admin session/);
   assert.match(markup, /GitHub/);
   assert.match(markup, /Matrix/);
   assert.match(markup, /\/api\/matrix\/\*/);
 });
 
-test("Settings login adapters keep GitHub behind admin session and Matrix server-configured", () => {
+test("Settings login adapters expose GitHub and Matrix as backend-configured account surfaces", () => {
   const adapters = deriveSettingsLoginAdapters({
     copy: {
-      authenticated: "Unlocked",
       checking: "Checking",
-      locked: "Locked",
       ready: "Ready",
       unavailable: "Unavailable",
       error: "Error",
@@ -198,10 +185,6 @@ test("Settings login adapters keep GitHub behind admin session and Matrix server
       disconnect: "Disconnect",
       open: "Open",
       retry: "Retry",
-    },
-    authSession: {
-      status: "locked",
-      error: null,
     },
     backend: {
       healthy: true,
@@ -228,15 +211,59 @@ test("Settings login adapters keep GitHub behind admin session and Matrix server
     },
   });
 
-  const admin = adapters.find((adapter) => adapter.id === "admin");
   const github = adapters.find((adapter) => adapter.id === "github");
   const matrix = adapters.find((adapter) => adapter.id === "matrix");
 
-  assert.equal(admin?.status, "locked");
-  assert.equal(admin?.primaryAction, "connect");
-  assert.equal(github?.status, "locked");
-  assert.deepEqual(github?.requirements, ["Admin session"]);
+  assert.equal(github?.status, "available");
+  assert.equal(github?.primaryAction, "open");
+  assert.deepEqual(github?.requirements, []);
   assert.equal(matrix?.status, "unavailable");
   assert.equal(matrix?.primaryAction, "configure");
   assert.ok(matrix?.requirements.includes("MATRIX_ACCESS_TOKEN"));
+});
+
+test("Settings login adapters require GitHub backend account configuration instead of admin login", () => {
+  const adapters = deriveSettingsLoginAdapters({
+    copy: {
+      checking: "Checking",
+      ready: "Ready",
+      unavailable: "Unavailable",
+      error: "Error",
+      none: "None",
+      configureBackend: "Configure server",
+      connect: "Connect",
+      disconnect: "Disconnect",
+      open: "Open",
+      retry: "Retry",
+    },
+    backend: {
+      healthy: true,
+      label: "Ready",
+    },
+    github: {
+      configured: false,
+      ready: false,
+      connectionLabel: "Unavailable",
+      repositoryLabel: "No repo selected",
+      accessLabel: "Not configured",
+    },
+    matrix: {
+      configured: true,
+      ready: true,
+      identityLabel: "@user:matrix.example",
+      connectionLabel: "Ready",
+      homeserverLabel: "matrix.example",
+      scopeLabel: "No scope",
+    },
+    chat: {
+      activeAlias: "default",
+      availableCount: 1,
+    },
+  });
+
+  const github = adapters.find((adapter) => adapter.id === "github");
+
+  assert.equal(github?.status, "unavailable");
+  assert.equal(github?.primaryAction, "configure");
+  assert.deepEqual(github?.requirements, ["GITHUB_TOKEN", "GITHUB_ALLOWED_REPOS"]);
 });

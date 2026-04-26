@@ -37,11 +37,6 @@ type ShellCopy = {
   noActiveSession: string;
   sessionIdPrefix: string;
   archivedBadge: string;
-  accountAuthenticated: string;
-  accountChecking: string;
-  accountLocked: string;
-  accountLogout: string;
-  accountLoginRequired: string;
   statusReady: string;
   statusPartial: string;
   statusError: string;
@@ -184,21 +179,6 @@ type SettingsCopy = {
   configured: string;
   notConfigured: string;
   unavailable: string;
-};
-
-type AuthCopy = {
-  statusAuthenticated: string;
-  statusChecking: string;
-  statusLocked: string;
-  title: string;
-  intro: string;
-  cardTitle: string;
-  cardSubtitle: string;
-  passwordLabel: string;
-  submit: string;
-  submitBusy: string;
-  hint: string;
-  footerNote: string;
 };
 
 type ChatCopy = {
@@ -406,7 +386,6 @@ type LocalizationCopy = {
   approval: ApprovalCopy;
   review: ReviewCopy;
   settings: SettingsCopy;
-  auth: AuthCopy;
   chat: ChatCopy;
   github: GitHubCopy;
   matrix: MatrixCopy;
@@ -449,11 +428,6 @@ const EN_COPY: LocalizationCopy = {
     noActiveSession: "No active session",
     sessionIdPrefix: "ID",
     archivedBadge: "Archived",
-    accountAuthenticated: "GitHub admin",
-    accountChecking: "Checking session",
-    accountLocked: "No admin login",
-    accountLogout: "Log out",
-    accountLoginRequired: "Admin login required",
     statusReady: "Ready",
     statusPartial: "Partial",
     statusError: "Error",
@@ -598,20 +572,6 @@ const EN_COPY: LocalizationCopy = {
     configured: "Configured",
     notConfigured: "Not configured",
     unavailable: "Unavailable",
-  },
-  auth: {
-    statusAuthenticated: "Unlocked",
-    statusChecking: "Checking session",
-    statusLocked: "Locked",
-    title: "GitHub login",
-    intro: "GitHub read routes stay server-side locked until you sign in with the admin password.",
-    cardTitle: "Server-side authentication",
-    cardSubtitle: "Enter admin password",
-    passwordLabel: "Admin password",
-    submit: "Sign in",
-    submitBusy: "Signing in...",
-    hint: "Password stays only in the server-side HttpOnly session cookie.",
-    footerNote: "After sign-in, the GitHub read routes are unlocked. The write path remains bound to the server-side admin key.",
   },
   chat: {
     title: "Chat workspace",
@@ -834,11 +794,6 @@ const DE_COPY: LocalizationCopy = {
     noActiveSession: "Keine Session aktiv",
     sessionIdPrefix: "ID",
     archivedBadge: "Archiviert",
-    accountAuthenticated: "GitHub Admin",
-    accountChecking: "Session wird geprüft",
-    accountLocked: "Kein Admin-Login",
-    accountLogout: "Abmelden",
-    accountLoginRequired: "Admin-Login erforderlich",
     statusReady: "Bereit",
     statusPartial: "Teilweise",
     statusError: "Fehler",
@@ -983,20 +938,6 @@ const DE_COPY: LocalizationCopy = {
     configured: "Konfiguriert",
     notConfigured: "Nicht konfiguriert",
     unavailable: "Nicht verfügbar",
-  },
-  auth: {
-    statusAuthenticated: "Freigeschaltet",
-    statusChecking: "Session wird geprüft",
-    statusLocked: "Gesperrt",
-    title: "GitHub-Login",
-    intro: "Der Zugriff auf GitHub-Read-Routen ist serverseitig gesperrt, bis du dich mit dem Admin-Passwort anmeldest.",
-    cardTitle: "Serverseitige Authentifizierung",
-    cardSubtitle: "Admin-Passwort eingeben",
-    passwordLabel: "Admin-Passwort",
-    submit: "Anmelden",
-    submitBusy: "Anmelden...",
-    hint: "Passwort bleibt nur im HttpOnly-Session-Cookie auf dem Server.",
-    footerNote: "Nach der Anmeldung werden die GitHub-Read-Routen freigeschaltet. Der Schreibpfad bleibt zusätzlich an den serverseitigen Admin-Key gebunden.",
   },
   chat: {
     title: "Chat-Arbeitsbereich",

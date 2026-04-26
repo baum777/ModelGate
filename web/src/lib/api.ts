@@ -42,10 +42,6 @@ export type ModelResponse = {
   source: string;
 };
 
-export type AuthSessionResponse = {
-  authenticated: boolean;
-};
-
 export type DiagnosticsResponse = {
   ok: true;
   service: string;
@@ -549,54 +545,4 @@ export async function streamChatCompletion(
   } else if (!sawTerminal) {
     handlers.onMalformed?.("Stream ended without a terminal frame.");
   }
-}
-
-export async function fetchAuthSession(): Promise<AuthSessionResponse> {
-  const response = await fetch(resolveApiUrl("/api/auth/me"), {
-    credentials: "include"
-  });
-
-  if (response.status === 401) {
-    return {
-      authenticated: false
-    };
-  }
-
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
-  }
-
-  return response.json() as Promise<AuthSessionResponse>;
-}
-
-export async function loginAdmin(password: string): Promise<AuthSessionResponse> {
-  const response = await fetch(resolveApiUrl("/api/auth/login"), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    credentials: "include",
-    body: JSON.stringify({
-      password
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
-  }
-
-  return response.json() as Promise<AuthSessionResponse>;
-}
-
-export async function logoutAdmin(): Promise<AuthSessionResponse> {
-  const response = await fetch(resolveApiUrl("/api/auth/logout"), {
-    method: "POST",
-    credentials: "include"
-  });
-
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
-  }
-
-  return response.json() as Promise<AuthSessionResponse>;
 }

@@ -59,7 +59,7 @@ type MatrixStatus = "ok" | "error" | "malformed";
 
 async function installBaseMocks(
   page: Page,
-  options?: { matrixStatus?: MatrixStatus; authAuthenticated?: boolean | (() => boolean) },
+  options?: { matrixStatus?: MatrixStatus },
 ) {
   await page.route("**/health", async (route) => {
     await route.fulfill({
@@ -74,20 +74,6 @@ async function installBaseMocks(
       status: 200,
       contentType: "application/json",
       body: JSON.stringify(MODELS_OK),
-    });
-  });
-
-  await page.route("**/api/auth/me", async (route) => {
-    const authenticated = typeof options?.authAuthenticated === "function"
-      ? options.authAuthenticated()
-      : options?.authAuthenticated !== false;
-
-    await route.fulfill({
-      status: authenticated ? 200 : 401,
-      contentType: "application/json",
-      body: JSON.stringify({
-        authenticated,
-      }),
     });
   });
 
@@ -831,4 +817,17 @@ test("Settings keeps diagnostics behind Expert mode and allows clearing local en
   await settingsWorkspace.getByRole("button", { name: "Clear diagnostics" }).click();
 
   await expect(settingsWorkspace).toContainText("No local diagnostic events yet.");
+});
+
+test("Settings GitHub CTA opens the GitHub workspace without an admin login gate", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await loadConsole(page);
+
+  await page.getByTestId("tab-settings").click();
+  const settingsWorkspace = page.getByTestId("settings-workspace");
+  const githubAdapter = settingsWorkspace.locator(".settings-adapter-row").filter({ hasText: "GitHub" });
+
+  await githubAdapter.getByRole("button", { name: "Open" }).click();
+  await expect(page.getByTestId("github-workspace")).toBeVisible();
+  await expect(page.getByTestId("github-admin-login")).toHaveCount(0);
 });

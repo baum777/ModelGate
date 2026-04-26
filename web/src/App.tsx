@@ -1,6 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useReducer, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ChatWorkspace } from "./components/ChatWorkspace.js";
-import { GitHubAdminLogin } from "./components/GitHubAdminLogin.js";
 import {
   GitHubWorkspace,
   type GitHubWorkspaceStatus,
@@ -36,20 +35,12 @@ import {
 } from "./lib/localization.js";
 import {
   fetchDiagnostics,
-  fetchAuthSession,
   fetchHealth,
   fetchJournalRecent,
   fetchModels,
-  loginAdmin,
-  logoutAdmin,
   type DiagnosticsResponse,
   type JournalEntry
 } from "./lib/api.js";
-import {
-  createInitialGitHubAuthState,
-  describeGitHubAuthError,
-  githubAuthReducer,
-} from "./lib/github-auth.js";
 import {
   deriveSettingsLoginAdapters,
 } from "./lib/settings-login-adapters.js";
@@ -344,8 +335,6 @@ export default function App() {
   const workModeVisibility = getWorkModeVisibility(workMode);
   const workModeCopy = getWorkModeCopy(locale, workMode);
   const [workspaceState, setWorkspaceState] = useState(() => loadWorkspaceState());
-  const [authSessionState, dispatchAuthSession] = useReducer(githubAuthReducer, undefined, createInitialGitHubAuthState);
-  const [adminPassword, setAdminPassword] = useState("");
   const [backendHealthy, setBackendHealthy] = useState<boolean | null>(null);
   const [activeModelAlias, setActiveModelAlias] = useState<string | null>(null);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
@@ -374,7 +363,6 @@ export default function App() {
   const [matrixContext, setMatrixContext] = useState<MatrixWorkspaceStatus>(() => createDefaultMatrixContext());
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
-  const authSessionUnlocked = authSessionState.status === "authenticated";
 
   useEffect(() => {
     let cancelled = false;
@@ -476,44 +464,6 @@ export default function App() {
   }, [appText]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadGitHubSession() {
-      dispatchAuthSession({
-        type: "session_check_started"
-      });
-
-      try {
-        const session = await fetchAuthSession();
-
-        if (cancelled) {
-          return;
-        }
-
-        dispatchAuthSession({
-          type: "session_check_succeeded",
-          authenticated: session.authenticated
-        });
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-
-      dispatchAuthSession({
-          type: "session_check_failed",
-          error: error instanceof Error ? error.message : ui.shell.statusError
-        });
-      }
-    }
-
-    void loadGitHubSession();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ui.shell.statusError]);
-
-  useEffect(() => {
     persistShellState({
       activeTab: mode,
       workMode,
@@ -534,13 +484,6 @@ export default function App() {
   useEffect(() => {
     setDiagnosticsOpen(false);
   }, [mode]);
-
-  useEffect(() => {
-    if (!authSessionUnlocked) {
-      setGitHubContext(createDefaultGitHubContext());
-      setReviewItems((current) => current.filter((item) => item.source !== "github"));
-    }
-  }, [createDefaultGitHubContext, authSessionUnlocked]);
 
   const recordTelemetry = useCallback(
     (kind: TelemetryEntry["kind"], label: string, detail?: string) => {
@@ -668,57 +611,6 @@ export default function App() {
   const githubSession = (workspaceState.sessionsByWorkspace.github.find((session) => session.id === workspaceState.activeSessionIdByWorkspace.github) ?? workspaceState.sessionsByWorkspace.github[0]) as GitHubSession;
   const matrixSession = (workspaceState.sessionsByWorkspace.matrix.find((session) => session.id === workspaceState.activeSessionIdByWorkspace.matrix) ?? workspaceState.sessionsByWorkspace.matrix[0]) as MatrixSession;
 
-  const handleAdminLogin = useCallback(async () => {
-    const password = adminPassword;
-
-    if (password.trim().length === 0 || authSessionState.busy) {
-      return;
-    }
-
-    dispatchAuthSession({
-      type: "login_started"
-    });
-
-    try {
-      await loginAdmin(password);
-      dispatchAuthSession({
-        type: "login_succeeded"
-      });
-      setAdminPassword("");
-    } catch (error) {
-      dispatchAuthSession({
-        type: "login_failed",
-        error: error instanceof Error ? describeGitHubAuthError(error.message) : ui.shell.statusError
-      });
-      setAdminPassword("");
-    }
-  }, [authSessionState.busy, adminPassword, ui.shell.statusError]);
-
-  const handleAdminLogout = useCallback(async () => {
-    if (authSessionState.busy) {
-      return;
-    }
-
-    dispatchAuthSession({
-      type: "logout_started"
-    });
-
-    try {
-      await logoutAdmin();
-      dispatchAuthSession({
-        type: "logout_succeeded"
-      });
-      setAdminPassword("");
-      setGitHubContext(createDefaultGitHubContext());
-      removeModeReviewItems("github");
-    } catch (error) {
-      dispatchAuthSession({
-        type: "logout_failed",
-        error: error instanceof Error ? describeGitHubAuthError(error.message) : ui.shell.statusError
-      });
-    }
-  }, [createDefaultGitHubContext, authSessionState.busy, removeModeReviewItems, ui.shell.statusError]);
-
   const chatPendingProposal = chatSession?.metadata.chatState.pendingProposal ?? null;
   const chatLatestReceipt = chatSession?.metadata.chatState.receipts.at(-1) ?? null;
   const chatGovernanceState = chatPendingProposal
@@ -746,12 +638,22 @@ export default function App() {
             : ui.shell.healthChecking,
     },
   ];
+  const githubConfigured = runtimeDiagnostics?.github.configured ?? null;
+  const githubReady = runtimeDiagnostics?.github.ready ?? null;
+  const githubAccountLabel = githubConfigured === false || githubReady === false
+    ? ui.settings.notConfigured
+    : githubConfigured === null || githubReady === null
+      ? ui.shell.healthChecking
+      : ui.settings.configured;
+  const githubAccessLabel = githubConfigured === false || githubReady === false
+    ? ui.settings.notConfigured
+    : githubContext.accessLabel;
 
   const githubRows: StatusPanelRow[] = [
     { label: ui.github.connectedRepo, value: githubContext.repositoryLabel },
     { label: ui.settings.githubConnection, value: githubContext.connectionLabel },
-    { label: ui.github.readOnly, value: authSessionUnlocked ? githubContext.accessLabel : ui.auth.statusLocked },
-    ...(authSessionUnlocked && githubContext.approvalLabel !== ui.common.none
+    { label: ui.github.readOnly, value: githubAccessLabel },
+    ...(githubContext.approvalLabel !== ui.common.none
       ? [{ label: ui.review.approvalNeeded, value: githubContext.approvalLabel }]
       : []),
   ];
@@ -805,17 +707,10 @@ export default function App() {
             : ui.shell.healthCheckingDetail,
     },
     github: {
-      sessionLabel:
-        authSessionState.status === "authenticated"
-          ? ui.auth.statusAuthenticated
-          : authSessionState.status === "loading"
-            ? ui.auth.statusChecking
-            : authSessionState.error
-              ? ui.common.error
-              : ui.auth.statusLocked,
+      sessionLabel: githubAccountLabel,
       connectionLabel: githubContext.connectionLabel,
       repositoryLabel: githubContext.repositoryLabel,
-      accessLabel: authSessionUnlocked ? githubContext.accessLabel : ui.auth.statusLocked,
+      accessLabel: githubAccessLabel,
     },
     matrix: {
       identityLabel: matrixContext.identityLabel,
@@ -874,9 +769,7 @@ export default function App() {
 
   const settingsLoginAdapters = useMemo(() => deriveSettingsLoginAdapters({
     copy: {
-      authenticated: ui.auth.statusAuthenticated,
       checking: ui.shell.healthChecking,
-      locked: ui.auth.statusLocked,
       ready: ui.shell.statusReady,
       unavailable: ui.shell.healthUnavailable,
       error: ui.shell.statusError,
@@ -887,10 +780,6 @@ export default function App() {
       open: locale === "de" ? "Öffnen" : "Open",
       retry: locale === "de" ? "Erneut prüfen" : "Retry",
     },
-    authSession: {
-      status: authSessionState.status,
-      error: authSessionState.error,
-    },
     backend: {
       healthy: backendHealthy,
       label: settingsTruthSnapshot.backend.label,
@@ -900,7 +789,7 @@ export default function App() {
       ready: runtimeDiagnostics?.github.ready ?? null,
       connectionLabel: githubContext.connectionLabel,
       repositoryLabel: githubContext.repositoryLabel,
-      accessLabel: authSessionUnlocked ? githubContext.accessLabel : ui.auth.statusLocked,
+      accessLabel: githubAccessLabel,
     },
     matrix: {
       configured: runtimeDiagnostics?.matrix.configured ?? null,
@@ -916,11 +805,9 @@ export default function App() {
     },
   }), [
     activeModelAlias,
-    authSessionState.error,
-    authSessionState.status,
-    authSessionUnlocked,
     availableModels.length,
     backendHealthy,
+    githubAccessLabel,
     githubContext.accessLabel,
     githubContext.connectionLabel,
     githubContext.repositoryLabel,
@@ -962,10 +849,6 @@ export default function App() {
   const currentStatusBadge = useMemo(() => {
     switch (mode) {
       case "github":
-        if (!authSessionUnlocked) {
-          return authSessionState.error ? ui.shell.statusPartial : ui.auth.statusLocked;
-        }
-
         if (githubContext.connectionLabel !== ui.shell.statusReady) {
           return githubContext.connectionLabel;
         }
@@ -1024,18 +907,6 @@ export default function App() {
           return ui.shell.statusError;
         }
 
-        if (authSessionState.error) {
-          return ui.shell.statusError;
-        }
-
-        if (authSessionState.status === "loading") {
-          return ui.shell.statusPartial;
-        }
-
-        if (!authSessionUnlocked) {
-          return ui.auth.statusLocked;
-        }
-
         if (matrixContext.connectionLabel === ui.shell.statusError) {
           return ui.shell.statusError;
         }
@@ -1065,12 +936,9 @@ export default function App() {
     chatLatestReceipt?.outcome,
     chatPendingProposal?.status,
     expertMode,
-    authSessionState.error,
-    authSessionState.status,
     githubContext.approvalLabel,
     githubContext.connectionLabel,
     githubContext.repositoryLabel,
-    authSessionUnlocked,
     backendHealthy,
     activeModelAlias,
     matrixContext.approvalLabel,
@@ -1101,10 +969,6 @@ export default function App() {
   const currentStatusTone = useMemo(() => {
     switch (mode) {
       case "github":
-        if (!authSessionUnlocked) {
-          return authSessionState.error ? "error" : "partial";
-        }
-
         if (githubContext.connectionLabel !== ui.shell.statusReady) {
           return githubContext.connectionLabel === ui.shell.statusError ? "error" : "partial";
         }
@@ -1139,11 +1003,7 @@ export default function App() {
           return "error";
         }
 
-        if (authSessionState.error) {
-          return "error";
-        }
-
-        if (authSessionState.status === "loading" || !authSessionUnlocked || matrixContext.connectionLabel === ui.shell.healthChecking) {
+        if (matrixContext.connectionLabel === ui.shell.healthChecking) {
           return "partial";
         }
 
@@ -1171,12 +1031,9 @@ export default function App() {
     backendHealthy,
     chatLatestReceipt?.outcome,
     chatPendingProposal?.status,
-    authSessionState.error,
-    authSessionState.status,
     githubContext.approvalLabel,
     githubContext.connectionLabel,
     githubContext.repositoryLabel,
-    authSessionUnlocked,
     backendHealthy,
     activeModelAlias,
     matrixContext.connectionLabel,
@@ -1190,12 +1047,6 @@ export default function App() {
   const currentHelperText = useMemo(() => {
     switch (mode) {
       case "github":
-        if (!authSessionUnlocked) {
-          return authSessionState.error
-            ? ui.github.workspaceNoticeRepos
-            : ui.auth.intro;
-        }
-
         if (githubContext.approvalLabel !== ui.common.none) {
           return ui.github.approveHelper;
         }
@@ -1246,14 +1097,6 @@ export default function App() {
           return ui.shell.healthUnavailableDetail;
         }
 
-        if (authSessionState.error) {
-          return ui.github.workspaceNoticeRepos;
-        }
-
-        if (!authSessionUnlocked) {
-          return ui.auth.statusLocked;
-        }
-
         if (matrixContext.connectionLabel === ui.shell.statusError) {
           return ui.matrix.topicStatusUnavailable;
         }
@@ -1283,10 +1126,8 @@ export default function App() {
     chatLatestReceipt?.outcome,
     chatPendingProposal?.status,
     expertMode,
-    authSessionState.error,
     githubContext.approvalLabel,
     githubContext.repositoryLabel,
-    authSessionUnlocked,
     matrixContext.connectionLabel,
     matrixContext.approvalLabel,
     matrixContext.scopeLabel,
@@ -1298,13 +1139,6 @@ export default function App() {
   const currentExpertRows = useMemo(() => {
     switch (mode) {
       case "github":
-        if (!authSessionUnlocked) {
-          return [
-            { label: ui.auth.cardTitle, value: authSessionState.error ? ui.common.error : ui.auth.statusLocked },
-            { label: ui.shell.sessionLabel, value: authSessionState.status === "loading" ? ui.auth.statusChecking : ui.auth.statusLocked }
-          ];
-        }
-
         return [
           { label: ui.settings.githubConnection, value: githubContext.expertDetails.apiStatus },
           { label: ui.github.repoSelectLabel, value: githubContext.expertDetails.selectedRepoSlug ?? ui.common.na },
@@ -1355,11 +1189,8 @@ export default function App() {
     chatSession?.metadata.chatState.activeRoute?.selectedAlias,
     chatSession?.metadata.chatState.receipts.length,
     expertMode,
-    authSessionState.error,
-    authSessionState.status,
     githubContext.approvalLabel,
     githubContext.expertDetails,
-    authSessionUnlocked,
     matrixContext.approvalLabel,
     matrixContext.connectionLabel,
     matrixContext.expertDetails,
@@ -1546,7 +1377,7 @@ export default function App() {
       onTelemetry={recordTelemetry}
       onSessionChange={handleChatSessionChange}
     />
-  ) : mode === "github" && authSessionUnlocked ? (
+  ) : mode === "github" ? (
     <GitHubWorkspace
       key={githubSession?.id ?? "github-session"}
       session={githubSession}
@@ -1556,15 +1387,6 @@ export default function App() {
       onContextChange={setGitHubContext}
       onReviewItemsChange={updateGitHubReviewItems}
       onSessionChange={handleGitHubSessionChange}
-    />
-  ) : mode === "github" ? (
-    <GitHubAdminLogin
-      authState={authSessionState}
-      password={adminPassword}
-      onPasswordChange={setAdminPassword}
-      onSubmit={() => {
-        void handleAdminLogin();
-      }}
     />
   ) : mode === "matrix" ? (
     <MatrixWorkspace
@@ -1588,20 +1410,10 @@ export default function App() {
       onClearDiagnostics={() => setTelemetry([])}
       truthSnapshot={settingsTruthSnapshot}
       loginAdapters={settingsLoginAdapters}
-      adminPassword={adminPassword}
-      adminBusy={authSessionState.busy}
-      onAdminPasswordChange={setAdminPassword}
-      onAdminLogin={() => {
-        void handleAdminLogin();
-      }}
-      onAdminLogout={() => {
-        void handleAdminLogout();
-      }}
       onOpenWorkspace={handleWorkspaceTabSelect}
     />
   );
   const statusToneForBadge = currentStatusTone === "error" ? "error" : currentStatusTone === "ready" ? "ready" : "partial";
-  const accountTone = authSessionUnlocked ? "ready" : authSessionState.error ? "error" : "partial";
 
   return (
     <main className="app-shell app-shell-console" data-testid="app-shell">
@@ -1675,29 +1487,6 @@ export default function App() {
               <MutedSystemCopy className="shell-session-id">{ui.shell.sessionIdPrefix}: {activeSession.id}</MutedSystemCopy>
             ) : null}
 
-            {expertMode || mode === "github" || authSessionUnlocked ? (
-            <div className="shell-account-block">
-              <SectionLabel>{ui.shell.accountLabel}</SectionLabel>
-              <div className="shell-account-row">
-                <StatusBadge tone={accountTone}>
-                  {authSessionUnlocked ? ui.shell.accountAuthenticated : authSessionState.status === "loading" ? ui.shell.accountChecking : ui.shell.accountLocked}
-                </StatusBadge>
-                {authSessionUnlocked ? (
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={() => {
-                      void handleAdminLogout();
-                    }}
-                    disabled={authSessionState.busy}
-                  >
-                    {authSessionState.busy ? `${ui.shell.accountLogout}...` : ui.shell.accountLogout}
-                  </button>
-                ) : null}
-              </div>
-              {authSessionState.error ? <MutedSystemCopy>{authSessionState.error}</MutedSystemCopy> : null}
-            </div>
-            ) : null}
           </ShellCard>
 
           <SessionList

@@ -14,7 +14,7 @@ export type SettingsLoginAdapterAction =
   | "configure";
 
 export type SettingsLoginAdapter = {
-  id: "admin" | "github" | "matrix" | "chat";
+  id: "github" | "matrix" | "chat";
   label: string;
   status: SettingsLoginAdapterStatus;
   primaryAction: SettingsLoginAdapterAction;
@@ -26,9 +26,7 @@ export type SettingsLoginAdapter = {
 };
 
 type SettingsLoginAdapterCopy = {
-  authenticated: string;
   checking: string;
-  locked: string;
   ready: string;
   unavailable: string;
   error: string;
@@ -42,10 +40,6 @@ type SettingsLoginAdapterCopy = {
 
 export type DeriveSettingsLoginAdaptersInput = {
   copy: SettingsLoginAdapterCopy;
-  authSession: {
-    status: "loading" | "locked" | "authenticated";
-    error: string | null;
-  };
   backend: {
     healthy: boolean | null;
     label: string;
@@ -90,23 +84,9 @@ function statusActionLabel(action: SettingsLoginAdapterAction, copy: SettingsLog
 
 export function deriveSettingsLoginAdapters(input: DeriveSettingsLoginAdaptersInput): SettingsLoginAdapter[] {
   const { copy } = input;
-  const adminConnected = input.authSession.status === "authenticated";
-  const adminStatus: SettingsLoginAdapterStatus = input.authSession.status === "loading"
-    ? "checking"
-    : input.authSession.error
-      ? "error"
-      : adminConnected
-        ? "connected"
-        : "locked";
-  const githubStatus: SettingsLoginAdapterStatus = input.authSession.status === "loading"
-    ? "checking"
-    : input.authSession.error
-      ? "error"
-      : !adminConnected
-        ? "locked"
-        : input.github.configured === false || input.github.ready === false
-          ? "unavailable"
-          : "available";
+  const githubStatus: SettingsLoginAdapterStatus = input.github.configured === false || input.github.ready === false
+      ? "unavailable"
+      : "available";
   const matrixStatus: SettingsLoginAdapterStatus = input.matrix.connectionLabel === copy.error
     ? "error"
     : input.matrix.configured === false || input.matrix.ready === false
@@ -122,34 +102,19 @@ export function deriveSettingsLoginAdapters(input: DeriveSettingsLoginAdaptersIn
 
   const adapters: SettingsLoginAdapter[] = [
     {
-      id: "admin",
-      label: "Admin session",
-      status: adminStatus,
-      primaryAction: adminConnected ? "disconnect" : adminStatus === "checking" ? "retry" : "connect",
-      safeIdentityLabel: adminConnected ? copy.authenticated : adminStatus === "checking" ? copy.checking : copy.locked,
-      scopeSummary: "HttpOnly backend session",
-      expertDetails: [
-        { label: "Authority", value: "/api/auth/*" },
-        { label: "Session", value: input.authSession.status },
-        { label: "Backend", value: input.backend.label }
-      ],
-      requirements: adminConnected ? [] : ["MODEL_GATE_ADMIN_PASSWORD", "MODEL_GATE_SESSION_SECRET"],
-      authority: "/api/auth/login, /api/auth/me, /api/auth/logout"
-    },
-    {
       id: "github",
       label: "GitHub",
       status: githubStatus,
-      primaryAction: adminConnected ? "open" : "connect",
-      safeIdentityLabel: adminConnected ? input.github.connectionLabel : copy.locked,
+      primaryAction: githubStatus === "unavailable" ? "configure" : "open",
+      safeIdentityLabel: githubStatus === "unavailable" ? copy.unavailable : input.github.connectionLabel,
       scopeSummary: input.github.repositoryLabel,
       expertDetails: [
-        { label: "Authority", value: "/api/github/* + /api/auth/me" },
+        { label: "Authority", value: "/api/github/*" },
         { label: "Configured", value: input.github.configured === null ? copy.unavailable : String(input.github.configured) },
         { label: "Ready", value: input.github.ready === null ? copy.unavailable : String(input.github.ready) },
-        { label: "Access", value: adminConnected ? input.github.accessLabel : copy.locked }
+        { label: "Access", value: input.github.accessLabel }
       ],
-      requirements: adminConnected ? [] : ["Admin session"],
+      requirements: githubStatus === "unavailable" ? ["GITHUB_TOKEN", "GITHUB_ALLOWED_REPOS"] : [],
       authority: "/api/github/*"
     },
     {

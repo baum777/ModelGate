@@ -74,11 +74,6 @@ type SettingsWorkspaceProps = {
   onClearDiagnostics: () => void;
   truthSnapshot: SettingsTruthSnapshot;
   loginAdapters: SettingsLoginAdapter[];
-  adminPassword: string;
-  adminBusy: boolean;
-  onAdminPasswordChange: (value: string) => void;
-  onAdminLogin: () => void;
-  onAdminLogout: () => void;
   onOpenWorkspace: (workspace: "chat" | "github" | "matrix") => void;
 };
 
@@ -89,11 +84,6 @@ export function SettingsWorkspace({
   onClearDiagnostics,
   truthSnapshot,
   loginAdapters,
-  adminPassword,
-  adminBusy,
-  onAdminPasswordChange,
-  onAdminLogin,
-  onAdminLogout,
   onOpenWorkspace,
 }: SettingsWorkspaceProps) {
   const { locale, copy: ui } = useLocalization();
@@ -107,9 +97,6 @@ export function SettingsWorkspace({
         actionLabel: "Aktion",
         requirementsLabel: "Voraussetzungen",
         noRequirements: "Keine offenen Voraussetzungen",
-        passwordLabel: "Admin-Passwort",
-        signIn: "Anmelden",
-        signingIn: "Anmelden...",
         status: {
           available: "Bereit",
           connected: "Verbunden",
@@ -131,9 +118,6 @@ export function SettingsWorkspace({
         actionLabel: "Action",
         requirementsLabel: "Requirements",
         noRequirements: "No open requirements",
-        passwordLabel: "Admin password",
-        signIn: "Sign in",
-        signingIn: "Signing in...",
         status: {
           available: "Ready",
           connected: "Connected",
@@ -152,13 +136,6 @@ export function SettingsWorkspace({
       };
 
   function handleAdapterAction(adapter: SettingsLoginAdapter) {
-    if (adapter.id === "admin") {
-      if (adapter.primaryAction === "disconnect") {
-        onAdminLogout();
-      }
-      return;
-    }
-
     if (adapter.primaryAction === "open") {
       onOpenWorkspace(adapter.id);
     }
@@ -228,30 +205,6 @@ export function SettingsWorkspace({
                     {adapterCopy.action[adapter.primaryAction]}
                   </button>
                 </div>
-
-                {adapter.id === "admin" && adapter.primaryAction === "connect" ? (
-                  <form
-                    className="github-login-form settings-admin-login-form"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      onAdminLogin();
-                    }}
-                  >
-                    <label htmlFor="settings-admin-password">{adapterCopy.passwordLabel}</label>
-                    <input
-                      id="settings-admin-password"
-                      type="password"
-                      autoComplete="current-password"
-                      required
-                      value={adminPassword}
-                      onChange={(event) => onAdminPasswordChange(event.target.value)}
-                      disabled={adminBusy}
-                    />
-                    <button type="submit" disabled={adminBusy || adminPassword.trim().length === 0}>
-                      {adminBusy ? adapterCopy.signingIn : adapterCopy.signIn}
-                    </button>
-                  </form>
-                ) : null}
 
                 {expertMode ? (
                   <div className="detail-grid settings-adapter-details">

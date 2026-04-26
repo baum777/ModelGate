@@ -970,44 +970,6 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
   min-height: 52px;
 }
 
-.github-admin-login {
-  display: grid;
-  gap: 18px;
-}
-
-.github-login-card,
-.github-login-hint {
-  display: grid;
-  gap: 14px;
-}
-
-.github-login-form {
-  display: grid;
-  gap: 12px;
-}
-
-.github-login-form label {
-  color: var(--muted);
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
-.github-login-form input {
-  width: 100%;
-  min-height: 52px;
-  border-radius: 16px;
-  border: 1px solid var(--line);
-  background: rgba(3, 8, 17, 0.72);
-  color: var(--text);
-  padding: 0.95rem 1rem;
-}
-
-.github-login-form input:focus {
-  outline: 2px solid rgba(139, 124, 246, 0.35);
-  outline-offset: 2px;
-}
-
 .github-repo-card {
   padding: 14px;
   display: grid;
@@ -1650,8 +1612,7 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 .composer textarea:focus,
 .matrix-textarea:focus,
 .mini-panel select:focus,
-.input-row input:focus,
-.github-login-form input:focus {
+.input-row input:focus {
   outline: 2px solid rgba(255, 176, 92, 0.25);
   outline-offset: 2px;
 }
@@ -1874,7 +1835,6 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 .composer textarea,
 .matrix-textarea,
 .input-row input,
-.github-login-form input,
 .mini-panel select {
   min-height: 48px;
   line-height: 1.45;
@@ -2190,14 +2150,6 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 .settings-adapter-actions {
   display: flex;
   justify-content: flex-end;
-}
-
-.settings-admin-login-form {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.settings-admin-login-form label {
-  grid-column: 1 / -1;
 }
 
 .settings-adapter-details {
@@ -3474,7 +3426,6 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 
 /* Next UX gate: keep non-chat workspaces action-led instead of hero-led. */
 .github-workspace > .workspace-hero,
-.github-admin-login > .workspace-hero,
 .matrix-workspace > .matrix-hero,
 .review-workspace > .workspace-hero,
 .settings-workspace > .workspace-hero {
@@ -3490,7 +3441,6 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 }
 
 .github-workspace > .workspace-hero h1,
-.github-admin-login > .workspace-hero h1,
 .matrix-workspace > .matrix-hero h1,
 .review-workspace > .workspace-hero h1,
 .settings-workspace > .workspace-hero h1 {
@@ -3500,7 +3450,6 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 }
 
 .github-workspace > .workspace-hero .status-pill,
-.github-admin-login > .workspace-hero .status-pill,
 .matrix-workspace > .matrix-hero .status-pill,
 .review-workspace > .workspace-hero .status-pill,
 .settings-workspace > .workspace-hero .status-pill {
@@ -3508,7 +3457,6 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 }
 
 .github-workspace > .workspace-hero .hero-copy,
-.github-admin-login > .workspace-hero .hero-copy,
 .matrix-workspace > .matrix-hero .hero-copy,
 .review-workspace > .workspace-hero .hero-copy,
 .settings-workspace > .workspace-hero .hero-copy {
@@ -3516,7 +3464,6 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 }
 
 .github-workspace > .workspace-hero .workspace-hero-actions,
-.github-admin-login > .workspace-hero .workspace-hero-actions,
 .matrix-workspace > .matrix-hero .workspace-hero-actions,
 .review-workspace > .workspace-hero .workspace-hero-actions,
 .settings-workspace > .workspace-hero .workspace-hero-actions {
@@ -3544,7 +3491,6 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 
 @media (max-width: 720px) {
   .github-workspace > .workspace-hero,
-  .github-admin-login > .workspace-hero,
   .matrix-workspace > .matrix-hero,
   .review-workspace > .workspace-hero,
   .settings-workspace > .workspace-hero {
