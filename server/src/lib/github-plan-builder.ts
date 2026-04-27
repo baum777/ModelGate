@@ -228,7 +228,7 @@ async function generateProposalDraft(
   const selection = options.modelRegistry.resolveModel();
   const workflowPolicy = resolveGitHubProposalModel(options.env, options.modelCapabilities);
 
-  if (!selection.ok) {
+  if (selection.ok === false) {
     if (selection.reason !== "no_eligible_provider_targets") {
       throw new GitHubClientError({
         code: "github_not_configured",
