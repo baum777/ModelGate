@@ -435,7 +435,7 @@ async function installAbortableChatFetchMock(page: Page) {
 }
 
 async function loadConsole(page: Page) {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/console", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("app-shell")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("ModelGate Console")).toBeVisible();
   await expect(page.getByTestId("tab-chat")).toBeVisible();
@@ -444,6 +444,17 @@ async function loadConsole(page: Page) {
   await expect(page.getByTestId("tab-review")).toBeVisible();
   await expect(page.getByTestId("tab-settings")).toBeVisible();
 }
+
+test("root route renders public preview without console internals", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  await expect(page.getByTestId("public-preview")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("Public preview shell. Governed workspace access stays separate from this route.")).toBeVisible();
+  await expect(page.getByTestId("app-shell")).toHaveCount(0);
+  await expect(page.getByTestId("tab-chat")).toHaveCount(0);
+  await expect(page.getByTestId("truth-rail-health")).toHaveCount(0);
+});
 
 async function setLocale(page: Page, locale: "en" | "de") {
   const button = locale === "en" ? page.getByTestId("locale-en") : page.getByTestId("locale-de");

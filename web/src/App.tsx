@@ -88,6 +88,9 @@ type PersistedShellState = {
 };
 
 const SHELL_STORAGE_KEY = "modelgate.console.shell.v2";
+const THEME_STORAGE_KEY = "mg-theme";
+
+type ThemeMode = "dark" | "light";
 
 function createId() {
   return crypto.randomUUID();
@@ -221,8 +224,70 @@ function nowIso() {
 }
 
 export default function App() {
+  return shouldRenderConsole() ? <ConsoleShell /> : <PublicPreview />;
+}
+
+function shouldRenderConsole() {
+  if (typeof window === "undefined") {
+    return true;
+  }
+
+  const url = new URL(window.location.href);
+  return url.pathname === "/console" || url.searchParams.get("console") === "1";
+}
+
+function useTheme() {
+  const [theme, setTheme] = useState<ThemeMode>(() => {
+    if (typeof window === "undefined") {
+      return "dark";
+    }
+
+    const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
+
+    if (saved === "dark" || saved === "light") {
+      return saved;
+    }
+
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
+  return {
+    theme,
+    toggleTheme: () => setTheme((current) => current === "dark" ? "light" : "dark"),
+  };
+}
+
+function PublicPreview() {
+  return (
+    <main className="app-shell public-preview" data-testid="public-preview">
+      <section className="public-preview-card">
+        <div className="modelgate-mark" aria-hidden="true" />
+        <p className="app-kicker">MODELGATE</p>
+        <h1>ModelGate</h1>
+        <p className="hero-copy">
+          Public preview shell. Governed workspace access stays separate from this route.
+        </p>
+        <a className="secondary-button public-preview-link" href="/console">
+          Open governed console
+        </a>
+      </section>
+    </main>
+  );
+}
+
+function ConsoleShell() {
   const persisted = readPersistedShellState();
   const { locale, setLocale, copy: ui } = useLocalization();
+  const { theme, toggleTheme } = useTheme();
   const appText = useMemo(
     () => locale === "de"
       ? {
@@ -1419,12 +1484,21 @@ export default function App() {
     <main className="app-shell app-shell-console" data-testid="app-shell">
       <header className="global-header global-header-shell">
         <div className="brand-block">
+          <div className="modelgate-mark" aria-hidden="true" />
           <p className="app-kicker">{ui.shell.appKicker}</p>
           <h1>{ui.shell.appTitle}</h1>
           <p className="app-deck">{ui.shell.appDeck}</p>
         </div>
 
         <div className="header-actions">
+          <button
+            type="button"
+            className="theme-toggle-button"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {theme === "dark" ? "☀" : "☾"}
+          </button>
           <div className="shell-language-toggle" role="group" aria-label={ui.shell.languageLabel}>
             <button
               type="button"

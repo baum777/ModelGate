@@ -24,6 +24,26 @@
     {
       "source": "/chat",
       "destination": "/api/chat"
+    },
+    {
+      "source": "/api/matrix/:path*",
+      "destination": "/api/matrix/[...path]?path=:path*"
+    },
+    {
+      "source": "/api/auth/:path*",
+      "destination": "/api/[...path]?path=:path*"
+    },
+    {
+      "source": "/api/github/:path*",
+      "destination": "/api/[...path]?path=:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/[...path]?path=:path*"
+    },
+    {
+      "source": "/:path*",
+      "destination": "/"
     }
   ]
 }
