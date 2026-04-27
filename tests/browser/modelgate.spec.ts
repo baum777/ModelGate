@@ -456,6 +456,38 @@ test("root route renders public preview without console internals", async ({ pag
   await expect(page.getByTestId("truth-rail-health")).toHaveCount(0);
 });
 
+test("console route normalizes legacy query entry and keeps active workspace in the URL", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await page.goto("/?console=1", { waitUntil: "domcontentloaded" });
+
+  await expect(page.getByTestId("app-shell")).toBeVisible({ timeout: 15_000 });
+  await expect(page).toHaveURL(/\/console\?mode=chat$/);
+
+  await page.getByTestId("tab-github").click();
+  await expect(page.getByTestId("github-workspace")).toBeVisible();
+  await expect(page).toHaveURL(/\/console\?mode=github$/);
+
+  await page.goto("/console?mode=matrix", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("matrix-workspace")).toBeVisible({ timeout: 15_000 });
+  await expect(page).toHaveURL(/\/console\?mode=matrix$/);
+});
+
+test("GitHub and Matrix workspaces expose backend route ownership in the truth rail", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await loadConsole(page);
+
+  await page.getByTestId("tab-github").click();
+  await expect(page.getByTestId("truth-rail-route-ownership")).toBeVisible();
+  await expect(page.getByTestId("truth-rail-route-ownership")).toContainText("GitHub and Matrix are not browser integrations.");
+  await expect(page.getByTestId("truth-rail-route-ownership")).toContainText("identity");
+  await expect(page.getByTestId("truth-rail-route-ownership")).toContainText("verify");
+
+  await page.getByTestId("tab-matrix").click();
+  await expect(page.getByTestId("truth-rail-route-ownership")).toBeVisible();
+  await expect(page.getByTestId("truth-rail-route-ownership")).toContainText("analyze");
+  await expect(page.getByTestId("truth-rail-route-ownership")).toContainText("execute");
+});
+
 async function setLocale(page: Page, locale: "en" | "de") {
   const button = locale === "en" ? page.getByTestId("locale-en") : page.getByTestId("locale-de");
   const pressed = await button.getAttribute("aria-pressed");

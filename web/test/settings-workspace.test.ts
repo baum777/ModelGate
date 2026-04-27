@@ -167,6 +167,8 @@ test("Settings workspace renders backend, connection, and model truth without in
   assert.match(markup, /chat_stream_completed/);
   assert.match(markup, /github_proposal_created/);
   assert.doesNotMatch(markup, /Admin session/);
+  assert.doesNotMatch(markup, /<input/i);
+  assert.doesNotMatch(markup, /type="password"/i);
   assert.match(markup, /GitHub/);
   assert.match(markup, /Matrix/);
   assert.match(markup, /\/api\/matrix\/\*/);

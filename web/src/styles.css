@@ -3903,6 +3903,50 @@ button:hover:not(:disabled) { transform: translateY(-1px); }
   font-weight: 500;
 }
 
+.route-status-ladder {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.route-status-step {
+  display: grid;
+  grid-template-columns: minmax(74px, .65fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 7px 0;
+  border-bottom: .5px solid var(--bd);
+}
+
+.route-status-step:last-child {
+  border-bottom: 0;
+}
+
+.route-status-step span {
+  color: var(--tx-2);
+  font-family: "Syne", "Inter", sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.route-status-step strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--tx);
+  font-family: "IBM Plex Mono", "Cascadia Mono", monospace;
+  font-size: 10px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.route-status-step-ready strong { color: var(--green); }
+.route-status-step-partial strong { color: var(--amber); }
+.route-status-step-error strong { color: var(--red); }
+.route-status-step-muted strong { color: var(--tx-3); }
+
 .composer textarea,
 .matrix-textarea,
 .input-row input,

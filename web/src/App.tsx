@@ -92,6 +92,40 @@ const THEME_STORAGE_KEY = "mg-theme";
 
 type ThemeMode = "dark" | "light";
 
+function isWorkspaceMode(value: string | null): value is WorkspaceMode {
+  return value === "chat"
+    || value === "github"
+    || value === "matrix"
+    || value === "review"
+    || value === "settings";
+}
+
+function readUrlWorkspaceMode() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const url = new URL(window.location.href);
+  const requestedMode = url.searchParams.get("mode");
+  return isWorkspaceMode(requestedMode) ? requestedMode : null;
+}
+
+function replaceConsoleUrl(mode?: WorkspaceMode) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+  url.pathname = "/console";
+  url.searchParams.delete("console");
+
+  if (mode) {
+    url.searchParams.set("mode", mode);
+  }
+
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
 function createId() {
   return crypto.randomUUID();
 }
@@ -284,6 +318,29 @@ function PublicPreview() {
   );
 }
 
+function RouteStatusLadder({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: Array<{
+    label: string;
+    value: string;
+    tone?: "ready" | "partial" | "error" | "muted";
+  }>;
+}) {
+  return (
+    <div className="route-status-ladder" aria-label={title}>
+      {rows.map((row) => (
+        <div className={`route-status-step route-status-step-${row.tone ?? "muted"}`} key={row.label}>
+          <span>{row.label}</span>
+          <strong>{row.value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ConsoleShell() {
   const persisted = readPersistedShellState();
   const { locale, setLocale, copy: ui } = useLocalization();
@@ -394,7 +451,7 @@ function ConsoleShell() {
     }),
     [ui],
   );
-  const [mode, setMode] = useState<WorkspaceMode>(persisted?.activeTab ?? "chat");
+  const [mode, setMode] = useState<WorkspaceMode>(() => readUrlWorkspaceMode() ?? persisted?.activeTab ?? "chat");
   const [workMode, setWorkMode] = useState<WorkMode>(() => resolvePersistedWorkMode(persisted));
   const expertMode = isExpertMode(workMode);
   const workModeVisibility = getWorkModeVisibility(workMode);
@@ -428,6 +485,10 @@ function ConsoleShell() {
   const [matrixContext, setMatrixContext] = useState<MatrixWorkspaceStatus>(() => createDefaultMatrixContext());
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+
+  useEffect(() => {
+    replaceConsoleUrl(mode);
+  }, [mode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -578,6 +639,7 @@ function ConsoleShell() {
 
   const handleWorkspaceTabSelect = useCallback((nextMode: WorkspaceMode) => {
     setMode(nextMode);
+    replaceConsoleUrl(nextMode);
 
     if (isSessionWorkspace(nextMode)) {
       setWorkspaceState((current) => {
@@ -591,6 +653,7 @@ function ConsoleShell() {
     const now = nowIso();
 
     setMode(workspace);
+    replaceConsoleUrl(workspace);
     setWorkspaceState((current) => {
       switch (workspace) {
         case "github":
@@ -637,6 +700,7 @@ function ConsoleShell() {
 
   const handleWorkspaceSessionSelect = useCallback((workspace: WorkspaceKind, sessionId: string) => {
     setMode(workspace);
+    replaceConsoleUrl(workspace);
     setWorkspaceState((current) => selectSession(current, workspace, sessionId));
   }, []);
 
@@ -732,6 +796,68 @@ function ConsoleShell() {
       ? [{ label: ui.review.approvalNeeded, value: matrixContext.approvalLabel }]
       : []),
   ];
+  const routeOwnershipRows = mode === "github"
+    ? [
+        {
+          label: "identity",
+          value: githubAccountLabel,
+          tone: githubReady === true ? "ready" as const : githubReady === false ? "error" as const : "partial" as const,
+        },
+        {
+          label: "config",
+          value: runtimeDiagnostics?.github.configured ? ui.settings.configured : runtimeDiagnostics ? ui.settings.notConfigured : ui.shell.healthChecking,
+          tone: runtimeDiagnostics?.github.configured ? "ready" as const : runtimeDiagnostics ? "error" as const : "partial" as const,
+        },
+        {
+          label: "scope",
+          value: githubContext.repositoryLabel,
+          tone: githubContext.repositoryLabel === ui.github.noRepoSelected ? "partial" as const : "ready" as const,
+        },
+        {
+          label: "execute",
+          value: githubContext.approvalLabel,
+          tone: githubContext.approvalLabel === ui.common.none ? "muted" as const : "partial" as const,
+        },
+        {
+          label: "verify",
+          value: githubContext.resultLabel,
+          tone: githubContext.resultLabel === ui.github.verifyResult ? "muted" as const : "ready" as const,
+        },
+      ]
+    : mode === "matrix"
+      ? [
+          {
+            label: "identity",
+            value: matrixContext.identityLabel,
+            tone: runtimeDiagnostics?.matrix.configured ? "ready" as const : runtimeDiagnostics ? "error" as const : "partial" as const,
+          },
+          {
+            label: "rooms",
+            value: matrixContext.connectionLabel,
+            tone: matrixContext.connectionLabel === ui.shell.healthChecking ? "partial" as const : "ready" as const,
+          },
+          {
+            label: "scope",
+            value: matrixContext.scopeLabel,
+            tone: matrixContext.scopeLabel === ui.matrix.scopeUnresolved ? "partial" as const : "ready" as const,
+          },
+          {
+            label: "analyze",
+            value: matrixContext.summaryLabel,
+            tone: matrixContext.summaryLabel === ui.matrix.scopeSummaryUnavailable ? "muted" as const : "ready" as const,
+          },
+          {
+            label: "execute",
+            value: matrixContext.approvalLabel,
+            tone: matrixContext.approvalLabel === ui.common.none ? "muted" as const : "partial" as const,
+          },
+          {
+            label: "verify",
+            value: matrixContext.expertDetails.sseLifecycle,
+            tone: matrixContext.expertDetails.sseLifecycle === ui.common.loading ? "muted" as const : "ready" as const,
+          },
+        ]
+      : [];
   const reviewHasStale = reviewItems.some((item) => item.status === "stale");
   const reviewHasPending = reviewItems.some((item) => item.status === "pending_review");
   const reviewHasExecuting = reviewItems.some((item) => item.status === "approved");
@@ -1605,6 +1731,22 @@ function ConsoleShell() {
               </div>
             ) : null}
           </TruthRailSection>
+
+          {routeOwnershipRows.length > 0 ? (
+            <TruthRailSection
+              title={mode === "github" ? "GitHub route ownership" : "Matrix route ownership"}
+              testId="truth-rail-route-ownership"
+              badge={<StatusBadge tone="muted">backend-owned</StatusBadge>}
+            >
+              <MutedSystemCopy>
+                GitHub and Matrix are not browser integrations. The console sends governed intent; backend owns credentials, execution, verification, and sanitized errors.
+              </MutedSystemCopy>
+              <RouteStatusLadder
+                title={mode === "github" ? "GitHub status ladder" : "Matrix status ladder"}
+                rows={routeOwnershipRows}
+              />
+            </TruthRailSection>
+          ) : null}
 
           {approvalSummary.hasApprovals || expertMode ? (
             <TruthRailSection
