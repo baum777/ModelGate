@@ -86,6 +86,45 @@ test("auth login rejects invalid credentials and accepts the configured password
   assert.match(setCookie ?? "", /Max-Age=86400/);
 });
 
+test("auth login is rate-limited with retry-after", async (t) => {
+  const app = createApp({
+    env: createTestEnv({
+      RATE_LIMIT_WINDOW_MS: 60_000,
+      RATE_LIMIT_AUTH_LOGIN_MAX: 1
+    }),
+    openRouter: createMockOpenRouterClient(),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const firstResponse = await app.inject({
+    method: "POST",
+    url: "/api/auth/login",
+    payload: {
+      password: "wrong-password"
+    }
+  });
+
+  assert.equal(firstResponse.statusCode, 401);
+
+  const secondResponse = await app.inject({
+    method: "POST",
+    url: "/api/auth/login",
+    payload: {
+      password: "wrong-password"
+    }
+  });
+
+  assert.equal(secondResponse.statusCode, 429);
+  assert.equal(secondResponse.headers["retry-after"], "60");
+  assert.deepEqual(JSON.parse(secondResponse.body), {
+    code: "auth_attempts_exceeded"
+  });
+});
+
 test("auth session checks require a valid cookie and logout clears it", async (t) => {
   const app = createApp({
     env: createTestEnv(),

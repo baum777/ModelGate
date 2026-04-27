@@ -6,7 +6,6 @@ test-results/
 .env.local
 .env.router
 .local-ai/
-.local-dev/
 router.local.yml
 llm-router.local.yml
 .DS_Store
@@ -15,7 +14,5 @@ server/node_modules/
 server/dist/
 web/node_modules/
 web/dist/
-
-output/playwright/
 
 .vercel

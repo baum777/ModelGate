@@ -49,16 +49,22 @@ test("Matrix workspace review items map topic plans into the shared review langu
     ...verified,
     status: "mismatch",
   } as MatrixRoomTopicVerificationResult;
+  const failed = {
+    ...verified,
+    status: "failed",
+  } as MatrixRoomTopicVerificationResult;
 
   const pendingItems = buildMatrixReviewItems(plan, null, null, "@alice:matrix.example");
   const pendingItemsEn = buildMatrixReviewItems(plan, null, null, "@alice:matrix.example", "en");
   const approvedItems = buildMatrixReviewItems(plan, execution, null, "@alice:matrix.example");
   const executedItems = buildMatrixReviewItems(plan, execution, verified, "@alice:matrix.example");
+  const failedItems = buildMatrixReviewItems(plan, execution, failed, "@alice:matrix.example");
   const rejectedItems = buildMatrixReviewItems(plan, execution, mismatch, "@alice:matrix.example");
 
   assert.equal(pendingItems[0]?.status, "pending_review");
   assert.equal(approvedItems[0]?.status, "approved");
   assert.equal(executedItems[0]?.status, "executed");
+  assert.equal(failedItems[0]?.status, "failed");
   assert.equal(rejectedItems[0]?.status, "rejected");
   assert.equal(pendingItems[0]?.sourceLabel, "Matrix-Workspace");
   assert.match(pendingItems[0]?.summary ?? "", /Aktuell:/);

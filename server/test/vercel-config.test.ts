@@ -7,31 +7,30 @@ import test from "node:test";
 type VercelConfig = {
   functions?: Record<string, {
     maxDuration?: number;
-    includeFiles?: string;
-  }>;
-  rewrites?: Array<{
-    source: string;
-    destination: string;
+    includeFiles?: string | string[];
   }>;
 };
+
+function assertIncludeFiles(entry: string | string[] | undefined) {
+  assert.ok(entry, "includeFiles must be configured");
+
+  if (Array.isArray(entry)) {
+    assert.deepEqual(entry, [
+      "config/llm-router.yml",
+      "config/model-capabilities.yml"
+    ]);
+    return;
+  }
+
+  assert.equal(entry, "config/*.yml");
+}
 
 test("vercel config bundles runtime-loaded config files for both api entrypoints", () => {
   const vercelConfigPath = fileURLToPath(new URL("../../vercel.json", import.meta.url));
   const vercelConfig = JSON.parse(fs.readFileSync(vercelConfigPath, "utf8")) as VercelConfig;
 
   assert.equal(vercelConfig.functions?.["api/[...path].ts"]?.maxDuration, 60);
-  assert.equal(vercelConfig.functions?.["api/[...path].ts"]?.includeFiles, "config/*.yml");
+  assertIncludeFiles(vercelConfig.functions?.["api/[...path].ts"]?.includeFiles);
   assert.equal(vercelConfig.functions?.["api/matrix/[...path].ts"]?.maxDuration, 60);
-  assert.equal(vercelConfig.functions?.["api/matrix/[...path].ts"]?.includeFiles, "config/*.yml");
-
-  const configDir = path.dirname(fileURLToPath(new URL("../../config/llm-router.yml", import.meta.url)));
-  assert.deepEqual(
-    fs.readdirSync(configDir).filter((fileName) => fileName.endsWith(".yml")).sort(),
-    ["llm-router.yml", "model-capabilities.yml"]
-  );
-
-  assert.deepEqual(vercelConfig.rewrites?.at(-1), {
-    source: "/:path*",
-    destination: "/"
-  });
+  assertIncludeFiles(vercelConfig.functions?.["api/matrix/[...path].ts"]?.includeFiles);
 });

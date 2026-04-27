@@ -43,36 +43,101 @@ export type ModelResponse = {
 };
 
 export type DiagnosticsResponse = {
-  backend: {
-    status: "ok" | "degraded" | "error";
-    version: string;
-    mode: "policy" | "rules_first";
+  ok: true;
+  service: string;
+  runtimeMode: string;
+  diagnosticsGeneratedAt: string;
+  processStartedAt: string;
+  uptimeMs: number;
+  models: {
+    defaultPublicAlias: string;
+    publicAliases: string[];
   };
   routing: {
-    activePolicy: "policy" | "rules_first";
-    failClosed: boolean;
+    mode: string;
     allowFallback: boolean;
-    freeOnly: boolean;
-    logEnabled: boolean;
-    taskAliasMap: Record<string, string>;
-    fallbackChain: string[];
+    failClosed: boolean;
+    requireBackendOwnedResolution: boolean;
+  };
+  rateLimit: {
+    enabled: boolean;
+    windowMs: number;
+    limits: {
+      chat: number;
+      auth_login: number;
+      github_propose: number;
+      github_execute: number;
+      matrix_execute: number;
+    };
+    blockedByScope: {
+      chat: number;
+      auth_login: number;
+      github_propose: number;
+      github_execute: number;
+      matrix_execute: number;
+    };
+  };
+  actionStore: {
+    mode: "memory" | "file";
   };
   github: {
-    status: "ok" | "missing" | "error";
-    repoCount: number;
-    activeRepos: string[];
-    adminKeyConfigured: boolean;
-    lastContextBuild: string | null;
+    configured: boolean;
+    ready: boolean;
   };
   matrix: {
-    status: "ok" | "token_required" | "error";
-    enabled: boolean;
-    required: boolean;
-    failClosed: boolean;
-    expectedUserConfigured: boolean;
-    allowedActions: string[];
-    homeserverConfigured: boolean;
+    configured: boolean;
+    ready: boolean;
   };
+  journal: {
+    enabled: boolean;
+    mode: "memory" | "file";
+    maxEntries: number;
+    exposeRecentLimit: number;
+    recentCount: number;
+  };
+  counters: {
+    chatRequests: number;
+    chatStreamStarted: number;
+    chatStreamCompleted: number;
+    chatStreamError: number;
+    chatStreamAborted: number;
+    upstreamError: number;
+  };
+};
+
+export type JournalEntry = {
+  id: string;
+  timestamp: string;
+  source: "chat" | "github" | "matrix" | "auth" | "rate_limit" | "diagnostics" | "system";
+  eventType: string;
+  authorityDomain: string;
+  severity: "info" | "warning" | "error";
+  outcome: "accepted" | "rejected" | "executed" | "failed" | "blocked" | "verified" | "unverifiable" | "observed";
+  summary: string;
+  correlationId: string | null;
+  proposalId: string | null;
+  planId: string | null;
+  executionId: string | null;
+  verificationId: string | null;
+  modelRouteSummary: {
+    selectedAlias?: string;
+    workflowRole?: string;
+    taskClass?: string;
+    fallbackUsed?: boolean;
+    degraded?: boolean;
+    streaming?: boolean;
+  } | null;
+  safeMetadata: Record<string, unknown>;
+  redaction: {
+    contentStored: false;
+    secretsStored: false;
+    filteredKeys: string[];
+  };
+};
+
+export type JournalRecentResponse = {
+  ok: true;
+  entries: JournalEntry[];
 };
 
 export type ChatStreamHandlers = {
@@ -240,6 +305,29 @@ export async function fetchDiagnostics(): Promise<DiagnosticsResponse> {
   }
 
   return response.json() as Promise<DiagnosticsResponse>;
+}
+
+export async function fetchJournalRecent(options?: { limit?: number; source?: JournalEntry["source"] }): Promise<JournalRecentResponse> {
+  const params = new URLSearchParams();
+
+  if (typeof options?.limit === "number" && Number.isFinite(options.limit) && options.limit > 0) {
+    params.set("limit", String(Math.floor(options.limit)));
+  }
+
+  if (options?.source) {
+    params.set("source", options.source);
+  }
+
+  const query = params.toString();
+  const response = await fetch(resolveApiUrl(`/journal/recent${query.length > 0 ? `?${query}` : ""}`), {
+    credentials: "include"
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return response.json() as Promise<JournalRecentResponse>;
 }
 
 export async function streamChatCompletion(

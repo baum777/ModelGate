@@ -41,7 +41,7 @@ export type ChatSuccessResponse = {
   route: ChatRouteMetadata;
 };
 
-export type ChatErrorCode = "invalid_request" | "upstream_error" | "internal_error";
+export type ChatErrorCode = "invalid_request" | "upstream_error" | "internal_error" | "rate_limited";
 
 export type ChatErrorResponse = {
   ok: false;

@@ -1,87 +1,63 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import type { AppEnv } from "../lib/env.js";
-import type { AuthConfig } from "../lib/auth.js";
+import type { GitHubActionStoreSelection } from "../lib/github-action-store.js";
 import type { GitHubConfig } from "../lib/github-env.js";
 import type { MatrixConfig } from "../lib/matrix-env.js";
 import type { ModelRegistry } from "../lib/model-policy.js";
+import type { AppRateLimiter } from "../lib/rate-limit.js";
+import type { RuntimeJournal } from "../lib/runtime-journal.js";
+import type { RuntimeObservability } from "../lib/runtime-observability.js";
+import type { ModelCapabilitiesConfig } from "../lib/workflow-model-router.js";
 
-type DiagnosticsDependencies = {
+type DiagnosticsRouteDependencies = {
   env: AppEnv;
-  authConfig: AuthConfig;
+  modelRegistry: ModelRegistry;
+  modelCapabilitiesConfig: ModelCapabilitiesConfig;
+  rateLimiter: AppRateLimiter;
+  runtimeObservability: RuntimeObservability;
   githubConfig: GitHubConfig;
   matrixConfig: MatrixConfig;
-  modelRegistry: ModelRegistry;
+  actionStoreSelection: GitHubActionStoreSelection;
+  runtimeJournal: RuntimeJournal;
 };
 
-function unauthorized(reply: FastifyReply) {
-  return reply.status(401).send({
-    ok: false,
-    error: {
-      code: "diagnostics_auth_required",
-      message: "Diagnostics require X-ModelGate-Admin-Key"
-    }
-  });
-}
+export function diagnosticsRoutes(app: FastifyInstance, deps: DiagnosticsRouteDependencies) {
+  app.get("/diagnostics", async () => {
+    const runtime = deps.runtimeObservability.snapshot();
+    const rateLimit = deps.rateLimiter.getPublicSnapshot();
+    const journal = deps.runtimeJournal.getPublicSnapshot();
 
-function hasDiagnosticsAccess(request: FastifyRequest, authConfig: AuthConfig) {
-  const header = request.headers["x-modelgate-admin-key"];
-  const adminKey = Array.isArray(header) ? header[0] : header;
-
-  return Boolean(
-    authConfig.ready
-    && authConfig.adminPassword
-    && typeof adminKey === "string"
-    && adminKey === authConfig.adminPassword
-  );
-}
-
-export function diagnosticsRoutes(app: FastifyInstance, deps: DiagnosticsDependencies) {
-  app.get("/diagnostics", async (request, reply) => {
-    if (!hasDiagnosticsAccess(request, deps.authConfig)) {
-      return unauthorized(reply);
-    }
-
-    const publicAliases = deps.modelRegistry.publicModels.map((model) => model.alias);
-    const defaultAlias = deps.modelRegistry.defaultModelAlias;
-
-    return reply.status(200).send({
-      backend: {
-        status: "ok",
-        version: deps.env.APP_NAME,
-        mode: deps.env.MODEL_ROUTING_MODE === "policy" ? "policy" : "rules_first"
+    return {
+      ok: true,
+      service: deps.env.APP_NAME,
+      runtimeMode: "local",
+      diagnosticsGeneratedAt: runtime.generatedAt,
+      processStartedAt: runtime.startedAt,
+      uptimeMs: runtime.uptimeMs,
+      models: {
+        defaultPublicAlias: deps.modelRegistry.defaultModelAlias,
+        publicAliases: deps.modelRegistry.getPublicRegistry().map((entry) => entry.alias)
       },
       routing: {
-        activePolicy: deps.env.MODEL_ROUTING_MODE === "policy" ? "policy" : "rules_first",
-        failClosed: deps.env.MODEL_ROUTING_FAIL_CLOSED,
+        mode: deps.env.MODEL_ROUTING_MODE,
         allowFallback: deps.env.ALLOW_MODEL_FALLBACK,
-        freeOnly: true,
-        logEnabled: deps.env.MODEL_ROUTING_LOG_ENABLED,
-        taskAliasMap: {
-          chat: defaultAlias,
-          coding: defaultAlias,
-          repo_review: defaultAlias,
-          deep_reason: defaultAlias,
-          architecture: defaultAlias,
-          matrix_analyze: defaultAlias
-        },
-        fallbackChain: publicAliases
+        failClosed: deps.env.MODEL_ROUTING_FAIL_CLOSED,
+        requireBackendOwnedResolution: deps.modelCapabilitiesConfig.global_policy.require_backend_owned_model_resolution
+      },
+      rateLimit,
+      actionStore: {
+        mode: deps.actionStoreSelection.mode
       },
       github: {
-        status: deps.githubConfig.ready ? "ok" : deps.githubConfig.enabled ? "error" : "missing",
-        repoCount: deps.githubConfig.allowedRepos.length,
-        activeRepos: deps.githubConfig.allowedRepos,
-        adminKeyConfigured: deps.authConfig.ready,
-        lastContextBuild: null
+        configured: deps.githubConfig.enabled,
+        ready: deps.githubConfig.ready
       },
       matrix: {
-        status: deps.matrixConfig.ready ? "ok" : deps.matrixConfig.enabled ? "error" : "token_required",
-        enabled: deps.matrixConfig.enabled,
-        required: deps.matrixConfig.required,
-        failClosed: deps.env.MATRIX_FAIL_CLOSED,
-        expectedUserConfigured: Boolean(deps.matrixConfig.expectedUserId),
-        allowedActions: deps.env.MATRIX_ALLOWED_ACTION_TYPES,
-        homeserverConfigured: Boolean(deps.matrixConfig.baseUrl)
-      }
-    });
+        configured: deps.matrixConfig.enabled,
+        ready: deps.matrixConfig.ready
+      },
+      journal,
+      counters: runtime.counters
+    };
   });
 }

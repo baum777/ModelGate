@@ -1,5 +1,9 @@
 import {
   createInitialChatState,
+  createInitialStreamState,
+  getInterruptedStreamMessage,
+  normalizeChatExecutionMode,
+  type ChatExecutionMode,
   type ChatDraft,
   type ChatExecutionReceipt,
   type ChatMessage,
@@ -48,6 +52,7 @@ export type WorkspaceSession<TMetadata> = SessionBase & {
 export type ChatSessionMetadata = {
   chatState: ChatState;
   selectedModelAlias: string | null;
+  executionMode: ChatExecutionMode;
 };
 
 export type GitHubSessionMetadata = {
@@ -354,6 +359,26 @@ function normalizeChatState(value: unknown): ChatState | null {
           started: Boolean(value.currentAssistantDraft.started)
         }
       : null;
+  const streamState = value.streamState && isRecord(value.streamState)
+    ? createInitialStreamState({
+        started: Boolean(value.streamState.started),
+        routeReceived: Boolean(value.streamState.routeReceived),
+        tokenCount: typeof value.streamState.tokenCount === "number" && Number.isFinite(value.streamState.tokenCount)
+          ? Math.max(0, Math.floor(value.streamState.tokenCount))
+          : 0,
+        terminalReceived: Boolean(value.streamState.terminalReceived),
+        terminalKind:
+          value.streamState.terminalKind === "done"
+          || value.streamState.terminalKind === "error"
+          || value.streamState.terminalKind === "malformed"
+          || value.streamState.terminalKind === "none"
+            ? value.streamState.terminalKind
+            : "none",
+        cancelled: Boolean(value.streamState.cancelled),
+        interrupted: Boolean(value.streamState.interrupted),
+        malformed: Boolean(value.streamState.malformed)
+      })
+    : createInitialStreamState();
   const lastError = readNullableString(value.lastError);
   const lastStreamWarning = readNullableString(value.lastStreamWarning);
   const autoScrollEnabled = readBoolean(value.autoScrollEnabled);
@@ -389,30 +414,50 @@ function normalizeChatState(value: unknown): ChatState | null {
   }
 
   const normalizedPendingProposal = pendingProposal;
+  const wasInProgress = connectionState === "submitting" || connectionState === "streaming";
+  const recoveredWarning = wasInProgress
+    ? getInterruptedStreamMessage()
+    : lastStreamWarning;
+  const recoveredDraft = wasInProgress && currentAssistantDraft
+    ? {
+        ...currentAssistantDraft,
+        started: false
+      }
+    : currentAssistantDraft;
+  const recoveredNotices = wasInProgress
+    ? [
+        ...notices.filter((notice): notice is ChatNotice => Boolean(notice)),
+        {
+          id: `notice-stream-recover-${Date.now()}`,
+          level: "system" as const,
+          message: getInterruptedStreamMessage(),
+          createdAt: new Date().toISOString()
+        }
+      ].slice(-8)
+    : notices.filter((notice): notice is ChatNotice => Boolean(notice));
 
   const normalized: ChatState = {
     messages: messages.filter((message): message is ChatMessage => Boolean(message)),
     input,
-    connectionState: connectionState === "submitting" || connectionState === "streaming"
-      ? "error"
-      : connectionState,
-    currentAssistantDraft:
-      connectionState === "submitting" || connectionState === "streaming"
-        ? null
-        : currentAssistantDraft,
+    connectionState: wasInProgress ? "error" : connectionState,
+    currentAssistantDraft: recoveredDraft,
     lastError,
-    lastStreamWarning:
-      connectionState === "submitting" || connectionState === "streaming"
-        ? "A chat stream was in progress and was not resumed after reload."
-        : lastStreamWarning,
+    lastStreamWarning: recoveredWarning,
     autoScrollEnabled,
     activeRoute: null,
-    pendingProposal:
-      connectionState === "submitting" || connectionState === "streaming"
-        ? null
-        : normalizedPendingProposal,
+    pendingProposal: wasInProgress ? null : normalizedPendingProposal,
     receipts: receipts.filter((receipt): receipt is ChatExecutionReceipt => Boolean(receipt)),
-    notices: notices.filter((notice): notice is ChatNotice => Boolean(notice))
+    notices: recoveredNotices,
+    streamState: wasInProgress
+      ? {
+          ...streamState,
+          started: true,
+          interrupted: true,
+          terminalReceived: false,
+          terminalKind: "none",
+          tokenCount: Math.max(streamState.tokenCount, recoveredDraft?.text.length ?? 0)
+        }
+      : streamState
   };
 
   return normalized;
@@ -427,6 +472,7 @@ function normalizeChatSessionMetadata(value: unknown): ChatSessionMetadata | nul
   const selectedModelAlias = value.selectedModelAlias === null || typeof value.selectedModelAlias === "string"
     ? value.selectedModelAlias
     : null;
+  const executionMode = normalizeChatExecutionMode(value.executionMode);
 
   if (!chatState) {
     return null;
@@ -434,7 +480,8 @@ function normalizeChatSessionMetadata(value: unknown): ChatSessionMetadata | nul
 
   return {
     chatState,
-    selectedModelAlias
+    selectedModelAlias,
+    executionMode
   };
 }
 
@@ -724,7 +771,8 @@ function normalizeSession<TMetadata>(
 export function createChatSessionMetadata(): ChatSessionMetadata {
   return {
     chatState: createInitialChatState(),
-    selectedModelAlias: null
+    selectedModelAlias: null,
+    executionMode: "governed"
   };
 }
 
@@ -1049,7 +1097,7 @@ export function deriveSessionTitle<TMetadata>(session: WorkspaceSession<TMetadat
 
   if (session.workspace === "chat") {
     const metadata = session.metadata as ChatSessionMetadata;
-    if (metadata.chatState.pendingProposal?.prompt) {
+    if (metadata.executionMode === "governed" && metadata.chatState.pendingProposal?.prompt) {
       return metadata.chatState.pendingProposal.prompt.trim().slice(0, 48);
     }
     const firstUserMessage = metadata.chatState.messages.find((message) => message.role === "user");
@@ -1092,10 +1140,10 @@ export function deriveSessionStatus<TMetadata>(session: WorkspaceSession<TMetada
     if (metadata.chatState.connectionState === "error" || metadata.chatState.lastError) {
       return "failed";
     }
-    if (metadata.chatState.pendingProposal?.status === "pending") {
+    if (metadata.executionMode === "governed" && metadata.chatState.pendingProposal?.status === "pending") {
       return "review_required";
     }
-    if (metadata.chatState.pendingProposal?.status === "executing") {
+    if (metadata.executionMode === "governed" && metadata.chatState.pendingProposal?.status === "executing") {
       return "in_progress";
     }
     if (metadata.chatState.connectionState === "submitting" || metadata.chatState.connectionState === "streaming") {

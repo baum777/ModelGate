@@ -6,13 +6,14 @@ import {
   type GitHubContextBundle,
   type GitHubDiffFile,
   type GitHubProposalDraft,
+  type GitHubRoutingMetadata,
 } from "./github-contract.js";
 import type { GitHubConfig } from "./github-env.js";
 import { isGitHubRepoAllowed } from "./github-env.js";
 import type { ModelRegistry } from "./model-policy.js";
 import type { OpenRouterClient } from "./openrouter.js";
 import type { AppEnv } from "./env.js";
-import type { ModelCapabilitiesConfig } from "./workflow-model-router.js";
+import type { ModelCapabilitiesConfig, WorkflowModelPolicy } from "./workflow-model-router.js";
 import {
   assertStructuredOutputIfRequired,
   recordWorkflowModelDecision,
@@ -224,21 +225,23 @@ async function generateProposalDraft(
   request: GitHubChangeProposalRequest,
   context: GitHubContextBundle,
   files: LoadedProposalFile[]
-): Promise<GitHubProposalDraft> {
+): Promise<{
+  draft: GitHubProposalDraft;
+  routingMetadata: GitHubRoutingMetadata;
+}> {
   const selection = options.modelRegistry.resolveModel();
   const workflowPolicy = resolveGitHubProposalModel(options.env, options.modelCapabilities);
+  const selectionReason = "reason" in selection ? selection.reason : null;
 
-  if (selection.ok === false) {
-    if (selection.reason !== "no_eligible_provider_targets") {
-      throw new GitHubClientError({
-        code: "github_not_configured",
-        status: 503,
-        operation: "GitHub proposal generation",
-        path: "/api/github/actions/propose",
-        baseUrl: "unavailable",
-        message: "GitHub proposal backend is not configured"
-      });
-    }
+  if (!selection.ok && selectionReason !== "no_eligible_provider_targets") {
+    throw new GitHubClientError({
+      code: "github_not_configured",
+      status: 503,
+      operation: "GitHub proposal generation",
+      path: "/api/github/actions/propose",
+      baseUrl: "unavailable",
+      message: "GitHub proposal backend is not configured"
+    });
   }
 
   const publicSelection = selection.ok
@@ -289,7 +292,10 @@ async function generateProposalDraft(
     const jsonText = extractJsonObject(response.text);
     const parsed = JSON.parse(jsonText) as unknown;
     assertStructuredOutputIfRequired(workflowPolicy, parsed);
-    return GitHubProposalDraftSchema.parse(parsed) as GitHubProposalDraft;
+    return {
+      draft: GitHubProposalDraftSchema.parse(parsed) as GitHubProposalDraft,
+      routingMetadata: buildGitHubRoutingMetadata(workflowPolicy)
+    };
   } catch {
     throw new GitHubClientError({
       code: "github_patch_invalid",
@@ -300,6 +306,25 @@ async function generateProposalDraft(
       message: "GitHub proposal response was invalid"
     });
   }
+}
+
+function buildGitHubRoutingMetadata(policy: WorkflowModelPolicy): GitHubRoutingMetadata {
+  return {
+    workflowRole: "github_code_agent",
+    selectedModel: policy.selectedModel,
+    candidateModels: [...policy.candidateModels],
+    fallbackUsed: policy.fallbackUsed,
+    selectionSource: policy.selectionSource,
+    routingMode: policy.routingMode,
+    allowFallback: policy.allowFallback,
+    failClosed: policy.failClosed,
+    structuredOutputRequired: policy.structuredOutputRequired,
+    approvalRequired: policy.approvalRequired,
+    mayExecuteExternalTools: policy.mayExecuteExternalTools,
+    mayWriteExternalState: policy.mayWriteExternalState,
+    policySectionKey: policy.sectionKey ?? null,
+    recordedAt: new Date().toISOString()
+  };
 }
 
 function buildGitHubDiffFiles(
@@ -618,8 +643,8 @@ export function createGitHubProposalPlanner(options: GitHubProposalPlannerOption
       }
 
       const files = await loadProposalFiles(options.client, buildOptions.context);
-      const draft = await generateProposalDraft(options, buildOptions.request, buildOptions.context, files);
-      const diff = buildGitHubDiffFiles(draft, buildOptions.context, files);
+      const generated = await generateProposalDraft(options, buildOptions.request, buildOptions.context, files);
+      const diff = buildGitHubDiffFiles(generated.draft, buildOptions.context, files);
 
       if (diff.length === 0) {
         throw new GitHubClientError({
@@ -646,13 +671,14 @@ export function createGitHubProposalPlanner(options: GitHubProposalPlannerOption
         status: "pending_review",
         stale: false,
         requiresApproval: true,
-        summary: draft.summary.trim(),
-        rationale: buildProposalRationale(draft, buildOptions.context, diff.length),
-        riskLevel: draft.riskLevel ?? buildRiskLevel(diff.length, buildOptions.context.warnings),
+        summary: generated.draft.summary.trim(),
+        rationale: buildProposalRationale(generated.draft, buildOptions.context, diff.length),
+        riskLevel: generated.draft.riskLevel ?? buildRiskLevel(diff.length, buildOptions.context.warnings),
         citations,
         diff,
         generatedAt: buildOptions.createdAt,
-        expiresAt: new Date(Date.parse(buildOptions.createdAt) + options.config.planTtlMs).toISOString()
+        expiresAt: new Date(Date.parse(buildOptions.createdAt) + options.config.planTtlMs).toISOString(),
+        routingMetadata: generated.routingMetadata
       };
     }
   };

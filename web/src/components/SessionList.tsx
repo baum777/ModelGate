@@ -21,6 +21,7 @@ type SessionListProps<TMetadata> = {
   onArchive: (sessionId: string) => void;
   onDelete: (sessionId: string) => void;
   headerNote?: ReactNode;
+  showManagement?: boolean;
 };
 
 function statusTone(status: SessionStatus) {
@@ -81,7 +82,8 @@ export function SessionList<TMetadata>({
   onSelect,
   onArchive,
   onDelete,
-  headerNote
+  headerNote,
+  showManagement = true
 }: SessionListProps<TMetadata>) {
   const { locale, copy: ui } = useLocalization();
   const sortedSessions = sortSessionsByUpdatedAt(sessions);
@@ -91,7 +93,7 @@ export function SessionList<TMetadata>({
     <section
       className="session-list-card"
       data-testid="workspace-session-list"
-      aria-label={`${workspaceName} ${ui.sessionList.newSession}`}
+      aria-label={`${workspaceName} ${locale === "de" ? "Sessions" : "sessions"}`}
     >
       <header className="session-list-header">
         <div>
@@ -145,11 +147,14 @@ export function SessionList<TMetadata>({
                       {session.archived ? ui.sessionList.archived : ui.sessionList.active}
                   </span>
                 </div>
-                <small className="session-list-meta">
+                {showManagement ? (
+                  <small className="session-list-meta">
                     {ui.sessionList.updated} {formatRelativeTime(locale, session.updatedAt)} · {session.lastOpenedAt === session.updatedAt ? ui.sessionList.openedJustNow : ui.sessionList.openedRecently(formatRelativeTime(locale, session.lastOpenedAt))}
-                </small>
+                  </small>
+                ) : null}
               </button>
 
+              {showManagement ? (
                 <div className="session-list-actions">
                   <button
                     type="button"
@@ -169,6 +174,7 @@ export function SessionList<TMetadata>({
                     {ui.sessionList.delete}
                   </button>
                 </div>
+              ) : null}
               </article>
             );
           })

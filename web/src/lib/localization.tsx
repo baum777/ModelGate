@@ -3,10 +3,10 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 export type Locale = "en" | "de";
 
 export type SessionStatus = "draft" | "in_progress" | "review_required" | "done" | "failed";
-export type ReviewStatus = "pending_review" | "approved" | "rejected" | "stale" | "executed";
+export type ReviewStatus = "pending_review" | "approved" | "failed" | "rejected" | "stale" | "executed";
 export type ApprovalOutcome = "executed" | "failed" | "rejected" | "unverifiable";
 export type ConnectionState = "idle" | "submitting" | "streaming" | "completed" | "error";
-export type WorkspaceMode = "chat" | "github" | "matrix" | "routing" | "review" | "settings";
+export type WorkspaceMode = "chat" | "github" | "matrix" | "review" | "settings";
 
 type WorkspaceTabCopy = {
   label: string;
@@ -37,11 +37,6 @@ type ShellCopy = {
   noActiveSession: string;
   sessionIdPrefix: string;
   archivedBadge: string;
-  accountAuthenticated: string;
-  accountChecking: string;
-  accountLocked: string;
-  accountLogout: string;
-  accountLoginRequired: string;
   statusReady: string;
   statusPartial: string;
   statusError: string;
@@ -147,27 +142,54 @@ type SettingsCopy = {
   clearDiagnostics: string;
   connectionTruthNote: string;
   modelSourceLabel: string;
-};
-
-type AuthCopy = {
-  statusAuthenticated: string;
-  statusChecking: string;
-  statusLocked: string;
-  title: string;
-  intro: string;
-  cardTitle: string;
-  cardSubtitle: string;
-  credentialLabel: string;
-  submit: string;
-  submitBusy: string;
-  hint: string;
-  footerNote: string;
+  diagnosticsSummary: string;
+  runtimeModeLabel: string;
+  defaultPublicAliasLabel: string;
+  publicAliasesLabel: string;
+  routingModeLabel: string;
+  fallbackLabel: string;
+  failClosedLabel: string;
+  rateLimitLabel: string;
+  actionStoreLabel: string;
+  githubConfiguredLabel: string;
+  matrixConfiguredLabel: string;
+  diagnosticsGeneratedAtLabel: string;
+  uptimeLabel: string;
+  chatRequestsLabel: string;
+  chatStreamStartedLabel: string;
+  chatStreamCompletedLabel: string;
+  chatStreamErrorLabel: string;
+  chatStreamAbortedLabel: string;
+  upstreamErrorLabel: string;
+  rateLimitBlockedLabel: string;
+  diagnosticsSafetyNote: string;
+  journalLabel: string;
+  journalCardTitle: string;
+  journalRecentEventsLabel: string;
+  journalRetentionLabel: string;
+  journalRecentCountLabel: string;
+  journalOutcomeLabel: string;
+  journalSeverityLabel: string;
+  journalNoEntries: string;
+  journalUnavailable: string;
+  journalOutcomeBlocked: string;
+  journalOutcomeExecuted: string;
+  journalOutcomeVerified: string;
+  journalOutcomeUnverifiable: string;
+  configured: string;
+  notConfigured: string;
+  unavailable: string;
 };
 
 type ChatCopy = {
   title: string;
   intro: string;
   sessionLabel: string;
+  modeLabel: string;
+  modeDirect: string;
+  modeGoverned: string;
+  modeDirectHint: string;
+  modeGovernedHint: string;
   modelSelectLabel: string;
   noModels: string;
   onlyPublicAlias: string;
@@ -188,8 +210,22 @@ type ChatCopy = {
   noticeError: string;
   noticeSystem: string;
   composerPlaceholder: string;
+  sendDirect: string;
   prepareProposal: string;
+  composerHelperDirect: string;
   composerHelper: string;
+  emptyStateDirect: string;
+  copyCode: string;
+  copyCodeCopied: string;
+  copyCodeFailed: string;
+  codeLanguageFallback: string;
+  streamStatus: {
+    ready: string;
+    streaming: string;
+    interrupted: string;
+    cancelled: string;
+    unverifiable: string;
+  };
   composerLocked: {
     backend: string;
     model: string;
@@ -350,7 +386,6 @@ type LocalizationCopy = {
   approval: ApprovalCopy;
   review: ReviewCopy;
   settings: SettingsCopy;
-  auth: AuthCopy;
   chat: ChatCopy;
   github: GitHubCopy;
   matrix: MatrixCopy;
@@ -393,11 +428,6 @@ const EN_COPY: LocalizationCopy = {
     noActiveSession: "No active session",
     sessionIdPrefix: "ID",
     archivedBadge: "Archived",
-    accountAuthenticated: "GitHub admin",
-    accountChecking: "Checking session",
-    accountLocked: "No admin login",
-    accountLogout: "Log out",
-    accountLoginRequired: "Admin login required",
     statusReady: "Ready",
     statusPartial: "Partial",
     statusError: "Error",
@@ -420,7 +450,6 @@ const EN_COPY: LocalizationCopy = {
       chat: { label: "Chat", description: "Ask questions and inspect responses" },
       github: { label: "GitHub", description: "Read repositories and prepare proposals" },
       matrix: { label: "Matrix", description: "Scope, provenance, and topic updates" },
-      routing: { label: "Routing", description: "Inspect alias policy and lifecycle" },
       review: { label: "Review", description: "Review approvals and receipts" },
       settings: { label: "Settings", description: "View settings and diagnostics" },
     },
@@ -506,25 +535,53 @@ const EN_COPY: LocalizationCopy = {
     clearDiagnostics: "Clear diagnostics",
     connectionTruthNote: "Backend truth and connection truth stay separated from advisory copy.",
     modelSourceLabel: "Source",
-  },
-  auth: {
-    statusAuthenticated: "Unlocked",
-    statusChecking: "Checking session",
-    statusLocked: "Locked",
-    title: "GitHub status",
-    intro: "GitHub credentials stay server-side. The browser shows status only.",
-    cardTitle: "Server-side authentication",
-    cardSubtitle: "Configured outside the browser",
-    credentialLabel: "Credential status",
-    submit: "Unavailable in browser",
-    submitBusy: "Checking...",
-    hint: "No credential values are accepted or stored by the browser.",
-    footerNote: "GitHub writes remain backend-owned and approval-gated.",
+    diagnosticsSummary: "Safe runtime diagnostics",
+    runtimeModeLabel: "Runtime mode",
+    defaultPublicAliasLabel: "Default public alias",
+    publicAliasesLabel: "Public aliases",
+    routingModeLabel: "Model routing",
+    fallbackLabel: "Fallback",
+    failClosedLabel: "Fail-closed",
+    rateLimitLabel: "Rate limits",
+    actionStoreLabel: "Action store",
+    githubConfiguredLabel: "GitHub configured",
+    matrixConfiguredLabel: "Matrix configured",
+    diagnosticsGeneratedAtLabel: "Diagnostics generated",
+    uptimeLabel: "Uptime (ms)",
+    chatRequestsLabel: "Chat requests",
+    chatStreamStartedLabel: "Chat streams started",
+    chatStreamCompletedLabel: "Chat streams completed",
+    chatStreamErrorLabel: "Chat streams errored",
+    chatStreamAbortedLabel: "Chat streams aborted",
+    upstreamErrorLabel: "Upstream errors",
+    rateLimitBlockedLabel: "Rate-limit blocked",
+    diagnosticsSafetyNote: "Diagnostics contain aggregate counters only; no prompts, tokens, cookies, or provider credentials.",
+    journalLabel: "Journal",
+    journalCardTitle: "Recent events",
+    journalRecentEventsLabel: "Backend-owned receipts",
+    journalRetentionLabel: "Retention",
+    journalRecentCountLabel: "Recent count",
+    journalOutcomeLabel: "Outcome",
+    journalSeverityLabel: "Severity",
+    journalNoEntries: "No recent journal entries.",
+    journalUnavailable: "Journal unavailable",
+    journalOutcomeBlocked: "Blocked",
+    journalOutcomeExecuted: "Executed",
+    journalOutcomeVerified: "Verified",
+    journalOutcomeUnverifiable: "Unverifiable",
+    configured: "Configured",
+    notConfigured: "Not configured",
+    unavailable: "Unavailable",
   },
   chat: {
     title: "Chat workspace",
     intro: "Conversation stays separate from governed work objects. The backend remains the execution authority.",
     sessionLabel: "Conversation state",
+    modeLabel: "Execution mode",
+    modeDirect: "Read-only · no external writes",
+    modeGoverned: "Approval required · execution receipt",
+    modeDirectHint: "Direct Chat stays read-only and still uses backend-owned routing.",
+    modeGovernedHint: "Governed Execution is required for action-bearing workflows.",
     modelSelectLabel: "Public model alias",
     noModels: "No public aliases available",
     onlyPublicAlias: "Only public alias metadata is exposed. Provider targets stay backend-only.",
@@ -545,8 +602,22 @@ const EN_COPY: LocalizationCopy = {
     noticeError: "Error",
     noticeSystem: "Notice",
     composerPlaceholder: "Write operator input to prepare the next governed proposal...",
+    sendDirect: "Send direct chat",
     prepareProposal: "Prepare proposal",
+    composerHelperDirect: "Direct Chat runs immediately in read-only mode via /chat.",
     composerHelper: "Submit prepares a proposal. Backend execution starts only after approval.",
+    emptyStateDirect: "No direct chat messages yet. Send a read-only prompt to start.",
+    copyCode: "Copy code",
+    copyCodeCopied: "Copied",
+    copyCodeFailed: "Copy failed",
+    codeLanguageFallback: "text",
+    streamStatus: {
+      ready: "Ready",
+      streaming: "Streaming",
+      interrupted: "Interrupted",
+      cancelled: "Cancelled",
+      unverifiable: "Unverifiable",
+    },
     composerLocked: {
       backend: "Backend unreachable. Composer is fail-closed.",
       model: "No public model alias selected.",
@@ -554,7 +625,7 @@ const EN_COPY: LocalizationCopy = {
       execution: "Execution is running. Composer is locked.",
     },
     routePending: "Route pending",
-    routeFallback: "fallback",
+    routeFallback: "Fallback",
     routeDegraded: "degraded",
   },
   github: {
@@ -702,14 +773,14 @@ const DE_COPY: LocalizationCopy = {
   shell: {
     appKicker: "MODELGATE",
     appTitle: "ModelGate Konsole",
-    appDeck: "Governance-first Operator-Shell. Runtimetruth bleibt backend-owned.",
+    appDeck: "Governance-first Operator-Shell. Laufzeitwahrheit bleibt backend-owned.",
     workspaceConsoleKicker: "WORKSPACE CONSOLE",
     workspaceConsoleTitle: "Arbeitsbereich wählen",
-    workspaceConsoleNote: "Navigation, Sessionkontext und Disclosure bleiben links persistent.",
-    workspacesLabel: "Workspaces",
+    workspaceConsoleNote: "Navigation, Sessionkontext und Offenlegung bleiben links fixiert.",
+    workspacesLabel: "Arbeitsbereiche",
     sessionLabel: "Session",
-    disclosureLabel: "Disclosure",
-    accountLabel: "Account",
+    disclosureLabel: "Offenlegung",
+    accountLabel: "Konto",
     languageLabel: "Sprache",
     languageOptionEnglish: "EN",
     languageOptionGerman: "DE",
@@ -717,17 +788,12 @@ const DE_COPY: LocalizationCopy = {
     diagnosticsLabel: "Diagnostik",
     diagnosticsShow: "Diagnostik öffnen",
     diagnosticsHide: "Diagnostik schließen",
-    activateExpert: "Expert Mode aktivieren",
+    activateExpert: "Expertenmodus aktivieren",
     backendPrefix: "Backend",
     currentSessionFallback: "Aktive Session",
     noActiveSession: "Keine Session aktiv",
     sessionIdPrefix: "ID",
     archivedBadge: "Archiviert",
-    accountAuthenticated: "GitHub Admin",
-    accountChecking: "Session wird geprüft",
-    accountLocked: "Kein Admin-Login",
-    accountLogout: "Abmelden",
-    accountLoginRequired: "Admin-Login erforderlich",
     statusReady: "Bereit",
     statusPartial: "Teilweise",
     statusError: "Fehler",
@@ -736,23 +802,22 @@ const DE_COPY: LocalizationCopy = {
     pendingApprovalsChat: "Mindestens ein Chat-Vorschlag wartet auf Freigabe. Weitere Details im aktiven Workspace.",
     pendingApprovalsSeparate: "Freigaben bleiben getrennt von Ausführung. Prüfe Details im Review-Workspace.",
     diagnosticsAvailable: "Diagnostik ist verfügbar. Nutzung bleibt read-only und kontextbezogen.",
-    diagnosticsHidden: "Beginner blendet Diagnostik standardmäßig aus. Bei Störung wird sie sichtbar.",
-    healthTitle: "Health",
+    diagnosticsHidden: "Basismodus blendet Diagnostik standardmäßig aus. Bei Störungen wird sie sichtbar.",
+    healthTitle: "Status",
     healthReady: "Bereit",
     healthChecking: "Wird geprüft",
     healthUnavailable: "Nicht verfügbar",
     healthReadyDetail: "Backend erreichbar. Ausführung bleibt backend-owned.",
-    healthCheckingDetail: "Backend-Health wird geladen.",
+    healthCheckingDetail: "Backend-Status wird geladen.",
     healthUnavailableDetail: "Backend nicht erreichbar. Oberfläche bleibt fail-closed.",
-    modeLabel: "Mode",
-    publicAliasLabel: "Public alias",
+    modeLabel: "Modus",
+    publicAliasLabel: "Öffentlicher Alias",
     workspaceTabs: {
       chat: { label: "Chat", description: "Fragen stellen und Antworten prüfen" },
       github: { label: "GitHub", description: "Repository lesen und Vorschläge vorbereiten" },
       matrix: { label: "Matrix", description: "Scope, Provenienz und Topic-Updates" },
-      routing: { label: "Routing", description: "Alias-Policy und Lifecycle prüfen" },
-      review: { label: "Review", description: "Freigaben und Belege prüfen" },
-      settings: { label: "Settings", description: "Ansicht und Diagnose prüfen" },
+      review: { label: "Prüfung", description: "Freigaben und Belege prüfen" },
+      settings: { label: "Einstellungen", description: "Ansicht und Diagnostik prüfen" },
     },
   },
   sessionList: {
@@ -807,57 +872,85 @@ const DE_COPY: LocalizationCopy = {
     terminalDeviation: "Terminale Abweichung",
   },
   settings: {
-    heroStatus: "Settings",
+    heroStatus: "Einstellungen",
     title: "Einstellungen",
-    intro: "Disclosure wählen, Identität und Verbindung gegen Backendtruth prüfen und Diagnose im Expert Mode öffnen.",
+    intro: "Offenlegung wählen, Identität und Verbindung gegen Backend-Wahrheit prüfen und Diagnostik im Expertenmodus öffnen.",
     viewCardTitle: "Ansicht",
     identityCardTitle: "Identität und Verbindung",
     modelCardTitle: "Modelle",
     diagnosticsCardTitle: "Diagnostik",
-    beginner: "Beginner",
-    expert: "Expert",
+    beginner: "Basis",
+    expert: "Experte",
     backend: "Backend",
-    githubIdentity: "GitHub acting identity",
-    githubConnection: "GitHub Verbindung",
-    githubAuthority: "GitHub authority domain",
-    githubScope: "GitHub active scope",
-    matrixIdentity: "Matrix acting identity",
-    matrixConnection: "Matrix Verbindung",
+    githubIdentity: "GitHub-Handlungsidentität",
+    githubConnection: "GitHub-Verbindung",
+    githubAuthority: "GitHub-Autoritätsdomäne",
+    githubScope: "GitHub-aktiver Scope",
+    matrixIdentity: "Matrix-Handlungsidentität",
+    matrixConnection: "Matrix-Verbindung",
     matrixHomeserver: "Homeserver",
-    matrixScope: "Matrix active scope",
-    chatIdentity: "Chat acting identity",
+    matrixScope: "Matrix-aktiver Scope",
+    chatIdentity: "Chat-Handlungsidentität",
     chatScope: "Session-lokaler Chat-Thread (Browser)",
-    chatAuthority: "Chat backend route (/chat)",
+    chatAuthority: "Chat-Backend-Route (/chat)",
     backendTruth: "Gemeinsame Infrastruktur bedeutet nicht gemeinsame Autorität. Der Browser spiegelt nur Wahrheit wider, die der Backend-Server bereits belegen kann.",
-    backendPolicy: "Modellwahl bleibt alias-basiert. Provider-Zuordnung und Backend-Pfade bleiben server-owned und werden nicht im Browser als Wahrheit behandelt.",
+    backendPolicy: "Modellwahl bleibt alias-basiert. Provider-Zuordnung und Backend-Pfade bleiben serverseitig und werden im Browser nicht als Wahrheit behandelt.",
     modelChoiceNote: "Modellwahl bleibt alias-basiert.",
-    diagnosticsHidden: "Diagnose bleibt im Expert Mode verborgen.",
+    diagnosticsHidden: "Diagnostik bleibt im Basismodus verborgen.",
     diagnosticsEmpty: "Noch keine lokalen Diagnoseereignisse.",
     clearDiagnostics: "Diagnostik leeren",
-    connectionTruthNote: "Backendtruth und Verbindungstruth bleiben von Advisory-Text getrennt.",
+    connectionTruthNote: "Backend-Wahrheit und Verbindungswahrheit bleiben von Advisory-Text getrennt.",
     modelSourceLabel: "Quelle",
-  },
-  auth: {
-    statusAuthenticated: "Freigeschaltet",
-    statusChecking: "Session wird geprüft",
-    statusLocked: "Gesperrt",
-    title: "GitHub-Status",
-    intro: "GitHub-Zugangsdaten bleiben serverseitig. Der Browser zeigt nur Status.",
-    cardTitle: "Serverseitige Authentifizierung",
-    cardSubtitle: "Außerhalb des Browsers konfiguriert",
-    credentialLabel: "Credential-Status",
-    submit: "Im Browser nicht verfügbar",
-    submitBusy: "Prüfung läuft...",
-    hint: "Der Browser nimmt keine Credential-Werte an und speichert keine.",
-    footerNote: "GitHub-Schreibpfade bleiben backend-owned und approval-gated.",
+    diagnosticsSummary: "Sichere Runtime-Diagnostik",
+    runtimeModeLabel: "Runtime-Modus",
+    defaultPublicAliasLabel: "Standard-öffentlicher Alias",
+    publicAliasesLabel: "Öffentliche Aliase",
+    routingModeLabel: "Model-Routing",
+    fallbackLabel: "Fallback",
+    failClosedLabel: "Fail-closed",
+    rateLimitLabel: "Rate-Limits",
+    actionStoreLabel: "Action-Store",
+    githubConfiguredLabel: "GitHub konfiguriert",
+    matrixConfiguredLabel: "Matrix konfiguriert",
+    diagnosticsGeneratedAtLabel: "Diagnostik erzeugt",
+    uptimeLabel: "Uptime (ms)",
+    chatRequestsLabel: "Chat-Anfragen",
+    chatStreamStartedLabel: "Chat-Streams gestartet",
+    chatStreamCompletedLabel: "Chat-Streams abgeschlossen",
+    chatStreamErrorLabel: "Chat-Streams mit Fehler",
+    chatStreamAbortedLabel: "Chat-Streams abgebrochen",
+    upstreamErrorLabel: "Upstream-Fehler",
+    rateLimitBlockedLabel: "Rate-Limit blockiert",
+    diagnosticsSafetyNote: "Diagnostik enthält nur aggregierte Zähler; keine Prompts, Tokens, Cookies oder Provider-Credentials.",
+    journalLabel: "Journal",
+    journalCardTitle: "Letzte Ereignisse",
+    journalRecentEventsLabel: "Backend-owned Belege",
+    journalRetentionLabel: "Aufbewahrung",
+    journalRecentCountLabel: "Aktuelle Anzahl",
+    journalOutcomeLabel: "Ergebnis",
+    journalSeverityLabel: "Schweregrad",
+    journalNoEntries: "Keine aktuellen Journal-Einträge.",
+    journalUnavailable: "Journal nicht verfügbar",
+    journalOutcomeBlocked: "Blockiert",
+    journalOutcomeExecuted: "Ausgeführt",
+    journalOutcomeVerified: "Verifiziert",
+    journalOutcomeUnverifiable: "Nicht verifizierbar",
+    configured: "Konfiguriert",
+    notConfigured: "Nicht konfiguriert",
+    unavailable: "Nicht verfügbar",
   },
   chat: {
-    title: "Chat-Workspace",
-    intro: "Conversation bleibt getrennt von gouvernierten Arbeitsobjekten. Das Backend bleibt Ausführungsautorität.",
+    title: "Chat-Arbeitsbereich",
+    intro: "Konversation bleibt getrennt von gouvernierten Arbeitsobjekten. Das Backend bleibt Ausführungsautorität.",
     sessionLabel: "Konversationszustand",
-    modelSelectLabel: "Public model alias",
+    modeLabel: "Ausführungsmodus",
+    modeDirect: "Nur Lesen · keine externen Writes",
+    modeGoverned: "Freigabe nötig · Ausführungsbeleg",
+    modeDirectHint: "Direct Chat bleibt read-only und nutzt weiterhin backend-owned Routing.",
+    modeGovernedHint: "Governed Execution ist für action-bearing Workflows erforderlich.",
+    modelSelectLabel: "Öffentlicher Modellalias",
     noModels: "Keine öffentlichen Aliase verfügbar",
-    onlyPublicAlias: "Nur öffentliche Alias-Metadaten sind sichtbar. Provider-Ziele bleiben backend-only.",
+    onlyPublicAlias: "Nur öffentliche Alias-Metadaten sind sichtbar. Provider-Ziele bleiben backend-seitig.",
     modelHintFallback: "Die Metadaten des gewählten Alias erscheinen hier, sobald das Backend sie bereitstellt.",
     conversationState: "Konversationszustand",
     stopExecution: "Ausführung stoppen",
@@ -867,16 +960,30 @@ const DE_COPY: LocalizationCopy = {
     executingTitle: "Freigegebener Prompt wird ausgeführt",
     executingDetail: (alias) => `Backend-Ausführung für Alias ${alias} läuft.`,
     emptyState: "Noch keine gouvernierte Aktivität. Erstelle einen Vorschlag für den nächsten Prompt.",
-    operatorInput: "Operator input",
-    agentResponse: "Agent response",
-    agentDraft: "Agent response (draft)",
+    operatorInput: "Operator-Eingabe",
+    agentResponse: "Agent-Antwort",
+    agentDraft: "Agent-Antwort (Entwurf)",
     errorNotice: "Fehlerhinweis",
     systemNotice: "Systemhinweis",
     noticeError: "Fehler",
     noticeSystem: "Hinweis",
     composerPlaceholder: "Operator-Eingabe schreiben, um den nächsten gouvernierten Vorschlag vorzubereiten...",
+    sendDirect: "Direct Chat senden",
     prepareProposal: "Vorschlag vorbereiten",
-    composerHelper: "Submit bereitet einen Vorschlag vor. Die Backend-Ausführung startet erst nach Freigabe.",
+    composerHelperDirect: "Direct Chat wird sofort read-only über /chat ausgeführt.",
+    composerHelper: "Senden bereitet einen Vorschlag vor. Die Backend-Ausführung startet erst nach Freigabe.",
+    emptyStateDirect: "Noch keine Direct-Chat-Nachrichten. Sende einen read-only Prompt zum Start.",
+    copyCode: "Code kopieren",
+    copyCodeCopied: "Kopiert",
+    copyCodeFailed: "Kopieren fehlgeschlagen",
+    codeLanguageFallback: "text",
+    streamStatus: {
+      ready: "Bereit",
+      streaming: "Streaming",
+      interrupted: "Unterbrochen",
+      cancelled: "Abgebrochen",
+      unverifiable: "Nicht verifizierbar",
+    },
     composerLocked: {
       backend: "Backend nicht erreichbar. Composer bleibt fail-closed.",
       model: "Kein öffentlicher Modellalias ausgewählt.",
@@ -888,7 +995,7 @@ const DE_COPY: LocalizationCopy = {
     routeDegraded: "degradiert",
   },
   github: {
-    title: "GitHub-Workspace",
+    title: "GitHub-Arbeitsbereich",
     intro: "Repository ansehen, Projektstruktur verstehen und sichere Änderungsvorschläge vorbereiten.",
     repoSelectLabel: "Repo auswählen",
     loadingRepos: "Erlaubte Repos werden geladen...",
@@ -929,7 +1036,7 @@ const DE_COPY: LocalizationCopy = {
     workspaceNoticeProposal: "Der Vorschlag konnte nicht erstellt werden.",
     workspaceNoticeRepos: "Die Repo-Liste konnte nicht geladen werden.",
     workspaceNoticeSelection: "Wähle zuerst ein erlaubtes Repo aus.",
-    repositoryStatus: "Repository status",
+    repositoryStatus: "Repository-Status",
     privateRepo: "Privat",
     publicRepo: "Öffentlich",
     targetBranch: "Zielzweig",
@@ -938,7 +1045,7 @@ const DE_COPY: LocalizationCopy = {
     modelLabel: "Modell",
   },
   matrix: {
-    title: "Matrix-Workspace",
+    title: "Matrix-Arbeitsbereich",
     intro: "Scope, Provenienz und Topic-Updates werden über das Backend mit expliziten Freigabeschranken analysiert.",
     scopeTitle: "Scope",
     scopeInputTitle: "Ausgewählte Scope-Eingaben",
@@ -952,24 +1059,24 @@ const DE_COPY: LocalizationCopy = {
     selectedScopeTitle: "Ausgewählte Scope-Eingaben",
     resolveScope: "Scope auflösen",
     resolvingScope: "Wird aufgelöst...",
-    scopeUnresolved: "Scope-Zusammenfassung ist verfügbar, sobald das Backend antwortet.",
+    scopeUnresolved: "Scope-Zusammenfassung ist nicht verfügbar, bis das Backend antwortet.",
     scopeSummaryLoading: "Zusammenfassung wird geladen...",
-    scopeSummaryUnavailable: "Scope-Zusammenfassung ist verfügbar, sobald das Backend antwortet.",
+    scopeSummaryUnavailable: "Scope-Zusammenfassung ist nicht verfügbar, bis das Backend antwortet.",
     scopeSummaryReady: "Zusammenfassung bereit",
     scopePreview: "Provenienz ansehen",
     scopeAddSpace: "Space hinzufügen",
     scopeRemove: "Entfernen",
     scopeSelected: "Bereich gewählt",
     scopeSelectedLabel: "Bereich gewählt",
-    composerTitle: "Composer",
+    composerTitle: "Eingabe",
     threadContextTitle: "Thread-Kontext",
     threadOpen: "Thread öffnen",
     threadLeave: "Thread verlassen",
     threadNone: "Noch kein Thread geöffnet",
     threadOpenHint: "Wähle einen Beitrag oder Root, um explizit in einen Thread-Kontext zu wechseln.",
     threadLeaveHint: "Der Composer schreibt in den geöffneten Thread. Mit Thread verlassen kehrst du in den Raumkontext zurück.",
-    composerModeLabel: "Composer mode",
-    composerTargetLabel: "Composer-Ziel",
+    composerModeLabel: "Eingabemodus",
+    composerTargetLabel: "Eingabeziel",
     composerTargetMissing: "Ziel fehlt",
     composerTargetSet: "Ziel gesetzt",
     newPost: "Neuer Post",
@@ -977,20 +1084,20 @@ const DE_COPY: LocalizationCopy = {
     thread: "Thread starten",
     replyInThread: "Im Thread antworten",
     clearTarget: "Ziel löschen",
-    targetContextTitle: "Target context",
+    targetContextTitle: "Zielkontext",
     roomId: "Raum-ID",
     roomName: "Raumname",
     postId: "Beitrags-ID",
     threadRootId: "Thread-Root-ID",
-    draft: "Draft",
-    draftPlaceholder: "Composer draft content",
-    submit: "Submit (fail-closed)",
+    draft: "Entwurf",
+    draftPlaceholder: "Entwurf für die Eingabe",
+    submit: "Senden (fail-closed)",
     submitBusy: "Wird gesendet...",
-    submitBlocked: "Der Submit bleibt blockiert, bis ein Ziel explizit gesetzt ist.",
-    submitFailClosed: "Der Submit ist derzeit fail-closed, weil kein Write-Contract im Backend verdrahtet ist.",
+    submitBlocked: "Senden bleibt blockiert, bis ein Ziel explizit gesetzt ist.",
+    submitFailClosed: "Senden ist derzeit fail-closed, weil kein Write-Contract im Backend verdrahtet ist.",
     scopeNotice: "Backend-gesteuerte Matrix-Topic-Updates sind für Explore, Scope-Summary, read-only Provenienz, Analyse, Review, Freigabe, Ausführung und Verifikation verfügbar.",
     scopeSummaryInfo: "Backend löst den Scope auf und lädt die aktuelle Zusammenfassung.",
-    topicTitle: "Topic Update",
+    topicTitle: "Topic-Update",
     topicStatusReady: "Bereit",
     topicStatusPending: "Freigabe erforderlich",
     topicStatusBlocked: "Blockiert",
@@ -1006,13 +1113,13 @@ const DE_COPY: LocalizationCopy = {
     roomPickerLoading: "Beigetretene Räume werden geladen...",
     roomPickerEmpty: "Noch keine beigetretenen Räume geladen.",
     roomPickerChoose: "Bereich auswählen",
-    roomPickerRoom: "Bereich",
-    roomPickerSpace: "Bereich",
-    composerModePost: "Post",
+    roomPickerRoom: "Raum",
+    roomPickerSpace: "Space",
+    composerModePost: "Beitrag",
     composerModeReply: "Antwort",
     composerModeThread: "Thread",
     composerModeThreadReply: "Thread-Antwort",
-    composerDraftLabel: "Composer-Entwurf",
+    composerDraftLabel: "Eingabeentwurf",
   },
 };
 
@@ -1094,14 +1201,16 @@ export function getReviewStatusLabel(locale: Locale, status: ReviewStatus): stri
     ? {
         pending_review: "Wartet auf Freigabe",
         approved: "Ausführung läuft",
-        rejected: "Fehlgeschlagen / Abgelehnt",
+        failed: "Fehlgeschlagen",
+        rejected: "Abgelehnt / Abweichung",
         stale: "Veraltet",
         executed: "Ausgeführt",
       }
     : {
         pending_review: "Waiting for approval",
         approved: "Execution running",
-        rejected: "Failed / Rejected",
+        failed: "Failed",
+        rejected: "Rejected / Mismatch",
         stale: "Stale",
         executed: "Executed",
       };

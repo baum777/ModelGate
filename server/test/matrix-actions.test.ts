@@ -208,6 +208,20 @@ test("matrix analyze creates a deterministic topic plan and execute/verify use i
   assert.equal(verified.verification.status, "verified");
   assert.equal(verified.verification.expected, "New room topic");
   assert.equal(verified.verification.actual, "New room topic");
+
+  const journalResponse = await app.inject({
+    method: "GET",
+    url: "/journal/recent?source=matrix&limit=20"
+  });
+  assert.equal(journalResponse.statusCode, 200);
+  const journalPayload = JSON.parse(journalResponse.body) as {
+    ok: true;
+    entries: Array<{ eventType: string }>;
+  };
+  assert.equal(journalPayload.ok, true);
+  assert.ok(journalPayload.entries.some((entry) => entry.eventType === "matrix_execute_attempted"));
+  assert.ok(journalPayload.entries.some((entry) => entry.eventType === "matrix_execute_completed"));
+  assert.ok(journalPayload.entries.some((entry) => entry.eventType === "matrix_verify_result"));
 });
 
 test("matrix execute rejects requests without approval", async (t) => {
@@ -419,6 +433,65 @@ test("matrix execute writes the room topic and plan fetch shows the executed sta
       message: "Matrix plan was already executed"
     }
   });
+});
+
+test("matrix execute is rate-limited before write operations", async (t) => {
+  const topicClient = createMatrixActionClient({
+    roomTopic: "Old room topic"
+  });
+  const app = createApp({
+    env: createTestEnv({
+      RATE_LIMIT_WINDOW_MS: 60_000,
+      RATE_LIMIT_MATRIX_EXECUTE_MAX: 1
+    }),
+    openRouter: createMockOpenRouterClient(),
+    matrixConfig: createTestMatrixConfig(),
+    matrixClient: topicClient.client,
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const analyzeResponse = await app.inject({
+    method: "POST",
+    url: "/api/matrix/analyze",
+    payload: {
+      type: "update_room_topic",
+      roomId: "!room:matrix.example",
+      proposedValue: "New room topic"
+    }
+  });
+  const analyzed = JSON.parse(analyzeResponse.body) as { plan: { planId: string } };
+
+  const consumeResponse = await app.inject({
+    method: "POST",
+    url: "/api/matrix/actions/missing/execute",
+    payload: {
+      approval: true
+    }
+  });
+  assert.equal(consumeResponse.statusCode, 404);
+
+  const blockedResponse = await app.inject({
+    method: "POST",
+    url: `/api/matrix/actions/${analyzed.plan.planId}/execute`,
+    payload: {
+      approval: true
+    }
+  });
+
+  assert.equal(blockedResponse.statusCode, 429);
+  assert.equal(blockedResponse.headers["retry-after"], "60");
+  assert.deepEqual(JSON.parse(blockedResponse.body), {
+    ok: false,
+    error: {
+      code: "matrix_rate_limited",
+      message: "Matrix rate limit was hit"
+    }
+  });
+  assert.equal(topicClient.getWriteCalls(), 0);
 });
 
 test("matrix verify returns verified, mismatch, and pending states", async (t) => {

@@ -43,6 +43,8 @@ import {
   mergeMetadataRows,
 } from "../lib/governance-metadata.js";
 import { useLocalization, type Locale } from "../lib/localization.js";
+import { GuideOverlay, getWorkspaceGuide } from "./GuideOverlay.js";
+import { getWorkModeCopy, type WorkMode } from "../lib/work-mode.js";
 
 type WorkflowStatus = "loading" | "partial" | "ready" | "error";
 type LoadStatus = "idle" | "loading" | "ready" | "error";
@@ -80,6 +82,7 @@ export type MatrixWorkspaceStatus = {
 type MatrixWorkspaceProps = {
   session: MatrixSession;
   restoredSession: boolean;
+  workMode: WorkMode;
   expertMode: boolean;
   onTelemetry: (
     kind: "info" | "warning" | "error",
@@ -231,8 +234,10 @@ export function buildMatrixReviewItems(
 
   const status = topicVerification?.status === "verified"
     ? "executed"
-    : topicVerification?.status === "failed" || topicVerification?.status === "mismatch"
-      ? "rejected"
+    : topicVerification?.status === "failed"
+      ? "failed"
+      : topicVerification?.status === "mismatch"
+        ? "rejected"
       : topicExecution
         ? "approved"
         : topicPlan.status === "executed"
@@ -292,6 +297,7 @@ function describeMatrixError(operation: string, error: unknown) {
 export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   const { locale, copy: ui } = useLocalization();
   const localText = useMemo(() => getMatrixLocaleText(locale), [locale]);
+  const workModeCopy = getWorkModeCopy(locale, props.workMode);
   const persisted = props.session.metadata;
   const [status, setStatus] = useState<WorkflowStatus>("loading");
   const [whoami, setWhoami] = useState<MatrixWhoAmI | null>(null);
@@ -1082,31 +1088,40 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                   : ui.matrix.topicStatusLoading}
           </p>{" "}
           <h1>{ui.matrix.title}</h1>{" "}
-          <p className="hero-copy">
-            {ui.matrix.intro}
-          </p>{" "}
+          {props.expertMode ? (
+            <p className="hero-copy">
+              {ui.matrix.intro}
+            </p>
+          ) : (
+            <p className="hero-copy">{workModeCopy.controlHint}</p>
+          )}{" "}
+          <div className="workspace-hero-actions">
+            <GuideOverlay content={getWorkspaceGuide(locale, "matrix")} testId="guide-matrix" />
+          </div>{" "}
           {props.restoredSession ? (
             <div className="restored-banner" data-testid="matrix-restored-banner">
               RESTORED_SESSION: {ui.matrix.scopeNotice}
             </div>
           ) : null}
-          <div className="chip-row" aria-label={ui.matrix.scopeNotice}>
-            <span className="workflow-chip workflow-chip-complete">{ui.matrix.scopeTitle}</span>
-            <span className="workflow-chip workflow-chip-complete">{ui.matrix.scopeSummaryTitle}</span>
-            <span className="workflow-chip workflow-chip-complete">{ui.matrix.scopePreview}</span>
-            <span className={`workflow-chip ${topicPlan ? "workflow-chip-active" : "workflow-chip-idle"}`}>
-              {ui.matrix.topicTitle}
-            </span>
-            <span className={`workflow-chip ${topicPlan && !topicApprovalPending ? "workflow-chip-active" : "workflow-chip-idle"}`}>
-              {ui.matrix.topicStatusApproval}
-            </span>
-            <span className={`workflow-chip ${topicExecution ? "workflow-chip-complete" : "workflow-chip-idle"}`}>
-              {ui.approval.executionSection}
-            </span>
-            <span className={`workflow-chip ${topicVerification ? "workflow-chip-complete" : "workflow-chip-idle"}`}>
-              {ui.github.verifyResult}
-            </span>
-          </div>
+          {props.expertMode ? (
+            <div className="chip-row" aria-label={ui.matrix.scopeNotice}>
+              <span className="workflow-chip workflow-chip-complete">{ui.matrix.scopeTitle}</span>
+              <span className="workflow-chip workflow-chip-complete">{ui.matrix.scopeSummaryTitle}</span>
+              <span className="workflow-chip workflow-chip-complete">{ui.matrix.scopePreview}</span>
+              <span className={`workflow-chip ${topicPlan ? "workflow-chip-active" : "workflow-chip-idle"}`}>
+                {ui.matrix.topicTitle}
+              </span>
+              <span className={`workflow-chip ${topicPlan && !topicApprovalPending ? "workflow-chip-active" : "workflow-chip-idle"}`}>
+                {ui.matrix.topicStatusApproval}
+              </span>
+              <span className={`workflow-chip ${topicExecution ? "workflow-chip-complete" : "workflow-chip-idle"}`}>
+                {ui.approval.executionSection}
+              </span>
+              <span className={`workflow-chip ${topicVerification ? "workflow-chip-complete" : "workflow-chip-idle"}`}>
+                {ui.github.verifyResult}
+              </span>
+            </div>
+          ) : null}
         </div>{" "}
         <aside className="workspace-summary-card">
           {" "}
@@ -1155,7 +1170,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       <section className="matrix-grid">
         {" "}
         <section
-          className="workspace-card"
+          className="workspace-card matrix-topic-card matrix-secondary-panel"
           data-testid="matrix-topic-update-panel"
         >
           {" "}
@@ -1166,7 +1181,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             </div>
           </header>{" "}
           <div className="info-block">
-            <p className="info-label">{ui.matrix.roomId}</p>
+            <p className="info-label">{props.expertMode ? ui.matrix.roomId : ui.matrix.roomPickerRoom}</p>
             <div className="input-row">
               <input
                 type="text"
@@ -1299,7 +1314,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 <div className="chip-list">
                   {topicPlan.actions.map((action, index) => (
                     <span key={`${action.type}:${index}`} className="reference-chip">
-                      {action.type} · {action.roomId}
+                      {props.expertMode ? `${action.type} · ${action.roomId}` : `${ui.review.rowOpen} ${index + 1}`}
                     </span>
                   ))}
                 </div>
@@ -1448,7 +1463,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             </p>
           )}{" "}
         </section>{" "}
-        <section className="workspace-card">
+        <section className="workspace-card matrix-scope-card matrix-secondary-panel">
           {" "}
           <header className="card-header">
             <div>
@@ -1730,7 +1745,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             ) : null}{" "}
           </div>{" "}
         </section>{" "}
-        <section className="workspace-card" data-testid="matrix-composer-panel">
+        <section className="workspace-card matrix-composer-panel matrix-composer-focus-card" data-testid="matrix-composer-panel">
           <header className="card-header">
             <div>
               <span>{ui.matrix.composerTitle}</span>
@@ -1743,7 +1758,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               <p className="info-label">{ui.matrix.threadContextTitle}</p>
               <strong>
                 {activeThreadRootId
-                  ? `${ui.matrix.thread}: ${activeThreadRootId}`
+                  ? (props.expertMode ? `${ui.matrix.thread}: ${activeThreadRootId}` : ui.matrix.thread)
                   : ui.matrix.threadNone}
               </strong>
               <p className="muted-copy">
@@ -1752,11 +1767,13 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                   : ui.matrix.threadOpenHint}
               </p>
             </div>
-            <div className="matrix-thread-context-meta">
-              <span className="reference-chip">{ui.matrix.roomId}: {activeComposerRoomId ?? ui.common.na}</span>
-              <span className="reference-chip">{ui.matrix.postId}: {selectedEventId?.trim() || ui.common.na}</span>
-              <span className="reference-chip">{ui.matrix.threadRootId}: {activeThreadRootId ?? ui.common.na}</span>
-            </div>
+            {props.expertMode ? (
+              <div className="matrix-thread-context-meta">
+                <span className="reference-chip">{ui.matrix.roomId}: {activeComposerRoomId ?? ui.common.na}</span>
+                <span className="reference-chip">{ui.matrix.postId}: {selectedEventId?.trim() || ui.common.na}</span>
+                <span className="reference-chip">{ui.matrix.threadRootId}: {activeThreadRootId ?? ui.common.na}</span>
+              </div>
+            ) : null}
             <div className="matrix-thread-context-actions">
               <button
                 type="button"
@@ -1785,14 +1802,20 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             <div>
               <p className="info-label">{ui.matrix.composerTargetLabel}</p>
               <strong>{describeComposerMode(composerMode)}</strong>
-              <p className="muted-copy">{describeComposerTarget(composerTarget)}</p>
+              <p className="muted-copy">
+                {props.expertMode
+                  ? describeComposerTarget(composerTarget)
+                  : (composerTarget.kind === "none" ? ui.matrix.composerTargetMissing : ui.matrix.composerTargetSet)}
+              </p>
             </div>
             <div className="matrix-composer-banner-meta">
               <span className={`status-pill status-${composerTarget.kind === "none" ? "partial" : "ready"}`}>
                 {composerTarget.kind === "none" ? ui.matrix.composerTargetMissing : ui.matrix.composerTargetSet}
               </span>
               <span className="reference-chip">
-                {ui.matrix.roomId}: {roomName ?? roomId ?? topicRoomId ?? selectedRoomIds[0] ?? ui.common.na}
+                {props.expertMode
+                  ? `${ui.matrix.roomId}: ${roomId ?? topicRoomId ?? selectedRoomIds[0] ?? ui.common.na}`
+                  : `${ui.matrix.roomPickerRoom}: ${roomName ?? (activeComposerRoomId ? ui.matrix.composerTargetSet : ui.common.na)}`}
               </span>
             </div>
           </div>
@@ -1803,7 +1826,11 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               <span className="workflow-chip workflow-chip-active" data-testid="matrix-composer-mode-label">
                 {composerMode}
               </span>
-              <span className="reference-chip">{describeComposerTarget(composerTarget)}</span>
+              <span className="reference-chip">
+                {props.expertMode
+                  ? describeComposerTarget(composerTarget)
+                  : (composerTarget.kind === "none" ? ui.matrix.composerTargetMissing : ui.matrix.composerTargetSet)}
+              </span>
             </div>
           </div>
 
@@ -1853,16 +1880,16 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             </button>
           </div>
 
-          <div className="info-block">
+          <div className="info-block matrix-target-context">
             <p className="info-label">{ui.matrix.targetContextTitle}</p>
             <div className="detail-grid">
               <div>
-                <span>{ui.matrix.roomId}</span>
+                <span>{props.expertMode ? ui.matrix.roomId : ui.matrix.roomPickerRoom}</span>
                 <input
                   type="text"
                   value={roomId ?? ""}
                   onChange={(event) => setRoomId(event.target.value.trim().length > 0 ? event.target.value : null)}
-                  placeholder="!room:matrix.example"
+                  placeholder={props.expertMode ? "!room:matrix.example" : ui.matrix.roomPickerChoose}
                   data-testid="matrix-composer-room-id"
                 />
               </div>
@@ -1876,26 +1903,30 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                   data-testid="matrix-composer-room-name"
                 />
               </div>
-              <div>
-                <span>{ui.matrix.postId}</span>
-                <input
-                  type="text"
-                  value={selectedEventId ?? ""}
-                  onChange={(event) => setSelectedEventId(event.target.value.trim().length > 0 ? event.target.value : null)}
-                  placeholder={ui.matrix.postId}
-                  data-testid="matrix-composer-post-id"
-                />
-              </div>
-              <div>
-                <span>{ui.matrix.threadRootId}</span>
-                <input
-                  type="text"
-                  value={selectedThreadRootId ?? ""}
-                  onChange={(event) => setSelectedThreadRootId(event.target.value.trim().length > 0 ? event.target.value : null)}
-                  placeholder={ui.matrix.threadRootId}
-                  data-testid="matrix-composer-thread-root-id"
-                />
-              </div>
+              {props.expertMode ? (
+                <div>
+                  <span>{ui.matrix.postId}</span>
+                  <input
+                    type="text"
+                    value={selectedEventId ?? ""}
+                    onChange={(event) => setSelectedEventId(event.target.value.trim().length > 0 ? event.target.value : null)}
+                    placeholder={ui.matrix.postId}
+                    data-testid="matrix-composer-post-id"
+                  />
+                </div>
+              ) : null}
+              {props.expertMode ? (
+                <div>
+                  <span>{ui.matrix.threadRootId}</span>
+                  <input
+                    type="text"
+                    value={selectedThreadRootId ?? ""}
+                    onChange={(event) => setSelectedThreadRootId(event.target.value.trim().length > 0 ? event.target.value : null)}
+                    placeholder={ui.matrix.threadRootId}
+                    data-testid="matrix-composer-thread-root-id"
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
 

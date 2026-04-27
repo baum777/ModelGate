@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useReducer, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ChatWorkspace } from "./components/ChatWorkspace.js";
 import {
   GitHubWorkspace,
@@ -16,33 +16,34 @@ import {
   SettingsWorkspace,
   type DiagnosticEntry,
 } from "./components/SettingsWorkspace.js";
-import { RoutingView } from "./components/RoutingView.js";
-import { Sidebar } from "./components/Sidebar.js";
-import { Topbar } from "./components/Topbar.js";
-import { TruthRail } from "./components/TruthRail.js";
+import { SessionList } from "./components/SessionList.js";
 import {
   type StatusPanelRow,
 } from "./components/StatusPanel.js";
+import { DiagnosticsDrawer } from "./components/ExpertDetails.js";
 import {
   MutedSystemCopy,
   SectionLabel,
   ShellCard,
   StatusBadge,
+  TruthRailSection,
 } from "./components/ShellPrimitives.js";
 import {
   getShellHealthCopy,
+  getSessionStatusLabel,
   useLocalization,
 } from "./lib/localization.js";
 import {
   fetchDiagnostics,
   fetchHealth,
+  fetchJournalRecent,
   fetchModels,
-  type DiagnosticsResponse
+  type DiagnosticsResponse,
+  type JournalEntry
 } from "./lib/api.js";
 import {
-  createInitialGitHubAuthState,
-  githubAuthReducer,
-} from "./lib/github-auth.js";
+  deriveSettingsLoginAdapters,
+} from "./lib/settings-login-adapters.js";
 import {
   appendSession,
   createChatSessionMetadata,
@@ -63,8 +64,15 @@ import {
 import {
   summarizePendingApprovals,
 } from "./lib/shell-view-model.js";
+import {
+  getWorkModeCopy,
+  getWorkModeVisibility,
+  isExpertMode,
+  resolvePersistedWorkMode,
+  type WorkMode,
+} from "./lib/work-mode.js";
 
-type WorkspaceMode = "chat" | "github" | "matrix" | "routing" | "review" | "settings";
+type WorkspaceMode = "chat" | "github" | "matrix" | "review" | "settings";
 
 type TelemetryEntry = {
   id: string;
@@ -75,6 +83,7 @@ type TelemetryEntry = {
 
 type PersistedShellState = {
   activeTab?: WorkspaceMode;
+  workMode?: WorkMode;
   expertMode?: boolean;
 };
 
@@ -109,7 +118,92 @@ function appendTelemetry(current: TelemetryEntry[], entry: TelemetryEntry) {
   return [...current, entry].slice(-8);
 }
 
-const WORKSPACE_MODES: WorkspaceMode[] = ["chat", "github", "matrix", "routing", "review", "settings"];
+const WORKSPACE_MODES: WorkspaceMode[] = ["chat", "github", "matrix", "review", "settings"];
+
+function WorkspaceIcon({ mode }: { mode: WorkspaceMode }) {
+  switch (mode) {
+    case "github":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M6 6.75A2.75 2.75 0 0 1 8.75 4H15l3 3v10.25A2.75 2.75 0 0 1 15.25 20H8.75A2.75 2.75 0 0 1 6 17.25V6.75Z" />
+          <path d="M15 4v3h3" />
+          <path d="M8.5 11.25h7" />
+          <path d="M8.5 14.5h7" />
+        </svg>
+      );
+    case "matrix":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <rect x="4" y="4" width="6" height="6" rx="1.5" />
+          <rect x="14" y="4" width="6" height="6" rx="1.5" />
+          <rect x="4" y="14" width="6" height="6" rx="1.5" />
+          <rect x="14" y="14" width="6" height="6" rx="1.5" />
+        </svg>
+      );
+    case "review":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M6 5.5A1.5 1.5 0 0 1 7.5 4h9A1.5 1.5 0 0 1 18 5.5v11A1.5 1.5 0 0 1 16.5 18H10l-4 4v-3.5A1.5 1.5 0 0 1 4.5 17V5.5Z" />
+          <path d="M8 8.5h8" />
+          <path d="M8 11.5h8" />
+          <path d="M8 14.5h5" />
+        </svg>
+      );
+    case "settings":
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M12 8.5A3.5 3.5 0 1 1 12 15.5A3.5 3.5 0 0 1 12 8.5Z" />
+          <path d="M4.5 12a7.5 7.5 0 0 1 .2-1.7l2-.4a6.7 6.7 0 0 1 .8-1.3l-1.2-1.7a8 8 0 0 1 2.4-2.4l1.7 1.2c.4-.3.9-.6 1.3-.8l.4-2A7.5 7.5 0 0 1 12 4.5c.6 0 1.1.1 1.7.2l.4 2c.5.2 1 .5 1.3.8l1.7-1.2a8 8 0 0 1 2.4 2.4l-1.2 1.7c.3.4.6.9.8 1.3l2 .4a7.5 7.5 0 0 1 0 3.4l-2 .4c-.2.5-.5 1-.8 1.3l1.2 1.7a8 8 0 0 1-2.4 2.4l-1.7-1.2c-.4.3-.9.6-1.3.8l-.4 2a7.5 7.5 0 0 1-3.4 0l-.4-2c-.5-.2-1-.5-1.3-.8l-1.7 1.2a8 8 0 0 1-2.4-2.4l1.2-1.7c-.3-.4-.6-.9-.8-1.3l-2-.4A7.5 7.5 0 0 1 4.5 12Z" />
+        </svg>
+      );
+    case "chat":
+    default:
+      return (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v7A2.5 2.5 0 0 1 16.5 16H9l-4 4v-4.5A2.5 2.5 0 0 1 5 13V6.5Z" />
+          <path d="M8 8.5h8" />
+          <path d="M8 11.5h5.5" />
+        </svg>
+      );
+  }
+}
+
+function BeginnerExpertToggle({
+  workMode,
+  setWorkMode,
+}: {
+  workMode: WorkMode;
+  setWorkMode: (value: WorkMode) => void;
+}) {
+  const { locale } = useLocalization();
+  const beginnerCopy = getWorkModeCopy(locale, "beginner");
+  const expertCopy = getWorkModeCopy(locale, "expert");
+  const activeCopy = getWorkModeCopy(locale, workMode);
+
+  return (
+    <div className="work-mode-control">
+      <div className="mode-toggle" role="group" aria-label={activeCopy.label}>
+        <button
+          type="button"
+          className={workMode === "beginner" ? "mode-toggle-button mode-toggle-button-active" : "mode-toggle-button"}
+          onClick={() => setWorkMode("beginner")}
+          aria-pressed={workMode === "beginner"}
+        >
+          {beginnerCopy.shortLabel}
+        </button>
+        <button
+          type="button"
+          className={workMode === "expert" ? "mode-toggle-button mode-toggle-button-active" : "mode-toggle-button"}
+          onClick={() => setWorkMode("expert")}
+          aria-pressed={workMode === "expert"}
+        >
+          {expertCopy.shortLabel}
+        </button>
+      </div>
+      <MutedSystemCopy className="work-mode-hint">{activeCopy.description}</MutedSystemCopy>
+    </div>
+  );
+}
 
 function mergeReviewItems(current: ReviewItem[], next: ReviewItem[]) {
   const remaining = current.filter(
@@ -126,36 +220,7 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function PublicPreview() {
-  return (
-    <main className="app-shell public-preview" data-testid="public-preview">
-      <section className="workspace-hero">
-        <div>
-          <p className="status-pill status-partial">WIP preview</p>
-          <h1>ModelGate</h1>
-          <p className="hero-copy">
-            Public preview shell. Governed workspace access stays separate from this route.
-          </p>
-        </div>
-      </section>
-    </main>
-  );
-}
-
 export default function App() {
-  return shouldRenderConsole() ? <ConsoleShell /> : <PublicPreview />;
-}
-
-function shouldRenderConsole() {
-  if (typeof window === "undefined") {
-    return true;
-  }
-
-  const url = new URL(window.location.href);
-  return url.pathname === "/console" || url.searchParams.get("console") === "1";
-}
-
-function ConsoleShell() {
   const persisted = readPersistedShellState();
   const { locale, setLocale, copy: ui } = useLocalization();
   const appText = useMemo(
@@ -163,21 +228,26 @@ function ConsoleShell() {
       ? {
           telemetryHealthLoaded: "Backend-Health geladen",
           telemetryHealthLoadedDetail: (service: string, modeLabel: string, allowedModelCount: number) =>
-            `${service} meldet ${modeLabel} mit ${allowedModelCount} öffentlichen Modell(aliasen).`,
+            `${service} meldet ${modeLabel} mit ${allowedModelCount} öffentlichen Modellen.`,
           telemetryHealthFailed: "Backend-Health fehlgeschlagen",
           telemetryHealthFailedDetail: "Kein Zugriff auf /health",
           telemetryModelAliasLoaded: "Öffentlicher Modellalias geladen",
           telemetryModelAliasLoadedDetail: (alias: string) =>
-            `Alias ${alias} ausgewählt; Provider-Ziele bleiben backend-owned.`,
+            `Alias ${alias} ausgewählt; Provider-Ziele bleiben backend-seitig.`,
           telemetryModelListFailed: "Modellliste fehlgeschlagen",
           telemetryModelListFailedDetail: "Kein Zugriff auf /models",
+          telemetryDiagnosticsFailed: "Diagnostik nicht verfügbar",
+          telemetryDiagnosticsFailedDetail: "Kein Zugriff auf /diagnostics",
           chatGovernancePendingApproval: "Freigabe ausstehend",
           chatGovernanceExecutionRunning: "Ausführung läuft",
           chatGovernanceLastExecutionConfirmed: "Letzte Ausführung bestätigt",
           chatGovernanceProposalRejected: "Vorschlag verworfen",
           chatGovernanceLastExecutionFailed: "Letzte Ausführung fehlgeschlagen",
           chatGovernanceNoOpenProposal: "Kein offener Vorschlag",
-          sessionHeaderNote: "Wiederaufnehmbare Sessions pro Workspace",
+          sessionHeaderNote: "Wiederaufnehmbare Sessions pro Arbeitsbereich",
+          processGoReview: "Review öffnen",
+          processGoWorkspace: "Workspace öffnen",
+          processCreateSession: "Neue Session",
         }
       : {
           telemetryHealthLoaded: "Backend health loaded",
@@ -190,6 +260,8 @@ function ConsoleShell() {
             `Selected alias ${alias}; provider targets remain backend-owned.`,
           telemetryModelListFailed: "Model list failed",
           telemetryModelListFailedDetail: "Unable to reach /models",
+          telemetryDiagnosticsFailed: "Diagnostics unavailable",
+          telemetryDiagnosticsFailedDetail: "Unable to reach /diagnostics",
           chatGovernancePendingApproval: "Approval pending",
           chatGovernanceExecutionRunning: "Execution running",
           chatGovernanceLastExecutionConfirmed: "Last execution confirmed",
@@ -197,6 +269,9 @@ function ConsoleShell() {
           chatGovernanceLastExecutionFailed: "Last execution failed",
           chatGovernanceNoOpenProposal: "No open proposal",
           sessionHeaderNote: "Resumable sessions per workspace",
+          processGoReview: "Open review",
+          processGoWorkspace: "Open workspace",
+          processCreateSession: "New session",
         },
     [locale],
   );
@@ -255,9 +330,11 @@ function ConsoleShell() {
     [ui],
   );
   const [mode, setMode] = useState<WorkspaceMode>(persisted?.activeTab ?? "chat");
-  const [expertMode, setExpertMode] = useState(persisted?.expertMode ?? false);
+  const [workMode, setWorkMode] = useState<WorkMode>(() => resolvePersistedWorkMode(persisted));
+  const expertMode = isExpertMode(workMode);
+  const workModeVisibility = getWorkModeVisibility(workMode);
+  const workModeCopy = getWorkModeCopy(locale, workMode);
   const [workspaceState, setWorkspaceState] = useState(() => loadWorkspaceState());
-  const [githubAuthState] = useReducer(githubAuthReducer, undefined, createInitialGitHubAuthState);
   const [backendHealthy, setBackendHealthy] = useState<boolean | null>(null);
   const [activeModelAlias, setActiveModelAlias] = useState<string | null>(null);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
@@ -272,6 +349,8 @@ function ConsoleShell() {
     default?: boolean;
     available?: boolean;
   }>>([]);
+  const [runtimeDiagnostics, setRuntimeDiagnostics] = useState<DiagnosticsResponse | null>(null);
+  const [runtimeJournalEntries, setRuntimeJournalEntries] = useState<JournalEntry[]>([]);
   const [restoredSession] = useState(() => {
     if (typeof window === "undefined") {
       return false;
@@ -284,17 +363,16 @@ function ConsoleShell() {
   const [matrixContext, setMatrixContext] = useState<MatrixWorkspaceStatus>(() => createDefaultMatrixContext());
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
-  const [diagnosticsSnapshot, setDiagnosticsSnapshot] = useState<DiagnosticsResponse | null>(null);
-  const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
-  const githubUnlocked = true;
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadConsoleState() {
-      const [healthResult, modelsResult] = await Promise.allSettled([
+      const [healthResult, modelsResult, diagnosticsResult, journalResult] = await Promise.allSettled([
         fetchHealth(),
         fetchModels(),
+        fetchDiagnostics(),
+        fetchJournalRecent(),
       ]);
 
       if (cancelled) {
@@ -354,18 +432,27 @@ function ConsoleShell() {
         );
       }
 
-      try {
-        const diagnostics = await fetchDiagnostics();
+      if (diagnosticsResult.status === "fulfilled") {
+        setRuntimeDiagnostics(diagnosticsResult.value);
+      } else {
+        setRuntimeDiagnostics(null);
+        setTelemetry((current) =>
+          appendTelemetry(current, {
+            id: createId(),
+            kind: "warning",
+            label: appText.telemetryDiagnosticsFailed,
+            detail:
+              diagnosticsResult.reason instanceof Error
+                ? diagnosticsResult.reason.message
+                : appText.telemetryDiagnosticsFailedDetail,
+          }),
+        );
+      }
 
-        if (!cancelled) {
-          setDiagnosticsSnapshot(diagnostics);
-          setDiagnosticsError(null);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setDiagnosticsSnapshot(null);
-          setDiagnosticsError(error instanceof Error ? error.message : "Diagnostics unavailable");
-        }
+      if (journalResult.status === "fulfilled") {
+        setRuntimeJournalEntries(journalResult.value.entries);
+      } else {
+        setRuntimeJournalEntries([]);
       }
     }
 
@@ -379,22 +466,20 @@ function ConsoleShell() {
   useEffect(() => {
     persistShellState({
       activeTab: mode,
+      workMode,
       expertMode,
     });
-  }, [expertMode, mode]);
+  }, [expertMode, mode, workMode]);
 
   useEffect(() => {
     saveWorkspaceState(workspaceState);
   }, [workspaceState]);
 
   useEffect(() => {
-    if (!expertMode) {
+    if (!workModeVisibility.showDiagnosticsByDefault) {
       setDiagnosticsOpen(false);
-      if (mode === "routing") {
-        setMode("chat");
-      }
     }
-  }, [expertMode, mode]);
+  }, [workModeVisibility.showDiagnosticsByDefault]);
 
   useEffect(() => {
     setDiagnosticsOpen(false);
@@ -526,7 +611,6 @@ function ConsoleShell() {
   const githubSession = (workspaceState.sessionsByWorkspace.github.find((session) => session.id === workspaceState.activeSessionIdByWorkspace.github) ?? workspaceState.sessionsByWorkspace.github[0]) as GitHubSession;
   const matrixSession = (workspaceState.sessionsByWorkspace.matrix.find((session) => session.id === workspaceState.activeSessionIdByWorkspace.matrix) ?? workspaceState.sessionsByWorkspace.matrix[0]) as MatrixSession;
 
-
   const chatPendingProposal = chatSession?.metadata.chatState.pendingProposal ?? null;
   const chatLatestReceipt = chatSession?.metadata.chatState.receipts.at(-1) ?? null;
   const chatGovernanceState = chatPendingProposal
@@ -554,12 +638,22 @@ function ConsoleShell() {
             : ui.shell.healthChecking,
     },
   ];
+  const githubConfigured = runtimeDiagnostics?.github.configured ?? null;
+  const githubReady = runtimeDiagnostics?.github.ready ?? null;
+  const githubAccountLabel = githubConfigured === false || githubReady === false
+    ? ui.settings.notConfigured
+    : githubConfigured === null || githubReady === null
+      ? ui.shell.healthChecking
+      : ui.settings.configured;
+  const githubAccessLabel = githubConfigured === false || githubReady === false
+    ? ui.settings.notConfigured
+    : githubContext.accessLabel;
 
   const githubRows: StatusPanelRow[] = [
     { label: ui.github.connectedRepo, value: githubContext.repositoryLabel },
     { label: ui.settings.githubConnection, value: githubContext.connectionLabel },
-    { label: ui.github.readOnly, value: githubUnlocked ? githubContext.accessLabel : ui.auth.statusLocked },
-    ...(githubUnlocked && githubContext.approvalLabel !== ui.common.none
+    { label: ui.github.readOnly, value: githubAccessLabel },
+    ...(githubContext.approvalLabel !== ui.common.none
       ? [{ label: ui.review.approvalNeeded, value: githubContext.approvalLabel }]
       : []),
   ];
@@ -576,7 +670,7 @@ function ConsoleShell() {
   const reviewHasStale = reviewItems.some((item) => item.status === "stale");
   const reviewHasPending = reviewItems.some((item) => item.status === "pending_review");
   const reviewHasExecuting = reviewItems.some((item) => item.status === "approved");
-  const reviewHasRejected = reviewItems.some((item) => item.status === "rejected");
+  const reviewHasTerminal = reviewItems.some((item) => item.status === "rejected" || item.status === "failed");
 
   const reviewRows: StatusPanelRow[] = [
     { label: ui.review.openReviews, value: String(reviewItems.length) },
@@ -591,7 +685,7 @@ function ConsoleShell() {
               ? ui.review.approvalNeeded
               : reviewHasExecuting
                 ? ui.review.executing
-                : reviewHasRejected
+                : reviewHasTerminal
                   ? ui.review.terminalDeviation
                   : ui.review.ready,
     },
@@ -613,17 +707,10 @@ function ConsoleShell() {
             : ui.shell.healthCheckingDetail,
     },
     github: {
-      sessionLabel:
-        githubAuthState.status === "authenticated"
-          ? ui.auth.statusAuthenticated
-          : githubAuthState.status === "loading"
-            ? ui.auth.statusChecking
-            : githubAuthState.error
-              ? ui.common.error
-              : ui.auth.statusLocked,
+      sessionLabel: githubAccountLabel,
       connectionLabel: githubContext.connectionLabel,
       repositoryLabel: githubContext.repositoryLabel,
-      accessLabel: githubUnlocked ? githubContext.accessLabel : ui.auth.statusLocked,
+      accessLabel: githubAccessLabel,
     },
     matrix: {
       identityLabel: matrixContext.identityLabel,
@@ -636,7 +723,106 @@ function ConsoleShell() {
       availableCount: availableModels.length,
       registrySourceLabel: modelRegistry.length > 0 ? "backend-policy" : ui.common.na,
     },
+    diagnostics: {
+      runtimeMode: runtimeDiagnostics?.runtimeMode ?? ui.settings.unavailable,
+      defaultPublicAlias: runtimeDiagnostics?.models.defaultPublicAlias ?? ui.settings.unavailable,
+      publicAliases: runtimeDiagnostics?.models.publicAliases.join(", ") || ui.settings.unavailable,
+      routingMode: runtimeDiagnostics?.routing.mode ?? ui.settings.unavailable,
+      fallbackEnabled: runtimeDiagnostics
+        ? (runtimeDiagnostics.routing.allowFallback ? ui.common.active : ui.common.inactive)
+        : ui.settings.unavailable,
+      failClosed: runtimeDiagnostics
+        ? (runtimeDiagnostics.routing.failClosed ? ui.common.active : ui.common.inactive)
+        : ui.settings.unavailable,
+      rateLimitEnabled: runtimeDiagnostics
+        ? (runtimeDiagnostics.rateLimit.enabled ? ui.common.active : ui.common.inactive)
+        : ui.settings.unavailable,
+      actionStoreMode: runtimeDiagnostics?.actionStore.mode ?? ui.settings.unavailable,
+      githubConfigured: runtimeDiagnostics
+        ? (runtimeDiagnostics.github.configured ? ui.settings.configured : ui.settings.notConfigured)
+        : ui.settings.unavailable,
+      matrixConfigured: runtimeDiagnostics
+        ? (runtimeDiagnostics.matrix.configured ? ui.settings.configured : ui.settings.notConfigured)
+        : ui.settings.unavailable,
+      generatedAt: runtimeDiagnostics?.diagnosticsGeneratedAt ?? ui.settings.unavailable,
+      uptimeMs: runtimeDiagnostics ? String(runtimeDiagnostics.uptimeMs) : ui.settings.unavailable,
+      chatRequests: runtimeDiagnostics ? String(runtimeDiagnostics.counters.chatRequests) : ui.settings.unavailable,
+      chatStreamStarted: runtimeDiagnostics ? String(runtimeDiagnostics.counters.chatStreamStarted) : ui.settings.unavailable,
+      chatStreamCompleted: runtimeDiagnostics ? String(runtimeDiagnostics.counters.chatStreamCompleted) : ui.settings.unavailable,
+      chatStreamError: runtimeDiagnostics ? String(runtimeDiagnostics.counters.chatStreamError) : ui.settings.unavailable,
+      chatStreamAborted: runtimeDiagnostics ? String(runtimeDiagnostics.counters.chatStreamAborted) : ui.settings.unavailable,
+      upstreamError: runtimeDiagnostics ? String(runtimeDiagnostics.counters.upstreamError) : ui.settings.unavailable,
+      rateLimitBlocked: runtimeDiagnostics
+        ? `chat:${runtimeDiagnostics.rateLimit.blockedByScope.chat}, auth:${runtimeDiagnostics.rateLimit.blockedByScope.auth_login}, gh-propose:${runtimeDiagnostics.rateLimit.blockedByScope.github_propose}, gh-exec:${runtimeDiagnostics.rateLimit.blockedByScope.github_execute}, matrix-exec:${runtimeDiagnostics.rateLimit.blockedByScope.matrix_execute}`
+        : ui.settings.unavailable,
+    },
+    journal: {
+      status: runtimeDiagnostics?.journal.enabled ? ui.settings.configured : ui.settings.journalUnavailable,
+      mode: runtimeDiagnostics?.journal.mode ?? ui.settings.unavailable,
+      retention: runtimeDiagnostics
+        ? `${runtimeDiagnostics.journal.recentCount}/${runtimeDiagnostics.journal.maxEntries}`
+        : ui.settings.unavailable,
+      recentCount: runtimeDiagnostics ? String(runtimeDiagnostics.journal.recentCount) : ui.settings.unavailable,
+      entries: runtimeJournalEntries.slice(0, 12)
+    }
   };
+
+  const settingsLoginAdapters = useMemo(() => deriveSettingsLoginAdapters({
+    copy: {
+      checking: ui.shell.healthChecking,
+      ready: ui.shell.statusReady,
+      unavailable: ui.shell.healthUnavailable,
+      error: ui.shell.statusError,
+      none: ui.common.none,
+      configureBackend: locale === "de" ? "Server konfigurieren" : "Configure server",
+      connect: locale === "de" ? "Verbinden" : "Connect",
+      disconnect: locale === "de" ? "Trennen" : "Disconnect",
+      open: locale === "de" ? "Öffnen" : "Open",
+      retry: locale === "de" ? "Erneut prüfen" : "Retry",
+    },
+    backend: {
+      healthy: backendHealthy,
+      label: settingsTruthSnapshot.backend.label,
+    },
+    github: {
+      configured: runtimeDiagnostics?.github.configured ?? null,
+      ready: runtimeDiagnostics?.github.ready ?? null,
+      connectionLabel: githubContext.connectionLabel,
+      repositoryLabel: githubContext.repositoryLabel,
+      accessLabel: githubAccessLabel,
+    },
+    matrix: {
+      configured: runtimeDiagnostics?.matrix.configured ?? null,
+      ready: runtimeDiagnostics?.matrix.ready ?? null,
+      identityLabel: matrixContext.identityLabel,
+      connectionLabel: matrixContext.connectionLabel,
+      homeserverLabel: matrixContext.homeserverLabel,
+      scopeLabel: matrixContext.scopeLabel,
+    },
+    chat: {
+      activeAlias: activeModelAlias,
+      availableCount: availableModels.length,
+    },
+  }), [
+    activeModelAlias,
+    availableModels.length,
+    backendHealthy,
+    githubAccessLabel,
+    githubContext.accessLabel,
+    githubContext.connectionLabel,
+    githubContext.repositoryLabel,
+    locale,
+    matrixContext.connectionLabel,
+    matrixContext.homeserverLabel,
+    matrixContext.identityLabel,
+    matrixContext.scopeLabel,
+    runtimeDiagnostics?.github.configured,
+    runtimeDiagnostics?.github.ready,
+    runtimeDiagnostics?.matrix.configured,
+    runtimeDiagnostics?.matrix.ready,
+    settingsTruthSnapshot.backend.label,
+    ui,
+  ]);
 
   const settingsRows: StatusPanelRow[] = [
     { label: ui.settings.backend, value: settingsTruthSnapshot.backend.label },
@@ -645,25 +831,12 @@ function ConsoleShell() {
     { label: ui.settings.modelCardTitle, value: settingsTruthSnapshot.models.activeAlias },
   ];
 
-  const routingRows: StatusPanelRow[] = diagnosticsSnapshot
-    ? [
-        { label: "active_policy", value: diagnosticsSnapshot.routing.activePolicy },
-        { label: "fail_closed", value: String(diagnosticsSnapshot.routing.failClosed) },
-        { label: "fallbacks", value: String(diagnosticsSnapshot.routing.fallbackChain.length) },
-        { label: "log_enabled", value: String(diagnosticsSnapshot.routing.logEnabled) },
-      ]
-    : [
-        { label: "status", value: diagnosticsError ? "auth required" : "loading" },
-      ];
-
   const currentRows = useMemo(() => {
     switch (mode) {
       case "github":
         return githubRows;
       case "matrix":
         return matrixRows;
-      case "routing":
-        return routingRows;
       case "review":
         return reviewRows;
       case "settings":
@@ -671,15 +844,11 @@ function ConsoleShell() {
       default:
         return chatRows;
     }
-  }, [chatRows, githubRows, matrixRows, mode, reviewRows, routingRows, settingsRows]);
+  }, [chatRows, githubRows, matrixRows, mode, reviewRows, settingsRows]);
 
   const currentStatusBadge = useMemo(() => {
     switch (mode) {
       case "github":
-        if (!githubUnlocked) {
-          return githubAuthState.error ? ui.shell.statusPartial : ui.auth.statusLocked;
-        }
-
         if (githubContext.connectionLabel !== ui.shell.statusReady) {
           return githubContext.connectionLabel;
         }
@@ -728,34 +897,14 @@ function ConsoleShell() {
           return ui.review.executing;
         }
 
-        if (reviewHasRejected) {
+    if (reviewHasTerminal) {
           return ui.review.terminalDeviation;
         }
 
         return ui.shell.statusReady;
-      case "routing":
-        return diagnosticsSnapshot
-          ? diagnosticsSnapshot.routing.failClosed
-            ? ui.shell.statusReady
-            : ui.shell.statusPartial
-          : diagnosticsError
-            ? ui.shell.statusError
-            : ui.shell.statusPartial;
       case "settings":
         if (backendHealthy === false) {
           return ui.shell.statusError;
-        }
-
-        if (githubAuthState.error) {
-          return ui.shell.statusError;
-        }
-
-        if (githubAuthState.status === "loading") {
-          return ui.shell.statusPartial;
-        }
-
-        if (!githubUnlocked) {
-          return ui.auth.statusLocked;
         }
 
         if (matrixContext.connectionLabel === ui.shell.statusError) {
@@ -787,14 +936,9 @@ function ConsoleShell() {
     chatLatestReceipt?.outcome,
     chatPendingProposal?.status,
     expertMode,
-    githubAuthState.error,
-    githubAuthState.status,
     githubContext.approvalLabel,
     githubContext.connectionLabel,
     githubContext.repositoryLabel,
-    githubUnlocked,
-    diagnosticsError,
-    diagnosticsSnapshot,
     backendHealthy,
     activeModelAlias,
     matrixContext.approvalLabel,
@@ -817,7 +961,7 @@ function ConsoleShell() {
     };
   }, [chatPendingProposal?.status, reviewItems]);
   const workspaceName = ui.shell.workspaceTabs[mode].label;
-  const workspaceContextTitle = `${workspaceName} ${ui.shell.workspaceContextSuffix}`;
+  const nextStepTitle = ui.review.nextStepLabel;
   const diagnosticsTitle = `${ui.shell.workspaceTabs[mode].label} ${ui.shell.diagnosticsLabel}`;
   const showBeginnerDiagnostics = !expertMode && healthState.tone === "error";
   const diagnosticsAccessible = expertMode || showBeginnerDiagnostics;
@@ -825,10 +969,6 @@ function ConsoleShell() {
   const currentStatusTone = useMemo(() => {
     switch (mode) {
       case "github":
-        if (!githubUnlocked) {
-          return githubAuthState.error ? "error" : "partial";
-        }
-
         if (githubContext.connectionLabel !== ui.shell.statusReady) {
           return githubContext.connectionLabel === ui.shell.statusError ? "error" : "partial";
         }
@@ -853,31 +993,17 @@ function ConsoleShell() {
           return "partial";
         }
 
-        if (reviewHasStale || reviewHasRejected) {
+    if (reviewHasStale || reviewHasTerminal) {
           return "error";
         }
 
         return reviewHasPending || reviewHasExecuting ? "partial" : "ready";
-      case "routing":
-        if (diagnosticsError) {
-          return "error";
-        }
-
-        if (!diagnosticsSnapshot) {
-          return "partial";
-        }
-
-        return diagnosticsSnapshot.routing.failClosed ? "ready" : "partial";
       case "settings":
         if (backendHealthy === false) {
           return "error";
         }
 
-        if (githubAuthState.error) {
-          return "error";
-        }
-
-        if (githubAuthState.status === "loading" || !githubUnlocked || matrixContext.connectionLabel === ui.shell.healthChecking) {
+        if (matrixContext.connectionLabel === ui.shell.healthChecking) {
           return "partial";
         }
 
@@ -905,151 +1031,10 @@ function ConsoleShell() {
     backendHealthy,
     chatLatestReceipt?.outcome,
     chatPendingProposal?.status,
-    diagnosticsError,
-    diagnosticsSnapshot,
-    githubAuthState.error,
-    githubAuthState.status,
     githubContext.approvalLabel,
     githubContext.connectionLabel,
     githubContext.repositoryLabel,
-    githubUnlocked,
     backendHealthy,
-    activeModelAlias,
-    matrixContext.connectionLabel,
-    matrixContext.approvalLabel,
-    matrixContext.scopeLabel,
-    matrixContext.summaryLabel,
-    mode,
-    reviewItems,
-  ]);
-
-  const currentStatusHeadline = useMemo(() => {
-    switch (mode) {
-      case "github":
-        if (!githubUnlocked) {
-          return githubAuthState.error ? ui.github.workspaceNoticeRepos : ui.auth.footerNote;
-        }
-
-        if (githubContext.connectionLabel !== ui.shell.statusReady) {
-          return githubContext.connectionLabel === ui.shell.statusError
-            ? ui.github.workspaceNoticeRepos
-            : ui.shell.healthCheckingDetail;
-        }
-
-        if (githubContext.approvalLabel !== ui.common.none) {
-          return ui.review.approvalNeeded;
-        }
-
-        if (githubContext.repositoryLabel === ui.github.noRepoSelected) {
-          return ui.github.nextStepChooseRepo;
-        }
-
-        return ui.github.intro;
-      case "matrix":
-        if (matrixContext.connectionLabel !== ui.shell.statusReady) {
-          return matrixContext.connectionLabel === ui.shell.statusError
-            ? ui.matrix.topicStatusUnavailable
-            : ui.shell.healthCheckingDetail;
-        }
-
-        if (matrixContext.scopeLabel === ui.matrix.scopeSelected) {
-          return ui.matrix.resolveScope;
-        }
-
-        if (matrixContext.approvalLabel !== ui.common.none) {
-          return ui.matrix.topicStatusApproval;
-        }
-
-        if (matrixContext.summaryLabel === ui.matrix.scopeSummaryUnavailable) {
-          return ui.matrix.scopeSummaryLoading;
-        }
-
-        return ui.matrix.scopeNotice;
-      case "review":
-        if (reviewItems.length === 0) {
-          return ui.review.emptyTitle;
-        }
-
-        if (reviewHasStale) {
-          return ui.review.warning;
-        }
-
-        if (reviewHasPending) {
-          return ui.review.approvalNeeded;
-        }
-
-        if (reviewHasExecuting) {
-          return ui.review.executing;
-        }
-
-        if (reviewHasRejected) {
-          return ui.review.terminalDeviation;
-        }
-
-        return ui.review.ready;
-      case "routing":
-        if (diagnosticsError) {
-          return "Diagnostics require backend authorization. Browser remains read-only.";
-        }
-
-        if (!diagnosticsSnapshot) {
-          return "Routing diagnostics are loading.";
-        }
-
-        return "Alias-only routing policy loaded from /diagnostics.";
-      case "settings":
-        if (backendHealthy === false) {
-          return ui.shell.healthUnavailableDetail;
-        }
-
-        if (githubAuthState.error) {
-          return ui.github.workspaceNoticeRepos;
-        }
-
-        if (githubAuthState.status === "loading") {
-          return ui.auth.statusChecking;
-        }
-
-        if (!githubUnlocked) {
-          return ui.shell.accountLoginRequired;
-        }
-
-        if (matrixContext.connectionLabel === ui.shell.statusError) {
-          return ui.matrix.topicStatusUnavailable;
-        }
-
-        if (!activeModelAlias) {
-          return ui.settings.modelChoiceNote;
-        }
-
-        return ui.settings.connectionTruthNote;
-      default:
-        if (chatPendingProposal?.status === "pending") {
-          return ui.chat.composerLocked.approval;
-        }
-
-        if (chatPendingProposal?.status === "executing") {
-          return ui.chat.composerLocked.execution;
-        }
-
-        if (chatLatestReceipt?.outcome === "failed" || chatLatestReceipt?.outcome === "unverifiable") {
-          return ui.shell.statusError;
-        }
-
-        return backendHealthy === false ? ui.shell.healthUnavailableDetail : backendHealthy === true ? ui.shell.healthReadyDetail : ui.shell.healthCheckingDetail;
-    }
-  }, [
-    backendHealthy,
-    chatLatestReceipt?.outcome,
-    chatPendingProposal?.status,
-    diagnosticsError,
-    diagnosticsSnapshot,
-    githubAuthState.error,
-    githubAuthState.status,
-    githubContext.approvalLabel,
-    githubContext.connectionLabel,
-    githubContext.repositoryLabel,
-    githubUnlocked,
     activeModelAlias,
     matrixContext.connectionLabel,
     matrixContext.approvalLabel,
@@ -1062,12 +1047,6 @@ function ConsoleShell() {
   const currentHelperText = useMemo(() => {
     switch (mode) {
       case "github":
-        if (!githubUnlocked) {
-          return githubAuthState.error
-            ? ui.github.workspaceNoticeRepos
-            : ui.auth.intro;
-        }
-
         if (githubContext.approvalLabel !== ui.common.none) {
           return ui.github.approveHelper;
         }
@@ -1108,24 +1087,14 @@ function ConsoleShell() {
           return ui.review.executing;
         }
 
-        if (reviewHasRejected) {
+    if (reviewHasTerminal) {
           return ui.review.terminalDeviation;
         }
 
         return ui.review.ready;
-      case "routing":
-        return "Config: config/model-capabilities.yml + config/llm-router.yml. Provider IDs remain backend-only.";
       case "settings":
         if (backendHealthy === false) {
           return ui.shell.healthUnavailableDetail;
-        }
-
-        if (githubAuthState.error) {
-          return ui.github.workspaceNoticeRepos;
-        }
-
-        if (!githubUnlocked) {
-          return ui.auth.statusLocked;
         }
 
         if (matrixContext.connectionLabel === ui.shell.statusError) {
@@ -1156,13 +1125,9 @@ function ConsoleShell() {
     backendHealthy,
     chatLatestReceipt?.outcome,
     chatPendingProposal?.status,
-    diagnosticsError,
-    diagnosticsSnapshot,
     expertMode,
-    githubAuthState.error,
     githubContext.approvalLabel,
     githubContext.repositoryLabel,
-    githubUnlocked,
     matrixContext.connectionLabel,
     matrixContext.approvalLabel,
     matrixContext.scopeLabel,
@@ -1174,13 +1139,6 @@ function ConsoleShell() {
   const currentExpertRows = useMemo(() => {
     switch (mode) {
       case "github":
-        if (!githubUnlocked) {
-          return [
-            { label: ui.auth.cardTitle, value: githubAuthState.error ? ui.common.error : ui.auth.statusLocked },
-            { label: ui.shell.sessionLabel, value: githubAuthState.status === "loading" ? ui.auth.statusChecking : ui.auth.statusLocked }
-          ];
-        }
-
         return [
           { label: ui.settings.githubConnection, value: githubContext.expertDetails.apiStatus },
           { label: ui.github.repoSelectLabel, value: githubContext.expertDetails.selectedRepoSlug ?? ui.common.na },
@@ -1207,22 +1165,11 @@ function ConsoleShell() {
                   ? ui.review.approvalNeeded
                   : reviewHasExecuting
                     ? ui.review.executing
-                    : reviewHasRejected
+                    : reviewHasTerminal
                       ? ui.review.terminalDeviation
                       : ui.review.ready,
           },
         ];
-      case "routing":
-        return diagnosticsSnapshot
-          ? [
-              { label: "active_policy", value: diagnosticsSnapshot.routing.activePolicy },
-              { label: "fail_closed", value: String(diagnosticsSnapshot.routing.failClosed) },
-              { label: "allow_fallback", value: String(diagnosticsSnapshot.routing.allowFallback) },
-              { label: "free_only", value: String(diagnosticsSnapshot.routing.freeOnly) },
-            ]
-          : [
-              { label: "diagnostics", value: diagnosticsError ? "auth required" : "loading" },
-            ];
       case "settings":
         return [
           { label: ui.settings.backend, value: settingsTruthSnapshot.backend.label },
@@ -1241,14 +1188,9 @@ function ConsoleShell() {
     chatPendingProposal?.status,
     chatSession?.metadata.chatState.activeRoute?.selectedAlias,
     chatSession?.metadata.chatState.receipts.length,
-    diagnosticsError,
-    diagnosticsSnapshot,
     expertMode,
-    githubAuthState.error,
-    githubAuthState.status,
     githubContext.approvalLabel,
     githubContext.expertDetails,
-    githubUnlocked,
     matrixContext.approvalLabel,
     matrixContext.connectionLabel,
     matrixContext.expertDetails,
@@ -1426,6 +1368,7 @@ function ConsoleShell() {
     <ChatWorkspace
       key={chatSession?.id ?? "chat-session"}
       session={chatSession}
+      workMode={workMode}
       backendHealthy={backendHealthy}
       activeModelAlias={activeModelAlias}
       availableModels={availableModels}
@@ -1439,7 +1382,7 @@ function ConsoleShell() {
       key={githubSession?.id ?? "github-session"}
       session={githubSession}
       backendHealthy={backendHealthy}
-      expertMode={expertMode}
+      workMode={workMode}
       onTelemetry={recordTelemetry}
       onContextChange={setGitHubContext}
       onReviewItemsChange={updateGitHubReviewItems}
@@ -1450,6 +1393,7 @@ function ConsoleShell() {
       key={matrixSession?.id ?? "matrix-session"}
       session={matrixSession}
       restoredSession={restoredSession}
+      workMode={workMode}
       expertMode={expertMode}
       onTelemetry={recordTelemetry}
       onContextChange={setMatrixContext}
@@ -1458,93 +1402,216 @@ function ConsoleShell() {
     />
   ) : mode === "review" ? (
     <ReviewWorkspace items={reviewItems} expertMode={expertMode} />
-  ) : mode === "routing" ? (
-    <RoutingView diagnosticsSnapshot={diagnosticsSnapshot} diagnosticsError={diagnosticsError} />
   ) : (
     <SettingsWorkspace
-      expertMode={expertMode}
-      onExpertModeChange={setExpertMode}
+      workMode={workMode}
+      onWorkModeChange={setWorkMode}
       diagnostics={telemetry as DiagnosticEntry[]}
       onClearDiagnostics={() => setTelemetry([])}
       truthSnapshot={settingsTruthSnapshot}
-      diagnosticsSnapshot={diagnosticsSnapshot}
-      diagnosticsError={diagnosticsError}
+      loginAdapters={settingsLoginAdapters}
+      onOpenWorkspace={handleWorkspaceTabSelect}
     />
   );
   const statusToneForBadge = currentStatusTone === "error" ? "error" : currentStatusTone === "ready" ? "ready" : "partial";
-  const accountTone = githubUnlocked ? "ready" : githubAuthState.error ? "error" : "partial";
-  const accountLabel = githubUnlocked
-    ? ui.shell.accountAuthenticated
-    : githubAuthState.status === "loading"
-      ? ui.shell.accountChecking
-      : ui.shell.accountLocked;
-  const visibleWorkspaceModes = expertMode
-    ? WORKSPACE_MODES
-    : WORKSPACE_MODES.filter((workspaceMode) => workspaceMode !== "routing");
 
   return (
     <main className="app-shell app-shell-console" data-testid="app-shell">
-      <Topbar locale={locale} onLocaleChange={setLocale} health={healthState} />
+      <header className="global-header global-header-shell">
+        <div className="brand-block">
+          <p className="app-kicker">{ui.shell.appKicker}</p>
+          <h1>{ui.shell.appTitle}</h1>
+          <p className="app-deck">{ui.shell.appDeck}</p>
+        </div>
+
+        <div className="header-actions">
+          <div className="shell-language-toggle" role="group" aria-label={ui.shell.languageLabel}>
+            <button
+              type="button"
+              className={locale === "en" ? "secondary-button shell-language-button shell-language-button-active" : "secondary-button shell-language-button"}
+              onClick={() => setLocale("en")}
+              aria-pressed={locale === "en"}
+              aria-label={locale === "de" ? "Sprache: Englisch" : "Language: English"}
+              data-testid="locale-en"
+            >
+              {ui.shell.languageOptionEnglish}
+            </button>
+            <button
+              type="button"
+              className={locale === "de" ? "secondary-button shell-language-button shell-language-button-active" : "secondary-button shell-language-button"}
+              onClick={() => setLocale("de")}
+              aria-pressed={locale === "de"}
+              aria-label={locale === "de" ? "Sprache: Deutsch" : "Language: German"}
+              data-testid="locale-de"
+            >
+              {ui.shell.languageOptionGerman}
+            </button>
+          </div>
+          <StatusBadge tone={healthState.tone}>{ui.shell.backendPrefix} {healthState.label}</StatusBadge>
+        </div>
+      </header>
 
       <section className="console-layout">
-        <Sidebar
-          locale={locale}
-          workspaceModes={visibleWorkspaceModes}
-          activeMode={mode}
-          onWorkspaceSelect={handleWorkspaceTabSelect}
-          workspaceName={workspaceName}
-          activeSession={activeSession}
-          sessionStatusTone={statusToneForBadge}
-          expertMode={expertMode}
-          onExpertModeChange={setExpertMode}
-          accountTone={accountTone}
-          accountLabel={accountLabel}
-          accountError={githubAuthState.error}
-          sessionWorkspace={sessionWorkspace}
-          sessionWorkspaceSessions={sessionWorkspaceSessions}
-          sessionWorkspaceActiveId={sessionWorkspaceActiveId}
-          onSessionCreate={() => handleWorkspaceSessionCreate(sessionWorkspace)}
-          onSessionSelect={(sessionId) => handleWorkspaceSessionSelect(sessionWorkspace, sessionId)}
-          onSessionArchive={(sessionId) => handleWorkspaceSessionArchive(sessionWorkspace, sessionId)}
-          onSessionDelete={(sessionId) => handleWorkspaceSessionDelete(sessionWorkspace, sessionId)}
-          sessionHeaderNote={appText.sessionHeaderNote}
-        />
+        <aside className="workspace-sidebar shell-left-rail">
+          <ShellCard variant="rail" className="shell-nav-card">
+            <SectionLabel>{ui.shell.workspacesLabel}</SectionLabel>
+            <nav className="sidebar-nav" aria-label={ui.shell.workspacesLabel}>
+              {WORKSPACE_MODES.map((workspaceMode) => (
+                <button
+                  key={workspaceMode}
+                  type="button"
+                  className={mode === workspaceMode ? "workspace-tab workspace-tab-active workspace-tab-vertical workspace-tab-shell-active" : "workspace-tab workspace-tab-vertical"}
+                  onClick={() => handleWorkspaceTabSelect(workspaceMode)}
+                  aria-current={mode === workspaceMode ? "page" : undefined}
+                  data-testid={`tab-${workspaceMode}`}
+                >
+                  <WorkspaceIcon mode={workspaceMode} />
+                  <span>
+                    <strong>{ui.shell.workspaceTabs[workspaceMode].label}</strong>
+                    {expertMode ? <small>{ui.shell.workspaceTabs[workspaceMode].description}</small> : null}
+                  </span>
+                </button>
+              ))}
+            </nav>
+          </ShellCard>
+
+          <ShellCard variant="muted" className="shell-session-identity-card shell-controls-card">
+            <div className="shell-control-row">
+              <div>
+                <SectionLabel>{locale === "de" ? "Arbeitsmodus" : "Work mode"}</SectionLabel>
+                <BeginnerExpertToggle workMode={workMode} setWorkMode={setWorkMode} />
+              </div>
+              <StatusBadge tone={statusToneForBadge}>{getSessionStatusLabel(locale, activeSession?.status ?? "draft")}</StatusBadge>
+            </div>
+            {expertMode && activeSession?.id ? (
+              <MutedSystemCopy className="shell-session-id">{ui.shell.sessionIdPrefix}: {activeSession.id}</MutedSystemCopy>
+            ) : null}
+
+          </ShellCard>
+
+          <SessionList
+            workspace={sessionWorkspace}
+            sessions={sessionWorkspaceSessions}
+            activeSessionId={sessionWorkspaceActiveId}
+            onCreate={() => handleWorkspaceSessionCreate(sessionWorkspace)}
+            onSelect={(sessionId) => handleWorkspaceSessionSelect(sessionWorkspace, sessionId)}
+            onArchive={(sessionId) => handleWorkspaceSessionArchive(sessionWorkspace, sessionId)}
+            onDelete={(sessionId) => handleWorkspaceSessionDelete(sessionWorkspace, sessionId)}
+            headerNote={expertMode ? appText.sessionHeaderNote : undefined}
+            showManagement={expertMode}
+          />
+        </aside>
 
         <section className="console-main shell-center-main">
           <ShellCard variant="base" className="workspace-frame-card">
-            <header className="workspace-frame-header">
-              <div>
-                <SectionLabel>{workspaceName}</SectionLabel>
-                <h2>{activeSession?.title ?? ui.shell.currentSessionFallback}</h2>
-              </div>
-              <StatusBadge tone={statusToneForBadge}>{currentStatusBadge}</StatusBadge>
-            </header>
-            <MutedSystemCopy className="workspace-frame-note">{currentStatusHeadline}</MutedSystemCopy>
             <div className="workspace-frame-body">{workspaceSurface}</div>
           </ShellCard>
         </section>
 
-        <TruthRail
-          locale={locale}
-          expertMode={expertMode}
-          healthState={healthState}
-          workspaceName={workspaceName}
-          activeModelAlias={activeModelAlias}
-          activeSession={activeSession}
-          statusTone={statusToneForBadge}
-          currentStatusBadge={currentStatusBadge}
-          approvalSummary={approvalSummary}
-          workspaceContextTitle={workspaceContextTitle}
-          currentRows={currentRows}
-          currentHelperText={currentHelperText}
-          diagnosticsAccessible={diagnosticsAccessible}
-          diagnosticsOpen={diagnosticsOpen}
-          diagnosticsTitle={diagnosticsTitle}
-          diagnosticsRows={currentExpertRows}
-          diagnosticsChildren={currentExpertChildren}
-          onActivateExpert={() => setExpertMode(true)}
-          onDiagnosticsToggle={setDiagnosticsOpen}
-        />
+        <aside className="workspace-context truth-rail">
+          <TruthRailSection
+            title={ui.shell.healthTitle}
+            testId="truth-rail-health"
+            badge={<StatusBadge tone={healthState.tone}>{healthState.label}</StatusBadge>}
+          >
+            <MutedSystemCopy>{workModeCopy.riskHint}</MutedSystemCopy>
+            {expertMode || healthState.tone !== "ready" ? (
+              <MutedSystemCopy>{healthState.detail}</MutedSystemCopy>
+            ) : null}
+            {expertMode ? (
+              <div className="truth-rail-pairs">
+                <div>
+                  <span>{ui.shell.modeLabel}</span>
+                  <strong>{workspaceName}</strong>
+                </div>
+                <div>
+                  <span>{ui.shell.publicAliasLabel}</span>
+                  <strong>{activeModelAlias ?? ui.common.na}</strong>
+                </div>
+              </div>
+            ) : null}
+          </TruthRailSection>
+
+          {approvalSummary.hasApprovals || expertMode ? (
+            <TruthRailSection
+              title={ui.shell.pendingApprovalsTitle}
+              testId="truth-rail-approvals"
+              badge={<StatusBadge tone={approvalSummary.stale > 0 ? "error" : approvalSummary.pending > 0 ? "partial" : "muted"}>{approvalSummary.pending}</StatusBadge>}
+            >
+              <p className="truth-rail-keyline">
+                {ui.shell.pendingApprovalsSummary(approvalSummary.pending, approvalSummary.stale)}
+              </p>
+              {approvalSummary.hasApprovals ? (
+                <MutedSystemCopy>
+                  {approvalSummary.chatPending > 0 ? ui.shell.pendingApprovalsChat : ui.shell.pendingApprovalsSeparate}
+                </MutedSystemCopy>
+              ) : null}
+            </TruthRailSection>
+          ) : null}
+
+          <TruthRailSection
+            title={nextStepTitle}
+            testId="truth-rail-next-step"
+            badge={<StatusBadge tone={statusToneForBadge}>{currentStatusBadge}</StatusBadge>}
+          >
+            <div className="truth-rail-pairs">
+              {currentRows.slice(0, expertMode ? 2 : 1).map((row) => (
+                <div key={row.label}>
+                  <span>{row.label}</span>
+                  <strong>{row.value}</strong>
+                </div>
+              ))}
+            </div>
+            <MutedSystemCopy>{currentHelperText}</MutedSystemCopy>
+            <div className="truth-rail-actions">
+              {approvalSummary.hasApprovals && mode !== "review" ? (
+                <button type="button" className="secondary-button" onClick={() => handleWorkspaceTabSelect("review")}>
+                  {appText.processGoReview}
+                </button>
+              ) : mode === "review" && reviewItems.length === 0 ? (
+                <button type="button" className="secondary-button" onClick={() => handleWorkspaceTabSelect(workspaceState.activeWorkspace)}>
+                  {appText.processGoWorkspace}
+                </button>
+              ) : isSessionWorkspace(mode) ? (
+                <button type="button" className="secondary-button" onClick={() => handleWorkspaceSessionCreate(sessionWorkspace)}>
+                  {appText.processCreateSession}
+                </button>
+              ) : null}
+            </div>
+          </TruthRailSection>
+
+          {diagnosticsAccessible || expertMode ? (
+          <TruthRailSection title={ui.shell.diagnosticsLabel} testId="truth-rail-diagnostics">
+            <MutedSystemCopy>
+              {diagnosticsAccessible ? ui.shell.diagnosticsAvailable : ui.shell.diagnosticsHidden}
+            </MutedSystemCopy>
+            {!diagnosticsAccessible ? (
+              <button type="button" className="secondary-button" onClick={() => setWorkMode("expert")}>
+                {ui.shell.activateExpert}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setDiagnosticsOpen((current) => !current)}
+              >
+                {diagnosticsOpen ? ui.shell.diagnosticsHide : ui.shell.diagnosticsShow}
+              </button>
+            )}
+
+            <DiagnosticsDrawer
+              expertMode={diagnosticsAccessible}
+              title={diagnosticsTitle}
+              rows={currentExpertRows}
+              className="shell-diagnostics-drawer"
+              open={diagnosticsOpen}
+              onToggle={setDiagnosticsOpen}
+            >
+              {currentExpertChildren}
+            </DiagnosticsDrawer>
+          </TruthRailSection>
+          ) : null}
+        </aside>
       </section>
     </main>
   );

@@ -1,7 +1,13 @@
 import React from "react";
-import type { DiagnosticsResponse } from "../lib/api.js";
-import { DiagnosticsRow, type DiagnosticsRowState } from "./DiagnosticsRow.js";
 import { useLocalization } from "../lib/localization.js";
+import type { JournalEntry } from "../lib/api.js";
+import { GuideOverlay, getWorkspaceGuide } from "./GuideOverlay.js";
+import {
+  getWorkModeCopy,
+  isExpertMode,
+  type WorkMode,
+} from "../lib/work-mode.js";
+import type { SettingsLoginAdapter } from "../lib/settings-login-adapters.js";
 
 export type DiagnosticEntry = {
   kind: "info" | "warning" | "error";
@@ -31,65 +37,109 @@ export type SettingsTruthSnapshot = {
     availableCount: number;
     registrySourceLabel: string;
   };
+  diagnostics: {
+    runtimeMode: string;
+    defaultPublicAlias: string;
+    publicAliases: string;
+    routingMode: string;
+    fallbackEnabled: string;
+    failClosed: string;
+    rateLimitEnabled: string;
+    actionStoreMode: string;
+    githubConfigured: string;
+    matrixConfigured: string;
+    generatedAt: string;
+    uptimeMs: string;
+    chatRequests: string;
+    chatStreamStarted: string;
+    chatStreamCompleted: string;
+    chatStreamError: string;
+    chatStreamAborted: string;
+    upstreamError: string;
+    rateLimitBlocked: string;
+  };
+  journal: {
+    status: string;
+    mode: string;
+    retention: string;
+    recentCount: string;
+    entries: JournalEntry[];
+  };
 };
 
 type SettingsWorkspaceProps = {
-  expertMode: boolean;
-  onExpertModeChange: (value: boolean) => void;
+  workMode: WorkMode;
+  onWorkModeChange: (value: WorkMode) => void;
   diagnostics: DiagnosticEntry[];
   onClearDiagnostics: () => void;
   truthSnapshot: SettingsTruthSnapshot;
-  diagnosticsSnapshot: DiagnosticsResponse | null;
-  diagnosticsError: string | null;
+  loginAdapters: SettingsLoginAdapter[];
+  onOpenWorkspace: (workspace: "chat" | "github" | "matrix") => void;
 };
 
 export function SettingsWorkspace({
-  expertMode,
-  onExpertModeChange,
+  workMode,
+  onWorkModeChange,
   diagnostics,
   onClearDiagnostics,
   truthSnapshot,
-  diagnosticsSnapshot,
-  diagnosticsError,
+  loginAdapters,
+  onOpenWorkspace,
 }: SettingsWorkspaceProps) {
-  const { copy: ui } = useLocalization();
-  const diagnosticRows = [
-    {
-      label: ui.settings.githubConnection,
-      caption: "OAuth status from /diagnostics. Token is backend-only.",
-      value: diagnosticsSnapshot?.github.status ?? (diagnosticsError ? "auth required" : "loading"),
-      state: diagnosticsSnapshot?.github.status === "ok" ? "ok" : diagnosticsError ? "error" : "missing"
-    },
-    {
-      label: ui.settings.githubScope,
-      caption: "Allowed repositories from backend configuration.",
-      value: diagnosticsSnapshot ? `${diagnosticsSnapshot.github.repoCount} repos` : "not configured",
-      state: diagnosticsSnapshot && diagnosticsSnapshot.github.repoCount > 0 ? "ok" : "missing"
-    },
-    {
-      label: ui.settings.matrixConnection,
-      caption: "Matrix token status. Stored server-side only.",
-      value: diagnosticsSnapshot?.matrix.status ?? (diagnosticsError ? "auth required" : "loading"),
-      state: diagnosticsSnapshot?.matrix.status === "ok" ? "ok" : diagnosticsSnapshot?.matrix.status === "error" || diagnosticsError ? "error" : "missing"
-    },
-    {
-      label: ui.settings.matrixHomeserver,
-      caption: "Configured origin status only.",
-      value: diagnosticsSnapshot?.matrix.homeserverConfigured ? "configured" : "not configured",
-      state: diagnosticsSnapshot?.matrix.homeserverConfigured ? "ok" : "missing"
-    },
-    {
-      label: ui.settings.backend,
-      caption: "Backend diagnostics endpoint.",
-      value: diagnosticsSnapshot?.backend.status ?? (diagnosticsError ? "auth required" : "loading"),
-      state: diagnosticsSnapshot?.backend.status === "ok" ? "ok" : diagnosticsError ? "error" : "degraded"
+  const { locale, copy: ui } = useLocalization();
+  const expertMode = isExpertMode(workMode);
+  const beginnerCopy = getWorkModeCopy(locale, "beginner");
+  const expertCopy = getWorkModeCopy(locale, "expert");
+  const activeCopy = getWorkModeCopy(locale, workMode);
+  const adapterCopy = locale === "de"
+    ? {
+        accessTitle: "Zugänge",
+        actionLabel: "Aktion",
+        requirementsLabel: "Voraussetzungen",
+        noRequirements: "Keine offenen Voraussetzungen",
+        status: {
+          available: "Bereit",
+          connected: "Verbunden",
+          locked: "Gesperrt",
+          checking: "Wird geprüft",
+          unavailable: "Nicht verfügbar",
+          error: "Fehler",
+        },
+        action: {
+          connect: "Verbinden",
+          disconnect: "Trennen",
+          open: "Öffnen",
+          retry: "Erneut prüfen",
+          configure: "Server konfigurieren",
+        },
+      }
+    : {
+        accessTitle: "Access",
+        actionLabel: "Action",
+        requirementsLabel: "Requirements",
+        noRequirements: "No open requirements",
+        status: {
+          available: "Ready",
+          connected: "Connected",
+          locked: "Locked",
+          checking: "Checking",
+          unavailable: "Unavailable",
+          error: "Error",
+        },
+        action: {
+          connect: "Connect",
+          disconnect: "Disconnect",
+          open: "Open",
+          retry: "Retry",
+          configure: "Configure server",
+        },
+      };
+
+  function handleAdapterAction(adapter: SettingsLoginAdapter) {
+    if (adapter.primaryAction === "open") {
+      onOpenWorkspace(adapter.id);
     }
-  ] satisfies Array<{
-    label: string;
-    caption: string;
-    value: string | number;
-    state: DiagnosticsRowState;
-  }>;
+  }
 
   return (
     <section className="workspace-panel settings-workspace" data-testid="settings-workspace">
@@ -97,7 +147,10 @@ export function SettingsWorkspace({
         <div>
           <p className="status-pill status-partial">{ui.settings.heroStatus}</p>
           <h1>{ui.settings.title}</h1>
-          <p className="hero-copy">{ui.settings.intro}</p>
+          <p className="hero-copy">{activeCopy.description}</p>
+          <div className="workspace-hero-actions">
+            <GuideOverlay content={getWorkspaceGuide(locale, "settings")} testId="guide-settings" />
+          </div>
         </div>
       </section>
 
@@ -106,16 +159,77 @@ export function SettingsWorkspace({
           <header className="card-header">
             <div>
               <span>{ui.settings.viewCardTitle}</span>
-              <strong>{ui.settings.beginner} / {ui.settings.expert}</strong>
+              <strong>{activeCopy.label}</strong>
             </div>
           </header>
+          <p className="muted-copy">{activeCopy.riskHint}</p>
           <div className="action-row">
-            <button type="button" className={expertMode ? "secondary-button" : ""} onClick={() => onExpertModeChange(false)}>
-              {ui.settings.beginner}
+            <button type="button" className={workMode === "beginner" ? "" : "secondary-button"} onClick={() => onWorkModeChange("beginner")}>
+              {beginnerCopy.shortLabel}
             </button>
-            <button type="button" className={expertMode ? "" : "secondary-button"} onClick={() => onExpertModeChange(true)}>
-              {ui.settings.expert}
+            <button type="button" className={workMode === "expert" ? "" : "secondary-button"} onClick={() => onWorkModeChange("expert")}>
+              {expertCopy.shortLabel}
             </button>
+          </div>
+        </article>
+
+        <article className="workspace-card settings-access-card">
+          <header className="card-header">
+            <div>
+              <span>{adapterCopy.accessTitle}</span>
+              <strong>{ui.settings.backendTruth}</strong>
+            </div>
+          </header>
+
+          <div className="settings-adapter-list">
+            {loginAdapters.map((adapter) => (
+              <section key={adapter.id} className={`settings-adapter-row settings-adapter-row-${adapter.status}`}>
+                <div className="settings-adapter-main">
+                  <div>
+                    <span className={`status-pill status-${adapter.status === "connected" || adapter.status === "available" ? "ready" : adapter.status === "error" || adapter.status === "unavailable" ? "error" : "partial"}`}>
+                      {adapterCopy.status[adapter.status]}
+                    </span>
+                    <h2>{adapter.label}</h2>
+                  </div>
+                  <p className="muted-copy">{adapter.safeIdentityLabel}</p>
+                  <p>{adapter.scopeSummary}</p>
+                </div>
+
+                <div className="settings-adapter-actions">
+                  <button
+                    type="button"
+                    className={adapter.primaryAction === "configure" ? "secondary-button" : ""}
+                    onClick={() => handleAdapterAction(adapter)}
+                    disabled={adapter.primaryAction === "configure" || adapter.primaryAction === "retry" || adapter.status === "checking"}
+                  >
+                    {adapterCopy.action[adapter.primaryAction]}
+                  </button>
+                </div>
+
+                {expertMode ? (
+                  <div className="detail-grid settings-adapter-details">
+                    <div>
+                      <span>{adapterCopy.actionLabel}</span>
+                      <strong>{adapterCopy.action[adapter.primaryAction]}</strong>
+                    </div>
+                    <div>
+                      <span>{adapterCopy.requirementsLabel}</span>
+                      <strong>{adapter.requirements.length > 0 ? adapter.requirements.join(", ") : adapterCopy.noRequirements}</strong>
+                    </div>
+                    <div>
+                      <span>{ui.settings.chatAuthority}</span>
+                      <strong>{adapter.authority}</strong>
+                    </div>
+                    {adapter.expertDetails.map((detail) => (
+                      <div key={`${adapter.id}-${detail.label}`}>
+                        <span>{detail.label}</span>
+                        <strong>{detail.value}</strong>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+            ))}
           </div>
         </article>
 
@@ -139,45 +253,53 @@ export function SettingsWorkspace({
               <span>{ui.settings.githubConnection}</span>
               <strong>{truthSnapshot.github.connectionLabel}</strong>
             </div>
-            <div>
-              <span>{ui.settings.githubAuthority}</span>
-              <strong>{truthSnapshot.github.accessLabel}</strong>
-            </div>
-            <div>
-              <span>{ui.settings.githubScope}</span>
-              <strong>{truthSnapshot.github.repositoryLabel}</strong>
-            </div>
+            {expertMode ? (
+              <>
+                <div>
+                  <span>{ui.settings.githubAuthority}</span>
+                  <strong>{truthSnapshot.github.accessLabel}</strong>
+                </div>
+                <div>
+                  <span>{ui.settings.githubScope}</span>
+                  <strong>{truthSnapshot.github.repositoryLabel}</strong>
+                </div>
+              </>
+            ) : null}
             <div>
               <span>{ui.settings.matrixIdentity}</span>
               <strong>{truthSnapshot.matrix.identityLabel}</strong>
             </div>
-            <div>
-              <span>{ui.settings.matrixConnection}</span>
-              <strong>{truthSnapshot.matrix.connectionLabel}</strong>
-            </div>
-            <div>
-              <span>{ui.settings.matrixHomeserver}</span>
-              <strong>{truthSnapshot.matrix.homeserverLabel}</strong>
-            </div>
-            <div>
-              <span>{ui.settings.matrixScope}</span>
-              <strong>{truthSnapshot.matrix.scopeLabel}</strong>
-            </div>
-            <div>
-              <span>{ui.settings.chatIdentity}</span>
-              <strong>{ui.settings.chatIdentity}</strong>
-            </div>
-            <div>
-              <span>{ui.settings.chatScope}</span>
-              <strong>{ui.settings.chatScope}</strong>
-            </div>
-            <div>
-              <span>{ui.settings.chatAuthority}</span>
-              <strong>{ui.settings.chatAuthority}</strong>
-            </div>
+            {expertMode ? (
+              <>
+                <div>
+                  <span>{ui.settings.matrixConnection}</span>
+                  <strong>{truthSnapshot.matrix.connectionLabel}</strong>
+                </div>
+                <div>
+                  <span>{ui.settings.matrixHomeserver}</span>
+                  <strong>{truthSnapshot.matrix.homeserverLabel}</strong>
+                </div>
+                <div>
+                  <span>{ui.settings.matrixScope}</span>
+                  <strong>{truthSnapshot.matrix.scopeLabel}</strong>
+                </div>
+                <div>
+                  <span>{ui.settings.chatIdentity}</span>
+                  <strong>{ui.settings.chatIdentity}</strong>
+                </div>
+                <div>
+                  <span>{ui.settings.chatScope}</span>
+                  <strong>{ui.settings.chatScope}</strong>
+                </div>
+                <div>
+                  <span>{ui.settings.chatAuthority}</span>
+                  <strong>{ui.settings.chatAuthority}</strong>
+                </div>
+              </>
+            ) : null}
           </div>
           <p className="muted-copy">{truthSnapshot.backend.detail}</p>
-          <p className="muted-copy">{ui.settings.backendTruth}</p>
+          {expertMode ? <p className="muted-copy">{ui.settings.backendTruth}</p> : null}
         </article>
 
         <article className="workspace-card">
@@ -204,19 +326,151 @@ export function SettingsWorkspace({
           <p className="muted-copy">{ui.settings.modelChoiceNote}</p>
         </article>
 
+        {expertMode ? (
         <article className="workspace-card">
           <header className="card-header">
             <div>
               <span>{ui.settings.diagnosticsCardTitle}</span>
-              <strong>/diagnostics</strong>
+              <strong>{ui.settings.diagnosticsSummary}</strong>
             </div>
           </header>
-          <p className="muted-copy">Status only. No secret values, provider IDs, or admin-key inputs are rendered.</p>
-          <div className="diagnostics-status-list">
-            {diagnosticRows.map((row) => (
-              <DiagnosticsRow key={row.label} {...row} />
-            ))}
+          <div className="detail-grid">
+            <div>
+              <span>{ui.settings.runtimeModeLabel}</span>
+              <strong>{truthSnapshot.diagnostics.runtimeMode}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.defaultPublicAliasLabel}</span>
+              <strong>{truthSnapshot.diagnostics.defaultPublicAlias}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.publicAliasesLabel}</span>
+              <strong>{truthSnapshot.diagnostics.publicAliases}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.routingModeLabel}</span>
+              <strong>{truthSnapshot.diagnostics.routingMode}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.fallbackLabel}</span>
+              <strong>{truthSnapshot.diagnostics.fallbackEnabled}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.failClosedLabel}</span>
+              <strong>{truthSnapshot.diagnostics.failClosed}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.rateLimitLabel}</span>
+              <strong>{truthSnapshot.diagnostics.rateLimitEnabled}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.actionStoreLabel}</span>
+              <strong>{truthSnapshot.diagnostics.actionStoreMode}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.githubConfiguredLabel}</span>
+              <strong>{truthSnapshot.diagnostics.githubConfigured}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.matrixConfiguredLabel}</span>
+              <strong>{truthSnapshot.diagnostics.matrixConfigured}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.diagnosticsGeneratedAtLabel}</span>
+              <strong>{truthSnapshot.diagnostics.generatedAt}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.uptimeLabel}</span>
+              <strong>{truthSnapshot.diagnostics.uptimeMs}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.chatRequestsLabel}</span>
+              <strong>{truthSnapshot.diagnostics.chatRequests}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.chatStreamStartedLabel}</span>
+              <strong>{truthSnapshot.diagnostics.chatStreamStarted}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.chatStreamCompletedLabel}</span>
+              <strong>{truthSnapshot.diagnostics.chatStreamCompleted}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.chatStreamErrorLabel}</span>
+              <strong>{truthSnapshot.diagnostics.chatStreamError}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.chatStreamAbortedLabel}</span>
+              <strong>{truthSnapshot.diagnostics.chatStreamAborted}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.upstreamErrorLabel}</span>
+              <strong>{truthSnapshot.diagnostics.upstreamError}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.rateLimitBlockedLabel}</span>
+              <strong>{truthSnapshot.diagnostics.rateLimitBlocked}</strong>
+            </div>
           </div>
+          <p className="muted-copy">{ui.settings.diagnosticsSafetyNote}</p>
+        </article>
+        ) : null}
+
+        {expertMode ? (
+        <article className="workspace-card">
+          <header className="card-header">
+            <div>
+              <span>{ui.settings.journalCardTitle}</span>
+              <strong>{ui.settings.journalRecentEventsLabel}</strong>
+            </div>
+          </header>
+          <div className="detail-grid">
+            <div>
+              <span>{ui.settings.journalLabel}</span>
+              <strong>{truthSnapshot.journal.status}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.actionStoreLabel}</span>
+              <strong>{truthSnapshot.journal.mode}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.journalRetentionLabel}</span>
+              <strong>{truthSnapshot.journal.retention}</strong>
+            </div>
+            <div>
+              <span>{ui.settings.journalRecentCountLabel}</span>
+              <strong>{truthSnapshot.journal.recentCount}</strong>
+            </div>
+          </div>
+          {truthSnapshot.journal.entries.length === 0 ? (
+            <p className="empty-state">{ui.settings.journalNoEntries}</p>
+          ) : (
+            <div className="diagnostic-feed" aria-live="polite">
+              {truthSnapshot.journal.entries.map((entry) => (
+                <article key={entry.id} className={`telemetry-item telemetry-item-${entry.severity}`}>
+                  <strong>{entry.summary}</strong>
+                  <p>
+                    {entry.timestamp} · {entry.source} · {entry.eventType}
+                  </p>
+                  <p>
+                    {ui.settings.journalOutcomeLabel}: {entry.outcome} · {ui.settings.journalSeverityLabel}: {entry.severity}
+                  </p>
+                </article>
+              ))}
+            </div>
+          )}
+        </article>
+        ) : null}
+
+        {expertMode ? (
+        <article className="workspace-card">
+          <header className="card-header">
+            <div>
+              <span>{ui.settings.diagnosticsCardTitle}</span>
+              <strong>{ui.settings.diagnosticsHidden}</strong>
+            </div>
+          </header>
+          <p className="muted-copy">{ui.settings.diagnosticsHidden}</p>
           {expertMode ? (
             <div className="diagnostic-feed" aria-live="polite">
               {diagnostics.length === 0 ? (
@@ -237,6 +491,7 @@ export function SettingsWorkspace({
             </div>
           ) : null}
         </article>
+        ) : null}
       </div>
 
     </section>

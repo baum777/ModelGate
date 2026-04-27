@@ -26,9 +26,6 @@ GitHub remote flow required when enabled:
 
 - `GITHUB_TOKEN` - required GitHub token for the backend-owned remote flow
 - `GITHUB_ALLOWED_REPOS` - required comma-separated allowlist of `owner/repo` values; the GitHub remote flow stays fail-closed until at least one repository is allowed
-- `MODEL_GATE_ADMIN_PASSWORD` - required server-side password for the GitHub session login
-- `MODEL_GATE_SESSION_SECRET` - required server-side secret used to sign and validate the HttpOnly session cookie
-- `MODEL_GATE_SESSION_TTL_SECONDS` - optional session lifetime in seconds; defaults to `86400`
 - `GITHUB_AGENT_API_KEY` - required to approve execute requests; send it only from trusted server-side callers via `X-ModelGate-Admin-Key`
 
 Optional environment variables:
@@ -215,9 +212,9 @@ data: {"ok":false,"error":{"code":"upstream_error","message":"Chat provider requ
 
 ## GitHub Workspace Contract
 
-These routes are backend-owned and review-first. The browser may read allowed repositories, build read context, prepare a proposal plan, and submit approval intent only. Execution stays server-side and fails closed until `GITHUB_TOKEN`, `GITHUB_ALLOWED_REPOS`, `MODEL_GATE_ADMIN_PASSWORD`, `MODEL_GATE_SESSION_SECRET`, and `GITHUB_AGENT_API_KEY` are configured.
+These routes are backend-owned and review-first. The browser may read allowed repositories, build read context, prepare a proposal plan, and submit approval intent only. GitHub account authority comes from the backend-owned `GITHUB_TOKEN` and `GITHUB_ALLOWED_REPOS` configuration. Execution stays server-side and fails closed until `GITHUB_AGENT_API_KEY` is configured for trusted callers.
 
-GitHub read routes now require a valid server-issued admin session cookie. The browser never sees the password or signing secret.
+GitHub read and proposal routes do not require the legacy global admin session. The browser never sees the GitHub token, provider key, or execute key.
 
 ### `GET /api/github/repos`
 
@@ -237,7 +234,7 @@ Returns the stored GitHub plan while it is still active.
 
 ### `POST /api/github/actions/:planId/execute`
 
-Requires `{ "approval": true }`, re-checks the plan freshness, and creates the backend-owned execution result. The request must also include `X-ModelGate-Admin-Key` matching `GITHUB_AGENT_API_KEY`; otherwise the route fails closed with 401 or 403. This gate is additive to the session cookie check.
+Requires `{ "approval": true }`, re-checks the plan freshness, and creates the backend-owned execution result. The request must also include `X-ModelGate-Admin-Key` matching `GITHUB_AGENT_API_KEY`; otherwise the route fails closed with 401 or 403. This execution gate is independent of the legacy session routes.
 
 ### `GET /api/github/actions/:planId/verify`
 

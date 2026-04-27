@@ -29,8 +29,10 @@ import type { GitHubConfig } from "../lib/github-env.js";
 import { isGitHubRepoAllowed, normalizeGitHubRepoFullName } from "../lib/github-env.js";
 import { normalizeGitHubRelativePath } from "../lib/github-paths.js";
 import { OpenRouterError, type OpenRouterClient } from "../lib/openrouter.js";
-import { verifySessionFromRequest, type AuthConfig } from "../lib/auth.js";
+import type { AuthConfig } from "../lib/auth.js";
 import type { ModelRegistry } from "../lib/model-policy.js";
+import type { AppRateLimiter } from "../lib/rate-limit.js";
+import type { RuntimeJournal } from "../lib/runtime-journal.js";
 import type { ModelCapabilitiesConfig } from "../lib/workflow-model-router.js";
 
 type GitHubRouteDependencies = {
@@ -42,12 +44,18 @@ type GitHubRouteDependencies = {
   modelRegistry: ModelRegistry;
   modelCapabilitiesConfig: ModelCapabilitiesConfig;
   actionStore?: GitHubActionStore;
+  rateLimiter: AppRateLimiter;
+  runtimeJournal: RuntimeJournal;
 };
 
 const GITHUB_ADMIN_KEY_HEADER = "x-modelgate-admin-key";
 const DEFAULT_SMOKE_BRANCH_PREFIX = "modelgate/github-smoke";
 
 function sendGitHubError(reply: FastifyReply, code: GitHubErrorCode, message?: string, retryAfterSeconds?: number | null) {
+  if (typeof retryAfterSeconds === "number" && retryAfterSeconds > 0) {
+    reply.header("Retry-After", String(Math.ceil(retryAfterSeconds)));
+  }
+
   return reply.status(githubErrorStatus(code)).send(
     buildGitHubErrorResponse(code, message, retryAfterSeconds === null ? undefined : retryAfterSeconds)
   );
@@ -530,12 +538,6 @@ function sendGitHubAdminKeyError(reply: FastifyReply, code: "github_unauthorized
   return sendGitHubError(reply, code);
 }
 
-function requireGitHubSession(request: FastifyRequest, reply: FastifyReply, authConfig: AuthConfig): void {
-  if (!verifySessionFromRequest(request, authConfig)) {
-    sendGitHubError(reply, "auth_required");
-  }
-}
-
 function requiresGitHubAdminKey(config: GitHubConfig) {
   return Boolean(config.agentApiKey && config.agentApiKey.trim().length > 0);
 }
@@ -601,11 +603,7 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     actionStore
   });
 
-  app.get("/api/github/repos", {
-    preHandler: async (request, reply) => {
-      requireGitHubSession(request, reply, deps.authConfig);
-    }
-  }, async (_request, reply) => {
+  app.get("/api/github/repos", async (_request, reply) => {
     if (!deps.config.ready) {
       return sendGitHubError(reply, "github_not_configured");
     }
@@ -624,11 +622,7 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
   });
 
-  app.post("/api/github/context", {
-    preHandler: async (request, reply) => {
-      requireGitHubSession(request, reply, deps.authConfig);
-    }
-  }, async (request, reply) => {
+  app.post("/api/github/context", async (request, reply) => {
     if (!deps.config.ready) {
       return sendGitHubError(reply, "github_not_configured");
     }
@@ -673,11 +667,7 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
   });
 
-  app.post("/api/github/actions/propose", {
-    preHandler: async (request, reply) => {
-      requireGitHubSession(request, reply, deps.authConfig);
-    }
-  }, async (request, reply) => {
+  app.post("/api/github/actions/propose", async (request, reply) => {
     if (!deps.config.ready) {
       return sendGitHubError(reply, "github_not_configured");
     }
@@ -696,6 +686,12 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
 
     if (!isGitHubRepoAllowed(deps.config, repoParams.owner, repoParams.repo)) {
       return sendGitHubError(reply, "github_repo_not_allowed");
+    }
+
+    const limit = deps.rateLimiter.check("github_propose", request, deps.authConfig);
+
+    if (!limit.allowed) {
+      return sendGitHubError(reply, "github_rate_limited", undefined, limit.retryAfterSeconds);
     }
 
     try {
@@ -807,6 +803,27 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
           request: proposalRequest,
           context
         });
+        deps.runtimeJournal.append({
+          source: "github",
+          eventType: "github_proposal_created",
+          authorityDomain: "github",
+          severity: "info",
+          outcome: "accepted",
+          summary: "GitHub proposal created",
+          planId: builtPlan.planId,
+          modelRouteSummary: builtPlan.routingMetadata
+            ? {
+                selectedAlias: builtPlan.routingMetadata.selectedModel,
+                workflowRole: builtPlan.routingMetadata.workflowRole,
+                fallbackUsed: builtPlan.routingMetadata.fallbackUsed
+              }
+            : null,
+          safeMetadata: {
+            repo: builtPlan.repo.fullName,
+            targetBranch: builtPlan.targetBranch,
+            mode: proposalRequest.mode ?? "standard"
+          }
+        });
 
         return builtPlan;
       })(), deps.config.requestTimeoutMs);
@@ -820,11 +837,7 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
   });
 
-  app.get("/api/github/actions/:planId", {
-    preHandler: async (request, reply) => {
-      requireGitHubSession(request, reply, deps.authConfig);
-    }
-  }, async (request, reply) => {
+  app.get("/api/github/actions/:planId", async (request, reply) => {
     if (!deps.config.ready) {
       return sendGitHubError(reply, "github_not_configured");
     }
@@ -868,11 +881,7 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
   });
 
-  app.post("/api/github/actions/:planId/execute", {
-    preHandler: async (request, reply) => {
-      requireGitHubSession(request, reply, deps.authConfig);
-    }
-  }, async (request, reply) => {
+  app.post("/api/github/actions/:planId/execute", async (request, reply) => {
     if (!deps.config.ready) {
       return sendGitHubError(reply, "github_not_configured");
     }
@@ -899,6 +908,12 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
       return sendGitHubError(reply, "invalid_request");
     }
 
+    const limit = deps.rateLimiter.check("github_execute", request, deps.authConfig);
+
+    if (!limit.allowed) {
+      return sendGitHubError(reply, "github_rate_limited", undefined, limit.retryAfterSeconds);
+    }
+
     const lookup = actionStore.readPlan(parsedPlanId.data);
 
     if (lookup.state === "missing") {
@@ -910,22 +925,55 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
 
     try {
+      deps.runtimeJournal.append({
+        source: "github",
+        eventType: "github_execute_attempted",
+        authorityDomain: "github",
+        severity: "info",
+        outcome: "observed",
+        planId: lookup.plan.planId,
+        summary: "GitHub execute attempted",
+        safeMetadata: {
+          repo: lookup.plan.repo.fullName,
+          targetBranch: lookup.plan.targetBranch
+        }
+      });
       const execution: GitHubExecuteResult = await actionExecutor.executePlan(lookup.plan);
+      deps.runtimeJournal.append({
+        source: "github",
+        eventType: "github_execute_completed",
+        authorityDomain: "github",
+        severity: "info",
+        outcome: "executed",
+        planId: execution.planId,
+        executionId: execution.commitSha,
+        summary: "GitHub execute completed",
+        safeMetadata: {
+          branchName: execution.branchName,
+          targetBranch: execution.targetBranch,
+          prNumber: execution.prNumber
+        }
+      });
 
       return reply.status(200).send({
         ok: true,
         result: execution
       });
     } catch (error) {
+      deps.runtimeJournal.append({
+        source: "github",
+        eventType: "github_execute_failed",
+        authorityDomain: "github",
+        severity: "error",
+        outcome: "failed",
+        planId: lookup.plan.planId,
+        summary: "GitHub execute failed"
+      });
       return handleGitHubError(reply, error);
     }
   });
 
-  app.get("/api/github/actions/:planId/verify", {
-    preHandler: async (request, reply) => {
-      requireGitHubSession(request, reply, deps.authConfig);
-    }
-  }, async (request, reply) => {
+  app.get("/api/github/actions/:planId/verify", async (request, reply) => {
     if (!deps.config.ready) {
       return sendGitHubError(reply, "github_not_configured");
     }
@@ -963,6 +1011,20 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     if (recoveredFromGitHub) {
       try {
         const verification = await verifyRecoveredRoutePlan(lookup.plan, deps.client);
+        deps.runtimeJournal.append({
+          source: "github",
+          eventType: "github_verify_result",
+          authorityDomain: "github",
+          severity: verification.status === "mismatch" ? "warning" : "info",
+          outcome: verification.status === "verified" ? "verified" : verification.status === "mismatch" ? "unverifiable" : "observed",
+          planId: verification.planId,
+          verificationId: verification.checkedAt,
+          summary: `GitHub verify ${verification.status}`,
+          safeMetadata: {
+            branchName: verification.branchName,
+            targetBranch: verification.targetBranch
+          }
+        });
 
         return reply.status(200).send({
           ok: true,
@@ -975,6 +1037,20 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
 
     try {
       const verification: GitHubVerifyResult = await actionExecutor.verifyPlan(lookup.plan);
+      deps.runtimeJournal.append({
+        source: "github",
+        eventType: "github_verify_result",
+        authorityDomain: "github",
+        severity: verification.status === "mismatch" ? "warning" : "info",
+        outcome: verification.status === "verified" ? "verified" : verification.status === "mismatch" ? "unverifiable" : "observed",
+        planId: verification.planId,
+        verificationId: verification.checkedAt,
+        summary: `GitHub verify ${verification.status}`,
+        safeMetadata: {
+          branchName: verification.branchName,
+          targetBranch: verification.targetBranch
+        }
+      });
 
       return reply.status(200).send({
         ok: true,
@@ -985,11 +1061,7 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
   });
 
-  app.get("/api/github/repos/:owner/:repo/tree", {
-    preHandler: async (request, reply) => {
-      requireGitHubSession(request, reply, deps.authConfig);
-    }
-  }, async (request, reply) => {
+  app.get("/api/github/repos/:owner/:repo/tree", async (request, reply) => {
     if (!deps.config.ready) {
       return sendGitHubError(reply, "github_not_configured");
     }
@@ -1031,11 +1103,7 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
   });
 
-  app.get("/api/github/repos/:owner/:repo/file", {
-    preHandler: async (request, reply) => {
-      requireGitHubSession(request, reply, deps.authConfig);
-    }
-  }, async (request, reply) => {
+  app.get("/api/github/repos/:owner/:repo/file", async (request, reply) => {
     if (!deps.config.ready) {
       return sendGitHubError(reply, "github_not_configured");
     }

@@ -227,8 +227,39 @@ test("github proposal routes create a review-only plan scaffold and keep it read
       diff: unknown[];
       generatedAt: string;
       expiresAt: string;
+      routingMetadata?: {
+        workflowRole: string;
+        selectedModel: string;
+        candidateModels: string[];
+        fallbackUsed: boolean;
+        selectionSource: string;
+        routingMode: string;
+        allowFallback: boolean;
+        failClosed: boolean;
+        structuredOutputRequired: boolean;
+        approvalRequired: boolean;
+        mayExecuteExternalTools: boolean;
+        mayWriteExternalState: boolean;
+        policySectionKey: string | null;
+        recordedAt: string;
+      };
     };
   };
+
+  const journalResponse = await app.inject({
+    method: "GET",
+    url: "/journal/recent?source=github&limit=10"
+  });
+  assert.equal(journalResponse.statusCode, 200);
+  const journalPayload = JSON.parse(journalResponse.body) as {
+    ok: true;
+    entries: Array<{
+      eventType: string;
+      planId: string | null;
+    }>;
+  };
+  assert.equal(journalPayload.ok, true);
+  assert.ok(journalPayload.entries.some((entry) => entry.eventType === "github_proposal_created"));
 
   assert.equal(proposeBody.ok, true);
   assert.match(proposeBody.plan.planId, /^plan_[0-9a-f-]{36}$/);
@@ -260,6 +291,23 @@ test("github proposal routes create a review-only plan scaffold and keep it read
   assert.match(proposeBody.plan.diff[1]?.patch ?? "", /\+  return 'flow through utils v2';/);
   assert.match(proposeBody.plan.generatedAt, /^\d{4}-\d{2}-\d{2}T/);
   assert.match(proposeBody.plan.expiresAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(proposeBody.plan.routingMetadata?.workflowRole, "github_code_agent");
+  assert.equal(proposeBody.plan.routingMetadata?.selectedModel, "qwen/qwen3-coder:free");
+  assert.deepEqual(proposeBody.plan.routingMetadata?.candidateModels, [
+    "qwen/qwen3-coder:free",
+    "qwen/qwen3-next-80b-a3b-instruct:free"
+  ]);
+  assert.equal(proposeBody.plan.routingMetadata?.fallbackUsed, false);
+  assert.equal(proposeBody.plan.routingMetadata?.selectionSource, "env");
+  assert.equal(proposeBody.plan.routingMetadata?.routingMode, "policy");
+  assert.equal(proposeBody.plan.routingMetadata?.allowFallback, true);
+  assert.equal(proposeBody.plan.routingMetadata?.failClosed, true);
+  assert.equal(proposeBody.plan.routingMetadata?.structuredOutputRequired, true);
+  assert.equal(proposeBody.plan.routingMetadata?.approvalRequired, true);
+  assert.equal(proposeBody.plan.routingMetadata?.mayExecuteExternalTools, false);
+  assert.equal(proposeBody.plan.routingMetadata?.mayWriteExternalState, false);
+  assert.equal(proposeBody.plan.routingMetadata?.policySectionKey, "github_code_agent");
+  assert.match(proposeBody.plan.routingMetadata?.recordedAt ?? "", /^\d{4}-\d{2}-\d{2}T/);
 
   currentCommitSha = "commit-sha-2";
 
@@ -426,6 +474,7 @@ test("github proposal routes create a deterministic smoke plan without the LLM",
       targetBranch: string;
       summary: string;
       rationale: string;
+      routingMetadata?: unknown;
       diff: Array<{
         path: string;
         changeType: string;
@@ -439,6 +488,7 @@ test("github proposal routes create a deterministic smoke plan without the LLM",
   assert.equal(body.plan.targetBranch, "main");
   assert.equal(body.plan.summary, "Smoke proposal for acme/widget");
   assert.match(body.plan.rationale, /Deterministic smoke proposal for acme\/widget/i);
+  assert.equal(body.plan.routingMetadata, undefined);
   assert.deepEqual(body.plan.diff.map((file) => file.path), [
     "docs/modelgate-smoke.md"
   ]);
@@ -1063,4 +1113,161 @@ test("github proposal routes reject malformed model drafts", async (t) => {
       message: "GitHub proposal response was invalid"
     }
   });
+});
+
+test("github proposal routes return 429 and skip OpenRouter when rate-limited", async (t) => {
+  let openRouterCalls = 0;
+  const githubConfig = createTestGitHubConfig({
+    allowedRepos: ["acme/widget"],
+    allowedRepoSet: new Set(["acme/widget"]),
+    planTtlMs: 60_000
+  });
+
+  const githubClient = createGitHubClient({
+    config: githubConfig,
+    fetchImpl: async (input) => {
+      const url = new URL(String(input));
+
+      if (url.pathname === "/repos/acme/widget") {
+        return makeJsonResponse({
+          full_name: "acme/widget",
+          name: "widget",
+          default_branch: "main",
+          description: "Widget repo",
+          private: false,
+          archived: false,
+          disabled: false,
+          permissions: {
+            push: true
+          },
+          owner: {
+            login: "acme"
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/commits/main") {
+        return makeJsonResponse({
+          sha: "commit-sha-1",
+          commit: {
+            tree: {
+              sha: "tree-sha-1"
+            }
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/git/trees/tree-sha-1") {
+        return makeJsonResponse({
+          sha: "tree-sha-1",
+          truncated: false,
+          tree: [
+            {
+              path: "README.md",
+              type: "blob",
+              sha: "blob-readme",
+              size: 70,
+              mode: "100644"
+            }
+          ]
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/contents/README.md") {
+        return makeJsonResponse({
+          type: "file",
+          path: "README.md",
+          sha: "blob-readme",
+          size: 70,
+          encoding: "base64",
+          content: encodeText("widget repo\n")
+        });
+      }
+
+      throw new Error(`unexpected path: ${url.pathname}${url.search}`);
+    }
+  });
+
+  const openRouter = createMockOpenRouterClient({
+    createChatCompletion: async (request, selection) => {
+      openRouterCalls += 1;
+      return {
+        model: selection.publicModelId,
+        text: JSON.stringify({
+          summary: request.messages[0]?.content.includes("INPUT:") ? "Update widget" : "Update",
+          rationale: "Keep it reviewable.",
+          riskLevel: "low_surface",
+          files: [
+            {
+              path: "README.md",
+              changeType: "modified",
+              afterContent: "widget repo updated\n"
+            }
+          ]
+        })
+      };
+    }
+  });
+
+  const app = createApp({
+    env: createTestEnv({
+      RATE_LIMIT_WINDOW_MS: 60_000,
+      RATE_LIMIT_GITHUB_PROPOSE_MAX: 1
+    }),
+    openRouter,
+    githubConfig,
+    githubClient,
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const firstResponse = await app.inject({
+    method: "POST",
+    url: "/api/github/actions/propose",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    },
+    payload: {
+      repo: {
+        owner: "acme",
+        repo: "widget"
+      },
+      objective: "Update widget",
+      ref: "main",
+      selectedPaths: ["README.md"]
+    }
+  });
+  assert.equal(firstResponse.statusCode, 200);
+
+  const secondResponse = await app.inject({
+    method: "POST",
+    url: "/api/github/actions/propose",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    },
+    payload: {
+      repo: {
+        owner: "acme",
+        repo: "widget"
+      },
+      objective: "Update widget again",
+      ref: "main",
+      selectedPaths: ["README.md"]
+    }
+  });
+
+  assert.equal(secondResponse.statusCode, 429);
+  assert.equal(secondResponse.headers["retry-after"], "60");
+  assert.deepEqual(JSON.parse(secondResponse.body), {
+    ok: false,
+    error: {
+      code: "github_rate_limited",
+      message: "GitHub rate limit was hit",
+      retryAfterSeconds: 60
+    }
+  });
+  assert.equal(openRouterCalls, 1);
 });

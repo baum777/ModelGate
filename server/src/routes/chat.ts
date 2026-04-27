@@ -1,9 +1,13 @@
 import type { FastifyInstance } from "fastify";
+import type { AuthConfig } from "../lib/auth.js";
 import { ChatRequestSchema, type ChatErrorResponse } from "../lib/chat-contract.js";
 import type { AppEnv } from "../lib/env.js";
 import { buildCorsHeaders, writeSseEvent } from "../lib/http.js";
 import type { ModelRegistry } from "../lib/model-policy.js";
 import { type OpenRouterClient, OpenRouterError } from "../lib/openrouter.js";
+import type { AppRateLimiter } from "../lib/rate-limit.js";
+import type { RuntimeJournal } from "../lib/runtime-journal.js";
+import type { RuntimeObservability } from "../lib/runtime-observability.js";
 import { resolveChatRouteDecision } from "../lib/routing-authority.js";
 import { assertNoFrontendProviderModelOverride, type ModelCapabilitiesConfig } from "../lib/workflow-model-router.js";
 
@@ -12,6 +16,10 @@ type ChatRouteDependencies = {
   openRouter: OpenRouterClient;
   modelRegistry: ModelRegistry;
   modelCapabilitiesConfig: ModelCapabilitiesConfig;
+  authConfig: AuthConfig;
+  rateLimiter: AppRateLimiter;
+  runtimeObservability: RuntimeObservability;
+  runtimeJournal: RuntimeJournal;
 };
 
 function buildInvalidRequestResponse(): ChatErrorResponse {
@@ -64,12 +72,30 @@ function buildInternalErrorResponse(message = "Chat backend model policy unavail
   };
 }
 
+function buildRateLimitedResponse(): ChatErrorResponse {
+  return {
+    ok: false,
+    error: {
+      code: "rate_limited",
+      message: "Chat rate limit exceeded"
+    }
+  };
+}
+
 function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
 }
 
 export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
   app.post("/chat", async (request, reply) => {
+    deps.runtimeObservability.increment("chatRequests");
+    const limit = deps.rateLimiter.check("chat", request, deps.authConfig);
+
+    if (!limit.allowed) {
+      reply.header("Retry-After", String(limit.retryAfterSeconds));
+      return reply.status(429).send(buildRateLimitedResponse());
+    }
+
     try {
       assertNoFrontendProviderModelOverride(request.body);
     } catch {
@@ -136,12 +162,44 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
         ok: true,
         model: routeDecision.selection.publicModelAlias
       });
+      deps.runtimeObservability.increment("chatStreamStarted");
+      deps.runtimeJournal.append({
+        source: "chat",
+        eventType: "chat_stream_started",
+        authorityDomain: "chat",
+        severity: "info",
+        outcome: "accepted",
+        summary: "Chat stream started",
+        modelRouteSummary: {
+          selectedAlias: routeDecision.route.selectedAlias,
+          taskClass: routeDecision.route.taskClass,
+          fallbackUsed: routeDecision.route.fallbackUsed,
+          degraded: routeDecision.route.degraded,
+          streaming: true
+        }
+      });
       writeSseEvent(reply.raw, "route", {
         ok: true,
         route: routeDecision.route
       });
 
       const onClientAbort = () => {
+        deps.runtimeObservability.increment("chatStreamAborted");
+        deps.runtimeJournal.append({
+          source: "chat",
+          eventType: "chat_stream_aborted",
+          authorityDomain: "chat",
+          severity: "warning",
+          outcome: "blocked",
+          summary: "Chat stream aborted by client",
+          modelRouteSummary: {
+            selectedAlias: routeDecision.route.selectedAlias,
+            taskClass: routeDecision.route.taskClass,
+            fallbackUsed: routeDecision.route.fallbackUsed,
+            degraded: routeDecision.route.degraded,
+            streaming: true
+          }
+        });
         abortController.abort();
       };
 
@@ -162,6 +220,22 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
             text: result.text,
             route: routeDecision.route
           });
+          deps.runtimeObservability.increment("chatStreamCompleted");
+          deps.runtimeJournal.append({
+            source: "chat",
+            eventType: "chat_stream_completed",
+            authorityDomain: "chat",
+            severity: "info",
+            outcome: "executed",
+            summary: "Chat stream completed",
+            modelRouteSummary: {
+              selectedAlias: routeDecision.route.selectedAlias,
+              taskClass: routeDecision.route.taskClass,
+              fallbackUsed: routeDecision.route.fallbackUsed,
+              degraded: routeDecision.route.degraded,
+              streaming: true
+            }
+          });
         }
       } catch (error) {
         if (abortController.signal.aborted || isAbortError(error)) {
@@ -172,6 +246,27 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
         request.log.error({
           status: upstream.status
         }, "streaming chat request failed");
+        deps.runtimeObservability.increment("chatStreamError");
+        deps.runtimeObservability.increment("upstreamError");
+        deps.runtimeJournal.append({
+          source: "chat",
+          eventType: "chat_stream_error",
+          authorityDomain: "chat",
+          severity: "error",
+          outcome: "failed",
+          summary: "Chat stream failed",
+          modelRouteSummary: {
+            selectedAlias: routeDecision.route.selectedAlias,
+            taskClass: routeDecision.route.taskClass,
+            fallbackUsed: routeDecision.route.fallbackUsed,
+            degraded: routeDecision.route.degraded,
+            streaming: true
+          },
+          safeMetadata: {
+            status: upstream.status,
+            code: upstream.body.error.code
+          }
+        });
 
         writeSseEvent(reply.raw, "error", upstream.body);
       } finally {
@@ -197,6 +292,7 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
       request.log.error({
         status: upstream.status
       }, "chat request failed");
+      deps.runtimeObservability.increment("upstreamError");
 
       return reply.status(upstream.status).send(upstream.body);
     }

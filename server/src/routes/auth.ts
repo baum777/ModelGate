@@ -1,9 +1,11 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { createSessionCookie, clearSessionCookie, verifyAdminPassword, verifySessionFromRequest, type AuthConfig } from "../lib/auth.js";
+import type { AppRateLimiter } from "../lib/rate-limit.js";
 import { z } from "zod";
 
 type AuthRouteDependencies = {
   config: AuthConfig;
+  rateLimiter: AppRateLimiter;
 };
 
 const AuthLoginRequestSchema = z.object({
@@ -22,8 +24,21 @@ function sendAuthInvalidCredentials(reply: FastifyReply) {
   });
 }
 
+function sendAuthRateLimited(reply: FastifyReply, retryAfterSeconds: number) {
+  reply.header("Retry-After", String(retryAfterSeconds));
+  return reply.status(429).send({
+    code: "auth_attempts_exceeded"
+  });
+}
+
 export function authRoutes(app: FastifyInstance, deps: AuthRouteDependencies) {
   app.post("/api/auth/login", async (request, reply) => {
+    const limit = deps.rateLimiter.check("auth_login", request);
+
+    if (!limit.allowed) {
+      return sendAuthRateLimited(reply, limit.retryAfterSeconds);
+    }
+
     if (!deps.config.ready) {
       return sendAuthNotConfigured(reply);
     }

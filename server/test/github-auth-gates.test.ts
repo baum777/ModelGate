@@ -3,7 +3,7 @@ import test from "node:test";
 import { createApp } from "../src/app.js";
 import { createMockOpenRouterClient, createTestEnv } from "../test-support/helpers.js";
 
-test("github routes fail closed without a valid session", async (t) => {
+test("github routes rely on GitHub backend configuration, not a global admin session", async (t) => {
   const app = createApp({
     env: createTestEnv(),
     openRouter: createMockOpenRouterClient(),
@@ -15,50 +15,29 @@ test("github routes fail closed without a valid session", async (t) => {
   });
 
   const routes = [
-    {
-      method: "GET" as const,
-      url: "/api/github/repos"
-    },
+    { method: "GET" as const, url: "/api/github/repos" },
     {
       method: "POST" as const,
       url: "/api/github/context",
-      payload: {
-        repo: {
-          owner: "acme",
-          repo: "widget"
-        },
-        question: "What is the structure?"
-      }
+      payload: { repo: { owner: "acme", repo: "widget" }, question: "What is the structure?" }
     },
     {
       method: "POST" as const,
       url: "/api/github/actions/propose",
-      payload: {
-        repo: {
-          owner: "acme",
-          repo: "widget"
-        },
-        objective: "Review the widget flow"
-      }
+      payload: { repo: { owner: "acme", repo: "widget" }, objective: "Review the widget flow" }
     },
-    {
-      method: "POST" as const,
-      url: "/api/github/actions/plan_123/execute",
-      payload: {
-        approval: true
-      }
-    }
+    { method: "POST" as const, url: "/api/github/actions/plan_123/execute", payload: { approval: true } }
   ];
 
   for (const request of routes) {
     const response = await app.inject(request);
 
-    assert.equal(response.statusCode, 401);
+    assert.equal(response.statusCode, 503);
     assert.deepEqual(JSON.parse(response.body), {
       ok: false,
       error: {
-        code: "auth_required",
-        message: "Authentication required"
+        code: "github_not_configured",
+        message: "GitHub backend is not configured"
       }
     });
   }

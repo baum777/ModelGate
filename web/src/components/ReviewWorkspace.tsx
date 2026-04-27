@@ -4,10 +4,11 @@ import {
   ExecutionReceiptCard,
   ProposalCard,
 } from "./ApprovalPrimitives.js";
+import { GuideOverlay, getWorkspaceGuide } from "./GuideOverlay.js";
 import { StatusPanel } from "./StatusPanel.js";
 import { getReviewStatusLabel, useLocalization, type Locale } from "../lib/localization.js";
 
-export type ReviewItemStatus = "pending_review" | "approved" | "rejected" | "stale" | "executed";
+export type ReviewItemStatus = "pending_review" | "approved" | "failed" | "rejected" | "stale" | "executed";
 
 export type ReviewItem = {
   id: string;
@@ -32,8 +33,9 @@ const REVIEW_STATUS_PRIORITY: Record<ReviewItemStatus, number> = {
   stale: 0,
   pending_review: 1,
   approved: 2,
-  executed: 3,
+  failed: 3,
   rejected: 4,
+  executed: 5,
 };
 
 export function prioritizeReviewItems(items: ReviewItem[]) {
@@ -59,6 +61,7 @@ export function describeReviewNextStep(items: ReviewItem[], locale: Locale = "en
         stale: "Veraltete Prüfung erneuern",
         pending: "Freigabe prüfen",
         approved: "Ausführung beobachten",
+        failed: "Fehlgeschlagene Ausführung prüfen",
         rejected: "Terminale Abweichung prüfen",
         executed: "Erledigte Ausführungen prüfen",
         ready: "Bereit",
@@ -68,6 +71,7 @@ export function describeReviewNextStep(items: ReviewItem[], locale: Locale = "en
         stale: "Refresh stale review",
         pending: "Check approval",
         approved: "Watch execution",
+        failed: "Inspect failed execution",
         rejected: "Check terminal deviation",
         executed: "Review completed executions",
         ready: "Ready",
@@ -87,6 +91,10 @@ export function describeReviewNextStep(items: ReviewItem[], locale: Locale = "en
 
   if (items.some((item) => item.status === "approved")) {
     return labels.approved;
+  }
+
+  if (items.some((item) => item.status === "failed")) {
+    return labels.failed;
   }
 
   if (items.some((item) => item.status === "rejected")) {
@@ -123,7 +131,10 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
         <div>
           <p className="status-pill status-partial">{ui.review.heroStatus}</p>
           <h1>{ui.review.title}</h1>
-          <p className="hero-copy">{ui.review.intro}</p>
+          {expertMode ? <p className="hero-copy">{ui.review.intro}</p> : null}
+          <div className="workspace-hero-actions">
+            <GuideOverlay content={getWorkspaceGuide(locale, "review")} testId="guide-review" />
+          </div>
         </div>
       </section>
 
@@ -144,7 +155,7 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
           },
         ]}
         safetyTitle={ui.review.panelTitle}
-        safetyText={ui.review.intro}
+        safetyText={expertMode ? ui.review.intro : ui.review.emptyBody}
         expertMode={expertMode}
         expertRows={[
           {
@@ -184,6 +195,15 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
                 metadata={primaryMetadata}
                 testId="review-primary-executed"
               />
+            ) : primaryItem.status === "failed" ? (
+              <ExecutionReceiptCard
+                key={primaryItem.id}
+                title={primaryItem.title}
+                detail={primaryItem.summary}
+                outcome="failed"
+                metadata={primaryMetadata}
+                testId="review-primary-failed"
+              />
             ) : primaryItem.status === "rejected" ? (
               <ExecutionReceiptCard
                 key={primaryItem.id}
@@ -206,7 +226,7 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
                 testId="review-primary-proposal"
                 title={primaryItem.title}
                 summary={primaryItem.summary}
-                consequence={ui.review.intro}
+                consequence={expertMode ? ui.review.intro : ui.review.approvalNeeded}
                 statusLabel={primaryItem.stale ? ui.review.warning : ui.review.approvalNeeded}
                 statusTone={primaryItem.stale ? "error" : "partial"}
                 metadata={primaryMetadata}
@@ -230,7 +250,7 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
                       <span>{sourceLabelFor(item)}</span>
                       <strong>{item.title}</strong>
                     </div>
-                    <span className={`status-pill ${item.status === "stale" || item.status === "rejected" ? "status-error" : item.status === "executed" ? "status-ready" : "status-partial"}`}>
+                    <span className={`status-pill ${item.status === "stale" || item.status === "rejected" || item.status === "failed" ? "status-error" : item.status === "executed" ? "status-ready" : "status-partial"}`}>
                       {getReviewStatusLabel(locale, item.status)}
                     </span>
                   </div>
