@@ -9,6 +9,10 @@ type VercelConfig = {
     maxDuration?: number;
     includeFiles?: string;
   }>;
+  rewrites?: Array<{
+    source: string;
+    destination: string;
+  }>;
 };
 
 test("vercel config bundles runtime-loaded config files for both api entrypoints", () => {
@@ -25,4 +29,9 @@ test("vercel config bundles runtime-loaded config files for both api entrypoints
     fs.readdirSync(configDir).filter((fileName) => fileName.endsWith(".yml")).sort(),
     ["llm-router.yml", "model-capabilities.yml"]
   );
+
+  assert.deepEqual(vercelConfig.rewrites?.at(-1), {
+    source: "/:path*",
+    destination: "/"
+  });
 });
