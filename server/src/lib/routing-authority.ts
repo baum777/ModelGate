@@ -82,7 +82,7 @@ export function resolveChatRouteDecision(options: {
   const requestedAlias = options.request.modelAlias ?? options.request.model;
   const resolution = options.modelRegistry.resolveModel(requestedAlias);
 
-  if (!resolution.ok) {
+  if (resolution.ok === false) {
     throw new Error(`Chat route resolution failed: ${resolution.reason}`);
   }
 

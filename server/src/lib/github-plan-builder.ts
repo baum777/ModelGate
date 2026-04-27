@@ -228,15 +228,17 @@ async function generateProposalDraft(
   const selection = options.modelRegistry.resolveModel();
   const workflowPolicy = resolveGitHubProposalModel(options.env, options.modelCapabilities);
 
-  if (!selection.ok && selection.reason !== "no_eligible_provider_targets") {
-    throw new GitHubClientError({
-      code: "github_not_configured",
-      status: 503,
-      operation: "GitHub proposal generation",
-      path: "/api/github/actions/propose",
-      baseUrl: "unavailable",
-      message: "GitHub proposal backend is not configured"
-    });
+  if (!selection.ok) {
+    if (selection.reason !== "no_eligible_provider_targets") {
+      throw new GitHubClientError({
+        code: "github_not_configured",
+        status: 503,
+        operation: "GitHub proposal generation",
+        path: "/api/github/actions/propose",
+        baseUrl: "unavailable",
+        message: "GitHub proposal backend is not configured"
+      });
+    }
   }
 
   const publicSelection = selection.ok
