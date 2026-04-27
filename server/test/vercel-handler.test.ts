@@ -9,6 +9,7 @@ test("vercel handler preserves matrix routes and strips the /api prefix for root
   assert.equal(normalizeVercelRequestUrl("/api/health"), "/health");
   assert.equal(normalizeVercelRequestUrl("/api/auth/login"), "/api/auth/login");
   assert.equal(normalizeVercelRequestUrl("/api/auth/me?x=1"), "/api/auth/me?x=1");
+  assert.equal(normalizeVercelRequestUrl("/api/integrations/status"), "/api/integrations/status");
   assert.equal(normalizeVercelRequestUrl("/api/matrix/whoami"), "/api/matrix/whoami");
   assert.equal(normalizeVercelRequestUrl("/api/matrix/analyze"), "/api/matrix/analyze");
   assert.equal(normalizeVercelRequestUrl("/api/matrix/actions/plan/execute"), "/api/matrix/actions/plan/execute");

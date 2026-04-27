@@ -22,6 +22,15 @@ Security copy:
 | `/api/github/actions/propose` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/github.ts` | backend | `GITHUB_TOKEN`, model provider key | no external write; creates review plan |
 | `/api/github/actions/:planId/execute` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/github.ts` | backend | `GITHUB_TOKEN` | yes; approval-gated |
 | `/api/github/actions/:planId/verify` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/github.ts` | backend | `GITHUB_TOKEN` | no external write; verifies receipt |
+| `/api/integrations/status` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/integrations.ts` | backend | none returned to browser | no |
+| `/api/auth/github/start` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/integration-auth.ts` | backend | session cookie + short-lived state | no external write; connect intent only |
+| `/api/auth/github/callback` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/integration-auth.ts` | backend | callback state + server-side token exchange | no browser write; backend-owned credential handling |
+| `/api/auth/github/disconnect` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/integration-auth.ts` | backend | none returned to browser | no external write |
+| `/api/auth/github/reverify` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/integration-auth.ts` | backend | none returned to browser | no external write |
+| `/api/auth/matrix/start` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/integration-auth.ts` | backend | session cookie + short-lived state | no external write; connect intent only |
+| `/api/auth/matrix/callback` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/integration-auth.ts` | backend | callback state + server-side login-token exchange | no browser write; backend-owned credential handling |
+| `/api/auth/matrix/disconnect` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/integration-auth.ts` | backend | none returned to browser | no external write |
+| `/api/auth/matrix/reverify` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/integration-auth.ts` | backend | none returned to browser | no external write |
 | `/api/matrix/whoami` | `/api/matrix/[...path]?path=:path*` | `api/matrix/[...path].ts` | `server/src/routes/matrix.ts` | backend | `MATRIX_ACCESS_TOKEN` | no |
 | `/api/matrix/joined-rooms` | `/api/matrix/[...path]?path=:path*` | `api/matrix/[...path].ts` | `server/src/routes/matrix.ts` | backend | `MATRIX_ACCESS_TOKEN` | no |
 | `/api/matrix/scope/resolve` | `/api/matrix/[...path]?path=:path*` | `api/matrix/[...path].ts` | `server/src/routes/matrix.ts` | backend | `MATRIX_ACCESS_TOKEN` | server snapshot only |
@@ -34,3 +43,14 @@ Security copy:
 - Route contract tests live in `server/test/vercel-config.test.ts` and `server/test/vercel-handler.test.ts`.
 - Browser upstream boundary tests live in `web/test/browser-upstream-boundary.test.ts`.
 - Browser flow tests for console URL state and route ownership copy live in `tests/browser/modelgate.spec.ts`.
+
+## Settings Auth Connect Routing
+
+- Settings CTAs start backend-owned auth intent only.
+- Browser opens `/api/auth/{provider}/start` with an allowlisted `returnTo`.
+- Backend creates short-lived `state` and keeps it server-side.
+- Callback (`/api/auth/{provider}/callback`) validates `state`, performs provider exchange server-side when config is present, stores encrypted credential server-side, and redirects to `/console?mode=settings`.
+- Stub fallback remains available only when provider OAuth/SSO config is not present.
+- Browser reads only sanitized status from `/api/integrations/status`.
+
+Browser must not receive or store GitHub/Matrix tokens. Backend owns auth state, callback validation, credential handling, and execution boundaries.

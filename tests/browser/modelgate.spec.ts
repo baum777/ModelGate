@@ -40,6 +40,48 @@ const MATRIX_ROOMS_OK = {
   ],
 };
 
+const INTEGRATIONS_STATUS_OK = {
+  ok: true,
+  generatedAt: "2026-04-27T12:00:00.000Z",
+  github: {
+    status: "connect_available",
+    credentialSource: "not_connected",
+    capabilities: {
+      read: "blocked",
+      propose: "blocked",
+      execute: "blocked",
+      verify: "blocked",
+    },
+    executionMode: "disabled",
+    labels: {
+      identity: null,
+      scope: "No allowed repositories configured.",
+      allowedReposStatus: "missing",
+    },
+    lastVerifiedAt: null,
+    lastErrorCode: null,
+  },
+  matrix: {
+    status: "connect_available",
+    credentialSource: "not_connected",
+    capabilities: {
+      read: "blocked",
+      propose: "blocked",
+      execute: "blocked",
+      verify: "blocked",
+    },
+    executionMode: "disabled",
+    labels: {
+      identity: null,
+      scope: "Matrix scope unavailable until backend config is ready.",
+      homeserver: null,
+      roomAccess: "unknown",
+    },
+    lastVerifiedAt: null,
+    lastErrorCode: null,
+  },
+};
+
 const CHAT_STREAM = [
   "event: start",
   'data: {"ok":true,"model":"default"}',
@@ -74,6 +116,14 @@ async function installBaseMocks(
       status: 200,
       contentType: "application/json",
       body: JSON.stringify(MODELS_OK),
+    });
+  });
+
+  await page.route("**/api/integrations/status", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(INTEGRATIONS_STATUS_OK),
     });
   });
 
@@ -862,15 +912,36 @@ test("Settings keeps diagnostics behind Expert mode and allows clearing local en
   await expect(settingsWorkspace).toContainText("No local diagnostic events yet.");
 });
 
-test("Settings GitHub CTA opens the GitHub workspace without an admin login gate", async ({ page }) => {
+test("Settings GitHub CTA starts backend-owned auth flow and returns to Settings", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
+  let startHits = 0;
+
+  await page.route("**/api/auth/github/start**", async (route) => {
+    startHits += 1;
+    await route.fulfill({
+      status: 302,
+      headers: {
+        location: "/api/auth/github/callback?state=stub-state&code=stub-code"
+      },
+    });
+  });
+
+  await page.route("**/api/auth/github/callback**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html; charset=utf-8",
+      body: "<!doctype html><html><body><script>window.location.replace('/console?mode=settings');</script></body></html>",
+    });
+  });
+
   await loadConsole(page);
 
   await page.getByTestId("tab-settings").click();
   const settingsWorkspace = page.getByTestId("settings-workspace");
   const githubAdapter = settingsWorkspace.locator(".settings-adapter-row").filter({ hasText: "GitHub" });
 
-  await githubAdapter.getByRole("button", { name: "Open" }).click();
-  await expect(page.getByTestId("github-workspace")).toBeVisible();
-  await expect(page.getByTestId("github-admin-login")).toHaveCount(0);
+  await githubAdapter.getByRole("button", { name: "Connect" }).click();
+  await expect(page).toHaveURL(/\/api\/auth\/github\/callback\?state=stub-state/);
+  expect(startHits).toBe(1);
+  await expect(page.locator("body")).not.toContainText("sk-test");
 });

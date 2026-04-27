@@ -61,6 +61,13 @@ export const EnvSchema = z.object({
   GITHUB_APP_ID: z.string().trim().default(""),
   GITHUB_APP_PRIVATE_KEY: z.string().trim().default(""),
   GITHUB_APP_INSTALLATION_ID: z.string().trim().default(""),
+  GITHUB_OAUTH_CLIENT_ID: z.string().trim().default(""),
+  GITHUB_OAUTH_CLIENT_SECRET: z.string().trim().default(""),
+  GITHUB_OAUTH_AUTHORIZE_URL: z.string().trim().default("https://github.com/login/oauth/authorize"),
+  GITHUB_OAUTH_TOKEN_URL: z.string().trim().default("https://github.com/login/oauth/access_token"),
+  GITHUB_OAUTH_SCOPES: z.string().trim().default("repo,read:user"),
+  MATRIX_SSO_REDIRECT_PATH: z.string().trim().default("/_matrix/client/v3/login/sso/redirect"),
+  MATRIX_LOGIN_TOKEN_TYPE: z.string().trim().default("m.login.token"),
   RATE_LIMIT_ENABLED: z.string().trim().default("true"),
   RATE_LIMIT_WINDOW_MS: z.string().trim().default("60000"),
   RATE_LIMIT_CHAT_MAX: z.string().trim().default("30"),
@@ -128,6 +135,13 @@ export type AppEnv = {
   GITHUB_APP_ID: string;
   GITHUB_APP_PRIVATE_KEY: string;
   GITHUB_APP_INSTALLATION_ID: string;
+  GITHUB_OAUTH_CLIENT_ID: string;
+  GITHUB_OAUTH_CLIENT_SECRET: string;
+  GITHUB_OAUTH_AUTHORIZE_URL: string;
+  GITHUB_OAUTH_TOKEN_URL: string;
+  GITHUB_OAUTH_SCOPES: string[];
+  MATRIX_SSO_REDIRECT_PATH: string;
+  MATRIX_LOGIN_TOKEN_TYPE: string;
   RATE_LIMIT_ENABLED: boolean;
   RATE_LIMIT_WINDOW_MS: number;
   RATE_LIMIT_CHAT_MAX: number;
@@ -236,6 +250,13 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     GITHUB_APP_ID: parsed.GITHUB_APP_ID.trim(),
     GITHUB_APP_PRIVATE_KEY: parsed.GITHUB_APP_PRIVATE_KEY.trim(),
     GITHUB_APP_INSTALLATION_ID: parsed.GITHUB_APP_INSTALLATION_ID.trim(),
+    GITHUB_OAUTH_CLIENT_ID: parsed.GITHUB_OAUTH_CLIENT_ID.trim(),
+    GITHUB_OAUTH_CLIENT_SECRET: parsed.GITHUB_OAUTH_CLIENT_SECRET.trim(),
+    GITHUB_OAUTH_AUTHORIZE_URL: parsed.GITHUB_OAUTH_AUTHORIZE_URL.trim() || "https://github.com/login/oauth/authorize",
+    GITHUB_OAUTH_TOKEN_URL: parsed.GITHUB_OAUTH_TOKEN_URL.trim() || "https://github.com/login/oauth/access_token",
+    GITHUB_OAUTH_SCOPES: parseCsvList(parsed.GITHUB_OAUTH_SCOPES),
+    MATRIX_SSO_REDIRECT_PATH: parsed.MATRIX_SSO_REDIRECT_PATH.trim() || "/_matrix/client/v3/login/sso/redirect",
+    MATRIX_LOGIN_TOKEN_TYPE: parsed.MATRIX_LOGIN_TOKEN_TYPE.trim() || "m.login.token",
     RATE_LIMIT_ENABLED: parseBoolean(parsed.RATE_LIMIT_ENABLED.trim()),
     RATE_LIMIT_WINDOW_MS: parsePositiveIntWithPolicy(
       parsed.RATE_LIMIT_WINDOW_MS,

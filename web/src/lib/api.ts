@@ -105,6 +105,53 @@ export type DiagnosticsResponse = {
   };
 };
 
+export type IntegrationConnectionStatus =
+  | "not_connected"
+  | "connect_available"
+  | "connected"
+  | "auth_expired"
+  | "missing_server_config"
+  | "scope_denied"
+  | "upstream_unreachable"
+  | "disabled_by_policy"
+  | "error";
+
+export type IntegrationCredentialSource =
+  | "instance_configured"
+  | "user_connected"
+  | "user_connected_stub"
+  | "not_connected";
+
+export type IntegrationCapability = {
+  read: "available" | "blocked" | "unknown";
+  propose: "available" | "blocked" | "unknown";
+  execute: "available" | "approval_required" | "blocked" | "unknown";
+  verify: "available" | "blocked" | "unknown";
+};
+
+export type IntegrationStatus = {
+  status: IntegrationConnectionStatus;
+  credentialSource: IntegrationCredentialSource;
+  capabilities: IntegrationCapability;
+  executionMode: "disabled" | "approval_required" | "enabled";
+  labels: {
+    identity: string | null;
+    scope: string | null;
+    allowedReposStatus?: "configured" | "restricted" | "missing";
+    homeserver?: string | null;
+    roomAccess?: "readable" | "blocked" | "unknown";
+  };
+  lastVerifiedAt: string | null;
+  lastErrorCode: string | null;
+};
+
+export type IntegrationsStatusResponse = {
+  ok: true;
+  generatedAt: string;
+  github: IntegrationStatus;
+  matrix: IntegrationStatus;
+};
+
 export type JournalEntry = {
   id: string;
   timestamp: string;
@@ -328,6 +375,40 @@ export async function fetchJournalRecent(options?: { limit?: number; source?: Jo
   }
 
   return response.json() as Promise<JournalRecentResponse>;
+}
+
+export async function fetchIntegrationsStatus(): Promise<IntegrationsStatusResponse> {
+  const response = await fetch(resolveApiUrl("/api/integrations/status"), {
+    credentials: "include"
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return response.json() as Promise<IntegrationsStatusResponse>;
+}
+
+export async function postIntegrationControlAction(provider: "github" | "matrix", action: "disconnect" | "reverify") {
+  const response = await fetch(resolveApiUrl(`/api/auth/${provider}/${action}`), {
+    method: "POST",
+    credentials: "include"
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return response.json() as Promise<{
+    ok: true;
+    provider: "github" | "matrix";
+  }>;
+}
+
+export function buildIntegrationConnectStartUrl(provider: "github" | "matrix", returnTo = "/console?mode=settings") {
+  const params = new URLSearchParams();
+  params.set("returnTo", returnTo);
+  return resolveApiUrl(`/api/auth/${provider}/start?${params.toString()}`);
 }
 
 export async function streamChatCompletion(

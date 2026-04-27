@@ -34,11 +34,15 @@ import {
   useLocalization,
 } from "./lib/localization.js";
 import {
+  buildIntegrationConnectStartUrl,
   fetchDiagnostics,
   fetchHealth,
+  fetchIntegrationsStatus,
   fetchJournalRecent,
   fetchModels,
+  postIntegrationControlAction,
   type DiagnosticsResponse,
+  type IntegrationsStatusResponse,
   type JournalEntry
 } from "./lib/api.js";
 import {
@@ -472,6 +476,7 @@ function ConsoleShell() {
     available?: boolean;
   }>>([]);
   const [runtimeDiagnostics, setRuntimeDiagnostics] = useState<DiagnosticsResponse | null>(null);
+  const [integrationsStatus, setIntegrationsStatus] = useState<IntegrationsStatusResponse | null>(null);
   const [runtimeJournalEntries, setRuntimeJournalEntries] = useState<JournalEntry[]>([]);
   const [restoredSession] = useState(() => {
     if (typeof window === "undefined") {
@@ -494,11 +499,12 @@ function ConsoleShell() {
     let cancelled = false;
 
     async function loadConsoleState() {
-      const [healthResult, modelsResult, diagnosticsResult, journalResult] = await Promise.allSettled([
+      const [healthResult, modelsResult, diagnosticsResult, journalResult, integrationsResult] = await Promise.allSettled([
         fetchHealth(),
         fetchModels(),
         fetchDiagnostics(),
         fetchJournalRecent(),
+        fetchIntegrationsStatus(),
       ]);
 
       if (cancelled) {
@@ -579,6 +585,12 @@ function ConsoleShell() {
         setRuntimeJournalEntries(journalResult.value.entries);
       } else {
         setRuntimeJournalEntries([]);
+      }
+
+      if (integrationsResult.status === "fulfilled") {
+        setIntegrationsStatus(integrationsResult.value);
+      } else {
+        setIntegrationsStatus(null);
       }
     }
 
@@ -703,6 +715,37 @@ function ConsoleShell() {
     replaceConsoleUrl(workspace);
     setWorkspaceState((current) => selectSession(current, workspace, sessionId));
   }, []);
+
+  const refreshIntegrationsStatus = useCallback(async () => {
+    try {
+      const nextStatus = await fetchIntegrationsStatus();
+      setIntegrationsStatus(nextStatus);
+    } catch {
+      setIntegrationsStatus(null);
+    }
+  }, []);
+
+  const handleIntegrationAction = useCallback(async (
+    provider: "github" | "matrix",
+    action: "connect" | "reconnect" | "disconnect" | "reverify"
+  ) => {
+    if (action === "connect" || action === "reconnect") {
+      window.location.assign(buildIntegrationConnectStartUrl(provider, "/console?mode=settings"));
+      return;
+    }
+
+    try {
+      await postIntegrationControlAction(provider, action);
+    } catch (error) {
+      recordTelemetry(
+        "warning",
+        locale === "de" ? "Integrationsaktion fehlgeschlagen" : "Integration action failed",
+        error instanceof Error ? error.message : undefined
+      );
+    } finally {
+      await refreshIntegrationsStatus();
+    }
+  }, [locale, recordTelemetry, refreshIntegrationsStatus]);
 
   const handleWorkspaceSessionArchive = useCallback((workspace: WorkspaceKind, sessionId: string) => {
     setWorkspaceState((current) =>
@@ -961,58 +1004,15 @@ function ConsoleShell() {
   const settingsLoginAdapters = useMemo(() => deriveSettingsLoginAdapters({
     copy: {
       checking: ui.shell.healthChecking,
-      ready: ui.shell.statusReady,
       unavailable: ui.shell.healthUnavailable,
-      error: ui.shell.statusError,
       none: ui.common.none,
-      configureBackend: locale === "de" ? "Server konfigurieren" : "Configure server",
-      connect: locale === "de" ? "Verbinden" : "Connect",
-      disconnect: locale === "de" ? "Trennen" : "Disconnect",
-      open: locale === "de" ? "Öffnen" : "Open",
-      retry: locale === "de" ? "Erneut prüfen" : "Retry",
     },
-    backend: {
-      healthy: backendHealthy,
-      label: settingsTruthSnapshot.backend.label,
-    },
-    github: {
-      configured: runtimeDiagnostics?.github.configured ?? null,
-      ready: runtimeDiagnostics?.github.ready ?? null,
-      connectionLabel: githubContext.connectionLabel,
-      repositoryLabel: githubContext.repositoryLabel,
-      accessLabel: githubAccessLabel,
-    },
-    matrix: {
-      configured: runtimeDiagnostics?.matrix.configured ?? null,
-      ready: runtimeDiagnostics?.matrix.ready ?? null,
-      identityLabel: matrixContext.identityLabel,
-      connectionLabel: matrixContext.connectionLabel,
-      homeserverLabel: matrixContext.homeserverLabel,
-      scopeLabel: matrixContext.scopeLabel,
-    },
-    chat: {
-      activeAlias: activeModelAlias,
-      availableCount: availableModels.length,
-    },
+    integrations: integrationsStatus
   }), [
-    activeModelAlias,
-    availableModels.length,
-    backendHealthy,
-    githubAccessLabel,
-    githubContext.accessLabel,
-    githubContext.connectionLabel,
-    githubContext.repositoryLabel,
-    locale,
-    matrixContext.connectionLabel,
-    matrixContext.homeserverLabel,
-    matrixContext.identityLabel,
-    matrixContext.scopeLabel,
-    runtimeDiagnostics?.github.configured,
-    runtimeDiagnostics?.github.ready,
-    runtimeDiagnostics?.matrix.configured,
-    runtimeDiagnostics?.matrix.ready,
-    settingsTruthSnapshot.backend.label,
-    ui,
+    integrationsStatus,
+    ui.common.none,
+    ui.shell.healthChecking,
+    ui.shell.healthUnavailable
   ]);
 
   const settingsRows: StatusPanelRow[] = [
@@ -1601,7 +1601,7 @@ function ConsoleShell() {
       onClearDiagnostics={() => setTelemetry([])}
       truthSnapshot={settingsTruthSnapshot}
       loginAdapters={settingsLoginAdapters}
-      onOpenWorkspace={handleWorkspaceTabSelect}
+      onIntegrationAction={handleIntegrationAction}
     />
   );
   const statusToneForBadge = currentStatusTone === "error" ? "error" : currentStatusTone === "ready" ? "ready" : "partial";

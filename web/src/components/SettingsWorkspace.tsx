@@ -74,7 +74,10 @@ type SettingsWorkspaceProps = {
   onClearDiagnostics: () => void;
   truthSnapshot: SettingsTruthSnapshot;
   loginAdapters: SettingsLoginAdapter[];
-  onOpenWorkspace: (workspace: "chat" | "github" | "matrix") => void;
+  onIntegrationAction: (
+    provider: "github" | "matrix",
+    action: "connect" | "reconnect" | "disconnect" | "reverify"
+  ) => void;
 };
 
 export function SettingsWorkspace({
@@ -84,7 +87,7 @@ export function SettingsWorkspace({
   onClearDiagnostics,
   truthSnapshot,
   loginAdapters,
-  onOpenWorkspace,
+  onIntegrationAction,
 }: SettingsWorkspaceProps) {
   const { locale, copy: ui } = useLocalization();
   const expertMode = isExpertMode(workMode);
@@ -97,20 +100,33 @@ export function SettingsWorkspace({
         actionLabel: "Aktion",
         requirementsLabel: "Voraussetzungen",
         noRequirements: "Keine offenen Voraussetzungen",
+        credentialSourceLabel: "Credential Source",
+        capabilitiesLabel: "Capabilities",
+        lastVerifiedLabel: "Last verified",
+        lastErrorLabel: "Last error",
         status: {
-          available: "Bereit",
+          not_connected: "Nicht verbunden",
+          connect_available: "Verbinden verfügbar",
           connected: "Verbunden",
-          locked: "Gesperrt",
+          auth_expired: "Auth abgelaufen",
+          missing_server_config: "Server-Konfig fehlt",
+          scope_denied: "Scope verweigert",
+          upstream_unreachable: "Upstream nicht erreichbar",
+          disabled_by_policy: "Policy deaktiviert",
           checking: "Wird geprüft",
-          unavailable: "Nicht verfügbar",
           error: "Fehler",
+        },
+        source: {
+          instance_configured: "Instance configured",
+          user_connected: "User connected",
+          user_connected_stub: "User connected (stub)",
+          not_connected: "Not connected",
         },
         action: {
           connect: "Verbinden",
+          reconnect: "Neu verbinden",
           disconnect: "Trennen",
-          open: "Öffnen",
-          retry: "Erneut prüfen",
-          configure: "Server konfigurieren",
+          reverify: "Erneut prüfen",
         },
       }
     : {
@@ -118,28 +134,35 @@ export function SettingsWorkspace({
         actionLabel: "Action",
         requirementsLabel: "Requirements",
         noRequirements: "No open requirements",
+        credentialSourceLabel: "Credential source",
+        capabilitiesLabel: "Capabilities",
+        lastVerifiedLabel: "Last verified",
+        lastErrorLabel: "Last error",
         status: {
-          available: "Ready",
+          not_connected: "Not connected",
+          connect_available: "Connect available",
           connected: "Connected",
-          locked: "Locked",
+          auth_expired: "Auth expired",
+          missing_server_config: "Missing server config",
+          scope_denied: "Scope denied",
+          upstream_unreachable: "Upstream unreachable",
+          disabled_by_policy: "Disabled by policy",
           checking: "Checking",
-          unavailable: "Unavailable",
           error: "Error",
+        },
+        source: {
+          instance_configured: "Instance configured",
+          user_connected: "User connected",
+          user_connected_stub: "User connected (stub)",
+          not_connected: "Not connected",
         },
         action: {
           connect: "Connect",
+          reconnect: "Reconnect",
           disconnect: "Disconnect",
-          open: "Open",
-          retry: "Retry",
-          configure: "Configure server",
+          reverify: "Reverify",
         },
       };
-
-  function handleAdapterAction(adapter: SettingsLoginAdapter) {
-    if (adapter.primaryAction === "open") {
-      onOpenWorkspace(adapter.id);
-    }
-  }
 
   return (
     <section className="workspace-panel settings-workspace" data-testid="settings-workspace">
@@ -186,7 +209,7 @@ export function SettingsWorkspace({
               <section key={adapter.id} className={`settings-adapter-row settings-adapter-row-${adapter.status}`}>
                 <div className="settings-adapter-main">
                   <div>
-                    <span className={`status-pill status-${adapter.status === "connected" || adapter.status === "available" ? "ready" : adapter.status === "error" || adapter.status === "unavailable" ? "error" : "partial"}`}>
+                    <span className={`status-pill status-${adapter.status === "connected" ? "ready" : adapter.status === "error" || adapter.status === "missing_server_config" || adapter.status === "auth_expired" || adapter.status === "scope_denied" || adapter.status === "upstream_unreachable" ? "error" : "partial"}`}>
                       {adapterCopy.status[adapter.status]}
                     </span>
                     <h2>{adapter.label}</h2>
@@ -198,12 +221,21 @@ export function SettingsWorkspace({
                 <div className="settings-adapter-actions">
                   <button
                     type="button"
-                    className={adapter.primaryAction === "configure" ? "secondary-button" : ""}
-                    onClick={() => handleAdapterAction(adapter)}
-                    disabled={adapter.primaryAction === "configure" || adapter.primaryAction === "retry" || adapter.status === "checking"}
+                    onClick={() => onIntegrationAction(adapter.id, adapter.primaryAction)}
+                    disabled={adapter.status === "checking"}
                   >
                     {adapterCopy.action[adapter.primaryAction]}
                   </button>
+                  {adapter.secondaryAction ? (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => onIntegrationAction(adapter.id, adapter.secondaryAction!)}
+                      disabled={adapter.status === "checking"}
+                    >
+                      {adapterCopy.action[adapter.secondaryAction]}
+                    </button>
+                  ) : null}
                 </div>
 
                 {expertMode ? (
@@ -215,6 +247,22 @@ export function SettingsWorkspace({
                     <div>
                       <span>{adapterCopy.requirementsLabel}</span>
                       <strong>{adapter.requirements.length > 0 ? adapter.requirements.join(", ") : adapterCopy.noRequirements}</strong>
+                    </div>
+                    <div>
+                      <span>{adapterCopy.credentialSourceLabel}</span>
+                      <strong>{adapterCopy.source[adapter.credentialSource]}</strong>
+                    </div>
+                    <div>
+                      <span>{adapterCopy.capabilitiesLabel}</span>
+                      <strong>{adapter.capabilitySummary}</strong>
+                    </div>
+                    <div>
+                      <span>{adapterCopy.lastVerifiedLabel}</span>
+                      <strong>{adapter.lastVerifiedAt ?? ui.common.na}</strong>
+                    </div>
+                    <div>
+                      <span>{adapterCopy.lastErrorLabel}</span>
+                      <strong>{adapter.lastErrorCode ?? ui.common.none}</strong>
                     </div>
                     <div>
                       <span>{ui.settings.chatAuthority}</span>

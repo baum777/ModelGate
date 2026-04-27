@@ -6,10 +6,54 @@ import {
   SettingsWorkspace,
   type SettingsTruthSnapshot,
 } from "../src/components/SettingsWorkspace.js";
-import type { JournalEntry } from "../src/lib/api.js";
+import type { IntegrationsStatusResponse, JournalEntry } from "../src/lib/api.js";
 import { deriveSettingsLoginAdapters } from "../src/lib/settings-login-adapters.js";
 
-test("Settings workspace renders backend, connection, and model truth without inventing authority", () => {
+function createIntegrationsStatusFixture(): IntegrationsStatusResponse {
+  return {
+    ok: true,
+    generatedAt: "2026-04-27T12:00:00.000Z",
+    github: {
+      status: "connected",
+      credentialSource: "user_connected_stub",
+      capabilities: {
+        read: "available",
+        propose: "available",
+        execute: "approval_required",
+        verify: "available",
+      },
+      executionMode: "approval_required",
+      labels: {
+        identity: "stub-github-operator",
+        scope: "2 allowed repos",
+        allowedReposStatus: "configured",
+      },
+      lastVerifiedAt: "2026-04-27T12:00:00.000Z",
+      lastErrorCode: null,
+    },
+    matrix: {
+      status: "connect_available",
+      credentialSource: "not_connected",
+      capabilities: {
+        read: "blocked",
+        propose: "blocked",
+        execute: "blocked",
+        verify: "blocked",
+      },
+      executionMode: "disabled",
+      labels: {
+        identity: null,
+        scope: "Matrix scope unavailable until backend config is ready.",
+        homeserver: null,
+        roomAccess: "unknown",
+      },
+      lastVerifiedAt: null,
+      lastErrorCode: null,
+    },
+  };
+}
+
+test("Settings workspace renders integration cards and keeps secrets out of the DOM", () => {
   const truthSnapshot: SettingsTruthSnapshot = {
     backend: {
       label: "Bereit",
@@ -80,28 +124,6 @@ test("Settings workspace renders backend, connection, and model truth without in
             secretsStored: false,
             filteredKeys: []
           }
-        },
-        {
-          id: "entry-2",
-          timestamp: "2026-04-24T10:01:00.000Z",
-          source: "github",
-          eventType: "github_proposal_created",
-          authorityDomain: "github",
-          severity: "warning",
-          outcome: "blocked",
-          summary: "GitHub proposal blocked",
-          correlationId: null,
-          proposalId: null,
-          planId: "plan-1",
-          executionId: null,
-          verificationId: null,
-          modelRouteSummary: null,
-          safeMetadata: {},
-          redaction: {
-            contentStored: false,
-            secretsStored: false,
-            filteredKeys: []
-          }
         }
       ] as JournalEntry[],
     },
@@ -109,39 +131,10 @@ test("Settings workspace renders backend, connection, and model truth without in
   const loginAdapters = deriveSettingsLoginAdapters({
     copy: {
       checking: "Checking",
-      ready: "Ready",
       unavailable: "Unavailable",
-      error: "Error",
       none: "None",
-      configureBackend: "Configure server",
-      connect: "Connect",
-      disconnect: "Disconnect",
-      open: "Open",
-      retry: "Retry",
     },
-    backend: {
-      healthy: true,
-      label: "Bereit",
-    },
-    github: {
-      configured: true,
-      ready: true,
-      connectionLabel: "Bereit",
-      repositoryLabel: "acme/console",
-      accessLabel: "Schreibzugriff",
-    },
-    matrix: {
-      configured: true,
-      ready: true,
-      identityLabel: "@alice:matrix.example",
-      connectionLabel: "Verbunden",
-      homeserverLabel: "matrix.example",
-      scopeLabel: "Bereich gewählt",
-    },
-    chat: {
-      activeAlias: "gpt-4.1",
-      availableCount: 3,
-    },
+    integrations: createIntegrationsStatusFixture()
   });
 
   const markup = renderToStaticMarkup(
@@ -152,120 +145,63 @@ test("Settings workspace renders backend, connection, and model truth without in
       onClearDiagnostics: () => undefined,
       truthSnapshot,
       loginAdapters,
-      onOpenWorkspace: () => undefined,
+      onIntegrationAction: () => undefined,
     }),
   );
 
-  assert.match(markup, /Bereit/);
-  assert.match(markup, /Verbunden/);
-  assert.match(markup, /Schreibzugriff/);
-  assert.match(markup, /@alice:matrix\.example/);
-  assert.match(markup, /gpt-4\.1/);
-  assert.match(markup, /backend-policy/);
-  assert.match(markup, /default, coding/);
-  assert.match(markup, /chat:1, auth:0/);
-  assert.match(markup, /chat_stream_completed/);
-  assert.match(markup, /github_proposal_created/);
-  assert.doesNotMatch(markup, /Admin session/);
-  assert.doesNotMatch(markup, /<input/i);
-  assert.doesNotMatch(markup, /type="password"/i);
   assert.match(markup, /GitHub/);
   assert.match(markup, /Matrix/);
-  assert.match(markup, /\/api\/matrix\/\*/);
+  assert.match(markup, /stub-github-operator/);
+  assert.match(markup, /Credential source/);
+  assert.match(markup, /Connect available/);
+  assert.doesNotMatch(markup, /<input/i);
+  assert.doesNotMatch(markup, /type="password"/i);
+  assert.doesNotMatch(markup, /sk-test/);
 });
 
-test("Settings login adapters expose GitHub and Matrix as backend-configured account surfaces", () => {
+test("Settings login adapters map connected and reconnect states for governed CTAs", () => {
   const adapters = deriveSettingsLoginAdapters({
     copy: {
       checking: "Checking",
-      ready: "Ready",
       unavailable: "Unavailable",
-      error: "Error",
       none: "None",
-      configureBackend: "Configure server",
-      connect: "Connect",
-      disconnect: "Disconnect",
-      open: "Open",
-      retry: "Retry",
     },
-    backend: {
-      healthy: true,
-      label: "Ready",
-    },
-    github: {
-      configured: true,
-      ready: true,
-      connectionLabel: "Ready",
-      repositoryLabel: "No repo selected",
-      accessLabel: "Read only",
-    },
-    matrix: {
-      configured: false,
-      ready: false,
-      identityLabel: "Checking",
-      connectionLabel: "Checking",
-      homeserverLabel: "n/a",
-      scopeLabel: "No scope",
-    },
-    chat: {
-      activeAlias: "default",
-      availableCount: 1,
-    },
+    integrations: createIntegrationsStatusFixture()
   });
 
   const github = adapters.find((adapter) => adapter.id === "github");
   const matrix = adapters.find((adapter) => adapter.id === "matrix");
 
-  assert.equal(github?.status, "available");
-  assert.equal(github?.primaryAction, "open");
-  assert.deepEqual(github?.requirements, []);
-  assert.equal(matrix?.status, "unavailable");
-  assert.equal(matrix?.primaryAction, "configure");
-  assert.ok(matrix?.requirements.includes("MATRIX_ACCESS_TOKEN"));
+  assert.equal(github?.status, "connected");
+  assert.equal(github?.primaryAction, "reverify");
+  assert.equal(github?.secondaryAction, "disconnect");
+  assert.equal(github?.credentialSource, "user_connected_stub");
+
+  assert.equal(matrix?.status, "connect_available");
+  assert.equal(matrix?.primaryAction, "connect");
+  assert.equal(matrix?.secondaryAction, null);
 });
 
-test("Settings login adapters require GitHub backend account configuration instead of admin login", () => {
+test("Settings login adapters expose missing-server-config requirements", () => {
   const adapters = deriveSettingsLoginAdapters({
     copy: {
       checking: "Checking",
-      ready: "Ready",
       unavailable: "Unavailable",
-      error: "Error",
       none: "None",
-      configureBackend: "Configure server",
-      connect: "Connect",
-      disconnect: "Disconnect",
-      open: "Open",
-      retry: "Retry",
     },
-    backend: {
-      healthy: true,
-      label: "Ready",
-    },
-    github: {
-      configured: false,
-      ready: false,
-      connectionLabel: "Unavailable",
-      repositoryLabel: "No repo selected",
-      accessLabel: "Not configured",
-    },
-    matrix: {
-      configured: true,
-      ready: true,
-      identityLabel: "@user:matrix.example",
-      connectionLabel: "Ready",
-      homeserverLabel: "matrix.example",
-      scopeLabel: "No scope",
-    },
-    chat: {
-      activeAlias: "default",
-      availableCount: 1,
-    },
+    integrations: {
+      ...createIntegrationsStatusFixture(),
+      github: {
+        ...createIntegrationsStatusFixture().github,
+        status: "missing_server_config",
+        credentialSource: "not_connected",
+      }
+    }
   });
 
   const github = adapters.find((adapter) => adapter.id === "github");
 
-  assert.equal(github?.status, "unavailable");
-  assert.equal(github?.primaryAction, "configure");
+  assert.equal(github?.status, "missing_server_config");
+  assert.equal(github?.primaryAction, "reconnect");
   assert.deepEqual(github?.requirements, ["GITHUB_TOKEN", "GITHUB_ALLOWED_REPOS"]);
 });
