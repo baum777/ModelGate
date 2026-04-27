@@ -73,6 +73,50 @@ test("health and models return backend-owned metadata", async (t) => {
   assert.equal(typeof modelsPayload.registry[0]?.label, "string");
 });
 
+test("diagnostics is admin-key gated and returns bounded status only", async (t) => {
+  const env = createTestEnv({
+    GITHUB_TOKEN: "test-github-token",
+    GITHUB_ALLOWED_REPOS: ["acme/widget"]
+  });
+  const app = createApp({
+    env,
+    openRouter: createMockOpenRouterClient(),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const blocked = await app.inject({
+    method: "GET",
+    url: "/diagnostics"
+  });
+  assert.equal(blocked.statusCode, 401);
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/diagnostics",
+    headers: {
+      "x-modelgate-admin-key": env.MODEL_GATE_ADMIN_PASSWORD
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  const payload = JSON.parse(response.body) as {
+    routing: { taskAliasMap: Record<string, string>; fallbackChain: string[] };
+    github: { activeRepos: string[]; adminKeyConfigured: boolean };
+  };
+
+  assert.equal(payload.routing.taskAliasMap.chat, "default");
+  assert.deepEqual(payload.routing.fallbackChain, ["default"]);
+  assert.deepEqual(payload.github.activeRepos, ["acme/widget"]);
+  assert.equal(payload.github.adminKeyConfigured, true);
+  assert.equal(response.body.includes("test-github-token"), false);
+  assert.equal(response.body.includes(env.MODEL_GATE_ADMIN_PASSWORD), false);
+  assert.equal(response.body.includes("openrouter/auto"), false);
+});
+
 test("server boots Matrix read-only routes without an OpenRouter key and chat fails closed", async (t) => {
   const env = createTestEnv({
     OPENROUTER_API_KEY: ""

@@ -18,6 +18,7 @@ import { githubRoutes } from "./routes/github.js";
 import { matrixRoutes } from "./routes/matrix.js";
 import { healthRoutes } from "./routes/health.js";
 import { modelRoutes } from "./routes/models.js";
+import { diagnosticsRoutes } from "./routes/diagnostics.js";
 
 export type AppDependencies = {
   env: AppEnv;
@@ -70,6 +71,13 @@ export function createApp(deps: AppDependencies) {
 
   healthRoutes(app, deps.env, modelRegistry);
   modelRoutes(app, modelRegistry);
+  diagnosticsRoutes(app, {
+    env: deps.env,
+    authConfig,
+    githubConfig,
+    matrixConfig,
+    modelRegistry
+  });
   authRoutes(app, {
     config: authConfig
   });

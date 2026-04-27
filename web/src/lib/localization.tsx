@@ -6,7 +6,7 @@ export type SessionStatus = "draft" | "in_progress" | "review_required" | "done"
 export type ReviewStatus = "pending_review" | "approved" | "rejected" | "stale" | "executed";
 export type ApprovalOutcome = "executed" | "failed" | "rejected" | "unverifiable";
 export type ConnectionState = "idle" | "submitting" | "streaming" | "completed" | "error";
-export type WorkspaceMode = "chat" | "github" | "matrix" | "review" | "settings";
+export type WorkspaceMode = "chat" | "github" | "matrix" | "routing" | "review" | "settings";
 
 type WorkspaceTabCopy = {
   label: string;
@@ -157,7 +157,7 @@ type AuthCopy = {
   intro: string;
   cardTitle: string;
   cardSubtitle: string;
-  passwordLabel: string;
+  credentialLabel: string;
   submit: string;
   submitBusy: string;
   hint: string;
@@ -420,6 +420,7 @@ const EN_COPY: LocalizationCopy = {
       chat: { label: "Chat", description: "Ask questions and inspect responses" },
       github: { label: "GitHub", description: "Read repositories and prepare proposals" },
       matrix: { label: "Matrix", description: "Scope, provenance, and topic updates" },
+      routing: { label: "Routing", description: "Inspect alias policy and lifecycle" },
       review: { label: "Review", description: "Review approvals and receipts" },
       settings: { label: "Settings", description: "View settings and diagnostics" },
     },
@@ -510,15 +511,15 @@ const EN_COPY: LocalizationCopy = {
     statusAuthenticated: "Unlocked",
     statusChecking: "Checking session",
     statusLocked: "Locked",
-    title: "GitHub login",
-    intro: "GitHub read routes stay server-side locked until you sign in with the admin password.",
+    title: "GitHub status",
+    intro: "GitHub credentials stay server-side. The browser shows status only.",
     cardTitle: "Server-side authentication",
-    cardSubtitle: "Enter admin password",
-    passwordLabel: "Admin password",
-    submit: "Sign in",
-    submitBusy: "Signing in...",
-    hint: "Password stays only in the server-side HttpOnly session cookie.",
-    footerNote: "After sign-in, the GitHub read routes are unlocked. The write path remains bound to the server-side admin key.",
+    cardSubtitle: "Configured outside the browser",
+    credentialLabel: "Credential status",
+    submit: "Unavailable in browser",
+    submitBusy: "Checking...",
+    hint: "No credential values are accepted or stored by the browser.",
+    footerNote: "GitHub writes remain backend-owned and approval-gated.",
   },
   chat: {
     title: "Chat workspace",
@@ -749,6 +750,7 @@ const DE_COPY: LocalizationCopy = {
       chat: { label: "Chat", description: "Fragen stellen und Antworten prüfen" },
       github: { label: "GitHub", description: "Repository lesen und Vorschläge vorbereiten" },
       matrix: { label: "Matrix", description: "Scope, Provenienz und Topic-Updates" },
+      routing: { label: "Routing", description: "Alias-Policy und Lifecycle prüfen" },
       review: { label: "Review", description: "Freigaben und Belege prüfen" },
       settings: { label: "Settings", description: "Ansicht und Diagnose prüfen" },
     },
@@ -839,15 +841,15 @@ const DE_COPY: LocalizationCopy = {
     statusAuthenticated: "Freigeschaltet",
     statusChecking: "Session wird geprüft",
     statusLocked: "Gesperrt",
-    title: "GitHub-Login",
-    intro: "Der Zugriff auf GitHub-Read-Routen ist serverseitig gesperrt, bis du dich mit dem Admin-Passwort anmeldest.",
+    title: "GitHub-Status",
+    intro: "GitHub-Zugangsdaten bleiben serverseitig. Der Browser zeigt nur Status.",
     cardTitle: "Serverseitige Authentifizierung",
-    cardSubtitle: "Admin-Passwort eingeben",
-    passwordLabel: "Admin-Passwort",
-    submit: "Anmelden",
-    submitBusy: "Anmelden...",
-    hint: "Passwort bleibt nur im HttpOnly-Session-Cookie auf dem Server.",
-    footerNote: "Nach der Anmeldung werden die GitHub-Read-Routen freigeschaltet. Der Schreibpfad bleibt zusätzlich an den serverseitigen Admin-Key gebunden.",
+    cardSubtitle: "Außerhalb des Browsers konfiguriert",
+    credentialLabel: "Credential-Status",
+    submit: "Im Browser nicht verfügbar",
+    submitBusy: "Prüfung läuft...",
+    hint: "Der Browser nimmt keine Credential-Werte an und speichert keine.",
+    footerNote: "GitHub-Schreibpfade bleiben backend-owned und approval-gated.",
   },
   chat: {
     title: "Chat-Workspace",

@@ -78,7 +78,7 @@ export function githubAuthReducer(state: GitHubAuthState, action: GitHubAuthActi
 export function describeGitHubAuthError(code: string) {
   switch (code) {
     case "auth_invalid_credentials":
-      return "Das Passwort ist falsch.";
+      return "Invalid credentials.";
     case "auth_not_configured":
       return "Admin-Login ist auf dem Server nicht konfiguriert.";
     case "auth_required":

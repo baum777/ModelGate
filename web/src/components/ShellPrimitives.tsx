@@ -2,7 +2,7 @@ import React from "react";
 import type { ComponentPropsWithoutRef, ElementType, ReactNode } from "react";
 
 type ShellCardVariant = "base" | "rail" | "truth" | "muted";
-type BadgeTone = "ready" | "partial" | "error" | "muted";
+export type BadgeTone = "ready" | "partial" | "error" | "muted";
 
 type ShellCardProps<T extends ElementType = "section"> = {
   as?: T;

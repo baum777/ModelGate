@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { ChatWorkspace } from "./components/ChatWorkspace.js";
-import { GitHubAdminLogin } from "./components/GitHubAdminLogin.js";
 import {
   GitHubWorkspace,
   type GitHubWorkspaceStatus,
@@ -17,33 +16,31 @@ import {
   SettingsWorkspace,
   type DiagnosticEntry,
 } from "./components/SettingsWorkspace.js";
-import { SessionList } from "./components/SessionList.js";
+import { RoutingView } from "./components/RoutingView.js";
+import { Sidebar } from "./components/Sidebar.js";
+import { Topbar } from "./components/Topbar.js";
+import { TruthRail } from "./components/TruthRail.js";
 import {
   type StatusPanelRow,
 } from "./components/StatusPanel.js";
-import { DiagnosticsDrawer } from "./components/ExpertDetails.js";
 import {
   MutedSystemCopy,
   SectionLabel,
   ShellCard,
   StatusBadge,
-  TruthRailSection,
 } from "./components/ShellPrimitives.js";
 import {
   getShellHealthCopy,
-  getSessionStatusLabel,
   useLocalization,
 } from "./lib/localization.js";
 import {
-  fetchAuthSession,
+  fetchDiagnostics,
   fetchHealth,
   fetchModels,
-  loginAdmin,
-  logoutAdmin
+  type DiagnosticsResponse
 } from "./lib/api.js";
 import {
   createInitialGitHubAuthState,
-  describeGitHubAuthError,
   githubAuthReducer,
 } from "./lib/github-auth.js";
 import {
@@ -67,7 +64,7 @@ import {
   summarizePendingApprovals,
 } from "./lib/shell-view-model.js";
 
-type WorkspaceMode = "chat" | "github" | "matrix" | "review" | "settings";
+type WorkspaceMode = "chat" | "github" | "matrix" | "routing" | "review" | "settings";
 
 type TelemetryEntry = {
   id: string;
@@ -112,86 +109,7 @@ function appendTelemetry(current: TelemetryEntry[], entry: TelemetryEntry) {
   return [...current, entry].slice(-8);
 }
 
-const WORKSPACE_MODES: WorkspaceMode[] = ["chat", "github", "matrix", "review", "settings"];
-
-function WorkspaceIcon({ mode }: { mode: WorkspaceMode }) {
-  switch (mode) {
-    case "github":
-      return (
-        <svg aria-hidden="true" viewBox="0 0 24 24">
-          <path d="M6 6.75A2.75 2.75 0 0 1 8.75 4H15l3 3v10.25A2.75 2.75 0 0 1 15.25 20H8.75A2.75 2.75 0 0 1 6 17.25V6.75Z" />
-          <path d="M15 4v3h3" />
-          <path d="M8.5 11.25h7" />
-          <path d="M8.5 14.5h7" />
-        </svg>
-      );
-    case "matrix":
-      return (
-        <svg aria-hidden="true" viewBox="0 0 24 24">
-          <rect x="4" y="4" width="6" height="6" rx="1.5" />
-          <rect x="14" y="4" width="6" height="6" rx="1.5" />
-          <rect x="4" y="14" width="6" height="6" rx="1.5" />
-          <rect x="14" y="14" width="6" height="6" rx="1.5" />
-        </svg>
-      );
-    case "review":
-      return (
-        <svg aria-hidden="true" viewBox="0 0 24 24">
-          <path d="M6 5.5A1.5 1.5 0 0 1 7.5 4h9A1.5 1.5 0 0 1 18 5.5v11A1.5 1.5 0 0 1 16.5 18H10l-4 4v-3.5A1.5 1.5 0 0 1 4.5 17V5.5Z" />
-          <path d="M8 8.5h8" />
-          <path d="M8 11.5h8" />
-          <path d="M8 14.5h5" />
-        </svg>
-      );
-    case "settings":
-      return (
-        <svg aria-hidden="true" viewBox="0 0 24 24">
-          <path d="M12 8.5A3.5 3.5 0 1 1 12 15.5A3.5 3.5 0 0 1 12 8.5Z" />
-          <path d="M4.5 12a7.5 7.5 0 0 1 .2-1.7l2-.4a6.7 6.7 0 0 1 .8-1.3l-1.2-1.7a8 8 0 0 1 2.4-2.4l1.7 1.2c.4-.3.9-.6 1.3-.8l.4-2A7.5 7.5 0 0 1 12 4.5c.6 0 1.1.1 1.7.2l.4 2c.5.2 1 .5 1.3.8l1.7-1.2a8 8 0 0 1 2.4 2.4l-1.2 1.7c.3.4.6.9.8 1.3l2 .4a7.5 7.5 0 0 1 0 3.4l-2 .4c-.2.5-.5 1-.8 1.3l1.2 1.7a8 8 0 0 1-2.4 2.4l-1.7-1.2c-.4.3-.9.6-1.3.8l-.4 2a7.5 7.5 0 0 1-3.4 0l-.4-2c-.5-.2-1-.5-1.3-.8l-1.7 1.2a8 8 0 0 1-2.4-2.4l1.2-1.7c-.3-.4-.6-.9-.8-1.3l-2-.4A7.5 7.5 0 0 1 4.5 12Z" />
-        </svg>
-      );
-    case "chat":
-    default:
-      return (
-        <svg aria-hidden="true" viewBox="0 0 24 24">
-          <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v7A2.5 2.5 0 0 1 16.5 16H9l-4 4v-4.5A2.5 2.5 0 0 1 5 13V6.5Z" />
-          <path d="M8 8.5h8" />
-          <path d="M8 11.5h5.5" />
-        </svg>
-      );
-  }
-}
-
-function BeginnerExpertToggle({
-  expertMode,
-  setExpertMode,
-}: {
-  expertMode: boolean;
-  setExpertMode: (value: boolean) => void;
-}) {
-  const { copy: ui } = useLocalization();
-
-  return (
-    <div className="mode-toggle" role="group" aria-label={`${ui.settings.beginner} / ${ui.settings.expert}`}>
-      <button
-        type="button"
-        className={expertMode ? "mode-toggle-button" : "mode-toggle-button mode-toggle-button-active"}
-        onClick={() => setExpertMode(false)}
-        aria-pressed={!expertMode}
-      >
-        {ui.settings.beginner}
-      </button>
-      <button
-        type="button"
-        className={expertMode ? "mode-toggle-button mode-toggle-button-active" : "mode-toggle-button"}
-        onClick={() => setExpertMode(true)}
-        aria-pressed={expertMode}
-      >
-        {ui.settings.expert}
-      </button>
-    </div>
-  );
-}
+const WORKSPACE_MODES: WorkspaceMode[] = ["chat", "github", "matrix", "routing", "review", "settings"];
 
 function mergeReviewItems(current: ReviewItem[], next: ReviewItem[]) {
   const remaining = current.filter(
@@ -208,7 +126,36 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function PublicPreview() {
+  return (
+    <main className="app-shell public-preview" data-testid="public-preview">
+      <section className="workspace-hero">
+        <div>
+          <p className="status-pill status-partial">WIP preview</p>
+          <h1>ModelGate</h1>
+          <p className="hero-copy">
+            Public preview shell. Governed workspace access stays separate from this route.
+          </p>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 export default function App() {
+  return shouldRenderConsole() ? <ConsoleShell /> : <PublicPreview />;
+}
+
+function shouldRenderConsole() {
+  if (typeof window === "undefined") {
+    return true;
+  }
+
+  const url = new URL(window.location.href);
+  return url.pathname === "/console" || url.searchParams.get("console") === "1";
+}
+
+function ConsoleShell() {
   const persisted = readPersistedShellState();
   const { locale, setLocale, copy: ui } = useLocalization();
   const appText = useMemo(
@@ -310,8 +257,7 @@ export default function App() {
   const [mode, setMode] = useState<WorkspaceMode>(persisted?.activeTab ?? "chat");
   const [expertMode, setExpertMode] = useState(persisted?.expertMode ?? false);
   const [workspaceState, setWorkspaceState] = useState(() => loadWorkspaceState());
-  const [githubAuthState, dispatchGitHubAuth] = useReducer(githubAuthReducer, undefined, createInitialGitHubAuthState);
-  const [githubPassword, setGitHubPassword] = useState("");
+  const [githubAuthState] = useReducer(githubAuthReducer, undefined, createInitialGitHubAuthState);
   const [backendHealthy, setBackendHealthy] = useState<boolean | null>(null);
   const [activeModelAlias, setActiveModelAlias] = useState<string | null>(null);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
@@ -338,7 +284,9 @@ export default function App() {
   const [matrixContext, setMatrixContext] = useState<MatrixWorkspaceStatus>(() => createDefaultMatrixContext());
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
-  const githubUnlocked = githubAuthState.status === "authenticated";
+  const [diagnosticsSnapshot, setDiagnosticsSnapshot] = useState<DiagnosticsResponse | null>(null);
+  const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
+  const githubUnlocked = true;
 
   useEffect(() => {
     let cancelled = false;
@@ -405,6 +353,20 @@ export default function App() {
           }),
         );
       }
+
+      try {
+        const diagnostics = await fetchDiagnostics();
+
+        if (!cancelled) {
+          setDiagnosticsSnapshot(diagnostics);
+          setDiagnosticsError(null);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setDiagnosticsSnapshot(null);
+          setDiagnosticsError(error instanceof Error ? error.message : "Diagnostics unavailable");
+        }
+      }
     }
 
     void loadConsoleState();
@@ -413,44 +375,6 @@ export default function App() {
       cancelled = true;
     };
   }, [appText]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadGitHubSession() {
-      dispatchGitHubAuth({
-        type: "session_check_started"
-      });
-
-      try {
-        const session = await fetchAuthSession();
-
-        if (cancelled) {
-          return;
-        }
-
-        dispatchGitHubAuth({
-          type: "session_check_succeeded",
-          authenticated: session.authenticated
-        });
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-
-      dispatchGitHubAuth({
-          type: "session_check_failed",
-          error: error instanceof Error ? error.message : ui.shell.statusError
-        });
-      }
-    }
-
-    void loadGitHubSession();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ui.shell.statusError]);
 
   useEffect(() => {
     persistShellState({
@@ -466,19 +390,15 @@ export default function App() {
   useEffect(() => {
     if (!expertMode) {
       setDiagnosticsOpen(false);
+      if (mode === "routing") {
+        setMode("chat");
+      }
     }
-  }, [expertMode]);
+  }, [expertMode, mode]);
 
   useEffect(() => {
     setDiagnosticsOpen(false);
   }, [mode]);
-
-  useEffect(() => {
-    if (!githubUnlocked) {
-      setGitHubContext(createDefaultGitHubContext());
-      setReviewItems((current) => current.filter((item) => item.source !== "github"));
-    }
-  }, [createDefaultGitHubContext, githubUnlocked]);
 
   const recordTelemetry = useCallback(
     (kind: TelemetryEntry["kind"], label: string, detail?: string) => {
@@ -606,56 +526,6 @@ export default function App() {
   const githubSession = (workspaceState.sessionsByWorkspace.github.find((session) => session.id === workspaceState.activeSessionIdByWorkspace.github) ?? workspaceState.sessionsByWorkspace.github[0]) as GitHubSession;
   const matrixSession = (workspaceState.sessionsByWorkspace.matrix.find((session) => session.id === workspaceState.activeSessionIdByWorkspace.matrix) ?? workspaceState.sessionsByWorkspace.matrix[0]) as MatrixSession;
 
-  const handleGitHubLogin = useCallback(async () => {
-    const password = githubPassword;
-
-    if (password.trim().length === 0 || githubAuthState.busy) {
-      return;
-    }
-
-    dispatchGitHubAuth({
-      type: "login_started"
-    });
-
-    try {
-      await loginAdmin(password);
-      dispatchGitHubAuth({
-        type: "login_succeeded"
-      });
-      setGitHubPassword("");
-    } catch (error) {
-      dispatchGitHubAuth({
-        type: "login_failed",
-        error: error instanceof Error ? describeGitHubAuthError(error.message) : ui.shell.statusError
-      });
-      setGitHubPassword("");
-    }
-  }, [githubAuthState.busy, githubPassword, ui.shell.statusError]);
-
-  const handleGitHubLogout = useCallback(async () => {
-    if (githubAuthState.busy) {
-      return;
-    }
-
-    dispatchGitHubAuth({
-      type: "logout_started"
-    });
-
-    try {
-      await logoutAdmin();
-      dispatchGitHubAuth({
-        type: "logout_succeeded"
-      });
-      setGitHubPassword("");
-      setGitHubContext(createDefaultGitHubContext());
-      removeModeReviewItems("github");
-    } catch (error) {
-      dispatchGitHubAuth({
-        type: "logout_failed",
-        error: error instanceof Error ? describeGitHubAuthError(error.message) : ui.shell.statusError
-      });
-    }
-  }, [createDefaultGitHubContext, githubAuthState.busy, removeModeReviewItems, ui.shell.statusError]);
 
   const chatPendingProposal = chatSession?.metadata.chatState.pendingProposal ?? null;
   const chatLatestReceipt = chatSession?.metadata.chatState.receipts.at(-1) ?? null;
@@ -775,12 +645,25 @@ export default function App() {
     { label: ui.settings.modelCardTitle, value: settingsTruthSnapshot.models.activeAlias },
   ];
 
+  const routingRows: StatusPanelRow[] = diagnosticsSnapshot
+    ? [
+        { label: "active_policy", value: diagnosticsSnapshot.routing.activePolicy },
+        { label: "fail_closed", value: String(diagnosticsSnapshot.routing.failClosed) },
+        { label: "fallbacks", value: String(diagnosticsSnapshot.routing.fallbackChain.length) },
+        { label: "log_enabled", value: String(diagnosticsSnapshot.routing.logEnabled) },
+      ]
+    : [
+        { label: "status", value: diagnosticsError ? "auth required" : "loading" },
+      ];
+
   const currentRows = useMemo(() => {
     switch (mode) {
       case "github":
         return githubRows;
       case "matrix":
         return matrixRows;
+      case "routing":
+        return routingRows;
       case "review":
         return reviewRows;
       case "settings":
@@ -788,7 +671,7 @@ export default function App() {
       default:
         return chatRows;
     }
-  }, [chatRows, githubRows, matrixRows, mode, reviewRows, settingsRows]);
+  }, [chatRows, githubRows, matrixRows, mode, reviewRows, routingRows, settingsRows]);
 
   const currentStatusBadge = useMemo(() => {
     switch (mode) {
@@ -850,6 +733,14 @@ export default function App() {
         }
 
         return ui.shell.statusReady;
+      case "routing":
+        return diagnosticsSnapshot
+          ? diagnosticsSnapshot.routing.failClosed
+            ? ui.shell.statusReady
+            : ui.shell.statusPartial
+          : diagnosticsError
+            ? ui.shell.statusError
+            : ui.shell.statusPartial;
       case "settings":
         if (backendHealthy === false) {
           return ui.shell.statusError;
@@ -902,6 +793,8 @@ export default function App() {
     githubContext.connectionLabel,
     githubContext.repositoryLabel,
     githubUnlocked,
+    diagnosticsError,
+    diagnosticsSnapshot,
     backendHealthy,
     activeModelAlias,
     matrixContext.approvalLabel,
@@ -965,6 +858,16 @@ export default function App() {
         }
 
         return reviewHasPending || reviewHasExecuting ? "partial" : "ready";
+      case "routing":
+        if (diagnosticsError) {
+          return "error";
+        }
+
+        if (!diagnosticsSnapshot) {
+          return "partial";
+        }
+
+        return diagnosticsSnapshot.routing.failClosed ? "ready" : "partial";
       case "settings":
         if (backendHealthy === false) {
           return "error";
@@ -1002,6 +905,8 @@ export default function App() {
     backendHealthy,
     chatLatestReceipt?.outcome,
     chatPendingProposal?.status,
+    diagnosticsError,
+    diagnosticsSnapshot,
     githubAuthState.error,
     githubAuthState.status,
     githubContext.approvalLabel,
@@ -1082,6 +987,16 @@ export default function App() {
         }
 
         return ui.review.ready;
+      case "routing":
+        if (diagnosticsError) {
+          return "Diagnostics require backend authorization. Browser remains read-only.";
+        }
+
+        if (!diagnosticsSnapshot) {
+          return "Routing diagnostics are loading.";
+        }
+
+        return "Alias-only routing policy loaded from /diagnostics.";
       case "settings":
         if (backendHealthy === false) {
           return ui.shell.healthUnavailableDetail;
@@ -1127,6 +1042,8 @@ export default function App() {
     backendHealthy,
     chatLatestReceipt?.outcome,
     chatPendingProposal?.status,
+    diagnosticsError,
+    diagnosticsSnapshot,
     githubAuthState.error,
     githubAuthState.status,
     githubContext.approvalLabel,
@@ -1196,6 +1113,8 @@ export default function App() {
         }
 
         return ui.review.ready;
+      case "routing":
+        return "Config: config/model-capabilities.yml + config/llm-router.yml. Provider IDs remain backend-only.";
       case "settings":
         if (backendHealthy === false) {
           return ui.shell.healthUnavailableDetail;
@@ -1237,6 +1156,8 @@ export default function App() {
     backendHealthy,
     chatLatestReceipt?.outcome,
     chatPendingProposal?.status,
+    diagnosticsError,
+    diagnosticsSnapshot,
     expertMode,
     githubAuthState.error,
     githubContext.approvalLabel,
@@ -1291,6 +1212,17 @@ export default function App() {
                       : ui.review.ready,
           },
         ];
+      case "routing":
+        return diagnosticsSnapshot
+          ? [
+              { label: "active_policy", value: diagnosticsSnapshot.routing.activePolicy },
+              { label: "fail_closed", value: String(diagnosticsSnapshot.routing.failClosed) },
+              { label: "allow_fallback", value: String(diagnosticsSnapshot.routing.allowFallback) },
+              { label: "free_only", value: String(diagnosticsSnapshot.routing.freeOnly) },
+            ]
+          : [
+              { label: "diagnostics", value: diagnosticsError ? "auth required" : "loading" },
+            ];
       case "settings":
         return [
           { label: ui.settings.backend, value: settingsTruthSnapshot.backend.label },
@@ -1309,6 +1241,8 @@ export default function App() {
     chatPendingProposal?.status,
     chatSession?.metadata.chatState.activeRoute?.selectedAlias,
     chatSession?.metadata.chatState.receipts.length,
+    diagnosticsError,
+    diagnosticsSnapshot,
     expertMode,
     githubAuthState.error,
     githubAuthState.status,
@@ -1500,7 +1434,7 @@ export default function App() {
       onTelemetry={recordTelemetry}
       onSessionChange={handleChatSessionChange}
     />
-  ) : mode === "github" && githubUnlocked ? (
+  ) : mode === "github" ? (
     <GitHubWorkspace
       key={githubSession?.id ?? "github-session"}
       session={githubSession}
@@ -1510,15 +1444,6 @@ export default function App() {
       onContextChange={setGitHubContext}
       onReviewItemsChange={updateGitHubReviewItems}
       onSessionChange={handleGitHubSessionChange}
-    />
-  ) : mode === "github" ? (
-    <GitHubAdminLogin
-      authState={githubAuthState}
-      password={githubPassword}
-      onPasswordChange={setGitHubPassword}
-      onSubmit={() => {
-        void handleGitHubLogin();
-      }}
     />
   ) : mode === "matrix" ? (
     <MatrixWorkspace
@@ -1533,6 +1458,8 @@ export default function App() {
     />
   ) : mode === "review" ? (
     <ReviewWorkspace items={reviewItems} expertMode={expertMode} />
+  ) : mode === "routing" ? (
+    <RoutingView diagnosticsSnapshot={diagnosticsSnapshot} diagnosticsError={diagnosticsError} />
   ) : (
     <SettingsWorkspace
       expertMode={expertMode}
@@ -1540,124 +1467,48 @@ export default function App() {
       diagnostics={telemetry as DiagnosticEntry[]}
       onClearDiagnostics={() => setTelemetry([])}
       truthSnapshot={settingsTruthSnapshot}
+      diagnosticsSnapshot={diagnosticsSnapshot}
+      diagnosticsError={diagnosticsError}
     />
   );
   const statusToneForBadge = currentStatusTone === "error" ? "error" : currentStatusTone === "ready" ? "ready" : "partial";
   const accountTone = githubUnlocked ? "ready" : githubAuthState.error ? "error" : "partial";
+  const accountLabel = githubUnlocked
+    ? ui.shell.accountAuthenticated
+    : githubAuthState.status === "loading"
+      ? ui.shell.accountChecking
+      : ui.shell.accountLocked;
+  const visibleWorkspaceModes = expertMode
+    ? WORKSPACE_MODES
+    : WORKSPACE_MODES.filter((workspaceMode) => workspaceMode !== "routing");
 
   return (
     <main className="app-shell app-shell-console" data-testid="app-shell">
-      <header className="global-header global-header-shell">
-        <div className="brand-block">
-          <p className="app-kicker">{ui.shell.appKicker}</p>
-          <h1>{ui.shell.appTitle}</h1>
-          <p className="app-deck">{ui.shell.appDeck}</p>
-        </div>
-
-        <div className="header-actions">
-          <div className="shell-language-toggle" role="group" aria-label={ui.shell.languageLabel}>
-            <button
-              type="button"
-              className={locale === "en" ? "secondary-button shell-language-button shell-language-button-active" : "secondary-button shell-language-button"}
-              onClick={() => setLocale("en")}
-              aria-pressed={locale === "en"}
-            >
-              {ui.shell.languageOptionEnglish}
-            </button>
-            <button
-              type="button"
-              className={locale === "de" ? "secondary-button shell-language-button shell-language-button-active" : "secondary-button shell-language-button"}
-              onClick={() => setLocale("de")}
-              aria-pressed={locale === "de"}
-            >
-              {ui.shell.languageOptionGerman}
-            </button>
-          </div>
-          <StatusBadge tone={healthState.tone}>{ui.shell.backendPrefix} {healthState.label}</StatusBadge>
-        </div>
-      </header>
+      <Topbar locale={locale} onLocaleChange={setLocale} health={healthState} />
 
       <section className="console-layout">
-        <aside className="workspace-sidebar shell-left-rail">
-          <ShellCard variant="rail" className="shell-left-brand">
-            <p className="app-kicker">{ui.shell.workspaceConsoleKicker}</p>
-            <strong>{ui.shell.workspaceConsoleTitle}</strong>
-            <MutedSystemCopy>{ui.shell.workspaceConsoleNote}</MutedSystemCopy>
-          </ShellCard>
-
-          <ShellCard variant="rail" className="shell-nav-card">
-            <SectionLabel>{ui.shell.workspacesLabel}</SectionLabel>
-            <nav className="sidebar-nav" aria-label={ui.shell.workspacesLabel}>
-              {WORKSPACE_MODES.map((workspaceMode) => (
-                <button
-                  key={workspaceMode}
-                  type="button"
-                  className={mode === workspaceMode ? "workspace-tab workspace-tab-active workspace-tab-vertical workspace-tab-shell-active" : "workspace-tab workspace-tab-vertical"}
-                  onClick={() => handleWorkspaceTabSelect(workspaceMode)}
-                  aria-current={mode === workspaceMode ? "page" : undefined}
-                  data-testid={`tab-${workspaceMode}`}
-                >
-                  <WorkspaceIcon mode={workspaceMode} />
-                  <span>
-                    <strong>{ui.shell.workspaceTabs[workspaceMode].label}</strong>
-                    <small>{ui.shell.workspaceTabs[workspaceMode].description}</small>
-                  </span>
-                </button>
-              ))}
-            </nav>
-          </ShellCard>
-
-          <ShellCard variant="muted" className="shell-session-identity-card">
-            <SectionLabel>{ui.shell.sessionLabel}</SectionLabel>
-            <strong>{activeSession?.title ?? ui.shell.noActiveSession}</strong>
-            <MutedSystemCopy>{workspaceName}</MutedSystemCopy>
-            <div className="shell-session-meta">
-              <StatusBadge tone={statusToneForBadge}>{getSessionStatusLabel(locale, activeSession?.status ?? "draft")}</StatusBadge>
-              {activeSession?.archived ? <StatusBadge tone="muted">{ui.shell.archivedBadge}</StatusBadge> : null}
-            </div>
-            {expertMode && activeSession?.id ? (
-              <MutedSystemCopy className="shell-session-id">{ui.shell.sessionIdPrefix}: {activeSession.id}</MutedSystemCopy>
-            ) : null}
-
-            <div className="shell-disclosure-control">
-              <SectionLabel>{ui.shell.disclosureLabel}</SectionLabel>
-              <BeginnerExpertToggle expertMode={expertMode} setExpertMode={setExpertMode} />
-            </div>
-
-            <div className="shell-account-block">
-              <SectionLabel>{ui.shell.accountLabel}</SectionLabel>
-              <div className="shell-account-row">
-                <StatusBadge tone={accountTone}>
-                  {githubUnlocked ? ui.shell.accountAuthenticated : githubAuthState.status === "loading" ? ui.shell.accountChecking : ui.shell.accountLocked}
-                </StatusBadge>
-                {githubUnlocked ? (
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={() => {
-                      void handleGitHubLogout();
-                    }}
-                    disabled={githubAuthState.busy}
-                  >
-                    {githubAuthState.busy ? `${ui.shell.accountLogout}...` : ui.shell.accountLogout}
-                  </button>
-                ) : null}
-              </div>
-              {githubAuthState.error ? <MutedSystemCopy>{githubAuthState.error}</MutedSystemCopy> : null}
-            </div>
-          </ShellCard>
-
-          <SessionList
-            workspace={sessionWorkspace}
-            sessions={sessionWorkspaceSessions}
-            activeSessionId={sessionWorkspaceActiveId}
-            onCreate={() => handleWorkspaceSessionCreate(sessionWorkspace)}
-            onSelect={(sessionId) => handleWorkspaceSessionSelect(sessionWorkspace, sessionId)}
-            onArchive={(sessionId) => handleWorkspaceSessionArchive(sessionWorkspace, sessionId)}
-            onDelete={(sessionId) => handleWorkspaceSessionDelete(sessionWorkspace, sessionId)}
-            headerNote={appText.sessionHeaderNote}
-          />
-        </aside>
+        <Sidebar
+          locale={locale}
+          workspaceModes={visibleWorkspaceModes}
+          activeMode={mode}
+          onWorkspaceSelect={handleWorkspaceTabSelect}
+          workspaceName={workspaceName}
+          activeSession={activeSession}
+          sessionStatusTone={statusToneForBadge}
+          expertMode={expertMode}
+          onExpertModeChange={setExpertMode}
+          accountTone={accountTone}
+          accountLabel={accountLabel}
+          accountError={githubAuthState.error}
+          sessionWorkspace={sessionWorkspace}
+          sessionWorkspaceSessions={sessionWorkspaceSessions}
+          sessionWorkspaceActiveId={sessionWorkspaceActiveId}
+          onSessionCreate={() => handleWorkspaceSessionCreate(sessionWorkspace)}
+          onSessionSelect={(sessionId) => handleWorkspaceSessionSelect(sessionWorkspace, sessionId)}
+          onSessionArchive={(sessionId) => handleWorkspaceSessionArchive(sessionWorkspace, sessionId)}
+          onSessionDelete={(sessionId) => handleWorkspaceSessionDelete(sessionWorkspace, sessionId)}
+          sessionHeaderNote={appText.sessionHeaderNote}
+        />
 
         <section className="console-main shell-center-main">
           <ShellCard variant="base" className="workspace-frame-card">
@@ -1673,101 +1524,27 @@ export default function App() {
           </ShellCard>
         </section>
 
-        <aside className="workspace-context truth-rail">
-          <TruthRailSection
-            title={ui.shell.healthTitle}
-            testId="truth-rail-health"
-            badge={<StatusBadge tone={healthState.tone}>{healthState.label}</StatusBadge>}
-          >
-            <MutedSystemCopy>{healthState.detail}</MutedSystemCopy>
-            {expertMode ? (
-              <div className="truth-rail-pairs">
-                <div>
-                  <span>{ui.shell.modeLabel}</span>
-                  <strong>{workspaceName}</strong>
-                </div>
-                <div>
-                  <span>{ui.shell.publicAliasLabel}</span>
-                  <strong>{activeModelAlias ?? ui.common.na}</strong>
-                </div>
-              </div>
-            ) : null}
-          </TruthRailSection>
-
-          <TruthRailSection
-            title={ui.shell.sessionLabel}
-            testId="truth-rail-session"
-            badge={<StatusBadge tone={statusToneForBadge}>{getSessionStatusLabel(locale, activeSession?.status ?? "draft")}</StatusBadge>}
-          >
-            <p className="truth-rail-keyline">{activeSession?.title ?? ui.shell.noActiveSession}</p>
-            <MutedSystemCopy>
-              {ui.shell.workspacesLabel}: {workspaceName}
-              {activeSession?.updatedAt ? ` · ${ui.sessionList.updated} ${new Date(activeSession.updatedAt).toLocaleString()}` : ""}
-            </MutedSystemCopy>
-            {expertMode && activeSession?.id ? <MutedSystemCopy>{ui.shell.sessionIdPrefix}: {activeSession.id}</MutedSystemCopy> : null}
-          </TruthRailSection>
-
-          {approvalSummary.hasApprovals ? (
-            <TruthRailSection
-              title={ui.shell.pendingApprovalsTitle}
-              testId="truth-rail-approvals"
-              badge={<StatusBadge tone={approvalSummary.stale > 0 ? "error" : "partial"}>{approvalSummary.pending}</StatusBadge>}
-            >
-              <p className="truth-rail-keyline">
-                {ui.shell.pendingApprovalsSummary(approvalSummary.pending, approvalSummary.stale)}
-              </p>
-              <MutedSystemCopy>
-                {approvalSummary.chatPending > 0 ? ui.shell.pendingApprovalsChat : ui.shell.pendingApprovalsSeparate}
-              </MutedSystemCopy>
-            </TruthRailSection>
-          ) : null}
-
-          <TruthRailSection
-            title={workspaceContextTitle}
-            testId="truth-rail-workspace-context"
-            badge={<StatusBadge tone={statusToneForBadge}>{currentStatusBadge}</StatusBadge>}
-          >
-            <div className="truth-rail-pairs">
-              {currentRows.map((row) => (
-                <div key={row.label}>
-                  <span>{row.label}</span>
-                  <strong>{row.value}</strong>
-                </div>
-              ))}
-            </div>
-            <MutedSystemCopy>{currentHelperText}</MutedSystemCopy>
-          </TruthRailSection>
-
-          <TruthRailSection title={ui.shell.diagnosticsLabel} testId="truth-rail-diagnostics">
-            <MutedSystemCopy>
-              {diagnosticsAccessible ? ui.shell.diagnosticsAvailable : ui.shell.diagnosticsHidden}
-            </MutedSystemCopy>
-            {!diagnosticsAccessible ? (
-              <button type="button" className="secondary-button" onClick={() => setExpertMode(true)}>
-                {ui.shell.activateExpert}
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => setDiagnosticsOpen((current) => !current)}
-              >
-                {diagnosticsOpen ? ui.shell.diagnosticsHide : ui.shell.diagnosticsShow}
-              </button>
-            )}
-
-            <DiagnosticsDrawer
-              expertMode={diagnosticsAccessible}
-              title={diagnosticsTitle}
-              rows={currentExpertRows}
-              className="shell-diagnostics-drawer"
-              open={diagnosticsOpen}
-              onToggle={setDiagnosticsOpen}
-            >
-              {currentExpertChildren}
-            </DiagnosticsDrawer>
-          </TruthRailSection>
-        </aside>
+        <TruthRail
+          locale={locale}
+          expertMode={expertMode}
+          healthState={healthState}
+          workspaceName={workspaceName}
+          activeModelAlias={activeModelAlias}
+          activeSession={activeSession}
+          statusTone={statusToneForBadge}
+          currentStatusBadge={currentStatusBadge}
+          approvalSummary={approvalSummary}
+          workspaceContextTitle={workspaceContextTitle}
+          currentRows={currentRows}
+          currentHelperText={currentHelperText}
+          diagnosticsAccessible={diagnosticsAccessible}
+          diagnosticsOpen={diagnosticsOpen}
+          diagnosticsTitle={diagnosticsTitle}
+          diagnosticsRows={currentExpertRows}
+          diagnosticsChildren={currentExpertChildren}
+          onActivateExpert={() => setExpertMode(true)}
+          onDiagnosticsToggle={setDiagnosticsOpen}
+        />
       </section>
     </main>
   );

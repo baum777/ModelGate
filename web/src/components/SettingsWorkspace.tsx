@@ -1,4 +1,6 @@
 import React from "react";
+import type { DiagnosticsResponse } from "../lib/api.js";
+import { DiagnosticsRow, type DiagnosticsRowState } from "./DiagnosticsRow.js";
 import { useLocalization } from "../lib/localization.js";
 
 export type DiagnosticEntry = {
@@ -37,6 +39,8 @@ type SettingsWorkspaceProps = {
   diagnostics: DiagnosticEntry[];
   onClearDiagnostics: () => void;
   truthSnapshot: SettingsTruthSnapshot;
+  diagnosticsSnapshot: DiagnosticsResponse | null;
+  diagnosticsError: string | null;
 };
 
 export function SettingsWorkspace({
@@ -45,8 +49,47 @@ export function SettingsWorkspace({
   diagnostics,
   onClearDiagnostics,
   truthSnapshot,
+  diagnosticsSnapshot,
+  diagnosticsError,
 }: SettingsWorkspaceProps) {
   const { copy: ui } = useLocalization();
+  const diagnosticRows = [
+    {
+      label: ui.settings.githubConnection,
+      caption: "OAuth status from /diagnostics. Token is backend-only.",
+      value: diagnosticsSnapshot?.github.status ?? (diagnosticsError ? "auth required" : "loading"),
+      state: diagnosticsSnapshot?.github.status === "ok" ? "ok" : diagnosticsError ? "error" : "missing"
+    },
+    {
+      label: ui.settings.githubScope,
+      caption: "Allowed repositories from backend configuration.",
+      value: diagnosticsSnapshot ? `${diagnosticsSnapshot.github.repoCount} repos` : "not configured",
+      state: diagnosticsSnapshot && diagnosticsSnapshot.github.repoCount > 0 ? "ok" : "missing"
+    },
+    {
+      label: ui.settings.matrixConnection,
+      caption: "Matrix token status. Stored server-side only.",
+      value: diagnosticsSnapshot?.matrix.status ?? (diagnosticsError ? "auth required" : "loading"),
+      state: diagnosticsSnapshot?.matrix.status === "ok" ? "ok" : diagnosticsSnapshot?.matrix.status === "error" || diagnosticsError ? "error" : "missing"
+    },
+    {
+      label: ui.settings.matrixHomeserver,
+      caption: "Configured origin status only.",
+      value: diagnosticsSnapshot?.matrix.homeserverConfigured ? "configured" : "not configured",
+      state: diagnosticsSnapshot?.matrix.homeserverConfigured ? "ok" : "missing"
+    },
+    {
+      label: ui.settings.backend,
+      caption: "Backend diagnostics endpoint.",
+      value: diagnosticsSnapshot?.backend.status ?? (diagnosticsError ? "auth required" : "loading"),
+      state: diagnosticsSnapshot?.backend.status === "ok" ? "ok" : diagnosticsError ? "error" : "degraded"
+    }
+  ] satisfies Array<{
+    label: string;
+    caption: string;
+    value: string | number;
+    state: DiagnosticsRowState;
+  }>;
 
   return (
     <section className="workspace-panel settings-workspace" data-testid="settings-workspace">
@@ -165,10 +208,15 @@ export function SettingsWorkspace({
           <header className="card-header">
             <div>
               <span>{ui.settings.diagnosticsCardTitle}</span>
-              <strong>{ui.settings.diagnosticsHidden}</strong>
+              <strong>/diagnostics</strong>
             </div>
           </header>
-          <p className="muted-copy">{ui.settings.diagnosticsHidden}</p>
+          <p className="muted-copy">Status only. No secret values, provider IDs, or admin-key inputs are rendered.</p>
+          <div className="diagnostics-status-list">
+            {diagnosticRows.map((row) => (
+              <DiagnosticsRow key={row.label} {...row} />
+            ))}
+          </div>
           {expertMode ? (
             <div className="diagnostic-feed" aria-live="polite">
               {diagnostics.length === 0 ? (

@@ -5,11 +5,17 @@
   "functions": {
     "api/[...path].ts": {
       "maxDuration": 60,
-      "includeFiles": "config/*.yml"
+      "includeFiles": [
+        "config/llm-router.yml",
+        "config/model-capabilities.yml"
+      ]
     },
     "api/matrix/[...path].ts": {
       "maxDuration": 60,
-      "includeFiles": "config/*.yml"
+      "includeFiles": [
+        "config/llm-router.yml",
+        "config/model-capabilities.yml"
+      ]
     }
   },
   "rewrites": [
