@@ -4085,3 +4085,48 @@ code {
     max-height: 120px;
   }
 }
+
+/* Settings viewport resilience: keep the governed shell usable on small desktop widths. */
+.settings-workspace,
+.settings-workspace .settings-grid,
+.settings-workspace .workspace-card,
+.settings-adapter-row,
+.settings-adapter-main,
+.settings-adapter-main > div,
+.settings-adapter-actions,
+.settings-adapter-details,
+.settings-workspace .detail-grid,
+.settings-workspace .detail-grid div {
+  min-width: 0;
+}
+
+.settings-workspace .card-header strong,
+.settings-workspace .detail-grid strong,
+.settings-adapter-main h2,
+.settings-adapter-main p {
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
+.settings-adapter-main > div {
+  align-items: flex-start;
+}
+
+.settings-adapter-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 1200px) {
+  .console-layout {
+    grid-template-columns: 188px minmax(0, 1fr);
+  }
+
+  .workspace-context {
+    display: none;
+  }
+
+  .settings-workspace .settings-grid {
+    grid-template-columns: 1fr;
+  }
+}
