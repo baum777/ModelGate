@@ -117,8 +117,6 @@ type IntegrationAuthStoreOptions = {
 
 const DEFAULT_STATE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_STORE_FILE_PATH = ".local-ai/state/integration-auth-store.json";
-const DEFAULT_FALLBACK_KEY_ID = "model_gate_session_secret";
-const DEFAULT_FALLBACK_KEY_VERSION = 1;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -205,12 +203,6 @@ export function createIntegrationAuthStoreSelection(env: AppEnv): IntegrationAut
         keyMaterial: currentKeyMaterial
       };
     }
-  } else if (env.MODEL_GATE_SESSION_SECRET.trim().length > 0) {
-    current = {
-      keyId: DEFAULT_FALLBACK_KEY_ID,
-      keyVersion: DEFAULT_FALLBACK_KEY_VERSION,
-      keyMaterial: env.MODEL_GATE_SESSION_SECRET.trim()
-    };
   }
 
   return {
@@ -408,14 +400,7 @@ export function createIntegrationAuthStore(options: IntegrationAuthStoreOptions 
     .map((config) => normalizeCredentialKeyConfig(config))
     .filter((config): config is IntegrationCredentialKey => config !== null);
 
-  const fallbackLegacyKey = !explicitCurrentKey && explicitPreviousKeys.length === 0 && options.encryptionSecret?.trim()
-    ? normalizeCredentialKeyConfig({
-      keyId: DEFAULT_FALLBACK_KEY_ID,
-      keyVersion: DEFAULT_FALLBACK_KEY_VERSION,
-      keyMaterial: options.encryptionSecret
-    })
-    : null;
-  const currentEncryptionKey = explicitCurrentKey ?? fallbackLegacyKey;
+  const currentEncryptionKey = explicitCurrentKey;
   const decryptionKeys = new Map<string, IntegrationCredentialKey>();
 
   if (currentEncryptionKey) {

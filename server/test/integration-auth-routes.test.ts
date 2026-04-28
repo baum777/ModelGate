@@ -1,7 +1,21 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { createMockOpenRouterClient, createTestEnv, createTestMatrixConfig } from "../test-support/helpers.js";
+
+const TEST_ENCRYPTION_KEY = {
+  INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID: "integration-auth-test",
+  INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_VERSION: "1",
+  INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY: "integration-auth-test-secret"
+};
+
+function createTempStorePath() {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "modelgate-integration-auth-routes-"));
+  return path.join(directory, "integration-auth-store.json");
+}
 
 function readSetCookie(response: { headers: Record<string, unknown> }) {
   const header = response.headers["set-cookie"];
@@ -323,7 +337,8 @@ test("real GitHub OAuth callback stores a user-connected credential source", asy
   const env = createTestEnv({
     GITHUB_OAUTH_CLIENT_ID: "github-client-id",
     GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
-    MODEL_GATE_SESSION_SECRET: "real-oauth-session-secret"
+    MODEL_GATE_SESSION_SECRET: "real-oauth-session-secret",
+    ...TEST_ENCRYPTION_KEY
   });
 
   const app = createApp({
@@ -410,7 +425,8 @@ test("real GitHub OAuth callback stores a user-connected credential source", asy
 test("real Matrix login-token callback stores a user-connected credential source", async (t) => {
   const env = createTestEnv({
     MATRIX_LOGIN_TOKEN_TYPE: "m.login.token",
-    MODEL_GATE_SESSION_SECRET: "real-matrix-session-secret"
+    MODEL_GATE_SESSION_SECRET: "real-matrix-session-secret",
+    ...TEST_ENCRYPTION_KEY
   });
 
   const app = createApp({
@@ -603,7 +619,8 @@ test("real github reverify maps upstream 401 to auth_expired status", async (t) 
   const env = createTestEnv({
     GITHUB_OAUTH_CLIENT_ID: "github-client-id",
     GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
-    MODEL_GATE_SESSION_SECRET: "github-reverify-session-secret"
+    MODEL_GATE_SESSION_SECRET: "github-reverify-session-secret",
+    ...TEST_ENCRYPTION_KEY
   });
 
   let userCalls = 0;
@@ -773,6 +790,76 @@ test("github callback fails closed when OAuth is denied by the provider", async 
   assert.equal(statusPayload.github.credentialSource, "not_connected");
 });
 
+test("github start fails closed when OAuth config is partial instead of falling back to stub", async (t) => {
+  const app = createApp({
+    env: createTestEnv({
+      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
+      GITHUB_OAUTH_CLIENT_SECRET: ""
+    }),
+    openRouter: createMockOpenRouterClient(),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const start = await app.inject({
+    method: "GET",
+    url: "/api/auth/github/start"
+  });
+
+  assert.equal(start.statusCode, 503);
+  const payload = JSON.parse(start.body) as {
+    error: {
+      code: string;
+    };
+  };
+  assert.equal(payload.error.code, "missing_server_config");
+});
+
+test("github callback fails closed when OAuth code is missing in real credential mode", async (t) => {
+  const app = createApp({
+    env: createTestEnv({
+      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
+      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
+      ...TEST_ENCRYPTION_KEY
+    }),
+    openRouter: createMockOpenRouterClient(),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const start = await app.inject({
+    method: "GET",
+    url: "/api/auth/github/start"
+  });
+  const sessionCookie = readSetCookie(start);
+  const state = readGitHubStateFromAuthorizeLocation(String(start.headers.location ?? ""));
+
+  assert.ok(sessionCookie);
+  assert.ok(state);
+
+  const callback = await app.inject({
+    method: "GET",
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}`,
+    headers: {
+      cookie: sessionCookie ?? ""
+    }
+  });
+
+  assert.equal(callback.statusCode, 502);
+  const payload = JSON.parse(callback.body) as {
+    error: {
+      code: string;
+    };
+  };
+  assert.equal(payload.error.code, "callback_failed");
+});
+
 test("github callback fails closed when oauth code exchange is invalid", async (t) => {
   const app = createApp({
     env: createTestEnv({
@@ -935,6 +1022,142 @@ test("matrix start fails closed when SSO login flow is not supported", async (t)
     };
   };
   assert.equal(payload.error.code, "sso_not_supported");
+});
+
+test("matrix start fails closed when Matrix auth config is enabled but incomplete", async (t) => {
+  const app = createApp({
+    env: createTestEnv(),
+    matrixConfig: createTestMatrixConfig({
+      enabled: true,
+      ready: false,
+      baseUrl: null,
+      homeserverUrl: null,
+      accessToken: null,
+      issues: ["MATRIX_BASE_URL is required when MATRIX_ENABLED=true"]
+    }),
+    openRouter: createMockOpenRouterClient(),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const start = await app.inject({
+    method: "GET",
+    url: "/api/auth/matrix/start"
+  });
+
+  assert.equal(start.statusCode, 503);
+  const payload = JSON.parse(start.body) as {
+    error: {
+      code: string;
+    };
+  };
+  assert.equal(payload.error.code, "missing_server_config");
+});
+
+test("matrix start fails closed when homeserver login flow response is malformed", async (t) => {
+  const app = createApp({
+    env: createTestEnv(),
+    matrixConfig: createTestMatrixConfig({
+      enabled: true,
+      ready: true,
+      baseUrl: "https://matrix.example",
+      homeserverUrl: "https://matrix.example"
+    }),
+    openRouter: createMockOpenRouterClient(),
+    integrationFetch: async (input, init) => {
+      const url = String(input);
+
+      if (url === "https://matrix.example/_matrix/client/v3/login" && (!init || init.method === "GET")) {
+        return new Response(JSON.stringify({
+          invalid: true
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      return new Response(null, { status: 404 });
+    },
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const start = await app.inject({
+    method: "GET",
+    url: "/api/auth/matrix/start"
+  });
+
+  assert.equal(start.statusCode, 502);
+  const payload = JSON.parse(start.body) as {
+    error: {
+      code: string;
+    };
+  };
+  assert.equal(payload.error.code, "callback_failed");
+});
+
+test("matrix callback fails closed when login is denied by the provider", async (t) => {
+  const app = createApp({
+    env: createTestEnv(),
+    matrixConfig: createTestMatrixConfig({
+      enabled: true,
+      ready: true,
+      baseUrl: "https://matrix.example",
+      homeserverUrl: "https://matrix.example"
+    }),
+    openRouter: createMockOpenRouterClient(),
+    integrationFetch: async (input, init) => {
+      const url = String(input);
+
+      if (url === "https://matrix.example/_matrix/client/v3/login" && (!init || init.method === "GET")) {
+        return new Response(JSON.stringify({
+          flows: [{ type: "m.login.sso" }]
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      return new Response(null, { status: 404 });
+    },
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const start = await app.inject({
+    method: "GET",
+    url: "/api/auth/matrix/start"
+  });
+  const sessionCookie = readSetCookie(start);
+  const state = readMatrixStateFromStartLocation(String(start.headers.location ?? ""));
+
+  assert.ok(sessionCookie);
+  assert.ok(state);
+
+  const callback = await app.inject({
+    method: "GET",
+    url: `/api/auth/matrix/callback?state=${encodeURIComponent(state ?? "")}&error=access_denied`,
+    headers: {
+      cookie: sessionCookie ?? ""
+    }
+  });
+
+  assert.equal(callback.statusCode, 502);
+  const payload = JSON.parse(callback.body) as {
+    error: {
+      code: string;
+    };
+  };
+  assert.equal(payload.error.code, "callback_failed");
 });
 
 test("matrix callback fails closed when login-token exchange is partial", async (t) => {
@@ -1225,4 +1448,243 @@ test("configured providers fail closed when credential encryption is unavailable
 
   assert.equal(statusPayload.github.credentialSource, "not_connected");
   assert.equal(statusPayload.github.lastErrorCode, "missing_server_config");
+});
+
+test("matrix real credential callback fails closed when credential encryption is unavailable", async (t) => {
+  const app = createApp({
+    env: createTestEnv({
+      MATRIX_LOGIN_TOKEN_TYPE: "m.login.token",
+      MODEL_GATE_SESSION_SECRET: "",
+      INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY: "",
+      INTEGRATION_AUTH_ENCRYPTION_PREVIOUS_KEYS: ""
+    }),
+    matrixConfig: createTestMatrixConfig({
+      enabled: true,
+      ready: true,
+      baseUrl: "https://matrix.example",
+      homeserverUrl: "https://matrix.example"
+    }),
+    openRouter: createMockOpenRouterClient(),
+    integrationFetch: async (input, init) => {
+      const url = String(input);
+
+      if (url === "https://matrix.example/_matrix/client/v3/login" && (!init || init.method === "GET")) {
+        return new Response(JSON.stringify({
+          flows: [{ type: "m.login.sso" }]
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      if (url === "https://matrix.example/_matrix/client/v3/login" && init?.method === "POST") {
+        return new Response(JSON.stringify({
+          access_token: "matrix_access_token",
+          user_id: "@user:matrix.example",
+          device_id: "DEVICE"
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      return new Response(null, { status: 404 });
+    },
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const start = await app.inject({
+    method: "GET",
+    url: "/api/auth/matrix/start"
+  });
+  const sessionCookie = readSetCookie(start);
+  const state = readMatrixStateFromStartLocation(String(start.headers.location ?? ""));
+
+  assert.ok(sessionCookie);
+  assert.ok(state);
+
+  const callback = await app.inject({
+    method: "GET",
+    url: `/api/auth/matrix/callback?state=${encodeURIComponent(state ?? "")}&loginToken=real_login_token`,
+    headers: {
+      cookie: sessionCookie ?? ""
+    }
+  });
+
+  assert.equal(callback.statusCode, 503);
+  const payload = JSON.parse(callback.body) as {
+    error: {
+      code: string;
+    };
+  };
+  assert.equal(payload.error.code, "missing_server_config");
+});
+
+test("github disconnect clears durable user credential without exposing tokens", async (t) => {
+  const storePath = createTempStorePath();
+  const app = createApp({
+    env: createTestEnv({
+      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
+      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
+      INTEGRATION_AUTH_STORE_MODE: "file",
+      INTEGRATION_AUTH_STORE_FILE_PATH: storePath,
+      ...TEST_ENCRYPTION_KEY
+    }),
+    openRouter: createMockOpenRouterClient(),
+    integrationFetch: async (input) => {
+      const url = String(input);
+
+      if (url.startsWith("https://github.com/login/oauth/access_token")) {
+        return new Response(JSON.stringify({
+          access_token: "gho_durable_disconnect_token",
+          token_type: "bearer",
+          scope: "repo,read:user"
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      if (url === "https://api.github.com/user") {
+        return new Response(JSON.stringify({
+          login: "octocat"
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      return new Response(null, { status: 404 });
+    },
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const start = await app.inject({
+    method: "GET",
+    url: "/api/auth/github/start"
+  });
+  const sessionCookie = readSetCookie(start);
+  const state = readGitHubStateFromAuthorizeLocation(String(start.headers.location ?? ""));
+
+  assert.ok(sessionCookie);
+  assert.ok(state);
+
+  const callback = await app.inject({
+    method: "GET",
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=real_code`,
+    headers: {
+      cookie: sessionCookie ?? ""
+    }
+  });
+  assert.equal(callback.statusCode, 302);
+  assert.doesNotMatch(fs.readFileSync(storePath, "utf8"), /gho_durable_disconnect_token/);
+
+  const disconnect = await app.inject({
+    method: "POST",
+    url: "/api/auth/github/disconnect",
+    headers: {
+      cookie: sessionCookie ?? ""
+    }
+  });
+  assert.equal(disconnect.statusCode, 200);
+
+  const snapshot = JSON.parse(fs.readFileSync(storePath, "utf8")) as {
+    credentials: Array<{
+      providers: Record<string, unknown>;
+    }>;
+  };
+  assert.equal(snapshot.credentials.some((entry) => "github" in entry.providers), false);
+});
+
+test("matrix disconnect clears durable user credential without exposing tokens", async (t) => {
+  const storePath = createTempStorePath();
+  const app = createApp({
+    env: createTestEnv({
+      MATRIX_LOGIN_TOKEN_TYPE: "m.login.token",
+      INTEGRATION_AUTH_STORE_MODE: "file",
+      INTEGRATION_AUTH_STORE_FILE_PATH: storePath,
+      ...TEST_ENCRYPTION_KEY
+    }),
+    matrixConfig: createTestMatrixConfig({
+      enabled: true,
+      ready: true,
+      baseUrl: "https://matrix.example",
+      homeserverUrl: "https://matrix.example"
+    }),
+    openRouter: createMockOpenRouterClient(),
+    integrationFetch: async (input, init) => {
+      const url = String(input);
+
+      if (url === "https://matrix.example/_matrix/client/v3/login" && (!init || init.method === "GET")) {
+        return new Response(JSON.stringify({
+          flows: [{ type: "m.login.sso" }]
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      if (url === "https://matrix.example/_matrix/client/v3/login" && init?.method === "POST") {
+        return new Response(JSON.stringify({
+          access_token: "matrix_durable_disconnect_token",
+          user_id: "@user:matrix.example",
+          device_id: "DEVICE"
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      return new Response(null, { status: 404 });
+    },
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const start = await app.inject({
+    method: "GET",
+    url: "/api/auth/matrix/start"
+  });
+  const sessionCookie = readSetCookie(start);
+  const state = readMatrixStateFromStartLocation(String(start.headers.location ?? ""));
+
+  assert.ok(sessionCookie);
+  assert.ok(state);
+
+  const callback = await app.inject({
+    method: "GET",
+    url: `/api/auth/matrix/callback?state=${encodeURIComponent(state ?? "")}&loginToken=real_login_token`,
+    headers: {
+      cookie: sessionCookie ?? ""
+    }
+  });
+  assert.equal(callback.statusCode, 302);
+  assert.doesNotMatch(fs.readFileSync(storePath, "utf8"), /matrix_durable_disconnect_token/);
+
+  const disconnect = await app.inject({
+    method: "POST",
+    url: "/api/auth/matrix/disconnect",
+    headers: {
+      cookie: sessionCookie ?? ""
+    }
+  });
+  assert.equal(disconnect.statusCode, 200);
+
+  const snapshot = JSON.parse(fs.readFileSync(storePath, "utf8")) as {
+    credentials: Array<{
+      providers: Record<string, unknown>;
+    }>;
+  };
+  assert.equal(snapshot.credentials.some((entry) => "matrix" in entry.providers), false);
 });

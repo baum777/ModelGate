@@ -51,6 +51,7 @@ type IntegrationAuthErrorCode =
 
 type GitHubOAuthConfig = {
   enabled: boolean;
+  configured: boolean;
   clientId: string;
   clientSecret: string;
   authorizeUrl: string;
@@ -207,10 +208,12 @@ function createStubCallbackUrl(provider: IntegrationProvider, state: string) {
 function resolveGitHubOAuthConfig(env: AppEnv): GitHubOAuthConfig {
   const clientId = env.GITHUB_OAUTH_CLIENT_ID.trim();
   const clientSecret = env.GITHUB_OAUTH_CLIENT_SECRET.trim();
+  const configured = clientId.length > 0 || clientSecret.length > 0;
   const enabled = clientId.length > 0 && clientSecret.length > 0;
 
   return {
     enabled,
+    configured,
     clientId,
     clientSecret,
     authorizeUrl: normalizeBaseUrl(env.GITHUB_OAUTH_AUTHORIZE_URL || "https://github.com/login/oauth/authorize"),
@@ -650,6 +653,16 @@ function registerProviderStartRoute(
         url.searchParams.set("scope", oauthConfig.scopes.join(" "));
         return reply.redirect(url.toString(), 302);
       }
+
+      if (oauthConfig.configured) {
+        deps.authStore.setErrorCode(session.sessionId, provider, "missing_server_config");
+        return sendIntegrationAuthError(reply, "missing_server_config", statusForErrorCode("missing_server_config"));
+      }
+    }
+
+    if (provider === "matrix" && deps.matrixConfig.enabled && !deps.matrixConfig.ready) {
+      deps.authStore.setErrorCode(session.sessionId, provider, "missing_server_config");
+      return sendIntegrationAuthError(reply, "missing_server_config", statusForErrorCode("missing_server_config"));
     }
 
     if (provider === "matrix" && deps.matrixConfig.baseUrl) {
