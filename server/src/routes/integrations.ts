@@ -22,6 +22,14 @@ type IntegrationCredentialSource =
   | "user_connected_stub"
   | "not_connected";
 
+type IntegrationAuthState =
+  | "user_connected"
+  | "user_connected_stub"
+  | "auth_expired"
+  | "not_configured"
+  | "error"
+  | "not_connected";
+
 type IntegrationCapabilityLevel = "available" | "blocked" | "unknown";
 type IntegrationExecuteCapabilityLevel = "available" | "approval_required" | "blocked" | "unknown";
 type IntegrationExecutionMode = "disabled" | "approval_required" | "enabled";
@@ -35,6 +43,7 @@ type IntegrationCapability = {
 
 type IntegrationStatusPayload = {
   status: IntegrationConnectionStatus;
+  authState: IntegrationAuthState;
   credentialSource: IntegrationCredentialSource;
   capabilities: IntegrationCapability;
   executionMode: IntegrationExecutionMode;
@@ -88,6 +97,30 @@ function getCredentialSource(configReady: boolean, connection: IntegrationConnec
 
   if (configReady) {
     return "instance_configured";
+  }
+
+  return "not_connected";
+}
+
+function getAuthState(options: {
+  configReady: boolean;
+  connection: IntegrationConnectionRecord | null;
+  lastErrorCode: string | null;
+}): IntegrationAuthState {
+  if (options.lastErrorCode === "auth_expired") {
+    return "auth_expired";
+  }
+
+  if (options.lastErrorCode) {
+    return "error";
+  }
+
+  if (options.connection?.connected) {
+    return options.connection.source === "user_connected" ? "user_connected" : "user_connected_stub";
+  }
+
+  if (!options.configReady) {
+    return "not_configured";
   }
 
   return "not_connected";
@@ -211,6 +244,11 @@ function providerIdentityFallback(provider: IntegrationProvider, credentialSourc
 function buildGithubStatus(config: GitHubConfig, connection: IntegrationConnectionRecord | null): IntegrationStatusPayload {
   const credentialSource = getCredentialSource(config.ready, connection);
   const lastErrorCode = connection?.lastErrorCode ?? null;
+  const authState = getAuthState({
+    configReady: config.ready,
+    connection,
+    lastErrorCode
+  });
   const status = getConnectionStatus({
     credentialSource,
     configEnabled: config.enabled,
@@ -221,6 +259,7 @@ function buildGithubStatus(config: GitHubConfig, connection: IntegrationConnecti
 
   return {
     status,
+    authState,
     credentialSource,
     capabilities: buildCapabilities(config.ready, executionMode),
     executionMode,
@@ -237,6 +276,11 @@ function buildGithubStatus(config: GitHubConfig, connection: IntegrationConnecti
 function buildMatrixStatus(config: MatrixConfig, connection: IntegrationConnectionRecord | null): IntegrationStatusPayload {
   const credentialSource = getCredentialSource(config.ready, connection);
   const lastErrorCode = connection?.lastErrorCode ?? null;
+  const authState = getAuthState({
+    configReady: config.ready,
+    connection,
+    lastErrorCode
+  });
   const status = getConnectionStatus({
     credentialSource,
     configEnabled: config.enabled,
@@ -247,6 +291,7 @@ function buildMatrixStatus(config: MatrixConfig, connection: IntegrationConnecti
 
   return {
     status,
+    authState,
     credentialSource,
     capabilities: buildCapabilities(config.ready, executionMode),
     executionMode,

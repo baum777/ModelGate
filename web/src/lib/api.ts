@@ -122,6 +122,14 @@ export type IntegrationCredentialSource =
   | "user_connected_stub"
   | "not_connected";
 
+export type IntegrationAuthState =
+  | "user_connected"
+  | "user_connected_stub"
+  | "auth_expired"
+  | "not_configured"
+  | "error"
+  | "not_connected";
+
 export type IntegrationCapability = {
   read: "available" | "blocked" | "unknown";
   propose: "available" | "blocked" | "unknown";
@@ -131,6 +139,7 @@ export type IntegrationCapability = {
 
 export type IntegrationStatus = {
   status: IntegrationConnectionStatus;
+  authState?: IntegrationAuthState;
   credentialSource: IntegrationCredentialSource;
   capabilities: IntegrationCapability;
   executionMode: "disabled" | "approval_required" | "enabled";

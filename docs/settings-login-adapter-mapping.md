@@ -6,7 +6,7 @@ This document maps the browser-safe access adapters in Settings for the open-sou
 
 - Browser-owned: rendering, local UI state, stream consumption, and approval intent.
 - Backend-owned: authentication checks, session cookies, provider calls, Matrix credentials, GitHub authority, writes, and execution truth.
-- Implemented today: Settings exposes backend-owned GitHub and Matrix connect CTAs with server-owned callback handling, encrypted credential storage (when configured), session-bound receipts, and sanitized status via `/api/integrations/status`.
+- Implemented today: Settings exposes backend-owned GitHub and Matrix connect CTAs with server-owned callback handling, durable encrypted credential storage (when configured), session-bound receipts, and sanitized status via `/api/integrations/status`.
 - UI status today: GitHub and Matrix are rendered as integration cards with `Connect/Reconnect/Disconnect/Reverify`, credential source, and capability summaries.
 - Fallback behavior: when provider OAuth/SSO server config is missing, connect routes fail closed for unsafe callbacks and otherwise use session-bound stub receipts.
 - Legacy auth routes may remain server-side for compatibility, but the browser UI no longer uses a global admin login gate.
@@ -20,6 +20,7 @@ All Settings login adapters should expose the same browser-safe shape:
 | `id` | Stable adapter key: `github` or `matrix` | No secret or provider target |
 | `label` | Human-facing adapter name | Public UI copy only |
 | `status` | integration status from `/api/integrations/status` (`connect_available`, `connected`, `missing_server_config`, etc.) | Derived from backend status |
+| `authState` | backend auth posture (`user_connected`, `user_connected_stub`, `auth_expired`, `not_configured`, `error`, `not_connected`) | Backend truth only; no secret material |
 | `primaryAction` | `connect`, `reconnect`, `disconnect`, `reverify` | UI intent only |
 | `secondaryAction` | optional second CTA (`disconnect` for connected states) | UI intent only |
 | `credentialSource` | `instance_configured`, `user_connected`, `user_connected_stub`, `not_connected` | Source transparency only; no secret material |
@@ -36,6 +37,7 @@ type SettingsLoginAdapter = {
   id: "github" | "matrix";
   label: string;
   status: IntegrationConnectionStatus | "checking";
+  authState?: "user_connected" | "user_connected_stub" | "auth_expired" | "not_configured" | "error" | "not_connected";
   primaryAction: "connect" | "reconnect" | "disconnect" | "reverify";
   secondaryAction: "disconnect" | null;
   credentialSource: "instance_configured" | "user_connected" | "user_connected_stub" | "not_connected";
@@ -110,3 +112,5 @@ The Settings UI must not:
 - Docs-only mapping: review diff and confirm no runtime claims exceed current repo truth.
 - UI implementation slice: `npm run typecheck:web`, `npm run test:web`, `npm run test:browser`.
 - Backend auth route changes, if introduced later: include server auth tests and full `npm test`.
+- Integration auth key-rotation gate (opt-in live): `npm run test:integration-auth-rotation-live` with explicit live env only.
+- Matrix integration auth key-rotation gate (opt-in live): `npm run test:integration-auth-rotation-live:matrix` with explicit live env only.

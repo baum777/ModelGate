@@ -68,6 +68,12 @@ export const EnvSchema = z.object({
   GITHUB_OAUTH_SCOPES: z.string().trim().default("repo,read:user"),
   MATRIX_SSO_REDIRECT_PATH: z.string().trim().default("/_matrix/client/v3/login/sso/redirect"),
   MATRIX_LOGIN_TOKEN_TYPE: z.string().trim().default("m.login.token"),
+  INTEGRATION_AUTH_STORE_MODE: z.string().trim().default("file"),
+  INTEGRATION_AUTH_STORE_FILE_PATH: z.string().trim().default(".local-ai/state/integration-auth-store.json"),
+  INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID: z.string().trim().default(""),
+  INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_VERSION: z.string().trim().default("1"),
+  INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY: z.string().trim().default(""),
+  INTEGRATION_AUTH_ENCRYPTION_PREVIOUS_KEYS: z.string().trim().default(""),
   RATE_LIMIT_ENABLED: z.string().trim().default("true"),
   RATE_LIMIT_WINDOW_MS: z.string().trim().default("60000"),
   RATE_LIMIT_CHAT_MAX: z.string().trim().default("30"),
@@ -142,6 +148,12 @@ export type AppEnv = {
   GITHUB_OAUTH_SCOPES: string[];
   MATRIX_SSO_REDIRECT_PATH: string;
   MATRIX_LOGIN_TOKEN_TYPE: string;
+  INTEGRATION_AUTH_STORE_MODE: string;
+  INTEGRATION_AUTH_STORE_FILE_PATH: string;
+  INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID: string;
+  INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_VERSION: string;
+  INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY: string;
+  INTEGRATION_AUTH_ENCRYPTION_PREVIOUS_KEYS: string;
   RATE_LIMIT_ENABLED: boolean;
   RATE_LIMIT_WINDOW_MS: number;
   RATE_LIMIT_CHAT_MAX: number;
@@ -257,6 +269,12 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     GITHUB_OAUTH_SCOPES: parseCsvList(parsed.GITHUB_OAUTH_SCOPES),
     MATRIX_SSO_REDIRECT_PATH: parsed.MATRIX_SSO_REDIRECT_PATH.trim() || "/_matrix/client/v3/login/sso/redirect",
     MATRIX_LOGIN_TOKEN_TYPE: parsed.MATRIX_LOGIN_TOKEN_TYPE.trim() || "m.login.token",
+    INTEGRATION_AUTH_STORE_MODE: parsed.INTEGRATION_AUTH_STORE_MODE.trim() || "file",
+    INTEGRATION_AUTH_STORE_FILE_PATH: parsed.INTEGRATION_AUTH_STORE_FILE_PATH.trim() || ".local-ai/state/integration-auth-store.json",
+    INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID: parsed.INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID.trim(),
+    INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_VERSION: parsed.INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_VERSION.trim() || "1",
+    INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY: parsed.INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY.trim(),
+    INTEGRATION_AUTH_ENCRYPTION_PREVIOUS_KEYS: parsed.INTEGRATION_AUTH_ENCRYPTION_PREVIOUS_KEYS.trim(),
     RATE_LIMIT_ENABLED: parseBoolean(parsed.RATE_LIMIT_ENABLED.trim()),
     RATE_LIMIT_WINDOW_MS: parsePositiveIntWithPolicy(
       parsed.RATE_LIMIT_WINDOW_MS,

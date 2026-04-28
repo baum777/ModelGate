@@ -20,6 +20,9 @@
     "test:browser": "playwright test",
     "smoke:matrix": "node scripts/matrix-smoke.mjs",
     "test:matrix-live": "node --test --import tsx tests/live/matrix-smoke-live.test.ts",
+    "test:integration-auth-rotation-live": "node --test --import tsx tests/live/integration-auth-rotation-live.test.ts",
+    "test:integration-auth-rotation-live:matrix": "node --test --import tsx tests/live/integration-auth-rotation-live-matrix.test.ts",
+    "test:integration-auth-rotation-live:both": "npm run test:integration-auth-rotation-live && npm run test:integration-auth-rotation-live:matrix",
     "test": "npm run test:server && npm run test:web",
     "dev": "npm run dev:server"
   },

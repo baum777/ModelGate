@@ -59,6 +59,8 @@ The browser is a thin PWA shell. It renders backend-owned results, keeps local U
 - `GITHUB_APP_*` fields are reserved placeholders and are not wired into the current runtime path.
 - `npm run smoke:matrix` is the manual Matrix topic-retarget smoke and depends on a dedicated Matrix room.
 - `npm run test:matrix-live` is the opt-in live smoke wrapper used by the separate `Matrix live smoke` workflow; it skips cleanly when the backend or required env is missing.
+- `npm run test:integration-auth-rotation-live` is an opt-in live GitHub OAuth credential-rotation smoke; it skips cleanly when required live env is missing.
+- `npm run test:integration-auth-rotation-live:matrix` is an opt-in live Matrix login-token credential-rotation smoke; it skips cleanly when required live env is missing.
 - Restored browser state is UI-local only. It is not backend truth.
 
 ## Local Development
@@ -241,6 +243,16 @@ For the opt-in Matrix live smoke:
 ```bash
 npm run test:matrix-live
 ```
+
+For the opt-in integration auth rotation live smoke:
+
+```bash
+npm run test:integration-auth-rotation-live
+npm run test:integration-auth-rotation-live:matrix
+npm run test:integration-auth-rotation-live:both
+```
+
+Live setup and CI instructions: [docs/integration-auth-rotation-live-smoke.md](docs/integration-auth-rotation-live-smoke.md).
 
 For backend-only checks:
 

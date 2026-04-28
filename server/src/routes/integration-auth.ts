@@ -58,6 +58,19 @@ type GitHubOAuthConfig = {
   scopes: string[];
 };
 
+function parseScopeSet(scopeRaw: string | null): Set<string> {
+  if (!scopeRaw) {
+    return new Set();
+  }
+
+  const scopeEntries = scopeRaw
+    .split(/[,\s]+/)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+
+  return new Set(scopeEntries);
+}
+
 function isProductionDeployment() {
   return process.env.NODE_ENV === "production";
 }
@@ -285,6 +298,16 @@ async function exchangeGitHubCode(
     throw new Error("token_exchange_failed");
   }
 
+  const grantedScopes = parseScopeSet(scope);
+  const missingRequiredScope = oauthConfig.scopes
+    .map((requiredScope) => requiredScope.trim())
+    .filter((requiredScope) => requiredScope.length > 0)
+    .find((requiredScope) => !grantedScopes.has(requiredScope));
+
+  if (missingRequiredScope) {
+    throw new Error("scope_denied");
+  }
+
   const userResponse = await requestJson(
     deps.fetchImpl ?? fetch,
     "https://api.github.com/user",
@@ -393,15 +416,27 @@ async function exchangeMatrixLoginToken(
     "matrix_login_token_exchange"
   );
 
-  if (!loginResponse.ok || !loginResponse.payload || typeof loginResponse.payload !== "object") {
-    if (loginResponse.status === 401) {
+  const loginPayload = loginResponse.payload && typeof loginResponse.payload === "object"
+    ? loginResponse.payload as Record<string, unknown>
+    : null;
+
+  if (!loginResponse.ok || !loginPayload) {
+    const upstreamError = typeof loginPayload?.error === "string" ? loginPayload.error.trim() : "";
+    const upstreamErrorCode = typeof loginPayload?.errcode === "string" ? loginPayload.errcode.trim() : "";
+    const expiredToken = /expired/i.test(upstreamError) || /EXPIRED/i.test(upstreamErrorCode);
+
+    if (expiredToken) {
+      throw new Error("auth_expired");
+    }
+
+    if (loginResponse.status === 401 || loginResponse.status === 403 || loginResponse.status === 400) {
       throw new Error("login_token_invalid");
     }
 
     throw new Error("token_exchange_failed");
   }
 
-  const payload = loginResponse.payload as Record<string, unknown>;
+  const payload = loginPayload;
   const accessToken = typeof payload.access_token === "string" ? payload.access_token.trim() : "";
   const userId = typeof payload.user_id === "string" ? payload.user_id.trim() : "";
   const deviceId = typeof payload.device_id === "string" ? payload.device_id.trim() : null;

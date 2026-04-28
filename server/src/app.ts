@@ -23,7 +23,11 @@ import {
 } from "./lib/runtime-journal.js";
 import { createRuntimeObservability, type RuntimeObservability } from "./lib/runtime-observability.js";
 import { loadModelCapabilitiesConfig, type ModelCapabilitiesConfig } from "./lib/workflow-model-router.js";
-import { createIntegrationAuthStore, type IntegrationAuthStore } from "./lib/integration-auth-store.js";
+import {
+  createIntegrationAuthStore,
+  createIntegrationAuthStoreSelection,
+  type IntegrationAuthStore
+} from "./lib/integration-auth-store.js";
 import { authRoutes } from "./routes/auth.js";
 import { chatRoutes } from "./routes/chat.js";
 import { diagnosticsRoutes } from "./routes/diagnostics.js";
@@ -109,8 +113,12 @@ export function createApp(deps: AppDependencies) {
     });
   });
   const runtimeObservability = deps.runtimeObservability ?? createRuntimeObservability();
+  const integrationAuthStoreSelection = createIntegrationAuthStoreSelection(deps.env);
   const integrationAuthStore = deps.integrationAuthStore ?? createIntegrationAuthStore({
-    encryptionSecret: deps.env.MODEL_GATE_SESSION_SECRET
+    mode: integrationAuthStoreSelection.mode,
+    filePath: integrationAuthStoreSelection.filePath,
+    currentEncryptionKey: integrationAuthStoreSelection.encryption.current,
+    previousEncryptionKeys: integrationAuthStoreSelection.encryption.previous
   });
   const app = Fastify({
     logger: deps.logger ?? true,

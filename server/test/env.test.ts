@@ -32,6 +32,12 @@ test("env parsing allows Matrix-only startup without an OpenRouter key", () => {
     MATRIX_VERIFY_AFTER_EXECUTE: "true",
     MATRIX_ALLOWED_ACTION_TYPES: "set_room_topic",
     MATRIX_FAIL_CLOSED: "true",
+    INTEGRATION_AUTH_STORE_MODE: "file",
+    INTEGRATION_AUTH_STORE_FILE_PATH: ".local-ai/state/integration-auth-store.test.json",
+    INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID: "active-key",
+    INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_VERSION: "3",
+    INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY: "active-key-secret",
+    INTEGRATION_AUTH_ENCRYPTION_PREVIOUS_KEYS: "legacy@1:legacy-secret",
     GITHUB_ACTION_STORE_MODE: "file",
     GITHUB_ACTION_STORE_FILE_PATH: ".local-ai/state/github-action-store.test.json",
     RATE_LIMIT_ENABLED: "true",
@@ -75,6 +81,12 @@ test("env parsing allows Matrix-only startup without an OpenRouter key", () => {
   assert.equal(env.MATRIX_VERIFY_AFTER_EXECUTE, true);
   assert.deepEqual(env.MATRIX_ALLOWED_ACTION_TYPES, ["set_room_topic"]);
   assert.equal(env.MATRIX_FAIL_CLOSED, true);
+  assert.equal(env.INTEGRATION_AUTH_STORE_MODE, "file");
+  assert.equal(env.INTEGRATION_AUTH_STORE_FILE_PATH, ".local-ai/state/integration-auth-store.test.json");
+  assert.equal(env.INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID, "active-key");
+  assert.equal(env.INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_VERSION, "3");
+  assert.equal(env.INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY, "active-key-secret");
+  assert.equal(env.INTEGRATION_AUTH_ENCRYPTION_PREVIOUS_KEYS, "legacy@1:legacy-secret");
   assert.equal(env.GITHUB_ACTION_STORE_MODE, "file");
   assert.equal(env.GITHUB_ACTION_STORE_FILE_PATH, ".local-ai/state/github-action-store.test.json");
   assert.equal(env.RATE_LIMIT_ENABLED, true);

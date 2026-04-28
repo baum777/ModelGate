@@ -43,13 +43,17 @@ Security copy:
 - Route contract tests live in `server/test/vercel-config.test.ts` and `server/test/vercel-handler.test.ts`.
 - Browser upstream boundary tests live in `web/test/browser-upstream-boundary.test.ts`.
 - Browser flow tests for console URL state and route ownership copy live in `tests/browser/modelgate.spec.ts`.
+- Opt-in live rotation smoke for GitHub integration auth credentials lives in `tests/live/integration-auth-rotation-live.test.ts` and is run via `npm run test:integration-auth-rotation-live`.
+- Opt-in live rotation smoke for Matrix integration auth credentials lives in `tests/live/integration-auth-rotation-live-matrix.test.ts` and is run via `npm run test:integration-auth-rotation-live:matrix`.
 
 ## Settings Auth Connect Routing
 
 - Settings CTAs start backend-owned auth intent only.
 - Browser opens `/api/auth/{provider}/start` with an allowlisted `returnTo`.
 - Backend creates short-lived `state` and keeps it server-side.
-- Callback (`/api/auth/{provider}/callback`) validates `state`, performs provider exchange server-side when config is present, stores encrypted credential server-side, and redirects to `/console?mode=settings`.
+- Callback (`/api/auth/{provider}/callback`) validates `state`, performs provider exchange server-side when config is present, stores credentials in a durable encrypted backend store, and redirects to `/console?mode=settings`.
+- Stored provider credentials are session-bound and encrypted with key metadata (`keyId`, `keyVersion`) so active writes use the current key while reads can accept configured previous keys during rotation.
+- Real credential mode fails closed when encryption config is missing or invalid; stub fallback is allowed only when provider config is absent.
 - Stub fallback remains available only when provider OAuth/SSO config is not present.
 - Browser reads only sanitized status from `/api/integrations/status`.
 
