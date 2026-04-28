@@ -27,6 +27,7 @@ import { createGitHubProposalPlanner } from "../lib/github-plan-builder.js";
 import { createGitHubActionExecutionService } from "../lib/github-execution.js";
 import type { GitHubConfig } from "../lib/github-env.js";
 import { isGitHubRepoAllowed, normalizeGitHubRepoFullName } from "../lib/github-env.js";
+import type { IntegrationAuthStore } from "../lib/integration-auth-store.js";
 import { normalizeGitHubRelativePath } from "../lib/github-paths.js";
 import { OpenRouterError, type OpenRouterClient } from "../lib/openrouter.js";
 import type { AuthConfig } from "../lib/auth.js";
@@ -43,13 +44,20 @@ type GitHubRouteDependencies = {
   openRouter: OpenRouterClient;
   modelRegistry: ModelRegistry;
   modelCapabilitiesConfig: ModelCapabilitiesConfig;
+  authStore: IntegrationAuthStore;
   actionStore?: GitHubActionStore;
   rateLimiter: AppRateLimiter;
   runtimeJournal: RuntimeJournal;
 };
 
 const GITHUB_ADMIN_KEY_HEADER = "x-modelgate-admin-key";
+const INTEGRATION_SESSION_COOKIE = "modelgate_integration_session";
 const DEFAULT_SMOKE_BRANCH_PREFIX = "modelgate/github-smoke";
+type GitHubCredentialSource = "user_connected" | "instance_config";
+type GitHubResolvedClient = {
+  client: GitHubClient;
+  credentialSource: GitHubCredentialSource;
+};
 
 function sendGitHubError(reply: FastifyReply, code: GitHubErrorCode, message?: string, retryAfterSeconds?: number | null) {
   if (typeof retryAfterSeconds === "number" && retryAfterSeconds > 0) {
@@ -534,6 +542,58 @@ function readGitHubAdminKeyHeader(request: FastifyRequest) {
   return typeof rawValue === "string" ? rawValue : null;
 }
 
+function readIntegrationSessionCookie(request: FastifyRequest) {
+  const cookieHeader = Array.isArray(request.headers.cookie)
+    ? request.headers.cookie[0]
+    : request.headers.cookie;
+
+  if (!cookieHeader) {
+    return null;
+  }
+
+  for (const segment of cookieHeader.split(";")) {
+    const trimmed = segment.trim();
+
+    if (!trimmed.startsWith(`${INTEGRATION_SESSION_COOKIE}=`)) {
+      continue;
+    }
+
+    try {
+      return decodeURIComponent(trimmed.slice(INTEGRATION_SESSION_COOKIE.length + 1));
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function resolveRequestGitHubClient(request: FastifyRequest, deps: GitHubRouteDependencies): GitHubResolvedClient | null {
+  const sessionId = readIntegrationSessionCookie(request);
+
+  if (sessionId) {
+    const credential = deps.authStore.readCredential(sessionId, "github");
+    const accessToken = typeof credential?.accessToken === "string" ? credential.accessToken.trim() : "";
+    const kind = typeof credential?.kind === "string" ? credential.kind.trim() : "";
+
+    if (kind === "github_oauth" && accessToken.length > 0) {
+      return {
+        client: deps.client.withAccessToken(accessToken),
+        credentialSource: "user_connected"
+      };
+    }
+  }
+
+  if (deps.config.ready && deps.config.token) {
+    return {
+      client: deps.client,
+      credentialSource: "instance_config"
+    };
+  }
+
+  return null;
+}
+
 function sendGitHubAdminKeyError(reply: FastifyReply, code: "github_unauthorized" | "github_forbidden") {
   return sendGitHubError(reply, code);
 }
@@ -584,38 +644,24 @@ function requireGitHubAdminKey(request: FastifyRequest, reply: FastifyReply, con
 }
 
 export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies) {
-  const contextBuilder = createGitHubContextBuilder({
-    config: deps.config,
-    client: deps.client
-  });
-  const proposalPlanner = createGitHubProposalPlanner({
-    env: deps.env,
-    config: deps.config,
-    client: deps.client,
-    openRouter: deps.openRouter,
-    modelRegistry: deps.modelRegistry,
-    modelCapabilities: deps.modelCapabilitiesConfig
-  });
   const actionStore = deps.actionStore ?? createGitHubActionStore(deps.config.planTtlMs);
-  const actionExecutor = createGitHubActionExecutionService({
-    config: deps.config,
-    client: deps.client,
-    actionStore
-  });
 
   app.get("/api/github/repos", async (_request, reply) => {
-    if (!deps.config.ready) {
+    const resolvedClient = resolveRequestGitHubClient(_request, deps);
+
+    if (!resolvedClient) {
       return sendGitHubError(reply, "github_not_configured");
     }
 
     try {
       const checkedAt = new Date().toISOString();
-      const repos = await listAllowedRepos(deps.config, deps.client);
+      const repos = await listAllowedRepos(deps.config, resolvedClient.client);
 
       return reply.status(200).send({
         ok: true,
         checkedAt,
-        repos
+        repos,
+        credentialSource: resolvedClient.credentialSource
       });
     } catch (error) {
       return handleGitHubError(reply, error);
@@ -623,7 +669,9 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   });
 
   app.post("/api/github/context", async (request, reply) => {
-    if (!deps.config.ready) {
+    const resolvedClient = resolveRequestGitHubClient(request, deps);
+
+    if (!resolvedClient) {
       return sendGitHubError(reply, "github_not_configured");
     }
 
@@ -644,6 +692,10 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
 
     try {
+      const contextBuilder = createGitHubContextBuilder({
+        config: deps.config,
+        client: resolvedClient.client
+      });
       const contextRequest = {
         repo: {
           owner: parsedBody.data.repo.owner,
@@ -660,7 +712,8 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
 
       return reply.status(200).send({
         ok: true,
-        context
+        context,
+        credentialSource: resolvedClient.credentialSource
       });
     } catch (error) {
       return handleGitHubError(reply, error);
@@ -668,7 +721,9 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   });
 
   app.post("/api/github/actions/propose", async (request, reply) => {
-    if (!deps.config.ready) {
+    const resolvedClient = resolveRequestGitHubClient(request, deps);
+
+    if (!resolvedClient) {
       return sendGitHubError(reply, "github_not_configured");
     }
 
@@ -695,6 +750,18 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
 
     try {
+      const proposalPlanner = createGitHubProposalPlanner({
+        env: deps.env,
+        config: deps.config,
+        client: resolvedClient.client,
+        openRouter: deps.openRouter,
+        modelRegistry: deps.modelRegistry,
+        modelCapabilities: deps.modelCapabilitiesConfig
+      });
+      const contextBuilder = createGitHubContextBuilder({
+        config: deps.config,
+        client: resolvedClient.client
+      });
       const plan = await runWithTimeout((async () => {
         const proposalRequest = {
           repo: {
@@ -715,11 +782,11 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
         const smokeMode = proposalRequest.mode === "smoke";
         const context = await (smokeMode
           ? (() => {
-              const repoFullName = `${proposalRequest.repo.owner}/${proposalRequest.repo.repo}`.toLowerCase();
-              const baseRef = proposalRequest.baseBranch ?? proposalRequest.ref ?? "main";
+                const repoFullName = `${proposalRequest.repo.owner}/${proposalRequest.repo.repo}`.toLowerCase();
+                const baseRef = proposalRequest.baseBranch ?? proposalRequest.ref ?? "main";
               return Promise.all([
-                deps.client.readRepositorySummary(proposalRequest.repo.owner, proposalRequest.repo.repo),
-                deps.client.readRepositoryCommit(proposalRequest.repo.owner, proposalRequest.repo.repo, baseRef)
+                resolvedClient.client.readRepositorySummary(proposalRequest.repo.owner, proposalRequest.repo.repo),
+                resolvedClient.client.readRepositoryCommit(proposalRequest.repo.owner, proposalRequest.repo.repo, baseRef)
               ]).then(async ([repoSummary, baseCommit]) => {
                 const smokePath = "docs/modelgate-smoke.md";
                 const files: Array<{
@@ -731,7 +798,7 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
                 }> = [];
 
                 try {
-                  const file = await deps.client.readRepositoryFile(proposalRequest.repo.owner, proposalRequest.repo.repo, {
+                  const file = await resolvedClient.client.readRepositoryFile(proposalRequest.repo.owner, proposalRequest.repo.repo, {
                     ref: baseRef,
                     path: smokePath
                   });
@@ -785,7 +852,7 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
           context,
           createdAt
         });
-        const currentSummary = await deps.client.readRepositorySummary(builtPlan.repo.owner, builtPlan.repo.repo);
+        const currentSummary = await resolvedClient.client.readRepositorySummary(builtPlan.repo.owner, builtPlan.repo.repo);
 
         if (!isFreshGitHubPlan(currentSummary, builtPlan)) {
           throw new GitHubClientError({
@@ -830,7 +897,8 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
 
       return reply.status(200).send({
         ok: true,
-        plan
+        plan,
+        credentialSource: resolvedClient.credentialSource
       });
     } catch (error) {
       return handleGitHubError(reply, error);
@@ -838,7 +906,9 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   });
 
   app.get("/api/github/actions/:planId", async (request, reply) => {
-    if (!deps.config.ready) {
+    const resolvedClient = resolveRequestGitHubClient(request, deps);
+
+    if (!resolvedClient) {
       return sendGitHubError(reply, "github_not_configured");
     }
 
@@ -863,7 +933,7 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
 
     try {
-      const currentSummary = await deps.client.readRepositorySummary(lookup.plan.repo.owner, lookup.plan.repo.repo);
+      const currentSummary = await resolvedClient.client.readRepositorySummary(lookup.plan.repo.owner, lookup.plan.repo.repo);
 
       if (!isFreshGitHubPlan(currentSummary, lookup.plan)) {
         return sendGitHubError(reply, "github_stale_plan");
@@ -874,7 +944,8 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
         plan: {
           ...lookup.plan,
           stale: false
-        }
+        },
+        credentialSource: resolvedClient.credentialSource
       });
     } catch (error) {
       return handleGitHubError(reply, error);
@@ -882,7 +953,9 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   });
 
   app.post("/api/github/actions/:planId/execute", async (request, reply) => {
-    if (!deps.config.ready) {
+    const resolvedClient = resolveRequestGitHubClient(request, deps);
+
+    if (!resolvedClient) {
       return sendGitHubError(reply, "github_not_configured");
     }
 
@@ -925,6 +998,11 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
 
     try {
+      const actionExecutor = createGitHubActionExecutionService({
+        config: deps.config,
+        client: resolvedClient.client,
+        actionStore
+      });
       deps.runtimeJournal.append({
         source: "github",
         eventType: "github_execute_attempted",
@@ -957,7 +1035,8 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
 
       return reply.status(200).send({
         ok: true,
-        result: execution
+        result: execution,
+        credentialSource: resolvedClient.credentialSource
       });
     } catch (error) {
       deps.runtimeJournal.append({
@@ -974,7 +1053,9 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   });
 
   app.get("/api/github/actions/:planId/verify", async (request, reply) => {
-    if (!deps.config.ready) {
+    const resolvedClient = resolveRequestGitHubClient(request, deps);
+
+    if (!resolvedClient) {
       return sendGitHubError(reply, "github_not_configured");
     }
 
@@ -992,7 +1073,7 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     let recoveredFromGitHub = false;
 
     if (lookup.state === "missing") {
-      const recoveredPlan = await recoverPlanForVerification(parsedPlanId.data, deps.config, deps.client, actionStore);
+      const recoveredPlan = await recoverPlanForVerification(parsedPlanId.data, deps.config, resolvedClient.client, actionStore);
 
       if (recoveredPlan) {
         recoveredFromGitHub = true;
@@ -1010,7 +1091,7 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
 
     if (recoveredFromGitHub) {
       try {
-        const verification = await verifyRecoveredRoutePlan(lookup.plan, deps.client);
+        const verification = await verifyRecoveredRoutePlan(lookup.plan, resolvedClient.client);
         deps.runtimeJournal.append({
           source: "github",
           eventType: "github_verify_result",
@@ -1028,7 +1109,8 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
 
         return reply.status(200).send({
           ok: true,
-          verification
+          verification,
+          credentialSource: resolvedClient.credentialSource
         });
       } catch (error) {
         return handleGitHubError(reply, error);
@@ -1036,6 +1118,11 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
 
     try {
+      const actionExecutor = createGitHubActionExecutionService({
+        config: deps.config,
+        client: resolvedClient.client,
+        actionStore
+      });
       const verification: GitHubVerifyResult = await actionExecutor.verifyPlan(lookup.plan);
       deps.runtimeJournal.append({
         source: "github",
@@ -1054,7 +1141,8 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
 
       return reply.status(200).send({
         ok: true,
-        verification
+        verification,
+        credentialSource: resolvedClient.credentialSource
       });
     } catch (error) {
       return handleGitHubError(reply, error);
@@ -1062,7 +1150,9 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   });
 
   app.get("/api/github/repos/:owner/:repo/tree", async (request, reply) => {
-    if (!deps.config.ready) {
+    const resolvedClient = resolveRequestGitHubClient(request, deps);
+
+    if (!resolvedClient) {
       return sendGitHubError(reply, "github_not_configured");
     }
 
@@ -1089,14 +1179,15 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
 
     try {
-      const tree: GitHubFileTree = await deps.client.readRepositoryTree(repoParams.owner, repoParams.repo, {
+      const tree: GitHubFileTree = await resolvedClient.client.readRepositoryTree(repoParams.owner, repoParams.repo, {
         ...parsedQuery.data,
         path: normalizedPath ?? undefined
       });
 
       return reply.status(200).send({
         ok: true,
-        tree
+        tree,
+        credentialSource: resolvedClient.credentialSource
       });
     } catch (error) {
       return handleGitHubError(reply, error);
@@ -1104,7 +1195,9 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   });
 
   app.get("/api/github/repos/:owner/:repo/file", async (request, reply) => {
-    if (!deps.config.ready) {
+    const resolvedClient = resolveRequestGitHubClient(request, deps);
+
+    if (!resolvedClient) {
       return sendGitHubError(reply, "github_not_configured");
     }
 
@@ -1131,14 +1224,15 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
 
     try {
-      const file: GitHubFileContent = await deps.client.readRepositoryFile(repoParams.owner, repoParams.repo, {
+      const file: GitHubFileContent = await resolvedClient.client.readRepositoryFile(repoParams.owner, repoParams.repo, {
         ...parsedQuery.data,
         path: normalizedPath
       });
 
       return reply.status(200).send({
         ok: true,
-        file
+        file,
+        credentialSource: resolvedClient.credentialSource
       });
     } catch (error) {
       return handleGitHubError(reply, error);

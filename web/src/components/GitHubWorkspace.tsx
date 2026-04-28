@@ -18,6 +18,7 @@ import {
   type GitHubRepoSummary,
   type GitHubVerifyResult,
 } from "../lib/github-api.js";
+import type { IntegrationStatus } from "../lib/api.js";
 import type { ReviewItem } from "./ReviewWorkspace.js";
 import {
   deriveSessionStatus,
@@ -65,6 +66,11 @@ type GitHubWorkspaceProps = {
   onContextChange: (status: GitHubWorkspaceStatus) => void;
   onReviewItemsChange?: (items: ReviewItem[]) => void;
   onSessionChange: (session: GitHubSession) => void;
+  githubIntegration: IntegrationStatus | null;
+  onIntegrationAction: (
+    provider: "github" | "matrix",
+    action: "connect" | "reconnect" | "disconnect" | "reverify"
+  ) => void;
 };
 
 const ANALYSIS_QUESTION =
@@ -448,6 +454,12 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     props.session.metadata.verificationError,
   );
   const repoSelectRef = useRef<HTMLSelectElement | null>(null);
+  const githubIdentityLabel = props.githubIntegration?.labels.identity ?? (locale === "de" ? "Nicht verbunden" : "Not connected");
+  const githubConnected = props.githubIntegration?.credentialSource === "user_connected";
+  const githubConnectAction = props.githubIntegration?.status && props.githubIntegration.status !== "connect_available" && props.githubIntegration.status !== "not_connected"
+    ? "reconnect"
+    : "connect";
+  const githubConnectLabel = locale === "de" ? "GitHub verbinden" : "Connect your GitHub";
 
   useEffect(() => {
     const snapshotMetadata = {
@@ -932,6 +944,34 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
         </div>
 
         <aside className="mini-panel github-mini-panel">
+          <article className="github-repo-card" data-testid="github-integration-card">
+            <div className="github-repo-card-header">
+              <div>
+                <span>GitHub OAuth</span>
+                <strong>{githubIdentityLabel}</strong>
+              </div>
+              <span className={`status-pill ${githubConnected ? "status-ready" : "status-partial"}`}>
+                {githubConnected ? (locale === "de" ? "Verbunden" : "Connected") : (locale === "de" ? "Nicht verbunden" : "Not connected")}
+              </span>
+            </div>
+            <div className="action-row">
+              {githubConnected ? (
+                <>
+                  <button type="button" onClick={() => props.onIntegrationAction("github", "reverify")}>
+                    {locale === "de" ? "Erneut prüfen" : "Reverify"}
+                  </button>
+                  <button type="button" className="secondary-button" onClick={() => props.onIntegrationAction("github", "disconnect")}>
+                    {locale === "de" ? "Trennen" : "Disconnect"}
+                  </button>
+                </>
+              ) : (
+                <button type="button" onClick={() => props.onIntegrationAction("github", githubConnectAction)}>
+                  {githubConnectLabel}
+                </button>
+              )}
+            </div>
+          </article>
+
           <label htmlFor="github-repo-select">{ui.github.repoSelectLabel}</label>
           <select
             id="github-repo-select"

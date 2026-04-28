@@ -244,15 +244,17 @@ function providerIdentityFallback(provider: IntegrationProvider, credentialSourc
 function buildGithubStatus(config: GitHubConfig, connection: IntegrationConnectionRecord | null): IntegrationStatusPayload {
   const credentialSource = getCredentialSource(config.ready, connection);
   const lastErrorCode = connection?.lastErrorCode ?? null;
+  const hasUserCredential = connection?.connected === true && connection.source === "user_connected";
+  const githubOperationalReady = hasUserCredential || config.ready;
   const authState = getAuthState({
-    configReady: config.ready,
+    configReady: githubOperationalReady,
     connection,
     lastErrorCode
   });
   const status = getConnectionStatus({
     credentialSource,
     configEnabled: config.enabled,
-    configReady: config.ready,
+    configReady: githubOperationalReady,
     lastErrorCode
   });
   const executionMode = deriveGitHubExecutionMode(config);
@@ -261,7 +263,7 @@ function buildGithubStatus(config: GitHubConfig, connection: IntegrationConnecti
     status,
     authState,
     credentialSource,
-    capabilities: buildCapabilities(config.ready, executionMode),
+    capabilities: buildCapabilities(githubOperationalReady, executionMode),
     executionMode,
     labels: {
       identity: connection?.safeIdentityLabel ?? providerIdentityFallback("github", credentialSource),

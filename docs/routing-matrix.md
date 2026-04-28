@@ -58,3 +58,13 @@ Security copy:
 - Browser reads only sanitized status from `/api/integrations/status`.
 
 Browser must not receive or store GitHub/Matrix tokens. Backend owns auth state, callback validation, credential handling, and execution boundaries.
+
+## Session Credential Routing
+
+- `/api/github/*` is session-credential-aware.
+- Route order is fail-closed and deterministic:
+  1. Use session-bound GitHub OAuth credential from integration auth store when available (`credentialSource: user_connected`).
+  2. Otherwise use instance credential (`GITHUB_TOKEN`) only when instance GitHub config is ready (`credentialSource: instance_config`).
+  3. If neither source is available, return `github_not_configured`.
+- `GITHUB_ALLOWED_REPOS` policy remains enforced for both credential sources.
+- Execute and verify write posture remains approval-gated; session OAuth does not bypass `GITHUB_AGENT_API_KEY` requirements.

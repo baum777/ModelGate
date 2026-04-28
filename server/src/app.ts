@@ -170,6 +170,7 @@ export function createApp(deps: AppDependencies) {
     config: githubConfig,
     authConfig,
     client: githubClient,
+    authStore: integrationAuthStore,
     openRouter: deps.openRouter,
     modelRegistry,
     modelCapabilitiesConfig,

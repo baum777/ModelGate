@@ -164,6 +164,14 @@ export function SettingsWorkspace({
         },
       };
 
+  function getActionLabel(adapter: SettingsLoginAdapter, action: "connect" | "reconnect" | "disconnect" | "reverify") {
+    if (adapter.id === "github" && (action === "connect" || action === "reconnect")) {
+      return locale === "de" ? "GitHub verbinden" : "Connect your GitHub";
+    }
+
+    return adapterCopy.action[action];
+  }
+
   return (
     <section className="workspace-panel settings-workspace" data-testid="settings-workspace">
       <section className="workspace-hero">
@@ -230,7 +238,7 @@ export function SettingsWorkspace({
                     onClick={() => onIntegrationAction(adapter.id, adapter.primaryAction)}
                     disabled={adapter.status === "checking"}
                   >
-                    {adapterCopy.action[adapter.primaryAction]}
+                    {getActionLabel(adapter, adapter.primaryAction)}
                   </button>
                   {adapter.secondaryAction ? (
                     <button

@@ -1578,6 +1578,8 @@ function ConsoleShell() {
       onContextChange={setGitHubContext}
       onReviewItemsChange={updateGitHubReviewItems}
       onSessionChange={handleGitHubSessionChange}
+      githubIntegration={integrationsStatus?.github ?? null}
+      onIntegrationAction={handleIntegrationAction}
     />
   ) : mode === "matrix" ? (
     <MatrixWorkspace
