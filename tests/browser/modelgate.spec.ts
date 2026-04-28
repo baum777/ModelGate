@@ -101,7 +101,7 @@ type MatrixStatus = "ok" | "error" | "malformed";
 
 async function installBaseMocks(
   page: Page,
-  options?: { matrixStatus?: MatrixStatus },
+  options?: { matrixStatus?: MatrixStatus; integrationsStatus?: typeof INTEGRATIONS_STATUS_OK },
 ) {
   await page.route("**/health", async (route) => {
     await route.fulfill({
@@ -123,7 +123,7 @@ async function installBaseMocks(
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(INTEGRATIONS_STATUS_OK),
+      body: JSON.stringify(options?.integrationsStatus ?? INTEGRATIONS_STATUS_OK),
     });
   });
 
@@ -918,6 +918,8 @@ test("Settings GitHub CTA starts backend-owned auth flow and returns to Settings
 
   await page.route("**/api/auth/github/start**", async (route) => {
     startHits += 1;
+    const url = new URL(route.request().url());
+    expect(url.searchParams.get("returnTo")).toBe("/console?mode=settings");
     await route.fulfill({
       status: 302,
       headers: {
@@ -938,10 +940,108 @@ test("Settings GitHub CTA starts backend-owned auth flow and returns to Settings
 
   await page.getByTestId("tab-settings").click();
   const settingsWorkspace = page.getByTestId("settings-workspace");
-  const githubAdapter = settingsWorkspace.locator(".settings-adapter-row").filter({ hasText: "GitHub" });
+  const githubAdapter = settingsWorkspace.getByTestId("settings-adapter-github");
 
   await githubAdapter.getByRole("button", { name: "Connect" }).click();
   await expect(page).toHaveURL(/\/api\/auth\/github\/callback\?state=stub-state/);
   expect(startHits).toBe(1);
+  await expect(page.locator("body")).not.toContainText("sk-test");
+});
+
+test("Settings Matrix CTA starts backend-owned auth flow and returns to Settings", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  let startHits = 0;
+
+  await page.route("**/api/auth/matrix/start**", async (route) => {
+    startHits += 1;
+    const url = new URL(route.request().url());
+    expect(url.searchParams.get("returnTo")).toBe("/console?mode=settings");
+    await route.fulfill({
+      status: 302,
+      headers: {
+        location: "/api/auth/matrix/callback?state=stub-state&loginToken=stub-login-token"
+      },
+    });
+  });
+
+  await page.route("**/api/auth/matrix/callback**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html; charset=utf-8",
+      body: "<!doctype html><html><body><script>window.location.replace('/console?mode=settings');</script></body></html>",
+    });
+  });
+
+  await loadConsole(page);
+
+  await page.getByTestId("tab-settings").click();
+  const settingsWorkspace = page.getByTestId("settings-workspace");
+  const matrixAdapter = settingsWorkspace.getByTestId("settings-adapter-matrix");
+
+  await matrixAdapter.getByRole("button", { name: "Connect" }).click();
+  await expect(page).toHaveURL(/\/api\/auth\/matrix\/callback\?state=stub-state/);
+  expect(startHits).toBe(1);
+  await expect(page.locator("body")).not.toContainText("sk-test");
+});
+
+test("Settings connected auth CTAs call backend-owned control routes", async ({ page }) => {
+  const connectedIntegrationsStatus = {
+    ...INTEGRATIONS_STATUS_OK,
+    github: {
+      ...INTEGRATIONS_STATUS_OK.github,
+      status: "connected",
+      credentialSource: "user_connected_stub",
+      capabilities: {
+        read: "available",
+        propose: "available",
+        execute: "approval_required",
+        verify: "available",
+      },
+      executionMode: "approval_required",
+      labels: {
+        identity: "stub-github-operator",
+        scope: "2 allowed repos",
+        allowedReposStatus: "configured",
+      },
+      lastVerifiedAt: "2026-04-27T12:00:00.000Z",
+      lastErrorCode: null,
+    },
+  } satisfies typeof INTEGRATIONS_STATUS_OK;
+  await installBaseMocks(page, {
+    matrixStatus: "ok",
+    integrationsStatus: connectedIntegrationsStatus,
+  });
+  let reverifyHits = 0;
+  let disconnectHits = 0;
+
+  await page.route("**/api/auth/github/reverify", async (route) => {
+    reverifyHits += 1;
+    expect(route.request().method()).toBe("POST");
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, provider: "github" }),
+    });
+  });
+
+  await page.route("**/api/auth/github/disconnect", async (route) => {
+    disconnectHits += 1;
+    expect(route.request().method()).toBe("POST");
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, provider: "github" }),
+    });
+  });
+
+  await loadConsole(page);
+  await page.getByTestId("tab-settings").click();
+  const githubAdapter = page.getByTestId("settings-adapter-github");
+
+  await githubAdapter.getByTestId("settings-adapter-github-action-reverify").click();
+  await githubAdapter.getByTestId("settings-adapter-github-action-disconnect").click();
+
+  expect(reverifyHits).toBe(1);
+  expect(disconnectHits).toBe(1);
   await expect(page.locator("body")).not.toContainText("sk-test");
 });

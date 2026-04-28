@@ -151,6 +151,9 @@ test("Settings workspace renders integration cards and keeps secrets out of the 
 
   assert.match(markup, /GitHub/);
   assert.match(markup, /Matrix/);
+  assert.match(markup, /data-testid="settings-adapter-github"/);
+  assert.match(markup, /aria-label="GitHub Reverify"/);
+  assert.match(markup, /data-testid="settings-adapter-matrix-action-connect"/);
   assert.match(markup, /stub-github-operator/);
   assert.match(markup, /Credential source/);
   assert.match(markup, /Connect available/);

@@ -206,7 +206,11 @@ export function SettingsWorkspace({
 
           <div className="settings-adapter-list">
             {loginAdapters.map((adapter) => (
-              <section key={adapter.id} className={`settings-adapter-row settings-adapter-row-${adapter.status}`}>
+              <section
+                key={adapter.id}
+                className={`settings-adapter-row settings-adapter-row-${adapter.status}`}
+                data-testid={`settings-adapter-${adapter.id}`}
+              >
                 <div className="settings-adapter-main">
                   <div>
                     <span className={`status-pill status-${adapter.status === "connected" ? "ready" : adapter.status === "error" || adapter.status === "missing_server_config" || adapter.status === "auth_expired" || adapter.status === "scope_denied" || adapter.status === "upstream_unreachable" ? "error" : "partial"}`}>
@@ -221,6 +225,8 @@ export function SettingsWorkspace({
                 <div className="settings-adapter-actions">
                   <button
                     type="button"
+                    aria-label={`${adapter.label} ${adapterCopy.action[adapter.primaryAction]}`}
+                    data-testid={`settings-adapter-${adapter.id}-action-${adapter.primaryAction}`}
                     onClick={() => onIntegrationAction(adapter.id, adapter.primaryAction)}
                     disabled={adapter.status === "checking"}
                   >
@@ -230,6 +236,8 @@ export function SettingsWorkspace({
                     <button
                       type="button"
                       className="secondary-button"
+                      aria-label={`${adapter.label} ${adapterCopy.action[adapter.secondaryAction]}`}
+                      data-testid={`settings-adapter-${adapter.id}-action-${adapter.secondaryAction}`}
                       onClick={() => onIntegrationAction(adapter.id, adapter.secondaryAction!)}
                       disabled={adapter.status === "checking"}
                     >
