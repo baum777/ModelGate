@@ -13,7 +13,7 @@ test("env parsing allows Matrix-only startup without an OpenRouter key", () => {
     OPENROUTER_BASE_URL: "https://openrouter.ai/api/v1",
     OPENROUTER_MODEL: "openrouter/auto",
     OPENROUTER_MODELS: "",
-    APP_NAME: "modelgate-test",
+    APP_NAME: "mosaicstack-test",
     DEFAULT_SYSTEM_PROMPT: "prompt",
     CORS_ORIGINS: "http://localhost:5173",
     CHAT_MODEL: "google/gemma-4-31b-it:free",
@@ -53,9 +53,9 @@ test("env parsing allows Matrix-only startup without an OpenRouter key", () => {
     JOURNAL_FILE_PATH: ".local-ai/state/runtime-journal.test.json",
     JOURNAL_MAX_ENTRIES: "250",
     JOURNAL_EXPOSE_RECENT_LIMIT: "25",
-    MODEL_GATE_ADMIN_PASSWORD: "admin-password",
-    MODEL_GATE_SESSION_SECRET: "session-secret",
-    MODEL_GATE_SESSION_TTL_SECONDS: "43200"
+    MOSAIC_STACK_ADMIN_PASSWORD: "admin-password",
+    MOSAIC_STACK_SESSION_SECRET: "session-secret",
+    MOSAIC_STACK_SESSION_TTL_SECONDS: "43200"
   });
 
   assert.equal(env.OPENROUTER_API_KEY, "");
@@ -64,7 +64,7 @@ test("env parsing allows Matrix-only startup without an OpenRouter key", () => {
   assert.equal(env.OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B, "nemotron-key");
   assert.equal(env.PORT, 8787);
   assert.equal(env.HOST, "127.0.0.1");
-  assert.equal(env.APP_NAME, "modelgate-test");
+  assert.equal(env.APP_NAME, "mosaicstack-test");
   assert.equal(env.CHAT_MODEL, "google/gemma-4-31b-it:free");
   assert.equal(env.CODE_AGENT_MODEL, "qwen/qwen3-coder:free");
   assert.equal(env.STRUCTURED_PLAN_MODEL, "");
@@ -102,9 +102,9 @@ test("env parsing allows Matrix-only startup without an OpenRouter key", () => {
   assert.equal(env.JOURNAL_FILE_PATH, ".local-ai/state/runtime-journal.test.json");
   assert.equal(env.JOURNAL_MAX_ENTRIES, 250);
   assert.equal(env.JOURNAL_EXPOSE_RECENT_LIMIT, 25);
-  assert.equal(env.MODEL_GATE_ADMIN_PASSWORD, "admin-password");
-  assert.equal(env.MODEL_GATE_SESSION_SECRET, "session-secret");
-  assert.equal(env.MODEL_GATE_SESSION_TTL_SECONDS, 43200);
+  assert.equal(env.MOSAIC_STACK_ADMIN_PASSWORD, "admin-password");
+  assert.equal(env.MOSAIC_STACK_SESSION_SECRET, "session-secret");
+  assert.equal(env.MOSAIC_STACK_SESSION_TTL_SECONDS, 43200);
 });
 
 test("env parsing fails closed for malformed rate-limit numbers when configured", () => {

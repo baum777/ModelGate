@@ -17,7 +17,7 @@ export function createTestEnv(overrides: Partial<AppEnv> = {}): AppEnv {
     OPENROUTER_MODEL: overrides.OPENROUTER_MODEL ?? "openrouter/auto",
     OPENROUTER_MODELS: overrides.OPENROUTER_MODELS ?? ["openrouter/auto", "anthropic/claude-3.5-sonnet"],
     OPENROUTER_REQUEST_TIMEOUT_MS: overrides.OPENROUTER_REQUEST_TIMEOUT_MS ?? 15000,
-    APP_NAME: overrides.APP_NAME ?? "modelgate-test",
+    APP_NAME: overrides.APP_NAME ?? "mosaicstack-test",
     DEFAULT_SYSTEM_PROMPT: overrides.DEFAULT_SYSTEM_PROMPT ?? "Backend-owned system prompt.",
     CORS_ORIGINS: overrides.CORS_ORIGINS ?? ["http://localhost:5173"],
     CHAT_MODEL: overrides.CHAT_MODEL ?? overrides.OPENROUTER_MODEL ?? "openrouter/auto",
@@ -41,7 +41,7 @@ export function createTestEnv(overrides: Partial<AppEnv> = {}): AppEnv {
     GITHUB_AGENT_API_KEY: overrides.GITHUB_AGENT_API_KEY ?? "",
     GITHUB_API_BASE_URL: overrides.GITHUB_API_BASE_URL ?? "https://api.github.com",
     GITHUB_DEFAULT_OWNER: overrides.GITHUB_DEFAULT_OWNER ?? "",
-    GITHUB_BRANCH_PREFIX: overrides.GITHUB_BRANCH_PREFIX ?? "modelgate/github",
+    GITHUB_BRANCH_PREFIX: overrides.GITHUB_BRANCH_PREFIX ?? "mosaicstack/github",
     GITHUB_REQUEST_TIMEOUT_MS: overrides.GITHUB_REQUEST_TIMEOUT_MS ?? 8000,
     GITHUB_PLAN_TTL_MS: overrides.GITHUB_PLAN_TTL_MS ?? 720000,
     GITHUB_ACTION_STORE_MODE: overrides.GITHUB_ACTION_STORE_MODE ?? "memory",
@@ -81,9 +81,9 @@ export function createTestEnv(overrides: Partial<AppEnv> = {}): AppEnv {
     JOURNAL_FILE_PATH: overrides.JOURNAL_FILE_PATH ?? ".local-ai/state/runtime-journal.json",
     JOURNAL_MAX_ENTRIES: overrides.JOURNAL_MAX_ENTRIES ?? 500,
     JOURNAL_EXPOSE_RECENT_LIMIT: overrides.JOURNAL_EXPOSE_RECENT_LIMIT ?? 50,
-    MODEL_GATE_ADMIN_PASSWORD: overrides.MODEL_GATE_ADMIN_PASSWORD ?? "test-admin-password",
-    MODEL_GATE_SESSION_SECRET: overrides.MODEL_GATE_SESSION_SECRET ?? "test-session-secret",
-    MODEL_GATE_SESSION_TTL_SECONDS: overrides.MODEL_GATE_SESSION_TTL_SECONDS ?? 86_400
+    MOSAIC_STACK_ADMIN_PASSWORD: overrides.MOSAIC_STACK_ADMIN_PASSWORD ?? "test-admin-password",
+    MOSAIC_STACK_SESSION_SECRET: overrides.MOSAIC_STACK_SESSION_SECRET ?? "test-session-secret",
+    MOSAIC_STACK_SESSION_TTL_SECONDS: overrides.MOSAIC_STACK_SESSION_TTL_SECONDS ?? 86_400
   };
 }
 
@@ -217,7 +217,7 @@ export function createTestGitHubConfig(overrides: Partial<GitHubConfig> = {}): G
     allowedRepoSet: overrides.allowedRepoSet ?? new Set(allowedRepos),
     agentApiKey: overrides.agentApiKey ?? null,
     defaultOwner: overrides.defaultOwner ?? "acme",
-    branchPrefix: overrides.branchPrefix ?? "modelgate/github",
+    branchPrefix: overrides.branchPrefix ?? "mosaicstack/github",
     requestTimeoutMs: overrides.requestTimeoutMs ?? 5000,
     planTtlMs: overrides.planTtlMs ?? 720000,
     maxContextFiles: overrides.maxContextFiles ?? 6,

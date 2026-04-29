@@ -3,7 +3,7 @@ import type { GitHubConfig } from "../lib/github-env.js";
 import type { MatrixConfig } from "../lib/matrix-env.js";
 import type { IntegrationAuthStore, IntegrationConnectionRecord, IntegrationProvider } from "../lib/integration-auth-store.js";
 
-const INTEGRATION_SESSION_COOKIE = "modelgate_integration_session";
+const INTEGRATION_SESSION_COOKIE = "mosaicstack_integration_session";
 
 type IntegrationConnectionStatus =
   | "not_connected"

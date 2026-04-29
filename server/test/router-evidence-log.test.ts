@@ -8,7 +8,7 @@ import { appendMarkdownEntry, buildRouterDecisionMarkdown, redactSensitiveText }
 import { createMockOpenRouterClient, createTestEnv } from "../test-support/helpers.js";
 
 function createTempRoot() {
-  return mkdtempSync(path.join(os.tmpdir(), "modelgate-router-log-"));
+  return mkdtempSync(path.join(os.tmpdir(), "mosaicstack-router-log-"));
 }
 
 test("redactSensitiveText redacts secrets and long token-like strings", () => {

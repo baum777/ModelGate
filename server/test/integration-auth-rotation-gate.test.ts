@@ -7,7 +7,7 @@ import { createApp } from "../src/app.js";
 import { createMockOpenRouterClient, createTestEnv } from "../test-support/helpers.js";
 
 function createTempStorePath() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "modelgate-integration-auth-rotation-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstack-integration-auth-rotation-"));
   return path.join(directory, "integration-auth-store.json");
 }
 
@@ -46,7 +46,7 @@ test("next gate: integration auth key rotation supports restart reverify and key
     GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
     INTEGRATION_AUTH_STORE_MODE: "file" as const,
     INTEGRATION_AUTH_STORE_FILE_PATH: storePath,
-    MODEL_GATE_SESSION_SECRET: ""
+    MOSAIC_STACK_SESSION_SECRET: ""
   };
 
   let activeAccessToken = "gho_rotation_v1";
@@ -179,7 +179,7 @@ test("next gate: integration auth key rotation supports restart reverify and key
 
   assert.equal(callbackV2.statusCode, 302);
 
-  const sessionId = readCookieValue(sessionCookie ?? "", "modelgate_integration_session");
+  const sessionId = readCookieValue(sessionCookie ?? "", "mosaicstack_integration_session");
   assert.ok(sessionId);
 
   const snapshot = JSON.parse(fs.readFileSync(storePath, "utf8")) as {
@@ -208,7 +208,7 @@ test("next gate: missing previous key config fails closed after rotation", async
     GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
     INTEGRATION_AUTH_STORE_MODE: "file" as const,
     INTEGRATION_AUTH_STORE_FILE_PATH: storePath,
-    MODEL_GATE_SESSION_SECRET: ""
+    MOSAIC_STACK_SESSION_SECRET: ""
   };
 
   const fetchImpl: typeof fetch = async (input) => {

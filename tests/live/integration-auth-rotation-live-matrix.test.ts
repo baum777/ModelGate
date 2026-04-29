@@ -56,7 +56,7 @@ function readSetCookie(response: { headers: Record<string, unknown> }) {
 }
 
 function createTempStorePath() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "modelgate-live-integration-auth-matrix-rotation-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstack-live-integration-auth-matrix-rotation-"));
   return path.join(directory, "integration-auth-store.json");
 }
 
@@ -167,7 +167,7 @@ function createMatrixAuthStore(
 
 function createMatrixLiveEnv(config: MatrixLiveRotationConfig) {
   return createTestEnv({
-    MODEL_GATE_SESSION_SECRET: "",
+    MOSAIC_STACK_SESSION_SECRET: "",
     MATRIX_LOGIN_TOKEN_TYPE: config.matrixLoginTokenType
   });
 }

@@ -237,7 +237,7 @@ test("loadLlmRouterPolicy rejects malformed repo config", () => {
 });
 
 function mkTempRepo() {
-  const root = path.join(tmpdir(), `modelgate-router-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  const root = path.join(tmpdir(), `mosaicstack-router-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   mkdirSync(root, { recursive: true });
 
   return root;

@@ -109,7 +109,7 @@ export function createGitHubConfig(env: AppEnv): GitHubConfig {
       .filter((value): value is string => value !== null)
   )];
   const defaultOwner = env.GITHUB_DEFAULT_OWNER.trim() || null;
-  const branchPrefix = env.GITHUB_BRANCH_PREFIX.trim().replace(/^\/+|\/+$/g, "") || "modelgate/github";
+  const branchPrefix = env.GITHUB_BRANCH_PREFIX.trim().replace(/^\/+|\/+$/g, "") || "mosaicstack/github";
   const requestTimeoutMs = Number.isFinite(env.GITHUB_REQUEST_TIMEOUT_MS)
     ? env.GITHUB_REQUEST_TIMEOUT_MS
     : 8000;
@@ -193,7 +193,7 @@ export function createDisabledGitHubConfig(): GitHubConfig {
     allowedRepoSet: new Set<string>(),
     agentApiKey: null,
     defaultOwner: null,
-    branchPrefix: "modelgate/github",
+    branchPrefix: "mosaicstack/github",
     requestTimeoutMs: 8000,
     planTtlMs: 12 * 60 * 1000,
     maxContextFiles: 6,

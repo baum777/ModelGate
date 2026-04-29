@@ -16,8 +16,8 @@ function readSetCookie(response: { headers: Record<string, unknown> }) {
 test("auth login fails closed when server config is missing", async (t) => {
   const app = createApp({
     env: createTestEnv({
-      MODEL_GATE_ADMIN_PASSWORD: "",
-      MODEL_GATE_SESSION_SECRET: ""
+      MOSAIC_STACK_ADMIN_PASSWORD: "",
+      MOSAIC_STACK_SESSION_SECRET: ""
     }),
     openRouter: createMockOpenRouterClient(),
     logger: false

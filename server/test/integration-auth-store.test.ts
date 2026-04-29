@@ -10,7 +10,7 @@ import {
 import { createTestEnv } from "../test-support/helpers.js";
 
 function createTempStorePath() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "modelgate-integration-auth-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstack-integration-auth-"));
   return path.join(directory, "integration-auth-store.json");
 }
 
@@ -164,7 +164,7 @@ test("integration auth store fails closed in real credential mode when encryptio
 
 test("integration auth store selection does not use the session secret as credential encryption material", () => {
   const selection = createIntegrationAuthStoreSelection(createTestEnv({
-    MODEL_GATE_SESSION_SECRET: "session-cookie-secret",
+    MOSAIC_STACK_SESSION_SECRET: "session-cookie-secret",
     INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID: "",
     INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_VERSION: "1",
     INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY: "",

@@ -44,8 +44,8 @@ type LoadedProposalFile = {
   truncated: boolean;
 };
 
-const SMOKE_FILE_PATH = "docs/modelgate-smoke.md";
-const DEFAULT_SMOKE_BRANCH_PREFIX = "modelgate/github-smoke";
+const SMOKE_FILE_PATH = "docs/mosaicstack-smoke.md";
+const DEFAULT_SMOKE_BRANCH_PREFIX = "mosaicstack/github-smoke";
 
 function normalizeLineEndings(value: string) {
   return value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -458,7 +458,7 @@ function buildSmokeFileContent(options: {
   createdAt: string;
 }) {
   return [
-    "# ModelGate smoke",
+    "# MosaicStack smoke",
     "",
     `Generated at: ${options.createdAt}`,
     `Repo: ${options.repoFullName}`,

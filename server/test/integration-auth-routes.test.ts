@@ -13,7 +13,7 @@ const TEST_ENCRYPTION_KEY = {
 };
 
 function createTempStorePath() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "modelgate-integration-auth-routes-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstack-integration-auth-routes-"));
   return path.join(directory, "integration-auth-store.json");
 }
 
@@ -310,8 +310,8 @@ test("integrations status never exposes backend secrets", async (t) => {
     env: createTestEnv({
       GITHUB_TOKEN: "secret-github-token",
       GITHUB_ALLOWED_REPOS: ["octo/demo"],
-      MODEL_GATE_ADMIN_PASSWORD: "secret-admin-password",
-      MODEL_GATE_SESSION_SECRET: "secret-session-secret"
+      MOSAIC_STACK_ADMIN_PASSWORD: "secret-admin-password",
+      MOSAIC_STACK_SESSION_SECRET: "secret-session-secret"
     }),
     openRouter: createMockOpenRouterClient(),
     logger: false
@@ -337,7 +337,7 @@ test("real GitHub OAuth callback stores a user-connected credential source", asy
   const env = createTestEnv({
     GITHUB_OAUTH_CLIENT_ID: "github-client-id",
     GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
-    MODEL_GATE_SESSION_SECRET: "real-oauth-session-secret",
+    MOSAIC_STACK_SESSION_SECRET: "real-oauth-session-secret",
     ...TEST_ENCRYPTION_KEY
   });
 
@@ -425,7 +425,7 @@ test("real GitHub OAuth callback stores a user-connected credential source", asy
 test("real Matrix login-token callback stores a user-connected credential source", async (t) => {
   const env = createTestEnv({
     MATRIX_LOGIN_TOKEN_TYPE: "m.login.token",
-    MODEL_GATE_SESSION_SECRET: "real-matrix-session-secret",
+    MOSAIC_STACK_SESSION_SECRET: "real-matrix-session-secret",
     ...TEST_ENCRYPTION_KEY
   });
 
@@ -531,7 +531,7 @@ test("real Matrix login-token callback stores a user-connected credential source
 test("matrix callback fails closed when homeserver is configured but login token is missing", async (t) => {
   const env = createTestEnv({
     MATRIX_LOGIN_TOKEN_TYPE: "m.login.token",
-    MODEL_GATE_SESSION_SECRET: "matrix-fail-closed-session-secret"
+    MOSAIC_STACK_SESSION_SECRET: "matrix-fail-closed-session-secret"
   });
 
   const app = createApp({
@@ -619,7 +619,7 @@ test("real github reverify maps upstream 401 to auth_expired status", async (t) 
   const env = createTestEnv({
     GITHUB_OAUTH_CLIENT_ID: "github-client-id",
     GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
-    MODEL_GATE_SESSION_SECRET: "github-reverify-session-secret",
+    MOSAIC_STACK_SESSION_SECRET: "github-reverify-session-secret",
     ...TEST_ENCRYPTION_KEY
   });
 
@@ -1369,7 +1369,7 @@ test("configured providers fail closed when credential encryption is unavailable
     env: createTestEnv({
       GITHUB_OAUTH_CLIENT_ID: "github-client-id",
       GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
-      MODEL_GATE_SESSION_SECRET: "",
+      MOSAIC_STACK_SESSION_SECRET: "",
       INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY: "",
       INTEGRATION_AUTH_ENCRYPTION_PREVIOUS_KEYS: ""
     }),
@@ -1454,7 +1454,7 @@ test("matrix real credential callback fails closed when credential encryption is
   const app = createApp({
     env: createTestEnv({
       MATRIX_LOGIN_TOKEN_TYPE: "m.login.token",
-      MODEL_GATE_SESSION_SECRET: "",
+      MOSAIC_STACK_SESSION_SECRET: "",
       INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY: "",
       INTEGRATION_AUTH_ENCRYPTION_PREVIOUS_KEYS: ""
     }),

@@ -2,7 +2,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import type { AppEnv } from "./env.js";
 
-const AUTH_COOKIE_NAME = "modelgate_admin_session";
+const AUTH_COOKIE_NAME = "mosaicstack_admin_session";
 const AUTH_COOKIE_VERSION = "v1";
 const AUTH_COOKIE_SAME_SITE = "Lax";
 const DEFAULT_SESSION_TTL_SECONDS = 86_400;
@@ -122,19 +122,19 @@ function compareStringsSecurely(expected: string, actual: string) {
 }
 
 export function createAuthConfig(env: AppEnv): AuthConfig {
-  const adminPassword = env.MODEL_GATE_ADMIN_PASSWORD.trim() || null;
-  const sessionSecret = env.MODEL_GATE_SESSION_SECRET.trim() || null;
-  const sessionTtlSeconds = env.MODEL_GATE_SESSION_TTL_SECONDS > 0
-    ? Math.floor(env.MODEL_GATE_SESSION_TTL_SECONDS)
+  const adminPassword = env.MOSAIC_STACK_ADMIN_PASSWORD.trim() || null;
+  const sessionSecret = env.MOSAIC_STACK_SESSION_SECRET.trim() || null;
+  const sessionTtlSeconds = env.MOSAIC_STACK_SESSION_TTL_SECONDS > 0
+    ? Math.floor(env.MOSAIC_STACK_SESSION_TTL_SECONDS)
     : DEFAULT_SESSION_TTL_SECONDS;
   const issues: string[] = [];
 
   if (!adminPassword) {
-    issues.push("MODEL_GATE_ADMIN_PASSWORD is required");
+    issues.push("MOSAIC_STACK_ADMIN_PASSWORD is required");
   }
 
   if (!sessionSecret) {
-    issues.push("MODEL_GATE_SESSION_SECRET is required");
+    issues.push("MOSAIC_STACK_SESSION_SECRET is required");
   }
 
   return {

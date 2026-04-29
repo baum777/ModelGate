@@ -4,7 +4,7 @@ import type { AppEnv } from "../lib/env.js";
 import type { IntegrationAuthStore, IntegrationProvider } from "../lib/integration-auth-store.js";
 import type { MatrixConfig } from "../lib/matrix-env.js";
 
-const INTEGRATION_SESSION_COOKIE = "modelgate_integration_session";
+const INTEGRATION_SESSION_COOKIE = "mosaicstack_integration_session";
 const INTEGRATION_SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 const DEFAULT_RETURN_TO = "/console?mode=settings";
 

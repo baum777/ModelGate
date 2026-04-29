@@ -47,7 +47,7 @@ export const EnvSchema = z.object({
   GITHUB_AGENT_API_KEY: z.string().trim().default(""),
   GITHUB_API_BASE_URL: z.string().trim().default("https://api.github.com"),
   GITHUB_DEFAULT_OWNER: z.string().trim().default(""),
-  GITHUB_BRANCH_PREFIX: z.string().trim().default("modelgate/github"),
+  GITHUB_BRANCH_PREFIX: z.string().trim().default("mosaicstack/github"),
   GITHUB_REQUEST_TIMEOUT_MS: z.string().trim().default("8000"),
   GITHUB_PLAN_TTL_MS: z.string().trim().default("720000"),
   GITHUB_ACTION_STORE_MODE: z.string().trim().default("memory"),
@@ -87,9 +87,9 @@ export const EnvSchema = z.object({
   JOURNAL_FILE_PATH: z.string().trim().default(".local-ai/state/runtime-journal.json"),
   JOURNAL_MAX_ENTRIES: z.string().trim().default("500"),
   JOURNAL_EXPOSE_RECENT_LIMIT: z.string().trim().default("50"),
-  MODEL_GATE_ADMIN_PASSWORD: z.string().trim().default(""),
-  MODEL_GATE_SESSION_SECRET: z.string().trim().default(""),
-  MODEL_GATE_SESSION_TTL_SECONDS: z.string().trim().default("86400")
+  MOSAIC_STACK_ADMIN_PASSWORD: z.string().trim().default(""),
+  MOSAIC_STACK_SESSION_SECRET: z.string().trim().default(""),
+  MOSAIC_STACK_SESSION_TTL_SECONDS: z.string().trim().default("86400")
 });
 
 export type AppEnv = {
@@ -167,9 +167,9 @@ export type AppEnv = {
   JOURNAL_FILE_PATH: string;
   JOURNAL_MAX_ENTRIES: number;
   JOURNAL_EXPOSE_RECENT_LIMIT: number;
-  MODEL_GATE_ADMIN_PASSWORD: string;
-  MODEL_GATE_SESSION_SECRET: string;
-  MODEL_GATE_SESSION_TTL_SECONDS: number;
+  MOSAIC_STACK_ADMIN_PASSWORD: string;
+  MOSAIC_STACK_SESSION_SECRET: string;
+  MOSAIC_STACK_SESSION_TTL_SECONDS: number;
 };
 
 function parsePositiveIntOrDefault(input: string, fallback: number) {
@@ -248,7 +248,7 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     GITHUB_AGENT_API_KEY: parsed.GITHUB_AGENT_API_KEY.trim(),
     GITHUB_API_BASE_URL: parsed.GITHUB_API_BASE_URL.trim().replace(/\/+$/, "") || "https://api.github.com",
     GITHUB_DEFAULT_OWNER: parsed.GITHUB_DEFAULT_OWNER.trim(),
-    GITHUB_BRANCH_PREFIX: parsed.GITHUB_BRANCH_PREFIX.trim() || "modelgate/github",
+    GITHUB_BRANCH_PREFIX: parsed.GITHUB_BRANCH_PREFIX.trim() || "mosaicstack/github",
     GITHUB_REQUEST_TIMEOUT_MS: Number.parseInt(parsed.GITHUB_REQUEST_TIMEOUT_MS.trim(), 10),
     GITHUB_PLAN_TTL_MS: Number.parseInt(parsed.GITHUB_PLAN_TTL_MS.trim(), 10),
     GITHUB_ACTION_STORE_MODE: parsed.GITHUB_ACTION_STORE_MODE.trim() || "memory",
@@ -318,9 +318,9 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     JOURNAL_FILE_PATH: parsed.JOURNAL_FILE_PATH.trim() || ".local-ai/state/runtime-journal.json",
     JOURNAL_MAX_ENTRIES: parsePositiveIntOrDefault(parsed.JOURNAL_MAX_ENTRIES, 500),
     JOURNAL_EXPOSE_RECENT_LIMIT: parsePositiveIntOrDefault(parsed.JOURNAL_EXPOSE_RECENT_LIMIT, 50),
-    MODEL_GATE_ADMIN_PASSWORD: parsed.MODEL_GATE_ADMIN_PASSWORD.trim(),
-    MODEL_GATE_SESSION_SECRET: parsed.MODEL_GATE_SESSION_SECRET.trim(),
-    MODEL_GATE_SESSION_TTL_SECONDS: parsePositiveIntOrDefault(parsed.MODEL_GATE_SESSION_TTL_SECONDS, 86_400)
+    MOSAIC_STACK_ADMIN_PASSWORD: parsed.MOSAIC_STACK_ADMIN_PASSWORD.trim(),
+    MOSAIC_STACK_SESSION_SECRET: parsed.MOSAIC_STACK_SESSION_SECRET.trim(),
+    MOSAIC_STACK_SESSION_TTL_SECONDS: parsePositiveIntOrDefault(parsed.MOSAIC_STACK_SESSION_TTL_SECONDS, 86_400)
   };
 
   return normalized;

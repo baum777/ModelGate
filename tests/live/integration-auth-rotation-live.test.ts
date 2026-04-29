@@ -73,7 +73,7 @@ function readGitHubStateFromAuthorizeLocation(location: string) {
 }
 
 function createTempStorePath() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "modelgate-live-integration-auth-rotation-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstack-live-integration-auth-rotation-"));
   return path.join(directory, "integration-auth-store.json");
 }
 
@@ -169,7 +169,7 @@ function createLiveEnv(storePath: string, liveConfig: LiveRotationConfig, stage:
   return createTestEnv({
     GITHUB_OAUTH_CLIENT_ID: liveConfig.githubClientId,
     GITHUB_OAUTH_CLIENT_SECRET: liveConfig.githubClientSecret,
-    MODEL_GATE_SESSION_SECRET: "",
+    MOSAIC_STACK_SESSION_SECRET: "",
     INTEGRATION_AUTH_STORE_MODE: "file",
     INTEGRATION_AUTH_STORE_FILE_PATH: storePath,
     INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID: current.keyId,
@@ -268,7 +268,7 @@ test("integration auth live smoke: github credential key rotation across restart
   assert.equal(statusPayloadVn.github.authState, "user_connected");
   assert.equal(statusPayloadVn.github.credentialSource, "user_connected");
 
-  const sessionId = readCookieValue(sessionCookie ?? "", "modelgate_integration_session");
+  const sessionId = readCookieValue(sessionCookie ?? "", "mosaicstack_integration_session");
   assert.ok(sessionId);
   assertSnapshotKeyVersion(storePath, sessionId ?? "", {
     keyId: liveConfig.keyVn.keyId,
