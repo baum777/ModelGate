@@ -49,7 +49,9 @@ test("vercel config keeps governed GitHub and Matrix API routes on backend adapt
   assert.equal(rewrites.get("/health"), "/api/health");
   assert.equal(rewrites.get("/models"), "/api/models");
   assert.equal(rewrites.get("/chat"), "/api/chat");
+  assert.equal(rewrites.get("/api/github/:path*"), undefined);
+  assert.equal(rewrites.get("/api/matrix/:path*"), "/api/matrix/[...path]");
+  assert.equal(rewrites.get("/api/:path*"), "/api/[...path]");
   assert.equal(rewrites.get("/:path*"), "/");
-  assert.equal([...rewrites.keys()].some((source) => source.startsWith("/api/")), false);
   assert.equal([...rewrites.values()].some((destination) => destination.includes(":path*")), false);
 });
