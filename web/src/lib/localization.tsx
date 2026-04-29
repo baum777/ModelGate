@@ -405,8 +405,8 @@ const EN_COPY: LocalizationCopy = {
     justNow: "just now",
   },
   shell: {
-    appKicker: "MODELGATE",
-    appTitle: "ModelGate Console",
+    appKicker: "MOSAICSTACK",
+    appTitle: "MosaicStack Console",
     appDeck: "Governance-first operator shell. Runtime truth stays backend-owned.",
     workspaceConsoleKicker: "WORKSPACE CONSOLE",
     workspaceConsoleTitle: "Choose workspace",
@@ -771,8 +771,8 @@ const DE_COPY: LocalizationCopy = {
     justNow: "gerade eben",
   },
   shell: {
-    appKicker: "MODELGATE",
-    appTitle: "ModelGate Konsole",
+    appKicker: "MOSAICSTACK",
+    appTitle: "MosaicStack Konsole",
     appDeck: "Governance-first Operator-Shell. Laufzeitwahrheit bleibt backend-owned.",
     workspaceConsoleKicker: "WORKSPACE CONSOLE",
     workspaceConsoleTitle: "Arbeitsbereich wählen",
@@ -1152,7 +1152,7 @@ function writeStoredLocale(locale: Locale) {
   }
 }
 
-export const LOCALE_STORAGE_KEY = "modelgate.console.locale.v1";
+export const LOCALE_STORAGE_KEY = "mosaicstack.console.locale.v1";
 
 export function normalizeLocale(value: string | null | undefined): Locale {
   return value?.toLowerCase().startsWith("de") ? "de" : "en";

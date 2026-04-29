@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
-  <title>ModelGate</title>
-  <desc>Dark geometric mark for the ModelGate console.</desc>
+  <title>MosaicStack</title>
+  <desc>Dark geometric mark for the MosaicStack console.</desc>
   <defs>
     <linearGradient id="mg-bg" x1="64" y1="32" x2="448" y2="480" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#0b1427" />

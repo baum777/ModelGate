@@ -1,4 +1,4 @@
-const CACHE_NAME = "modelgate-shell-v1";
+const CACHE_NAME = "mosaicstack-shell-v1";
 const SHELL_ASSETS = [
   "/",
   "/index.html",

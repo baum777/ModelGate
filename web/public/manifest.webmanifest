@@ -1,6 +1,6 @@
 {
-  "name": "ModelGate",
-  "short_name": "ModelGate",
+  "name": "MosaicStack",
+  "short_name": "MosaicStack",
   "description": "Backend-owned console for chat, GitHub, and Matrix topic updates.",
   "start_url": "/",
   "scope": "/",
