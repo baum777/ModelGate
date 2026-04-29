@@ -163,6 +163,7 @@ test("Settings workspace renders integration cards and keeps secrets out of the 
       onOpenRouterModelInputChange: () => undefined,
       onAddOpenRouterModel: () => undefined,
       isAddingOpenRouterModel: false,
+      buildIntegrationStartUrl: (provider: "github" | "matrix") => `/api/auth/${provider}/start?returnTo=%2Fconsole%3Fmode%3Dsettings`,
     }),
   );
 
@@ -171,6 +172,7 @@ test("Settings workspace renders integration cards and keeps secrets out of the 
   assert.match(markup, /data-testid="settings-adapter-github"/);
   assert.match(markup, /aria-label="GitHub Reverify"/);
   assert.match(markup, /data-testid="settings-adapter-matrix-action-connect"/);
+  assert.match(markup, /href="\/api\/auth\/matrix\/start\?returnTo=%2Fconsole%3Fmode%3Dsettings"/);
   assert.match(markup, /stub-github-operator/);
   assert.match(markup, /Credential source/);
   assert.match(markup, /Connect available/);

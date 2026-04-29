@@ -928,20 +928,21 @@ test("Settings keeps diagnostics behind Expert mode and allows clearing local en
 test("Settings GitHub CTA starts backend-owned auth flow and returns to Settings", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
   let startHits = 0;
+  let callbackHits = 0;
 
   await page.route("**/api/auth/github/start**", async (route) => {
     startHits += 1;
     const url = new URL(route.request().url());
     expect(url.searchParams.get("returnTo")).toBe("/console?mode=settings");
     await route.fulfill({
-      status: 302,
-      headers: {
-        location: "/api/auth/github/callback?state=stub-state&code=stub-code"
-      },
+      status: 200,
+      contentType: "text/html; charset=utf-8",
+      body: "<!doctype html><html><body><script>window.location.replace('/api/auth/github/callback?state=stub-state&code=stub-code');</script></body></html>",
     });
   });
 
   await page.route("**/api/auth/github/callback**", async (route) => {
+    callbackHits += 1;
     await route.fulfill({
       status: 200,
       contentType: "text/html; charset=utf-8",
@@ -955,29 +956,34 @@ test("Settings GitHub CTA starts backend-owned auth flow and returns to Settings
   const settingsWorkspace = page.getByTestId("settings-workspace");
   const githubAdapter = settingsWorkspace.getByTestId("settings-adapter-github");
 
-  await githubAdapter.getByRole("button", { name: "Connect" }).click();
-  await expect(page).toHaveURL(/\/api\/auth\/github\/callback\?state=stub-state/);
+  const githubConnect = githubAdapter.getByTestId("settings-adapter-github-action-connect");
+  await expect(githubConnect).toHaveAttribute("href", /\/api\/auth\/github\/start\?returnTo=%2Fconsole%3Fmode%3Dsettings$/);
+  await githubConnect.click();
+  await expect(page).toHaveURL(/\/console\?mode=settings$/);
+  await expect(page.getByTestId("settings-workspace")).toBeVisible();
   expect(startHits).toBe(1);
+  expect(callbackHits).toBe(1);
   await expect(page.locator("body")).not.toContainText("sk-test");
 });
 
 test("Settings Matrix CTA starts backend-owned auth flow and returns to Settings", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
   let startHits = 0;
+  let callbackHits = 0;
 
   await page.route("**/api/auth/matrix/start**", async (route) => {
     startHits += 1;
     const url = new URL(route.request().url());
     expect(url.searchParams.get("returnTo")).toBe("/console?mode=settings");
     await route.fulfill({
-      status: 302,
-      headers: {
-        location: "/api/auth/matrix/callback?state=stub-state&loginToken=stub-login-token"
-      },
+      status: 200,
+      contentType: "text/html; charset=utf-8",
+      body: "<!doctype html><html><body><script>window.location.replace('/api/auth/matrix/callback?state=stub-state&loginToken=stub-login-token');</script></body></html>",
     });
   });
 
   await page.route("**/api/auth/matrix/callback**", async (route) => {
+    callbackHits += 1;
     await route.fulfill({
       status: 200,
       contentType: "text/html; charset=utf-8",
@@ -991,9 +997,13 @@ test("Settings Matrix CTA starts backend-owned auth flow and returns to Settings
   const settingsWorkspace = page.getByTestId("settings-workspace");
   const matrixAdapter = settingsWorkspace.getByTestId("settings-adapter-matrix");
 
-  await matrixAdapter.getByRole("button", { name: "Connect" }).click();
-  await expect(page).toHaveURL(/\/api\/auth\/matrix\/callback\?state=stub-state/);
+  const matrixConnect = matrixAdapter.getByTestId("settings-adapter-matrix-action-connect");
+  await expect(matrixConnect).toHaveAttribute("href", /\/api\/auth\/matrix\/start\?returnTo=%2Fconsole%3Fmode%3Dsettings$/);
+  await matrixConnect.click();
+  await expect(page).toHaveURL(/\/console\?mode=settings$/);
+  await expect(page.getByTestId("settings-workspace")).toBeVisible();
   expect(startHits).toBe(1);
+  expect(callbackHits).toBe(1);
   await expect(page.locator("body")).not.toContainText("sk-test");
 });
 

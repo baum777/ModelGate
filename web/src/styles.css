@@ -34,7 +34,8 @@ body {
 
 button, textarea, select, input { font: inherit; }
 
-button {
+button,
+.primary-link-button {
   border: 0;
   border-radius: 14px;
   padding: 0.85rem 1.1rem;
@@ -44,14 +45,23 @@ button {
   cursor: pointer;
   transition: transform 150ms ease, opacity 150ms ease, box-shadow 150ms ease;
   box-shadow: 0 10px 24px rgba(255, 139, 61, 0.2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
 }
 
-button:hover:not(:disabled) { transform: translateY(-1px); }
+button:hover:not(:disabled),
+.primary-link-button:hover:not(.is-disabled) {
+  transform: translateY(-1px);
+}
 
-button:disabled {
+button:disabled,
+.primary-link-button.is-disabled {
   cursor: not-allowed;
   opacity: 0.55;
   box-shadow: none;
+  pointer-events: none;
 }
 
 .ghost-button {
@@ -5172,11 +5182,13 @@ textarea:focus {
   width: 100%;
 }
 
-.settings-workspace .settings-adapter-actions button {
+.settings-workspace .settings-adapter-actions button,
+.settings-workspace .settings-adapter-actions .primary-link-button {
   margin-right: 8px;
 }
 
-.settings-workspace .settings-adapter-actions button:last-child {
+.settings-workspace .settings-adapter-actions button:last-child,
+.settings-workspace .settings-adapter-actions .primary-link-button:last-child {
   margin-right: 0;
 }
 

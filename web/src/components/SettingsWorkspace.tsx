@@ -83,6 +83,7 @@ type SettingsWorkspaceProps = {
   onOpenRouterModelInputChange: (value: string) => void;
   onAddOpenRouterModel: () => void;
   isAddingOpenRouterModel: boolean;
+  buildIntegrationStartUrl: (provider: "github" | "matrix") => string;
   onIntegrationAction: (
     provider: "github" | "matrix",
     action: "connect" | "reconnect" | "disconnect" | "reverify"
@@ -101,6 +102,7 @@ export function SettingsWorkspace({
   onOpenRouterModelInputChange,
   onAddOpenRouterModel,
   isAddingOpenRouterModel,
+  buildIntegrationStartUrl,
   onIntegrationAction,
 }: SettingsWorkspaceProps) {
   const { locale, copy: ui } = useLocalization();
@@ -265,15 +267,32 @@ export function SettingsWorkspace({
                 </div>
 
                 <div className="settings-adapter-actions">
-                  <button
-                    type="button"
-                    aria-label={`${adapter.label} ${adapterCopy.action[adapter.primaryAction]}`}
-                    data-testid={`settings-adapter-${adapter.id}-action-${adapter.primaryAction}`}
-                    onClick={() => onIntegrationAction(adapter.id, adapter.primaryAction)}
-                    disabled={adapter.status === "checking"}
-                  >
-                    {getActionLabel(adapter, adapter.primaryAction)}
-                  </button>
+                  {adapter.primaryAction === "connect" || adapter.primaryAction === "reconnect" ? (
+                    <a
+                      className={`primary-link-button${adapter.status === "checking" ? " is-disabled" : ""}`}
+                      aria-label={`${adapter.label} ${adapterCopy.action[adapter.primaryAction]}`}
+                      data-testid={`settings-adapter-${adapter.id}-action-${adapter.primaryAction}`}
+                      href={adapter.status === "checking" ? undefined : buildIntegrationStartUrl(adapter.id)}
+                      aria-disabled={adapter.status === "checking" ? "true" : undefined}
+                      onClick={(event) => {
+                        if (adapter.status === "checking") {
+                          event.preventDefault();
+                        }
+                      }}
+                    >
+                      {getActionLabel(adapter, adapter.primaryAction)}
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      aria-label={`${adapter.label} ${adapterCopy.action[adapter.primaryAction]}`}
+                      data-testid={`settings-adapter-${adapter.id}-action-${adapter.primaryAction}`}
+                      onClick={() => onIntegrationAction(adapter.id, adapter.primaryAction)}
+                      disabled={adapter.status === "checking"}
+                    >
+                      {getActionLabel(adapter, adapter.primaryAction)}
+                    </button>
+                  )}
                   {adapter.secondaryAction ? (
                     <button
                       type="button"

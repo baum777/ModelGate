@@ -808,6 +808,10 @@ function ConsoleShell() {
     }
   }, [locale, recordTelemetry, refreshIntegrationsStatus]);
 
+  const buildSettingsIntegrationStartUrl = useCallback((provider: "github" | "matrix") => (
+    buildIntegrationConnectStartUrl(provider, "/console?mode=settings")
+  ), []);
+
   const handleWorkspaceSessionArchive = useCallback((workspace: WorkspaceKind, sessionId: string) => {
     setWorkspaceState((current) =>
       updateSession(current, workspace, sessionId, (session) => ({
@@ -1669,6 +1673,7 @@ function ConsoleShell() {
       onOpenRouterModelInputChange={setOpenRouterModelInput}
       onAddOpenRouterModel={handleAddOpenRouterModel}
       isAddingOpenRouterModel={isAddingOpenRouterModel}
+      buildIntegrationStartUrl={buildSettingsIntegrationStartUrl}
       onIntegrationAction={handleIntegrationAction}
     />
   );
