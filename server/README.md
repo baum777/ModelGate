@@ -26,7 +26,7 @@ GitHub remote flow required when enabled:
 
 - `GITHUB_TOKEN` - required GitHub token for the backend-owned remote flow
 - `GITHUB_ALLOWED_REPOS` - required comma-separated allowlist of `owner/repo` values; the GitHub remote flow stays fail-closed until at least one repository is allowed
-- `GITHUB_AGENT_API_KEY` - required to approve execute requests; send it only from trusted server-side callers via `X-ModelGate-Admin-Key`
+- `GITHUB_AGENT_API_KEY` - required to approve execute requests; send it only from trusted server-side callers via `X-MosaicStack-Admin-Key`
 
 Optional environment variables:
 
@@ -85,7 +85,7 @@ Optional environment variables:
 - `MATRIX_SMOKE_TOPIC_PREFIX` - optional prefix for the temporary live smoke topic
 - `GITHUB_API_BASE_URL` - GitHub API base URL, defaults to `https://api.github.com`
 - `GITHUB_DEFAULT_OWNER` - optional default owner used by GitHub routing helpers
-- `GITHUB_BRANCH_PREFIX` - branch prefix for backend-created GitHub plans, defaults to `modelgate/github`
+- `GITHUB_BRANCH_PREFIX` - branch prefix for backend-created GitHub plans, defaults to `mosaicstack/github`
 - `GITHUB_REQUEST_TIMEOUT_MS` - GitHub upstream request timeout in milliseconds, defaults to `8000`
 - `GITHUB_PLAN_TTL_MS` - plan TTL in milliseconds, defaults to `720000`
 - `GITHUB_MAX_CONTEXT_FILES` - max files collected for `/api/github/context`, defaults to `6`
@@ -97,7 +97,7 @@ Optional environment variables:
 - `GITHUB_APP_ID` - currently schema-only and not wired into the GitHub runtime path
 - `GITHUB_APP_PRIVATE_KEY` - currently schema-only and not wired into the GitHub runtime path
 - `GITHUB_APP_INSTALLATION_ID` - currently schema-only and not wired into the GitHub runtime path
-- `MODEL_GATE_SESSION_TTL_SECONDS` - defaults to `86400`
+- `MOSAIC_STACK_SESSION_TTL_SECONDS` - defaults to `86400`
 
 ## Local Run
 
@@ -234,7 +234,7 @@ Returns the stored GitHub plan while it is still active.
 
 ### `POST /api/github/actions/:planId/execute`
 
-Requires `{ "approval": true }`, re-checks the plan freshness, and creates the backend-owned execution result. The request must also include `X-ModelGate-Admin-Key` matching `GITHUB_AGENT_API_KEY`; otherwise the route fails closed with 401 or 403. This execution gate is independent of the legacy session routes.
+Requires `{ "approval": true }`, re-checks the plan freshness, and creates the backend-owned execution result. The request must also include `X-MosaicStack-Admin-Key` matching `GITHUB_AGENT_API_KEY`; otherwise the route fails closed with 401 or 403. This execution gate is independent of the legacy session routes.
 
 ### `GET /api/github/actions/:planId/verify`
 
@@ -560,7 +560,7 @@ Required live smoke environment:
 - `MATRIX_BASE_URL`
 - `MATRIX_ACCESS_TOKEN`
 - `MATRIX_SMOKE_ROOM_ID`
-- `MATRIX_SMOKE_TOPIC_PREFIX` is optional and defaults to `ModelGate smoke`
+- `MATRIX_SMOKE_TOPIC_PREFIX` is optional and defaults to `MosaicStack smoke`
 
 The server reads the repo-root `.env` file. Copy `.env.example` to `.env`
 before running the backend or the smoke.

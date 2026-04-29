@@ -1,4 +1,4 @@
-# ModelGate Console / Guided Workspace
+# MosaicStack Console / Guided Workspace
 
 ## Status Ledger
 
@@ -8,7 +8,7 @@
 
 ## UI Boundaries
 
-- `ModelGate Console` is the visible brand
+- `MosaicStack Console` is the visible brand
 - primary navigation is `Chat`, `GitHub Workspace`, `Matrix Workspace`, `Review`, `Settings`
 - `Chat` is a consumer surface for backend-owned SSE and renders public model aliases only
 - `GitHub Workspace` reads allowed repos, prepares proposals, and stays review-first and approval-gated
