@@ -174,6 +174,29 @@ test("integration auth store selection does not use the session secret as creden
   assert.equal(selection.encryption.current, null);
 });
 
+test("integration auth store selection maps relative Vercel file paths to writable temp storage", () => {
+  const previousVercel = process.env.VERCEL;
+  process.env.VERCEL = "1";
+
+  try {
+    const selection = createIntegrationAuthStoreSelection(createTestEnv({
+      INTEGRATION_AUTH_STORE_MODE: "file",
+      INTEGRATION_AUTH_STORE_FILE_PATH: ".local-ai/state/integration-auth-store.json"
+    }));
+
+    assert.equal(
+      selection.filePath,
+      path.join(os.tmpdir(), "mosaicstack", ".local-ai/state/integration-auth-store.json")
+    );
+  } finally {
+    if (previousVercel === undefined) {
+      delete process.env.VERCEL;
+    } else {
+      process.env.VERCEL = previousVercel;
+    }
+  }
+});
+
 test("integration auth store fails closed when the current encryption config is invalid", () => {
   const store = createIntegrationAuthStore({
     mode: "memory",

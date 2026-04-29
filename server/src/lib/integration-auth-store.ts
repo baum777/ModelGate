@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import {
   createCipheriv,
@@ -117,6 +118,7 @@ type IntegrationAuthStoreOptions = {
 
 const DEFAULT_STATE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_STORE_FILE_PATH = ".local-ai/state/integration-auth-store.json";
+const VERCEL_TMP_STORE_ROOT = "mosaicstack";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -186,7 +188,12 @@ function parsePreviousEncryptionKeys(input: string): IntegrationCredentialKeyCon
 
 export function createIntegrationAuthStoreSelection(env: AppEnv): IntegrationAuthStoreSelection {
   const mode = env.INTEGRATION_AUTH_STORE_MODE.trim().toLowerCase() === "memory" ? "memory" : "file";
-  const filePath = env.INTEGRATION_AUTH_STORE_FILE_PATH.trim() || DEFAULT_STORE_FILE_PATH;
+  const configuredFilePath = env.INTEGRATION_AUTH_STORE_FILE_PATH.trim() || DEFAULT_STORE_FILE_PATH;
+  const filePath = mode === "file"
+    && process.env.VERCEL === "1"
+    && !path.isAbsolute(configuredFilePath)
+    ? path.join(os.tmpdir(), VERCEL_TMP_STORE_ROOT, configuredFilePath)
+    : configuredFilePath;
 
   const currentKeyMaterial = env.INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY.trim();
   const currentKeyId = env.INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID.trim();
