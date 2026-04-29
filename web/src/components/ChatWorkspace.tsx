@@ -18,7 +18,7 @@ import {
   deriveSessionTitle,
   type ChatSession
 } from "../lib/workspace-state.js";
-import { getConnectionStateLabel, useLocalization } from "../lib/localization.js";
+import { useLocalization } from "../lib/localization.js";
 import {
   ApprovalTransitionCard,
   DecisionZone,
@@ -148,6 +148,26 @@ function formatTimestamp(locale: "en" | "de", value: string | undefined) {
   return parsed.toLocaleString(locale);
 }
 
+function formatConnectionStateLabel(state: ConnectionState) {
+  return state.charAt(0).toUpperCase() + state.slice(1);
+}
+
+function resolveConnectionStateTone(state: ConnectionState) {
+  if (state === "completed") {
+    return "ready";
+  }
+
+  if (state === "error") {
+    return "error";
+  }
+
+  if (state === "submitting" || state === "streaming") {
+    return "partial";
+  }
+
+  return "muted";
+}
+
 function buildProposalConsequence(locale: "en" | "de", modelAlias: string | null) {
   const alias = modelAlias ?? "selected public alias";
   return locale === "de"
@@ -191,6 +211,17 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const scrollFrameRef = useRef<number | null>(null);
   const tokenBatcherRef = useRef<ReturnType<typeof createTokenBatcher> | null>(null);
+  const modelOptions = props.modelRegistry.length > 0
+    ? props.modelRegistry
+    : props.availableModels.map((alias) => ({
+        alias,
+        label: alias,
+        description: "",
+        capabilities: [],
+        tier: "core" as const,
+        streaming: true,
+        recommendedFor: [],
+      }));
 
   useEffect(() => {
     if (props.activeModelAlias && props.activeModelAlias !== selectedModel) {
@@ -587,12 +618,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     || chatState.connectionState === "streaming";
   const modelUnresolved = selectedModel.trim().length === 0;
   const backendUnreachable = props.backendHealthy === false;
-  const streamStatusLabel = resolveChatStreamStatusLabel({
-    streamState: chatState.streamState,
-    connectionState: chatState.connectionState,
-    copy: ui.chat.streamStatus
-  });
-
+  const connectionStateTone = resolveConnectionStateTone(chatState.connectionState);
   const composerBlockReason = resolveChatComposerBlockReason({
     executionMode,
     backendUnreachable,
@@ -624,9 +650,26 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       <section className="chat-toolbar">
         <div className="chat-toolbar-copy">
           <SectionLabel>{ui.chat.title}</SectionLabel>
-          <strong data-testid="chat-connection-state">{getConnectionStateLabel(locale, chatState.connectionState)}</strong>
-          <span className="chat-stream-status">{streamStatusLabel}</span>
+          <span
+            className={`shell-badge shell-badge-${connectionStateTone} chat-connection-state`}
+            data-testid="chat-connection-state"
+          >
+            {formatConnectionStateLabel(chatState.connectionState)}
+          </span>
           {beginnerMode ? <span className="chat-stream-status">{workModeCopy.controlHint}</span> : null}
+        </div>
+        <div className="runtime-actions chat-toolbar-actions chat-toolbar-primary-actions">
+          <GuideOverlay content={getWorkspaceGuide(locale, "chat")} testId="guide-chat" />
+          {executionRunning ? (
+            <button type="button" className="ghost-button" onClick={stopExecution}>
+              {ui.chat.stopExecution}
+            </button>
+          ) : null}
+          {notices.length > 0 ? (
+            <button type="button" className="secondary-button" onClick={() => dispatch({ type: "clear_notices" })}>
+              {ui.chat.clearNotices}
+            </button>
+          ) : null}
         </div>
 
         <div className="chat-toolbar-controls">
@@ -677,28 +720,15 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               {props.availableModels.length === 0 ? (
                 <option value="">{ui.chat.noModels}</option>
               ) : (
-                props.availableModels.map((model) => (
-                  <option key={model} value={model}>
-                    {model}
+                modelOptions.map((model) => (
+                  <option key={model.alias} value={model.alias}>
+                    {model.label}
                   </option>
                 ))
               )}
             </select>
           </div>
           ) : null}
-          <div className="runtime-actions chat-toolbar-actions">
-            <GuideOverlay content={getWorkspaceGuide(locale, "chat")} testId="guide-chat" />
-            {executionRunning ? (
-              <button type="button" className="ghost-button" onClick={stopExecution}>
-                {ui.chat.stopExecution}
-              </button>
-            ) : null}
-            {notices.length > 0 ? (
-              <button type="button" className="secondary-button" onClick={() => dispatch({ type: "clear_notices" })}>
-                {ui.chat.clearNotices}
-              </button>
-            ) : null}
-          </div>
         </div>
       </section>
 
@@ -831,9 +861,6 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           />
 
           <div className="composer-footer">
-            <p className="hint">
-              {composerBlockReason ?? (executionMode === "direct" ? ui.chat.composerHelperDirect : ui.chat.composerHelper)}
-            </p>
             <button
               type="submit"
               data-testid="chat-send"

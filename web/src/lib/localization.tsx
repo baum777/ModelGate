@@ -141,6 +141,8 @@ type SettingsCopy = {
   diagnosticsEmpty: string;
   clearDiagnostics: string;
   connectionTruthNote: string;
+  modelAliasLabel: string;
+  modelCountLabel: string;
   modelSourceLabel: string;
   diagnosticsSummary: string;
   runtimeModeLabel: string;
@@ -407,7 +409,7 @@ const EN_COPY: LocalizationCopy = {
   shell: {
     appKicker: "MOSAICSTACK",
     appTitle: "MosaicStack Console",
-    appDeck: "Governance-first operator shell. Runtime truth stays backend-owned.",
+    appDeck: "Governance-first operator shell.",
     workspaceConsoleKicker: "WORKSPACE CONSOLE",
     workspaceConsoleTitle: "Choose workspace",
     workspaceConsoleNote: "Navigation, session context, and disclosure stay pinned on the left.",
@@ -534,6 +536,8 @@ const EN_COPY: LocalizationCopy = {
     diagnosticsEmpty: "No local diagnostic events yet.",
     clearDiagnostics: "Clear diagnostics",
     connectionTruthNote: "Backend truth and connection truth stay separated from advisory copy.",
+    modelAliasLabel: "Active alias",
+    modelCountLabel: "Registered models",
     modelSourceLabel: "Source",
     diagnosticsSummary: "Safe runtime diagnostics",
     runtimeModeLabel: "Runtime mode",
@@ -773,7 +777,7 @@ const DE_COPY: LocalizationCopy = {
   shell: {
     appKicker: "MOSAICSTACK",
     appTitle: "MosaicStack Konsole",
-    appDeck: "Governance-first Operator-Shell. Laufzeitwahrheit bleibt backend-owned.",
+    appDeck: "Governance-first Operator-Shell.",
     workspaceConsoleKicker: "WORKSPACE CONSOLE",
     workspaceConsoleTitle: "Arbeitsbereich wählen",
     workspaceConsoleNote: "Navigation, Sessionkontext und Offenlegung bleiben links fixiert.",
@@ -900,6 +904,8 @@ const DE_COPY: LocalizationCopy = {
     diagnosticsEmpty: "Noch keine lokalen Diagnoseereignisse.",
     clearDiagnostics: "Diagnostik leeren",
     connectionTruthNote: "Backend-Wahrheit und Verbindungswahrheit bleiben von Advisory-Text getrennt.",
+    modelAliasLabel: "Aktiver Alias",
+    modelCountLabel: "Registrierte Modelle",
     modelSourceLabel: "Quelle",
     diagnosticsSummary: "Sichere Runtime-Diagnostik",
     runtimeModeLabel: "Runtime-Modus",

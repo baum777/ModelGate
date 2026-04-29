@@ -32,7 +32,7 @@ import {
 } from "../lib/governance-metadata.js";
 import { useLocalization, type Locale } from "../lib/localization.js";
 import { GuideOverlay, getWorkspaceGuide } from "./GuideOverlay.js";
-import { getWorkModeCopy, isExpertMode, type WorkMode } from "../lib/work-mode.js";
+import { isExpertMode, type WorkMode } from "../lib/work-mode.js";
 
 export type GitHubWorkspaceStatus = {
   repositoryLabel: string;
@@ -419,7 +419,6 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
   const { locale, copy: ui } = useLocalization();
   const localText = useMemo(() => getGitHubLocaleText(locale), [locale]);
   const expertMode = isExpertMode(props.workMode);
-  const workModeCopy = getWorkModeCopy(locale, props.workMode);
   const [repos, setRepos] = useState<GitHubRepoSummary[]>([]);
   const [reposLoading, setReposLoading] = useState(true);
   const [reposError, setReposError] = useState<string | null>(null);
@@ -897,16 +896,28 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     : analysisBundle
       ? ui.github.readOnly
       : ui.github.nextStepAnalysis;
-  const nextStepTitle = !hasSelection
-    ? `${ui.github.nextStepLabel}: ${ui.github.nextStepChooseRepo}.`
-    : proposalPlan
-      ? `${ui.github.nextStepLabel}: ${ui.github.nextStepProposal}.`
-      : `${ui.github.nextStepLabel}: ${ui.github.nextStepAnalysis}.`;
-  const nextStepDescription = !hasSelection
-    ? ui.github.actionReadBody
-    : proposalPlan
-      ? ui.github.approveHelper
-      : ui.github.actionReadBody;
+  const heroSteps = [
+    {
+      title: ui.github.nextStepChooseRepo,
+      description: locale === "de" ? "Wähle ein erlaubtes Repository aus der Liste." : "Pick an allowed repository from the list.",
+    },
+    {
+      title: githubConnectLabel,
+      description: locale === "de" ? "Verbinde GitHub, damit Vorschau und Analyse möglich sind." : "Connect GitHub so analysis and previews can run.",
+    },
+    {
+      title: ui.github.nextStepAnalysis,
+      description: ui.github.actionReadBody,
+    },
+    {
+      title: ui.github.nextStepProposal,
+      description: ui.github.actionProposalBody,
+    },
+    {
+      title: ui.review.approvalNeeded,
+      description: ui.github.approveHelper,
+    },
+  ];
 
   const workspaceNotice = proposalPlan && stalePlanBlocked
     ? ui.github.workspaceNoticeStale
@@ -934,13 +945,14 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             {hasSelection ? ui.github.readOnlyActive : ui.github.nextStepChooseRepo}
           </p>
           <h1>{ui.github.title}</h1>
-          {expertMode ? (
-            <p className="hero-copy">
-              {ui.github.intro}
-            </p>
-          ) : (
-            <p className="hero-copy">{workModeCopy.controlHint}</p>
-          )}
+          <ol className="github-hero-steps">
+            {heroSteps.map((step) => (
+              <li className="github-hero-step" key={step.title}>
+                <strong>{step.title}</strong>
+                <p>{step.description}</p>
+              </li>
+            ))}
+          </ol>
           <div className="workspace-hero-actions">
             <GuideOverlay content={getWorkspaceGuide(locale, "github")} testId="guide-github" />
           </div>
@@ -951,11 +963,13 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             <div className="github-repo-card-header">
               <div>
                 <span>GitHub OAuth</span>
-                <strong>{githubIdentityLabel}</strong>
+                {githubConnected ? <strong>{githubIdentityLabel}</strong> : null}
               </div>
-              <span className={`status-pill ${githubConnected ? "status-ready" : "status-partial"}`}>
-                {githubConnected ? (locale === "de" ? "Verbunden" : "Connected") : (locale === "de" ? "Nicht verbunden" : "Not connected")}
-              </span>
+              {githubConnected ? (
+                <span className="status-pill status-ready">
+                  {locale === "de" ? "Verbunden" : "Connected"}
+                </span>
+              ) : null}
             </div>
             <div className="action-row">
               {githubConnected ? (
@@ -975,9 +989,9 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             </div>
           </article>
 
-          <label htmlFor="github-repo-select">{ui.github.repoSelectLabel}</label>
           <select
             id="github-repo-select"
+            aria-label={ui.github.repoSelectLabel}
             ref={repoSelectRef}
             value={selectedRepoFullName}
             onChange={(event) => handleRepoChange(event.target.value)}
@@ -1015,20 +1029,15 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             <p>{reposLoading ? ui.github.loadingRepos : ui.github.noRepos}</p>
           )}
 
-          <div className="github-hero-note">
-            <p className="info-label">{ui.github.nextStepLabel}</p>
-            <strong>{nextStepTitle}</strong>
-            <p>{nextStepDescription}</p>
-            {workspaceNotice ? (
-              <p
-                className={proposalPlan && stalePlanBlocked ? "warning-banner" : "error-banner"}
-                role={proposalPlan && stalePlanBlocked ? "status" : "alert"}
-                data-testid="github-workspace-notice"
-              >
-                {workspaceNotice}
-              </p>
-            ) : null}
-          </div>
+          {workspaceNotice ? (
+            <p
+              className={proposalPlan && stalePlanBlocked ? "warning-banner" : "error-banner"}
+              role={proposalPlan && stalePlanBlocked ? "status" : "alert"}
+              data-testid="github-workspace-notice"
+            >
+              {workspaceNotice}
+            </p>
+          ) : null}
         </aside>
       </section>
 

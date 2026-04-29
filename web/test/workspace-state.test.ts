@@ -75,7 +75,7 @@ test("loadWorkspaceState fails closed when persisted data is malformed", () => {
     }
   } as Partial<Window>;
 
-  storage.set("modelgate.console.workspaces.v1", JSON.stringify({
+  storage.set("mosaicstack.console.workspaces.v1", JSON.stringify({
     version: 1,
     activeWorkspace: "chat",
     activeSessionIdByWorkspace: {
@@ -106,7 +106,7 @@ test("loadWorkspaceState canonicalizes legacy Matrix fields", () => {
 
   assert.ok(matrixSession);
 
-  storage.set("modelgate.console.workspaces.v1", JSON.stringify({
+  storage.set("mosaicstack.console.workspaces.v1", JSON.stringify({
     ...baseState,
     activeWorkspace: "matrix",
     sessionsByWorkspace: {
@@ -251,7 +251,7 @@ test("saveWorkspaceState strips legacy Matrix fields from persisted payload", ()
 
   withWindow(fakeWindow, () => saveWorkspaceState(state));
 
-  const persisted = JSON.parse(storage.get("modelgate.console.workspaces.v1") ?? "{}") as {
+  const persisted = JSON.parse(storage.get("mosaicstack.console.workspaces.v1") ?? "{}") as {
     sessionsByWorkspace?: {
       matrix?: Array<{
         metadata?: Record<string, unknown>;
@@ -281,7 +281,7 @@ test("chat session defaults to governed mode and legacy sessions normalize safel
   assert.equal(chatSession.metadata.executionMode, "governed");
 
   const storage = new Map<string, string>();
-  storage.set("modelgate.console.workspaces.v1", JSON.stringify({
+  storage.set("mosaicstack.console.workspaces.v1", JSON.stringify({
     ...state,
     sessionsByWorkspace: {
       ...state.sessionsByWorkspace,
@@ -348,7 +348,7 @@ test("in-progress chat streams normalize to interrupted state after reload with 
   assert.ok(chatSession);
 
   const storage = new Map<string, string>();
-  storage.set("modelgate.console.workspaces.v1", JSON.stringify({
+  storage.set("mosaicstack.console.workspaces.v1", JSON.stringify({
     ...base,
     sessionsByWorkspace: {
       ...base.sessionsByWorkspace,

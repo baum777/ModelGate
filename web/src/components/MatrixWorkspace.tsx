@@ -1113,11 +1113,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
           <div className="workspace-hero-actions">
             <GuideOverlay content={getWorkspaceGuide(locale, "matrix")} testId="guide-matrix" />
           </div>{" "}
-          {props.restoredSession ? (
-            <div className="restored-banner" data-testid="matrix-restored-banner">
-              RESTORED_SESSION: {ui.matrix.scopeNotice}
-            </div>
-          ) : null}
           {props.expertMode ? (
             <div className="chip-row" aria-label={ui.matrix.scopeNotice}>
               <span className="workflow-chip workflow-chip-complete">{ui.matrix.scopeTitle}</span>
