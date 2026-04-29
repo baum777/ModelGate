@@ -516,6 +516,37 @@ Supported write error codes:
 - `matrix_malformed_response`
 - `matrix_internal_error`
 
+## Live GitHub Smoke
+
+Use this only with a repository and target branch that are safe for smoke PRs.
+The smoke script calls the backend-owned `propose -> execute -> verify` lifecycle
+with deterministic `mode: "smoke"` and never sends GitHub credentials to the
+browser.
+
+Required live smoke environment:
+
+- `GITHUB_SMOKE_ENABLED=true`
+- `GITHUB_TOKEN`
+- `GITHUB_ALLOWED_REPOS`
+- `GITHUB_AGENT_API_KEY`
+- `GITHUB_SMOKE_REPO`
+- `GITHUB_SMOKE_BASE_BRANCH`
+- `GITHUB_SMOKE_TARGET_BRANCH`
+
+Run the manual smoke from the repository root:
+
+```bash
+npm run smoke:github
+```
+
+Behavior:
+
+- skips cleanly when the live smoke env is missing
+- uses backend-owned routes only
+- creates a deterministic smoke plan for `docs/mosaicstack-smoke.md`
+- requires backend admin approval via `GITHUB_AGENT_API_KEY`
+- fails closed if verification does not return `verified`
+
 ## Live Matrix Smoke
 
 Use this only with a dedicated Matrix test room that is safe to retarget temporarily.
