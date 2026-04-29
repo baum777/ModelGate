@@ -35,6 +35,7 @@ import {
   fetchIntegrationsStatus,
   fetchJournalRecent,
   fetchModels,
+  postOpenRouterModel,
   postIntegrationControlAction,
   type DiagnosticsResponse,
   type IntegrationsStatusResponse,
@@ -496,6 +497,8 @@ function ConsoleShell() {
     default?: boolean;
     available?: boolean;
   }>>([]);
+  const [openRouterModelInput, setOpenRouterModelInput] = useState("");
+  const [isAddingOpenRouterModel, setIsAddingOpenRouterModel] = useState(false);
   const [runtimeDiagnostics, setRuntimeDiagnostics] = useState<DiagnosticsResponse | null>(null);
   const [integrationsStatus, setIntegrationsStatus] = useState<IntegrationsStatusResponse | null>(null);
   const [runtimeJournalEntries, setRuntimeJournalEntries] = useState<JournalEntry[]>([]);
@@ -755,6 +758,33 @@ function ConsoleShell() {
       setIntegrationsStatus(null);
     }
   }, []);
+
+  const handleAddOpenRouterModel = useCallback(async () => {
+    const modelId = openRouterModelInput.trim();
+
+    if (!modelId) {
+      return;
+    }
+
+    setIsAddingOpenRouterModel(true);
+
+    try {
+      const result = await postOpenRouterModel(modelId);
+      setOpenRouterModelInput("");
+      setAvailableModels(result.models);
+      setModelRegistry(result.registry);
+      setActiveModelAlias(result.alias);
+      recordTelemetry("info", "OpenRouter model added", `Backend public alias ${result.alias} is selectable.`);
+    } catch (error) {
+      recordTelemetry(
+        "error",
+        "OpenRouter model add failed",
+        error instanceof Error ? error.message : "Unable to add OpenRouter model.",
+      );
+    } finally {
+      setIsAddingOpenRouterModel(false);
+    }
+  }, [openRouterModelInput, recordTelemetry]);
 
   const handleIntegrationAction = useCallback(async (
     provider: "github" | "matrix",
@@ -1634,6 +1664,11 @@ function ConsoleShell() {
       onClearDiagnostics={() => setTelemetry([])}
       truthSnapshot={settingsTruthSnapshot}
       loginAdapters={settingsLoginAdapters}
+      openRouterModels={modelRegistry.filter((model) => model.alias !== "default")}
+      openRouterModelInput={openRouterModelInput}
+      onOpenRouterModelInputChange={setOpenRouterModelInput}
+      onAddOpenRouterModel={handleAddOpenRouterModel}
+      isAddingOpenRouterModel={isAddingOpenRouterModel}
       onIntegrationAction={handleIntegrationAction}
     />
   );
@@ -1680,7 +1715,9 @@ function ConsoleShell() {
               {ui.shell.languageOptionGerman}
             </button>
           </div>
-          <StatusBadge tone={healthState.tone}>{ui.shell.backendPrefix} {healthState.label}</StatusBadge>
+          {healthState.tone === "ready" ? null : (
+            <StatusBadge tone={healthState.tone}>{ui.shell.backendPrefix} {healthState.label}</StatusBadge>
+          )}
         </div>
       </header>
 

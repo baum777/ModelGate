@@ -42,6 +42,15 @@ export type ModelResponse = {
   source: string;
 };
 
+export type AddOpenRouterModelResponse = {
+  ok: true;
+  alias: string;
+  model: ModelResponse["registry"][number];
+  models: string[];
+  registry: ModelResponse["registry"];
+  source: string;
+};
+
 export type DiagnosticsResponse = {
   ok: true;
   service: string;
@@ -349,6 +358,23 @@ export async function fetchModels(): Promise<ModelResponse> {
   }
 
   return response.json() as Promise<ModelResponse>;
+}
+
+export async function postOpenRouterModel(modelId: string): Promise<AddOpenRouterModelResponse> {
+  const response = await fetch(resolveApiUrl("/models/openrouter"), {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ modelId })
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return response.json() as Promise<AddOpenRouterModelResponse>;
 }
 
 export async function fetchDiagnostics(): Promise<DiagnosticsResponse> {

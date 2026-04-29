@@ -74,6 +74,15 @@ type SettingsWorkspaceProps = {
   onClearDiagnostics: () => void;
   truthSnapshot: SettingsTruthSnapshot;
   loginAdapters: SettingsLoginAdapter[];
+  openRouterModels: Array<{
+    alias: string;
+    label: string;
+    description: string;
+  }>;
+  openRouterModelInput: string;
+  onOpenRouterModelInputChange: (value: string) => void;
+  onAddOpenRouterModel: () => void;
+  isAddingOpenRouterModel: boolean;
   onIntegrationAction: (
     provider: "github" | "matrix",
     action: "connect" | "reconnect" | "disconnect" | "reverify"
@@ -87,6 +96,11 @@ export function SettingsWorkspace({
   onClearDiagnostics,
   truthSnapshot,
   loginAdapters,
+  openRouterModels,
+  openRouterModelInput,
+  onOpenRouterModelInputChange,
+  onAddOpenRouterModel,
+  isAddingOpenRouterModel,
   onIntegrationAction,
 }: SettingsWorkspaceProps) {
   const { locale, copy: ui } = useLocalization();
@@ -172,6 +186,26 @@ export function SettingsWorkspace({
     return adapterCopy.action[action];
   }
 
+  const openRouterCopy = locale === "de"
+    ? {
+        title: "OpenRouter Modelle",
+        subtitle: "Modelle zuerst hier registrieren; danach erscheinen sie als backend-owned Aliase im Chat.",
+        inputLabel: "OpenRouter Modell-ID",
+        placeholder: "provider/model",
+        add: "Modell hinzufügen",
+        adding: "Wird hinzugefügt",
+        empty: "Noch keine zusätzlichen OpenRouter-Modelle registriert.",
+      }
+    : {
+        title: "OpenRouter models",
+        subtitle: "Register models here first; then they appear as backend-owned aliases in Chat.",
+        inputLabel: "OpenRouter model ID",
+        placeholder: "provider/model",
+        add: "Add model",
+        adding: "Adding",
+        empty: "No additional OpenRouter models registered yet.",
+      };
+
   return (
     <section className="workspace-panel settings-workspace" data-testid="settings-workspace">
       <section className="workspace-hero">
@@ -186,7 +220,7 @@ export function SettingsWorkspace({
       </section>
 
       <div className="settings-grid">
-        <article className="workspace-card">
+        <article className="workspace-card settings-view-card">
           <header className="card-header">
             <div>
               <span>{ui.settings.viewCardTitle}</span>
@@ -297,7 +331,7 @@ export function SettingsWorkspace({
           </div>
         </article>
 
-        <article className="workspace-card">
+        <article className="workspace-card settings-identity-card">
           <header className="card-header">
             <div>
               <span>{ui.settings.identityCardTitle}</span>
@@ -347,18 +381,6 @@ export function SettingsWorkspace({
                   <span>{ui.settings.matrixScope}</span>
                   <strong>{truthSnapshot.matrix.scopeLabel}</strong>
                 </div>
-                <div>
-                  <span>{ui.settings.chatIdentity}</span>
-                  <strong>{ui.settings.chatIdentity}</strong>
-                </div>
-                <div>
-                  <span>{ui.settings.chatScope}</span>
-                  <strong>{ui.settings.chatScope}</strong>
-                </div>
-                <div>
-                  <span>{ui.settings.chatAuthority}</span>
-                  <strong>{ui.settings.chatAuthority}</strong>
-                </div>
               </>
             ) : null}
           </div>
@@ -366,7 +388,7 @@ export function SettingsWorkspace({
           {expertMode ? <p className="muted-copy">{ui.settings.backendTruth}</p> : null}
         </article>
 
-        <article className="workspace-card">
+        <article className="workspace-card settings-model-card">
           <header className="card-header">
             <div>
               <span>{ui.settings.modelCardTitle}</span>
@@ -375,11 +397,11 @@ export function SettingsWorkspace({
           </header>
           <div className="detail-grid">
             <div>
-              <span>{ui.settings.modelCardTitle}</span>
+              <span>{ui.settings.modelAliasLabel}</span>
               <strong>{truthSnapshot.models.activeAlias}</strong>
             </div>
             <div>
-              <span>{ui.settings.modelSourceLabel}</span>
+              <span>{ui.settings.modelCountLabel}</span>
               <strong>{String(truthSnapshot.models.availableCount)}</strong>
             </div>
             <div>
@@ -390,8 +412,60 @@ export function SettingsWorkspace({
           <p className="muted-copy">{ui.settings.modelChoiceNote}</p>
         </article>
 
+        <article className="workspace-card openrouter-model-card">
+          <header className="card-header">
+            <div>
+              <span>{openRouterCopy.title}</span>
+              <strong>{ui.settings.backendPolicy}</strong>
+            </div>
+          </header>
+          <p className="muted-copy">{openRouterCopy.subtitle}</p>
+          <form
+            className="settings-inline-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onAddOpenRouterModel();
+            }}
+          >
+            <label htmlFor="openrouter-model-input">{openRouterCopy.inputLabel}</label>
+            <div className="settings-inline-controls">
+              <input
+                id="openrouter-model-input"
+                data-testid="openrouter-model-input"
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                spellCheck={false}
+                value={openRouterModelInput}
+                onChange={(event) => onOpenRouterModelInputChange(event.target.value)}
+                placeholder={openRouterCopy.placeholder}
+              />
+              <button
+                type="submit"
+                data-testid="openrouter-model-add"
+                disabled={isAddingOpenRouterModel || openRouterModelInput.trim().length === 0}
+              >
+                {isAddingOpenRouterModel ? openRouterCopy.adding : openRouterCopy.add}
+              </button>
+            </div>
+          </form>
+          {openRouterModels.length === 0 ? (
+            <p className="empty-state">{openRouterCopy.empty}</p>
+          ) : (
+            <div className="settings-model-list">
+              {openRouterModels.map((model) => (
+                <div key={model.alias}>
+                  <span>{model.alias}</span>
+                  <strong>{model.label}</strong>
+                  <p>{model.description}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </article>
+
         {expertMode ? (
-        <article className="workspace-card">
+        <article className="workspace-card settings-diagnostics-card">
           <header className="card-header">
             <div>
               <span>{ui.settings.diagnosticsCardTitle}</span>
@@ -481,7 +555,7 @@ export function SettingsWorkspace({
         ) : null}
 
         {expertMode ? (
-        <article className="workspace-card">
+        <article className="workspace-card settings-journal-card">
           <header className="card-header">
             <div>
               <span>{ui.settings.journalCardTitle}</span>
@@ -527,7 +601,7 @@ export function SettingsWorkspace({
         ) : null}
 
         {expertMode ? (
-        <article className="workspace-card">
+        <article className="workspace-card settings-feed-card">
           <header className="card-header">
             <div>
               <span>{ui.settings.diagnosticsCardTitle}</span>

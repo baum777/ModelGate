@@ -128,6 +128,18 @@ test("Settings workspace renders integration cards and keeps secrets out of the 
       ] as JournalEntry[],
     },
   };
+  const openRouterModels = [
+    {
+      alias: "openrouter-1",
+      label: "OpenRouter model 1",
+      description: "Backend-owned OpenRouter model added in Settings.",
+      capabilities: ["chat", "streaming"],
+      tier: "specialized" as const,
+      streaming: true,
+      recommendedFor: ["configured_openrouter"],
+      available: true,
+    }
+  ];
   const loginAdapters = deriveSettingsLoginAdapters({
     copy: {
       checking: "Checking",
@@ -146,6 +158,11 @@ test("Settings workspace renders integration cards and keeps secrets out of the 
       truthSnapshot,
       loginAdapters,
       onIntegrationAction: () => undefined,
+      openRouterModels,
+      openRouterModelInput: "",
+      onOpenRouterModelInputChange: () => undefined,
+      onAddOpenRouterModel: () => undefined,
+      isAddingOpenRouterModel: false,
     }),
   );
 
@@ -157,7 +174,11 @@ test("Settings workspace renders integration cards and keeps secrets out of the 
   assert.match(markup, /stub-github-operator/);
   assert.match(markup, /Credential source/);
   assert.match(markup, /Connect available/);
-  assert.doesNotMatch(markup, /<input/i);
+  assert.match(markup, /OpenRouter (Modelle|models)/);
+  assert.match(markup, /OpenRouter model 1/);
+  assert.match(markup, /data-testid="openrouter-model-input"/);
+  assert.match(markup, /data-testid="openrouter-model-add"/);
+  assert.doesNotMatch(markup, /name=".*token/i);
   assert.doesNotMatch(markup, /type="password"/i);
   assert.doesNotMatch(markup, /sk-test/);
 });
