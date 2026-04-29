@@ -262,6 +262,16 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       scrollFrameRef.current = null;
     }
 
+    const hasThreadActivity = chatState.messages.length > 0
+      || chatState.receipts.length > 0
+      || chatState.notices.length > 0
+      || Boolean(chatState.pendingProposal)
+      || Boolean(chatState.currentAssistantDraft?.started);
+
+    if (!hasThreadActivity) {
+      return;
+    }
+
     scrollFrameRef.current = schedule(() => {
       scrollFrameRef.current = null;
       messageEndRef.current?.scrollIntoView({

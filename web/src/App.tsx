@@ -307,7 +307,7 @@ function useTheme() {
       return saved;
     }
 
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    return "dark";
   });
 
   useEffect(() => {
@@ -1867,6 +1867,28 @@ function ConsoleShell() {
           </TruthRailSection>
           ) : null}
         </aside>
+
+        <section className="bottom-diagnostics-layer" aria-label={ui.shell.diagnosticsLabel}>
+          <div className="diagnostic-signal diagnostic-signal-primary">
+            <SectionLabel>{ui.shell.healthTitle}</SectionLabel>
+            <strong>{healthState.label}</strong>
+          </div>
+          <div className="diagnostic-signal">
+            <SectionLabel>{ui.shell.modeLabel}</SectionLabel>
+            <strong>{workspaceName}</strong>
+          </div>
+          <div className="diagnostic-signal">
+            <SectionLabel>{ui.shell.diagnosticsLabel}</SectionLabel>
+            <strong>{telemetry.length > 0 ? telemetry[telemetry.length - 1].label : ui.common.na}</strong>
+          </div>
+          <button
+            type="button"
+            className="secondary-button bottom-diagnostics-action"
+            onClick={() => setDiagnosticsOpen((current) => !current)}
+          >
+            {diagnosticsOpen ? ui.shell.diagnosticsHide : ui.shell.diagnosticsShow}
+          </button>
+        </section>
       </section>
     </main>
   );
