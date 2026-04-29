@@ -44,7 +44,12 @@ test("vercel config keeps governed GitHub and Matrix API routes on backend adapt
   const vercelConfig = JSON.parse(fs.readFileSync(vercelConfigPath, "utf8")) as VercelConfig;
   const rewrites = new Map((vercelConfig.rewrites ?? []).map((rewrite) => [rewrite.source, rewrite.destination]));
 
-  assert.equal(rewrites.get("/api/github/:path*"), "/api/[...path]?path=:path*");
-  assert.equal(rewrites.get("/api/matrix/:path*"), "/api/matrix/[...path]?path=:path*");
+  assert.ok(vercelConfig.functions?.["api/[...path].ts"], "root API catch-all must be a Vercel function");
+  assert.ok(vercelConfig.functions?.["api/matrix/[...path].ts"], "Matrix API catch-all must be a Vercel function");
+  assert.equal(rewrites.get("/health"), "/api/health");
+  assert.equal(rewrites.get("/models"), "/api/models");
+  assert.equal(rewrites.get("/chat"), "/api/chat");
   assert.equal(rewrites.get("/:path*"), "/");
+  assert.equal([...rewrites.keys()].some((source) => source.startsWith("/api/")), false);
+  assert.equal([...rewrites.values()].some((destination) => destination.includes(":path*")), false);
 });
