@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 const HEALTH_OK = {
   ok: true,
-  service: "modelgate-test",
+  service: "mosaicstack-test",
   mode: "local",
   upstream: "openrouter",
   defaultModel: "default",
@@ -332,7 +332,7 @@ async function installGitHubWorkspaceMocks(page: Page, options: GitHubWorkspaceM
           },
           baseRef: "main",
           baseSha: "abc123",
-          branchName: "modelgate/demo-plan",
+          branchName: "mosaicstack/demo-plan",
           targetBranch: "main",
           status: "pending_review",
           stale: false,
@@ -385,7 +385,7 @@ async function installGitHubWorkspaceMocks(page: Page, options: GitHubWorkspaceM
         result: {
           planId: "plan-123",
           status: "executed",
-          branchName: "modelgate/demo-plan",
+          branchName: "mosaicstack/demo-plan",
           baseSha: "abc123",
           headSha: "def456",
           commitSha: "def456",
@@ -424,7 +424,7 @@ async function installGitHubWorkspaceMocks(page: Page, options: GitHubWorkspaceM
           planId: "plan-123",
           status: "verified",
           checkedAt: "2026-04-16T08:31:00.000Z",
-          branchName: "modelgate/demo-plan",
+          branchName: "mosaicstack/demo-plan",
           targetBranch: "main",
           expectedBaseSha: "abc123",
           actualBaseSha: "abc123",
@@ -487,7 +487,7 @@ async function installAbortableChatFetchMock(page: Page) {
 async function loadConsole(page: Page) {
   await page.goto("/console", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("app-shell")).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText("ModelGate Console")).toBeVisible();
+  await expect(page.getByText("MosaicStack Console")).toBeVisible();
   await expect(page.getByTestId("tab-chat")).toBeVisible();
   await expect(page.getByTestId("tab-github")).toBeVisible();
   await expect(page.getByTestId("tab-matrix")).toBeVisible();
@@ -565,6 +565,19 @@ test("shell renders core governed surfaces and keeps secrets out of the DOM", as
   const body = page.locator("body");
   await expect(body).not.toContainText("sk-test-openrouter-key");
   await expect(body).not.toContainText("sk-test-matrix-token");
+});
+
+test("left rail workspace tabs keep keyboard focus names in compact layout", async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 720 });
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await loadConsole(page);
+
+  const matrixTab = page.getByTestId("tab-matrix");
+  await expect(matrixTab).toHaveAttribute("aria-label", "Matrix");
+
+  await matrixTab.focus();
+  await expect(matrixTab).toBeFocused();
+  await expect(matrixTab).toHaveCSS("outline-style", "solid");
 });
 
 test("locale toggle switches key copy and persists across reload", async ({ page }) => {

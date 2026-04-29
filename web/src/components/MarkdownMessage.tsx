@@ -90,7 +90,7 @@ async function copyTextToClipboard(text: string) {
   }
 }
 
-function CodeFenceBlock(props: {
+const CodeFenceBlock = React.memo(function CodeFenceBlock(props: {
   code: string;
   language: string | null;
   isDiff: boolean;
@@ -137,13 +137,13 @@ function CodeFenceBlock(props: {
       </pre>
     </div>
   );
-}
+});
 
 export function hasRichTextContent(content: string) {
   return /(^|\n)\s{0,3}(#{1,6}\s|[-*+]\s|\d+\.\s|>\s|```|\|.+\|)|`[^`]+`/.test(content);
 }
 
-export function MarkdownMessage({ content, className }: MarkdownMessageProps) {
+export const MarkdownMessage = React.memo(function MarkdownMessage({ content, className }: MarkdownMessageProps) {
   const normalizedContent = useMemo(() => content || "", [content]);
 
   return (
@@ -196,4 +196,4 @@ export function MarkdownMessage({ content, className }: MarkdownMessageProps) {
       </ReactMarkdown>
     </div>
   );
-}
+});

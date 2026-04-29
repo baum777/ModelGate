@@ -1,19 +1,14 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ChatWorkspace } from "./components/ChatWorkspace.js";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  GitHubWorkspace,
   type GitHubWorkspaceStatus,
 } from "./components/GitHubWorkspace.js";
 import {
-  MatrixWorkspace,
   type MatrixWorkspaceStatus,
 } from "./components/MatrixWorkspace.js";
 import {
-  ReviewWorkspace,
   type ReviewItem,
 } from "./components/ReviewWorkspace.js";
 import {
-  SettingsWorkspace,
   type DiagnosticEntry,
 } from "./components/SettingsWorkspace.js";
 import { SessionList } from "./components/SessionList.js";
@@ -76,6 +71,32 @@ import {
   type WorkMode,
 } from "./lib/work-mode.js";
 
+const loadChatWorkspace = () => import("./components/ChatWorkspace.js");
+const loadGitHubWorkspace = () => import("./components/GitHubWorkspace.js");
+const loadMatrixWorkspace = () => import("./components/MatrixWorkspace.js");
+const loadReviewWorkspace = () => import("./components/ReviewWorkspace.js");
+const loadSettingsWorkspace = () => import("./components/SettingsWorkspace.js");
+
+const ChatWorkspace = lazy(() => loadChatWorkspace().then((module) => ({ default: module.ChatWorkspace })));
+const GitHubWorkspace = lazy(() => loadGitHubWorkspace().then((module) => ({ default: module.GitHubWorkspace })));
+const MatrixWorkspace = lazy(() => loadMatrixWorkspace().then((module) => ({ default: module.MatrixWorkspace })));
+const ReviewWorkspace = lazy(() => loadReviewWorkspace().then((module) => ({ default: module.ReviewWorkspace })));
+const SettingsWorkspace = lazy(() => loadSettingsWorkspace().then((module) => ({ default: module.SettingsWorkspace })));
+
+function scheduleWorkspacePreload(callback: () => void) {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  if ("requestIdleCallback" in window) {
+    const handle = window.requestIdleCallback(callback, { timeout: 1800 });
+    return () => window.cancelIdleCallback(handle);
+  }
+
+  const handle = globalThis.setTimeout(callback, 900);
+  return () => globalThis.clearTimeout(handle);
+}
+
 type WorkspaceMode = "chat" | "github" | "matrix" | "review" | "settings";
 
 type TelemetryEntry = {
@@ -91,7 +112,7 @@ type PersistedShellState = {
   expertMode?: boolean;
 };
 
-const SHELL_STORAGE_KEY = "modelgate.console.shell.v2";
+const SHELL_STORAGE_KEY = "mosaicstack.console.shell.v2";
 const THEME_STORAGE_KEY = "mg-theme";
 
 type ThemeMode = "dark" | "light";
@@ -308,9 +329,9 @@ function PublicPreview() {
   return (
     <main className="app-shell public-preview" data-testid="public-preview">
       <section className="public-preview-card">
-        <div className="modelgate-mark" aria-hidden="true" />
-        <p className="app-kicker">MODELGATE</p>
-        <h1>ModelGate</h1>
+        <div className="mosaicstack-mark" aria-hidden="true" />
+        <p className="app-kicker">MOSAICSTACK</p>
+        <h1>MosaicStack</h1>
         <p className="hero-copy">
           Public preview shell. Governed workspace access stays separate from this route.
         </p>
@@ -483,7 +504,7 @@ function ConsoleShell() {
       return false;
     }
 
-    return window.localStorage.getItem("modelgate.console.workspaces.v1") !== null;
+    return window.localStorage.getItem("mosaicstack.console.workspaces.v1") !== null;
   });
   const [telemetry, setTelemetry] = useState<TelemetryEntry[]>([]);
   const [githubContext, setGitHubContext] = useState<GitHubWorkspaceStatus>(() => createDefaultGitHubContext());
@@ -622,6 +643,16 @@ function ConsoleShell() {
   useEffect(() => {
     setDiagnosticsOpen(false);
   }, [mode]);
+
+  useEffect(() => scheduleWorkspacePreload(() => {
+    void Promise.all([
+      loadChatWorkspace(),
+      loadGitHubWorkspace(),
+      loadMatrixWorkspace(),
+      loadReviewWorkspace(),
+      loadSettingsWorkspace(),
+    ]);
+  }), []);
 
   const recordTelemetry = useCallback(
     (kind: TelemetryEntry["kind"], label: string, detail?: string) => {
@@ -1612,7 +1643,7 @@ function ConsoleShell() {
     <main className="app-shell app-shell-console" data-testid="app-shell">
       <header className="global-header global-header-shell">
         <div className="brand-block">
-          <div className="modelgate-mark" aria-hidden="true" />
+          <div className="mosaicstack-mark" aria-hidden="true" />
           <p className="app-kicker">{ui.shell.appKicker}</p>
           <h1>{ui.shell.appTitle}</h1>
           <p className="app-deck">{ui.shell.appDeck}</p>
@@ -1664,8 +1695,10 @@ function ConsoleShell() {
                   type="button"
                   className={mode === workspaceMode ? "workspace-tab workspace-tab-active workspace-tab-vertical workspace-tab-shell-active" : "workspace-tab workspace-tab-vertical"}
                   onClick={() => handleWorkspaceTabSelect(workspaceMode)}
+                  aria-label={ui.shell.workspaceTabs[workspaceMode].label}
                   aria-current={mode === workspaceMode ? "page" : undefined}
                   data-testid={`tab-${workspaceMode}`}
+                  title={ui.shell.workspaceTabs[workspaceMode].label}
                 >
                   <WorkspaceIcon mode={workspaceMode} />
                   <span>
@@ -1706,7 +1739,11 @@ function ConsoleShell() {
 
         <section className="console-main shell-center-main">
           <ShellCard variant="base" className="workspace-frame-card">
-            <div className="workspace-frame-body">{workspaceSurface}</div>
+            <div className="workspace-frame-body">
+              <Suspense fallback={<p className="empty-state" role="status">{ui.shell.healthChecking}</p>}>
+                {workspaceSurface}
+              </Suspense>
+            </div>
           </ShellCard>
         </section>
 

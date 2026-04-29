@@ -3693,7 +3693,7 @@ button:hover:not(:disabled) { transform: translateY(-1px); }
   grid-column: 2;
 }
 
-.modelgate-mark {
+.mosaicstack-mark {
   width: 24px;
   height: 24px;
   grid-row: 1 / span 3;
@@ -3827,6 +3827,20 @@ button:hover:not(:disabled) { transform: translateY(-1px); }
   backdrop-filter: none;
 }
 
+.session-list-item,
+.thread-block,
+.thread-notice,
+.github-review-card,
+.github-action-card,
+.github-repo-card,
+.review-item-card,
+.room-picker-item,
+.scope-summary-item {
+  contain: layout paint;
+  content-visibility: auto;
+  contain-intrinsic-size: 1px 96px;
+}
+
 .workspace-frame-card {
   min-height: calc(100vh - 77px);
 }
@@ -3836,6 +3850,14 @@ button:hover:not(:disabled) { transform: translateY(-1px); }
   padding: 6px 8px;
   border-radius: var(--r);
   text-align: left;
+}
+
+.shell-left-rail .workspace-tab:focus-visible {
+  border-color: var(--blue);
+  background: var(--blue-dim);
+  color: var(--tx);
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
 }
 
 .workspace-tab svg {

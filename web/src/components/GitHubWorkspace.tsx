@@ -591,7 +591,10 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       ? selectedRepo.fullName
       : ui.github.repoSelected
     : ui.github.noRepoSelected;
-  const rawDiffPreview = expertMode ? buildRawDiffPreview(proposalPlan) : null;
+  const rawDiffPreview = useMemo(
+    () => expertMode ? buildRawDiffPreview(proposalPlan) : null,
+    [expertMode, proposalPlan],
+  );
   const currentRequestId = requestId;
   const stalePlanBlocked = Boolean(
     proposalPlan?.stale

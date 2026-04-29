@@ -1,4 +1,4 @@
-import React, { useEffect, useReducer, useRef, useState, type FormEvent } from "react";
+import React, { useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from "react";
 import { streamChatCompletion } from "../lib/api.js";
 import {
   buildGovernedChatProposal,
@@ -592,15 +592,18 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     copy: ui.chat.composerLocked
   });
 
-  const notices = [
-    ...chatState.notices,
-    ...(warning && !chatState.notices.some((notice) => notice.message === warning)
-      ? [{ id: `warning-${warning}`, level: "system" as const, message: warning, createdAt: new Date().toISOString() }]
-      : []),
-    ...(error && !chatState.notices.some((notice) => notice.message === error)
-      ? [{ id: `error-${error}`, level: "error" as const, message: error, createdAt: new Date().toISOString() }]
-      : [])
-  ];
+  const notices = useMemo(
+    () => [
+      ...chatState.notices,
+      ...(warning && !chatState.notices.some((notice) => notice.message === warning)
+        ? [{ id: `warning-${warning}`, level: "system" as const, message: warning, createdAt: "" }]
+        : []),
+      ...(error && !chatState.notices.some((notice) => notice.message === error)
+        ? [{ id: `error-${error}`, level: "error" as const, message: error, createdAt: "" }]
+        : [])
+    ],
+    [chatState.notices, error, warning],
+  );
 
   return (
     <section
@@ -693,7 +696,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
         {beginnerMode ? (
           <ShellCard variant="muted" className="work-mode-guidance-card">
             <SectionLabel>{workModeCopy.label}</SectionLabel>
-            <p>{locale === "de" ? "Schreibe dein Ziel. ModelGate erstellt im geführten Modus zuerst einen Vorschlag, danach entscheidest du." : "Write the goal. In guided mode ModelGate prepares a proposal first, then you decide."}</p>
+            <p>{locale === "de" ? "Schreibe dein Ziel. MosaicStack erstellt im geführten Modus zuerst einen Vorschlag, danach entscheidest du." : "Write the goal. In guided mode MosaicStack prepares a proposal first, then you decide."}</p>
           </ShellCard>
         ) : null}
         {expertMode && chatState.activeRoute ? (

@@ -49,6 +49,8 @@ import { getWorkModeCopy, type WorkMode } from "../lib/work-mode.js";
 type WorkflowStatus = "loading" | "partial" | "ready" | "error";
 type LoadStatus = "idle" | "loading" | "ready" | "error";
 
+const MATRIX_VISIBLE_LIST_LIMIT = 80;
+
 export type MatrixWorkspaceStatus = {
   identityLabel: string;
   connectionLabel: string;
@@ -374,6 +376,19 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   const selectedSpaces = useMemo(
     () => selectedSpaceIds.filter((value) => value.trim().length > 0),
     [selectedSpaceIds],
+  );
+  const selectedRoomIdSet = useMemo(() => new Set(selectedRoomIds), [selectedRoomIds]);
+  const visibleJoinedRooms = useMemo(
+    () => joinedRooms.slice(0, MATRIX_VISIBLE_LIST_LIMIT),
+    [joinedRooms],
+  );
+  const visibleScopeSummaryItems = useMemo(
+    () => scopeSummary?.items.slice(0, MATRIX_VISIBLE_LIST_LIMIT) ?? [],
+    [scopeSummary],
+  );
+  const visibleHierarchyRooms = useMemo(
+    () => spaceHierarchy?.rooms?.slice(0, MATRIX_VISIBLE_LIST_LIMIT) ?? [],
+    [spaceHierarchy],
   );
   const matrixReviewItems = useMemo<ReviewItem[]>(
     () => buildMatrixReviewItems(topicPlan, topicExecution, topicVerification, whoami?.userId ?? null, locale),
@@ -1502,8 +1517,8 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 {joinedRooms.length === 0 ? (
                   <p className="empty-state">{ui.matrix.roomPickerEmpty}</p>
                 ) : (
-                  joinedRooms.map((room) => {
-                    const active = selectedRoomIds.includes(room.roomId);
+                  visibleJoinedRooms.map((room) => {
+                    const active = selectedRoomIdSet.has(room.roomId);
                     return (
                       <button
                         key={room.roomId}
@@ -1539,6 +1554,9 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                     );
                   })
                 )}{" "}
+                {joinedRooms.length > visibleJoinedRooms.length ? (
+                  <p className="muted-copy">+{joinedRooms.length - visibleJoinedRooms.length}</p>
+                ) : null}{" "}
               </div>{" "}
               {roomsError ? (
                 <p className="error-banner" data-testid="matrix-rooms-error">{roomsError}</p>
@@ -1656,7 +1674,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                     </span>
                   </div>
                   <div className="scope-summary-list">
-                    {scopeSummary.items.map((item) => (
+                    {visibleScopeSummaryItems.map((item) => (
                       <article
                         key={item.roomId}
                         className={`scope-summary-item ${item.roomId === provenanceRoomId ? "scope-summary-item-active" : ""}`}
@@ -1679,6 +1697,9 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                         </div>
                       </article>
                     ))}
+                    {scopeSummary.items.length > visibleScopeSummaryItems.length ? (
+                      <p className="muted-copy">+{scopeSummary.items.length - visibleScopeSummaryItems.length}</p>
+                    ) : null}
                   </div>
                 </div>
               ) : (
@@ -1715,7 +1736,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                     ) : null}{" "}
                     {spaceHierarchy?.rooms?.length ? (
                       <div className="scope-summary-list">
-                        {spaceHierarchy.rooms.map((room, index) => (
+                        {visibleHierarchyRooms.map((room, index) => (
                           <article
                             key={room.room_id ?? room.name ?? String(index)}
                             className="scope-summary-item"
@@ -1729,6 +1750,9 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                             </small>
                           </article>
                         ))}
+                        {spaceHierarchy.rooms.length > visibleHierarchyRooms.length ? (
+                          <p className="muted-copy">+{spaceHierarchy.rooms.length - visibleHierarchyRooms.length}</p>
+                        ) : null}
                       </div>
                     ) : (
                       <p className="empty-state">
