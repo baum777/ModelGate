@@ -1074,3 +1074,52 @@ test("Settings connected auth CTAs call backend-owned control routes", async ({ 
   expect(disconnectHits).toBe(1);
   await expect(page.locator("body")).not.toContainText("sk-test");
 });
+
+test("Settings verification buttons call backend-owned read checks without exposing secrets", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  let githubHits = 0;
+
+  await page.route("**/api/github/repos", async (route) => {
+    githubHits += 1;
+    expect(route.request().method()).toBe("GET");
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        checkedAt: "2026-04-30T12:00:00.000Z",
+        repos: [
+          {
+            owner: "octo",
+            repo: "demo",
+            fullName: "octo/demo",
+            defaultBranch: "main",
+            defaultBranchSha: "abc123",
+            description: "Demo repository",
+            isPrivate: false,
+            status: "ready",
+            permissions: { canWrite: true },
+            checkedAt: "2026-04-30T12:00:00.000Z",
+            token: "sk-test-github-token",
+          },
+        ],
+      }),
+    });
+  });
+
+  await loadConsole(page);
+  await page.getByTestId("tab-settings").click();
+  const settingsWorkspace = page.getByTestId("settings-workspace");
+
+  await settingsWorkspace.getByTestId("settings-verification-backend-action").click();
+  await expect(settingsWorkspace.getByTestId("settings-verification-backend")).toContainText("mosaicstack-test");
+
+  await settingsWorkspace.getByTestId("settings-verification-github-action").click();
+  await expect(settingsWorkspace.getByTestId("settings-verification-github")).toContainText("1 repository visible");
+
+  await settingsWorkspace.getByTestId("settings-verification-matrix-action").click();
+  await expect(settingsWorkspace.getByTestId("settings-verification-matrix")).toContainText("@user:matrix.example");
+
+  expect(githubHits).toBe(1);
+  await expect(page.locator("body")).not.toContainText("sk-test");
+});

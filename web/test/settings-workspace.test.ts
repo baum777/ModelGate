@@ -4,6 +4,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   SettingsWorkspace,
+  type SettingsVerificationState,
   type SettingsTruthSnapshot,
 } from "../src/components/SettingsWorkspace.js";
 import {
@@ -55,6 +56,26 @@ function createIntegrationsStatusFixture(): IntegrationsStatusResponse {
       },
       lastVerifiedAt: null,
       lastErrorCode: null,
+    },
+  };
+}
+
+function createVerificationFixture(): Record<"backend" | "github" | "matrix", SettingsVerificationState> {
+  return {
+    backend: {
+      status: "passed",
+      detail: "mosaicstack-test (local)",
+      checkedAt: "2026-04-27T12:00:00.000Z",
+    },
+    github: {
+      status: "idle",
+      detail: "",
+      checkedAt: null,
+    },
+    matrix: {
+      status: "failed",
+      detail: "Matrix credentials were rejected",
+      checkedAt: "2026-04-27T12:01:00.000Z",
     },
   };
 }
@@ -170,6 +191,8 @@ test("Settings workspace renders integration cards and keeps secrets out of the 
       onAddOpenRouterModel: () => undefined,
       isAddingOpenRouterModel: false,
       buildIntegrationStartUrl: (provider: "github" | "matrix") => `/api/auth/${provider}/start?returnTo=%2Fconsole%3Fmode%3Dsettings`,
+      verificationResults: createVerificationFixture(),
+      onVerifyConnection: () => undefined,
     }),
   );
 
@@ -196,6 +219,10 @@ test("Settings workspace renders integration cards and keeps secrets out of the 
   assert.match(markup, /OpenRouter model 1/);
   assert.match(markup, /data-testid="openrouter-model-input"/);
   assert.match(markup, /data-testid="openrouter-model-add"/);
+  assert.match(markup, /data-testid="settings-verification-backend"/);
+  assert.match(markup, /data-testid="settings-verification-github-action"/);
+  assert.match(markup, /mosaicstack-test \(local\)/);
+  assert.match(markup, /Matrix credentials were rejected/);
   assert.doesNotMatch(markup, /name=".*token/i);
   assert.doesNotMatch(markup, /type="password"/i);
   assert.doesNotMatch(markup, /sk-test/);

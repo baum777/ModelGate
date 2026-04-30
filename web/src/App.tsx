@@ -10,6 +10,8 @@ import {
 } from "./components/ReviewWorkspace.js";
 import {
   type DiagnosticEntry,
+  type SettingsVerificationState,
+  type SettingsVerificationTarget,
 } from "./components/SettingsWorkspace.js";
 import { SessionList } from "./components/SessionList.js";
 import {
@@ -37,6 +39,7 @@ import {
   fetchModels,
   postOpenRouterModel,
   postIntegrationControlAction,
+  testSettingsConnection,
   type DiagnosticsResponse,
   type IntegrationsStatusResponse,
   type JournalEntry
@@ -83,6 +86,24 @@ const GitHubWorkspace = lazy(() => loadGitHubWorkspace().then((module) => ({ def
 const MatrixWorkspace = lazy(() => loadMatrixWorkspace().then((module) => ({ default: module.MatrixWorkspace })));
 const ReviewWorkspace = lazy(() => loadReviewWorkspace().then((module) => ({ default: module.ReviewWorkspace })));
 const SettingsWorkspace = lazy(() => loadSettingsWorkspace().then((module) => ({ default: module.SettingsWorkspace })));
+
+const SETTINGS_VERIFICATION_INITIAL: Record<SettingsVerificationTarget, SettingsVerificationState> = {
+  backend: {
+    status: "idle",
+    detail: "",
+    checkedAt: null,
+  },
+  github: {
+    status: "idle",
+    detail: "",
+    checkedAt: null,
+  },
+  matrix: {
+    status: "idle",
+    detail: "",
+    checkedAt: null,
+  },
+};
 
 function scheduleWorkspacePreload(callback: () => void) {
   if (typeof window === "undefined") {
@@ -501,6 +522,7 @@ function ConsoleShell() {
   const [isAddingOpenRouterModel, setIsAddingOpenRouterModel] = useState(false);
   const [runtimeDiagnostics, setRuntimeDiagnostics] = useState<DiagnosticsResponse | null>(null);
   const [integrationsStatus, setIntegrationsStatus] = useState<IntegrationsStatusResponse | null>(null);
+  const [settingsVerificationResults, setSettingsVerificationResults] = useState(SETTINGS_VERIFICATION_INITIAL);
   const [runtimeJournalEntries, setRuntimeJournalEntries] = useState<JournalEntry[]>([]);
   const [restoredSession] = useState(() => {
     if (typeof window === "undefined") {
@@ -785,6 +807,64 @@ function ConsoleShell() {
       setIsAddingOpenRouterModel(false);
     }
   }, [openRouterModelInput, recordTelemetry]);
+
+  const handleSettingsVerifyConnection = useCallback(async (target: SettingsVerificationTarget) => {
+    setSettingsVerificationResults((current) => ({
+      ...current,
+      [target]: {
+        ...current[target],
+        status: "checking",
+        detail: "",
+      }
+    }));
+
+    try {
+      const result = await testSettingsConnection(target);
+      const checkedAt = new Date().toISOString();
+
+      if (target === "backend") {
+        setBackendHealthy(true);
+      } else {
+        await refreshIntegrationsStatus();
+      }
+
+      setSettingsVerificationResults((current) => ({
+        ...current,
+        [target]: {
+          status: "passed",
+          detail: result.detail,
+          checkedAt,
+        }
+      }));
+      recordTelemetry(
+        "info",
+        locale === "de" ? "Verbindung geprüft" : "Connection verified",
+        `${target}: ${result.detail}`
+      );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Connection check failed";
+
+      if (target === "backend") {
+        setBackendHealthy(false);
+      } else {
+        await refreshIntegrationsStatus();
+      }
+
+      setSettingsVerificationResults((current) => ({
+        ...current,
+        [target]: {
+          status: "failed",
+          detail,
+          checkedAt: new Date().toISOString(),
+        }
+      }));
+      recordTelemetry(
+        "warning",
+        locale === "de" ? "Verbindungsprüfung fehlgeschlagen" : "Connection verification failed",
+        `${target}: ${detail}`
+      );
+    }
+  }, [locale, recordTelemetry, refreshIntegrationsStatus]);
 
   const handleIntegrationAction = useCallback(async (
     provider: "github" | "matrix",
@@ -1675,6 +1755,8 @@ function ConsoleShell() {
       isAddingOpenRouterModel={isAddingOpenRouterModel}
       buildIntegrationStartUrl={buildSettingsIntegrationStartUrl}
       onIntegrationAction={handleIntegrationAction}
+      verificationResults={settingsVerificationResults}
+      onVerifyConnection={handleSettingsVerifyConnection}
     />
   );
   const statusToneForBadge = currentStatusTone === "error" ? "error" : currentStatusTone === "ready" ? "ready" : "partial";

@@ -75,6 +75,14 @@ export type SettingsTruthSnapshot = {
   };
 };
 
+export type SettingsVerificationTarget = "backend" | "github" | "matrix";
+
+export type SettingsVerificationState = {
+  status: "idle" | "checking" | "passed" | "failed";
+  detail: string;
+  checkedAt: string | null;
+};
+
 type SettingsWorkspaceProps = {
   workMode: WorkMode;
   onWorkModeChange: (value: WorkMode) => void;
@@ -96,6 +104,8 @@ type SettingsWorkspaceProps = {
     provider: "github" | "matrix",
     action: "connect" | "reconnect" | "disconnect" | "reverify"
   ) => void;
+  verificationResults: Record<SettingsVerificationTarget, SettingsVerificationState>;
+  onVerifyConnection: (target: SettingsVerificationTarget) => void;
 };
 
 function getIntegrationNodeStatus(status: SettingsLoginAdapter["status"]): SystemNodeStatus {
@@ -158,6 +168,8 @@ export function SettingsWorkspace({
   isAddingOpenRouterModel,
   buildIntegrationStartUrl,
   onIntegrationAction,
+  verificationResults,
+  onVerifyConnection,
 }: SettingsWorkspaceProps) {
   const { locale, copy: ui } = useLocalization();
   const expertMode = isExpertMode(workMode);
@@ -261,6 +273,54 @@ export function SettingsWorkspace({
         adding: "Adding",
         empty: "No additional OpenRouter models registered yet.",
       };
+  const verificationCopy = locale === "de"
+    ? {
+        title: "Verbindung testen",
+        subtitle: "Prüft bestehende Backend-Routen. Der Browser erhält nur Status und sichere Zusammenfassungen.",
+        backend: "Backend",
+        github: "GitHub",
+        matrix: "Matrix",
+        idle: "Noch nicht geprüft",
+        checking: "Wird geprüft",
+        passed: "OK",
+        failed: "Fehler",
+        checkedAt: "Geprüft",
+        action: "Test connection",
+      }
+    : {
+        title: "Test connections",
+        subtitle: "Checks existing backend routes. The browser only receives status and safe summaries.",
+        backend: "Backend",
+        github: "GitHub",
+        matrix: "Matrix",
+        idle: "Not checked yet",
+        checking: "Checking",
+        passed: "OK",
+        failed: "Failed",
+        checkedAt: "Checked",
+        action: "Test connection",
+      };
+  const verificationTargets: Array<{ id: SettingsVerificationTarget; label: string }> = [
+    { id: "backend", label: verificationCopy.backend },
+    { id: "github", label: verificationCopy.github },
+    { id: "matrix", label: verificationCopy.matrix },
+  ];
+
+  function getVerificationStatusLabel(status: SettingsVerificationState["status"]) {
+    return verificationCopy[status];
+  }
+
+  function getVerificationTone(status: SettingsVerificationState["status"]) {
+    if (status === "passed") {
+      return "ready";
+    }
+
+    if (status === "failed") {
+      return "error";
+    }
+
+    return "partial";
+  }
 
   return (
     <section className="workspace-panel settings-workspace" data-testid="settings-workspace">
@@ -430,6 +490,46 @@ export function SettingsWorkspace({
               })}
             </div>
           </GovernanceSpine>
+        </article>
+
+        <article className="workspace-card settings-verification-card">
+          <header className="card-header">
+            <div>
+              <span>{verificationCopy.title}</span>
+              <strong>{ui.settings.backendTruth}</strong>
+            </div>
+          </header>
+          <p className="muted-copy">{verificationCopy.subtitle}</p>
+          <div className="settings-verification-list">
+            {verificationTargets.map((target) => {
+              const result = verificationResults[target.id];
+              const tone = getVerificationTone(result.status);
+
+              return (
+                <div className="settings-verification-row" data-testid={`settings-verification-${target.id}`} key={target.id}>
+                  <div>
+                    <span className={`status-pill status-${tone}`}>{getVerificationStatusLabel(result.status)}</span>
+                    <strong>{target.label}</strong>
+                    <p>{result.detail || verificationCopy.idle}</p>
+                    {result.checkedAt ? (
+                      <span className="settings-verification-timestamp">
+                        {verificationCopy.checkedAt}: {result.checkedAt}
+                      </span>
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    data-testid={`settings-verification-${target.id}-action`}
+                    onClick={() => onVerifyConnection(target.id)}
+                    disabled={result.status === "checking"}
+                  >
+                    {result.status === "checking" ? verificationCopy.checking : verificationCopy.action}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </article>
 
         <article className="workspace-card settings-identity-card">

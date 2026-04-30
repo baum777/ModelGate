@@ -170,6 +170,14 @@ export type IntegrationsStatusResponse = {
   matrix: IntegrationStatus;
 };
 
+export type SettingsConnectionTestTarget = "backend" | "github" | "matrix";
+
+export type SettingsConnectionTestResult = {
+  ok: true;
+  target: SettingsConnectionTestTarget;
+  detail: string;
+};
+
 export type JournalEntry = {
   id: string;
   timestamp: string;
@@ -422,6 +430,59 @@ export async function fetchIntegrationsStatus(): Promise<IntegrationsStatusRespo
   }
 
   return response.json() as Promise<IntegrationsStatusResponse>;
+}
+
+export async function testSettingsConnection(target: SettingsConnectionTestTarget): Promise<SettingsConnectionTestResult> {
+  if (target === "backend") {
+    const health = await fetchHealth();
+
+    return {
+      ok: true,
+      target,
+      detail: `${health.service} (${health.mode})`
+    };
+  }
+
+  const path = target === "github" ? "/api/github/repos" : "/api/matrix/whoami";
+  const response = await fetch(resolveApiUrl(path), {
+    credentials: "include"
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  const payload = await response.json() as unknown;
+
+  if (target === "github") {
+    const repos = typeof payload === "object"
+      && payload !== null
+      && Array.isArray((payload as { repos?: unknown }).repos)
+      ? (payload as { repos: unknown[] }).repos.length
+      : 0;
+
+    return {
+      ok: true,
+      target,
+      detail: `${repos} repository${repos === 1 ? "" : "ies"} visible`
+    };
+  }
+
+  const matrixPayload = typeof payload === "object" && payload !== null
+    ? payload as { userId?: unknown; homeserver?: unknown }
+    : {};
+  const userId = typeof matrixPayload.userId === "string" && matrixPayload.userId.trim().length > 0
+    ? matrixPayload.userId.trim()
+    : "Matrix identity";
+  const homeserver = typeof matrixPayload.homeserver === "string" && matrixPayload.homeserver.trim().length > 0
+    ? matrixPayload.homeserver.trim()
+    : "configured homeserver";
+
+  return {
+    ok: true,
+    target,
+    detail: `${userId} on ${homeserver}`
+  };
 }
 
 export async function postIntegrationControlAction(provider: "github" | "matrix", action: "disconnect" | "reverify") {

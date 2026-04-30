@@ -5424,6 +5424,42 @@ textarea:focus {
   gap: var(--space-2);
 }
 
+.settings-verification-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.settings-verification-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.settings-verification-row > div {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.settings-verification-row strong,
+.settings-verification-row p,
+.settings-verification-timestamp {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.settings-verification-row p,
+.settings-verification-timestamp {
+  margin: 0;
+  color: var(--tx-2);
+  font-size: 0.86rem;
+}
+
 .settings-workspace .settings-access-spine {
   padding-left: var(--space-4);
 }
