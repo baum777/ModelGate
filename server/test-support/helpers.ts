@@ -147,6 +147,14 @@ export function createTestMatrixConfig(overrides: Partial<MatrixConfig> = {}): M
     tokenExpiresAt: overrides.tokenExpiresAt ?? null,
     expectedUserId: overrides.expectedUserId ?? null,
     requestTimeoutMs: overrides.requestTimeoutMs ?? 5000,
+    evidenceWritesEnabled: overrides.evidenceWritesEnabled ?? false,
+    evidenceWritesRequired: overrides.evidenceWritesRequired ?? false,
+    evidenceRooms: overrides.evidenceRooms ?? {
+      approvals: null,
+      provenance: null,
+      verification: null,
+      topicChanges: null
+    },
     issues: overrides.issues ?? []
   };
 }
@@ -199,6 +207,9 @@ export function createMockMatrixClient(overrides: Partial<MatrixClient> = {}): M
     })),
     updateRoomTopic: overrides.updateRoomTopic ?? (async () => ({
       transactionId: "txn_test"
+    })),
+    sendRoomMessage: overrides.sendRoomMessage ?? (async () => ({
+      transactionId: "$message:matrix.example"
     }))
   };
 }

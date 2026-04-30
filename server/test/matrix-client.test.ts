@@ -35,6 +35,49 @@ test("matrix whoami normalizes the homeserver identity", async () => {
   });
 });
 
+test("matrix client sends room messages with the backend bearer token", async () => {
+  const requests: Array<{
+    path: string;
+    method: string;
+    authorization: string | null;
+    body: unknown;
+  }> = [];
+  const client = createMatrixClient({
+    config: createTestMatrixConfig({
+      accessToken: "backend-token"
+    }),
+    fetchImpl: async (input, init) => {
+      const url = new URL(String(input));
+      const headers = new Headers(init?.headers);
+      requests.push({
+        path: url.pathname,
+        method: String(init?.method ?? "GET"),
+        authorization: headers.get("Authorization"),
+        body: JSON.parse(String(init?.body ?? "{}")) as unknown
+      });
+
+      return makeJsonResponse({
+        event_id: "$event:matrix.example"
+      });
+    }
+  });
+
+  const result = await client.sendRoomMessage("!evidence:matrix.example", "Evidence body");
+
+  assert.equal(result.transactionId, "$event:matrix.example");
+  assert.equal(requests.length, 1);
+  assert.match(
+    requests[0]?.path ?? "",
+    /^\/_matrix\/client\/v3\/rooms\/!evidence%3Amatrix\.example\/send\/m\.room\.message\//
+  );
+  assert.equal(requests[0]?.method, "PUT");
+  assert.equal(requests[0]?.authorization, "Bearer backend-token");
+  assert.deepEqual(requests[0]?.body, {
+    msgtype: "m.notice",
+    body: "Evidence body"
+  });
+});
+
 test("matrix joined rooms normalizes room metadata from upstream state", async () => {
   const calls: string[] = [];
   const client = createMatrixClient({

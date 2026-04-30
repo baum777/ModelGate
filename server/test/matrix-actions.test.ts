@@ -435,6 +435,90 @@ test("matrix execute writes the room topic and plan fetch shows the executed sta
   });
 });
 
+test("matrix execute records evidence write failure but returns execution result when evidence is optional", async (t) => {
+  const topicClient = createMatrixActionClient({
+    roomTopic: "Old room topic",
+    writeTransactionId: "event-optional-evidence"
+  });
+  const app = createApp({
+    env: createTestEnv(),
+    openRouter: createMockOpenRouterClient(),
+    matrixConfig: createTestMatrixConfig({
+      evidenceWritesEnabled: true,
+      evidenceWritesRequired: false,
+      evidenceRooms: {
+        approvals: "!approvals:matrix.example",
+        provenance: null,
+        verification: null,
+        topicChanges: "!topic-change-log:matrix.example"
+      }
+    }),
+    matrixClient: createMockMatrixClient({
+      ...topicClient.client,
+      sendRoomMessage: async () => {
+        throw new MatrixClientError({
+          code: "matrix_forbidden",
+          status: 403,
+          operation: "Matrix room message send",
+          path: "/_matrix/client/v3/rooms/!approvals%3Amatrix.example/send/m.room.message/txn",
+          baseUrl: "http://matrix.example",
+          message: "Matrix backend denied access"
+        });
+      }
+    }),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const analyzeResponse = await app.inject({
+    method: "POST",
+    url: "/api/matrix/analyze",
+    payload: {
+      type: "update_room_topic",
+      roomId: "!room:matrix.example",
+      proposedValue: "New room topic"
+    }
+  });
+  const analyzed = JSON.parse(analyzeResponse.body) as { plan: { planId: string } };
+
+  const executeResponse = await app.inject({
+    method: "POST",
+    url: `/api/matrix/actions/${analyzed.plan.planId}/execute`,
+    payload: {
+      approval: true
+    }
+  });
+
+  assert.equal(executeResponse.statusCode, 200);
+  const executed = JSON.parse(executeResponse.body) as {
+    ok: true;
+    result: {
+      status: "executed";
+      transactionId: string;
+      warnings?: Array<{ eventType: string }>;
+    };
+  };
+  assert.equal(executed.result.status, "executed");
+  assert.equal(executed.result.transactionId, "event-optional-evidence");
+  assert.ok(executed.result.warnings?.some((warning) => warning.eventType === "matrix_evidence_write_failed"));
+
+  const journalResponse = await app.inject({
+    method: "GET",
+    url: "/journal/recent?source=matrix&limit=20"
+  });
+  const journalPayload = JSON.parse(journalResponse.body) as {
+    ok: true;
+    entries: Array<{ eventType: string; planId: string | null }>;
+  };
+
+  assert.ok(journalPayload.entries.some(
+    (entry) => entry.eventType === "matrix_evidence_write_failed" && entry.planId === analyzed.plan.planId
+  ));
+});
+
 test("matrix execute is rate-limited before write operations", async (t) => {
   const topicClient = createMatrixActionClient({
     roomTopic: "Old room topic"
@@ -587,6 +671,80 @@ test("matrix verify returns verified, mismatch, and pending states", async (t) =
   assert.equal(mismatch.verification.status, "mismatch");
   assert.equal(mismatch.verification.expected, "New room topic");
   assert.equal(mismatch.verification.actual, "Out-of-band change");
+});
+
+test("matrix verify keeps mismatch status even when evidence write succeeds", async (t) => {
+  const topicClient = createMatrixActionClient({
+    roomTopic: "Old room topic"
+  });
+  const app = createApp({
+    env: createTestEnv(),
+    openRouter: createMockOpenRouterClient(),
+    matrixConfig: createTestMatrixConfig({
+      evidenceWritesEnabled: true,
+      evidenceWritesRequired: false,
+      evidenceRooms: {
+        approvals: null,
+        provenance: null,
+        verification: "!verification-results:matrix.example",
+        topicChanges: null
+      }
+    }),
+    matrixClient: createMockMatrixClient({
+      ...topicClient.client,
+      sendRoomMessage: async () => ({
+        transactionId: "$evidence:matrix.example"
+      })
+    }),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const analyzeResponse = await app.inject({
+    method: "POST",
+    url: "/api/matrix/analyze",
+    payload: {
+      type: "update_room_topic",
+      roomId: "!room:matrix.example",
+      proposedValue: "New room topic"
+    }
+  });
+  const analyzed = JSON.parse(analyzeResponse.body) as { plan: { planId: string } };
+
+  const executeResponse = await app.inject({
+    method: "POST",
+    url: `/api/matrix/actions/${analyzed.plan.planId}/execute`,
+    payload: {
+      approval: true
+    }
+  });
+  assert.equal(executeResponse.statusCode, 200);
+
+  topicClient.setCurrentTopic("Out-of-band change");
+
+  const mismatchResponse = await app.inject({
+    method: "GET",
+    url: `/api/matrix/actions/${analyzed.plan.planId}/verify`
+  });
+
+  assert.equal(mismatchResponse.statusCode, 200);
+  const mismatch = JSON.parse(mismatchResponse.body) as {
+    ok: true;
+    verification: {
+      status: "mismatch";
+      expected: string;
+      actual: string | null;
+      warnings?: Array<{ eventType: string }>;
+    };
+  };
+
+  assert.equal(mismatch.verification.status, "mismatch");
+  assert.equal(mismatch.verification.expected, "New room topic");
+  assert.equal(mismatch.verification.actual, "Out-of-band change");
+  assert.equal(mismatch.verification.warnings, undefined);
 });
 
 test("matrix writer routes normalize authorization and timeout failures without leaking tokens", async (t) => {
