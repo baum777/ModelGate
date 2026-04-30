@@ -11,6 +11,7 @@ const MatrixEnvSchema = z.object({
   MATRIX_TOKEN_EXPIRES_AT: z.string().trim().default(""),
   MATRIX_EXPECTED_USER_ID: z.string().trim().default(""),
   MATRIX_REQUEST_TIMEOUT_MS: z.string().trim().default("5000"),
+  MATRIX_EVIDENCE_ROOM_ID: z.string().trim().default(""),
   MATRIX_EVIDENCE_APPROVALS_ROOM_ID: z.string().trim().default(""),
   MATRIX_EVIDENCE_PROVENANCE_ROOM_ID: z.string().trim().default(""),
   MATRIX_EVIDENCE_VERIFICATION_ROOM_ID: z.string().trim().default(""),
@@ -131,6 +132,7 @@ export function createMatrixConfig(source: NodeJS.ProcessEnv = process.env): Mat
   const requestTimeoutMs = parseTimeout(parsed.MATRIX_REQUEST_TIMEOUT_MS);
   const evidenceWritesEnabledParse = parseBoolean(parsed.MATRIX_EVIDENCE_WRITES_ENABLED);
   const evidenceWritesRequiredParse = parseBoolean(parsed.MATRIX_EVIDENCE_WRITES_REQUIRED);
+  const evidenceRoomId = parsed.MATRIX_EVIDENCE_ROOM_ID.trim() || null;
   const issues: string[] = [];
 
   if (!enabledParse.valid) {
@@ -196,10 +198,10 @@ export function createMatrixConfig(source: NodeJS.ProcessEnv = process.env): Mat
     evidenceWritesEnabled: ready && evidenceWritesEnabledParse.value,
     evidenceWritesRequired: ready && evidenceWritesRequiredParse.value,
     evidenceRooms: {
-      approvals: parsed.MATRIX_EVIDENCE_APPROVALS_ROOM_ID.trim() || null,
-      provenance: parsed.MATRIX_EVIDENCE_PROVENANCE_ROOM_ID.trim() || null,
-      verification: parsed.MATRIX_EVIDENCE_VERIFICATION_ROOM_ID.trim() || null,
-      topicChanges: parsed.MATRIX_EVIDENCE_TOPIC_CHANGE_ROOM_ID.trim() || null
+      approvals: parsed.MATRIX_EVIDENCE_APPROVALS_ROOM_ID.trim() || evidenceRoomId,
+      provenance: parsed.MATRIX_EVIDENCE_PROVENANCE_ROOM_ID.trim() || evidenceRoomId,
+      verification: parsed.MATRIX_EVIDENCE_VERIFICATION_ROOM_ID.trim() || evidenceRoomId,
+      topicChanges: parsed.MATRIX_EVIDENCE_TOPIC_CHANGE_ROOM_ID.trim() || evidenceRoomId
     },
     issues
   };

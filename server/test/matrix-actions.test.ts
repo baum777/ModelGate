@@ -519,6 +519,104 @@ test("matrix execute records evidence write failure but returns execution result
   ));
 });
 
+test("matrix execute and verify return safe evidence receipts when evidence writes succeed", async (t) => {
+  const evidenceTransactions: string[] = [];
+  const topicClient = createMatrixActionClient({
+    roomTopic: "Old room topic",
+    writeTransactionId: "event-with-evidence"
+  });
+  const app = createApp({
+    env: createTestEnv(),
+    openRouter: createMockOpenRouterClient(),
+    matrixConfig: createTestMatrixConfig({
+      evidenceWritesEnabled: true,
+      evidenceWritesRequired: false,
+      evidenceRooms: {
+        approvals: "!evidence:matrix.example",
+        provenance: null,
+        verification: "!evidence:matrix.example",
+        topicChanges: "!evidence:matrix.example"
+      }
+    }),
+    matrixClient: createMockMatrixClient({
+      ...topicClient.client,
+      sendRoomMessage: async (_roomId, body) => {
+        const eventType = body.includes("matrix_approval_record")
+          ? "approval"
+          : body.includes("matrix_topic_change_record")
+            ? "topic"
+            : body.includes("matrix_verification_result")
+              ? "verification"
+              : "unknown";
+        const transactionId = `$${eventType}:matrix.example`;
+        evidenceTransactions.push(transactionId);
+        return { transactionId };
+      }
+    }),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const analyzeResponse = await app.inject({
+    method: "POST",
+    url: "/api/matrix/analyze",
+    payload: {
+      type: "update_room_topic",
+      roomId: "!room:matrix.example",
+      proposedValue: "New room topic"
+    }
+  });
+  const analyzed = JSON.parse(analyzeResponse.body) as { plan: { planId: string } };
+
+  const executeResponse = await app.inject({
+    method: "POST",
+    url: `/api/matrix/actions/${analyzed.plan.planId}/execute`,
+    payload: {
+      approval: true
+    }
+  });
+
+  assert.equal(executeResponse.statusCode, 200);
+  const executed = JSON.parse(executeResponse.body) as {
+    ok: true;
+    result: {
+      evidence?: Array<{ eventType: string; transactionId: string }>;
+    };
+  };
+
+  assert.deepEqual(executed.result.evidence, [
+    { eventType: "matrix_approval_record", transactionId: "$approval:matrix.example" },
+    { eventType: "matrix_topic_change_record", transactionId: "$topic:matrix.example" }
+  ]);
+
+  const verifyResponse = await app.inject({
+    method: "GET",
+    url: `/api/matrix/actions/${analyzed.plan.planId}/verify`
+  });
+
+  assert.equal(verifyResponse.statusCode, 200);
+  const verified = JSON.parse(verifyResponse.body) as {
+    ok: true;
+    verification: {
+      status: "verified";
+      evidence?: Array<{ eventType: string; transactionId: string }>;
+    };
+  };
+
+  assert.equal(verified.verification.status, "verified");
+  assert.deepEqual(verified.verification.evidence, [
+    { eventType: "matrix_verification_result", transactionId: "$verification:matrix.example" }
+  ]);
+  assert.deepEqual(evidenceTransactions, [
+    "$approval:matrix.example",
+    "$topic:matrix.example",
+    "$verification:matrix.example"
+  ]);
+});
+
 test("matrix execute is rate-limited before write operations", async (t) => {
   const topicClient = createMatrixActionClient({
     roomTopic: "Old room topic"

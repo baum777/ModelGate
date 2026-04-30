@@ -164,6 +164,17 @@ function evidenceWarnings(warnings: MatrixEvidenceWriteWarning[]) {
     : {};
 }
 
+function evidenceReceipts(receipts: Array<{
+  eventType: MatrixEvidenceInput["eventType"];
+  transactionId: string;
+}>) {
+  return receipts.length > 0
+    ? {
+      evidence: receipts
+    }
+    : {};
+}
+
 function planBeforeValue(plan: MatrixActionStoreEntry) {
   return isMatrixAgentPlan(plan) ? plan.currentValue : plan.diff.before;
 }
@@ -709,6 +720,7 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
 
     try {
       const warnings: MatrixEvidenceWriteWarning[] = [];
+      const receipts: Array<{ eventType: MatrixEvidenceInput["eventType"]; transactionId: string }> = [];
       deps.runtimeJournal.append({
         source: "matrix",
         eventType: "matrix_execute_attempted",
@@ -747,6 +759,11 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
         if (approvalEvidence.required) {
           return sendMatrixError(reply, "matrix_unavailable", "Matrix evidence write failed");
         }
+      } else if (approvalEvidence.transactionId) {
+        receipts.push({
+          eventType: "matrix_approval_record",
+          transactionId: approvalEvidence.transactionId
+        });
       }
 
       await assertMatrixRoomTopicUpdateReady(deps, plan.roomId);
@@ -809,6 +826,11 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
 
         if (!topicEvidence.ok) {
           warnings.push(topicEvidence.warning);
+        } else if (topicEvidence.transactionId) {
+          receipts.push({
+            eventType: "matrix_topic_change_record",
+            transactionId: topicEvidence.transactionId
+          });
         }
 
         return reply.status(200).send({
@@ -818,6 +840,7 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
             status: "executed",
             executedAt,
             transactionId: transaction.transactionId,
+            ...evidenceReceipts(receipts),
             ...evidenceWarnings(warnings)
           }
         });
@@ -875,6 +898,11 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
 
       if (!topicEvidence.ok) {
         warnings.push(topicEvidence.warning);
+      } else if (topicEvidence.transactionId) {
+        receipts.push({
+          eventType: "matrix_topic_change_record",
+          transactionId: topicEvidence.transactionId
+        });
       }
 
       return reply.status(200).send({
@@ -884,6 +912,7 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
           status: "executed",
           executedAt,
           transactionId: transaction.transactionId,
+          ...evidenceReceipts(receipts),
           ...evidenceWarnings(warnings)
         }
       });
@@ -939,6 +968,7 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
       const actual = await deps.client.readRoomTopic(plan.roomId);
       const checkedAt = new Date().toISOString();
       const warnings: MatrixEvidenceWriteWarning[] = [];
+      const receipts: Array<{ eventType: MatrixEvidenceInput["eventType"]; transactionId: string }> = [];
 
       let status: "verified" | "mismatch" | "pending" | "failed" = "pending";
       const expected = isMatrixAgentPlan(plan) ? plan.proposedValue : plan.diff.after;
@@ -997,6 +1027,11 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
 
       if (!verificationEvidence.ok) {
         warnings.push(verificationEvidence.warning);
+      } else if (verificationEvidence.transactionId) {
+        receipts.push({
+          eventType: "matrix_verification_result",
+          transactionId: verificationEvidence.transactionId
+        });
       }
 
       return reply.status(200).send({
@@ -1007,6 +1042,7 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
           checkedAt,
           expected,
           actual,
+          ...evidenceReceipts(receipts),
           ...evidenceWarnings(warnings)
         }
       });

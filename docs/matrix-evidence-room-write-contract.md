@@ -43,6 +43,7 @@ Required target rooms:
 Backend-only configuration should use explicit target variables:
 
 ```env
+MATRIX_EVIDENCE_ROOM_ID=
 MATRIX_EVIDENCE_APPROVALS_ROOM_ID=
 MATRIX_EVIDENCE_PROVENANCE_ROOM_ID=
 MATRIX_EVIDENCE_VERIFICATION_ROOM_ID=
@@ -50,6 +51,8 @@ MATRIX_EVIDENCE_TOPIC_CHANGE_ROOM_ID=
 MATRIX_EVIDENCE_WRITES_ENABLED=false
 MATRIX_EVIDENCE_WRITES_REQUIRED=false
 ```
+
+`MATRIX_EVIDENCE_ROOM_ID` is the MVP single-room configuration. When set, it routes approval, provenance, verification, and topic-change evidence to one already existing dedicated evidence room unless a more specific `MATRIX_EVIDENCE_*_ROOM_ID` target overrides it.
 
 ## Event Types
 

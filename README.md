@@ -167,6 +167,7 @@ Opt-in live checks:
 
 ```bash
 npm run test:matrix-live
+npm run test:matrix-evidence-live
 npm run test:integration-auth-rotation-live
 npm run test:integration-auth-rotation-live:matrix
 npm run test:integration-auth-rotation-live:both

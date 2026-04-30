@@ -344,6 +344,25 @@ function normalizeVerificationResponse(payload, expectedTopic) {
   return verification;
 }
 
+function normalizeEvidenceReceipts(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((entry) =>
+      entry
+      && typeof entry === "object"
+      && typeof entry.eventType === "string"
+      && typeof entry.transactionId === "string"
+      && entry.transactionId.trim().length > 0
+    )
+    .map((entry) => ({
+      eventType: entry.eventType,
+      transactionId: entry.transactionId
+    }));
+}
+
 async function runUpdateLifecycle(fetchImpl, backendBaseUrl, roomId, topic, options = {}) {
   const whoamiResult = await callBackendJson(fetchImpl, backendBaseUrl, "GET", "/api/matrix/whoami");
 
@@ -480,6 +499,10 @@ async function runUpdateLifecycle(fetchImpl, backendBaseUrl, roomId, topic, opti
     planId: plan.planId,
     beforeTopic: readPlanBeforeTopic(plan),
     targetTopic: topic,
+    evidence: {
+      execute: normalizeEvidenceReceipts(executed.result.evidence),
+      verify: normalizeEvidenceReceipts(verification.evidence)
+    },
     verification: {
       status: verification.status,
       expected: verification.expected,
