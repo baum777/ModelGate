@@ -237,6 +237,16 @@ type ChatCopy = {
   routePending: string;
   routeFallback: string;
   routeDegraded: string;
+  routingStatus: {
+    title: string;
+    activeModel: string;
+    providerStatus: string;
+    fallbackPolicy: string;
+    routeState: string;
+    fallbackEnabled: string;
+    fallbackDisabled: string;
+    fallbackUsed: string;
+  };
 };
 
 type GitHubCopy = {
@@ -631,6 +641,16 @@ const EN_COPY: LocalizationCopy = {
     routePending: "Route pending",
     routeFallback: "Fallback",
     routeDegraded: "degraded",
+    routingStatus: {
+      title: "Chat routing status",
+      activeModel: "Active model",
+      providerStatus: "Provider status",
+      fallbackPolicy: "Fallback policy",
+      routeState: "Route state",
+      fallbackEnabled: "Fallback enabled",
+      fallbackDisabled: "Fallback disabled",
+      fallbackUsed: "Fallback used",
+    },
   },
   github: {
     title: "GitHub workspace",
@@ -999,6 +1019,16 @@ const DE_COPY: LocalizationCopy = {
     routePending: "Route ausstehend",
     routeFallback: "Fallback",
     routeDegraded: "degradiert",
+    routingStatus: {
+      title: "Chat-Routing-Status",
+      activeModel: "Aktives Modell",
+      providerStatus: "Provider-Status",
+      fallbackPolicy: "Fallback-Policy",
+      routeState: "Routing-Zustand",
+      fallbackEnabled: "Fallback aktiv",
+      fallbackDisabled: "Fallback inaktiv",
+      fallbackUsed: "Fallback genutzt",
+    },
   },
   github: {
     title: "GitHub-Arbeitsbereich",

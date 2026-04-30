@@ -4,6 +4,7 @@ import test from "node:test";
 import { readSseEvents } from "../src/lib/api.js";
 import { getWorkspaceGuide } from "../src/components/GuideOverlay.js";
 import {
+  buildChatRoutingStatusItems,
   resolveChatComposerBlockReason,
   resolveChatScrollBehavior,
   resolveChatStreamStatusLabel,
@@ -484,4 +485,42 @@ test("stream status helper prefers malformed and cancelled over base connection 
     connectionState: "error",
     copy
   }), "unverifiable");
+});
+
+test("chat routing status summarizes alias, backend, fallback policy, and route metadata without provider targets", () => {
+  const items = buildChatRoutingStatusItems({
+    selectedModel: "default",
+    backendHealthy: true,
+    fallbackAllowed: true,
+    activeRoute: {
+      selectedAlias: "default",
+      taskClass: "dialog",
+      fallbackUsed: true,
+      degraded: true,
+      streaming: true,
+    },
+    copy: {
+      activeModel: "Active model",
+      providerStatus: "Provider status",
+      fallbackPolicy: "Fallback policy",
+      routeState: "Route state",
+      ready: "Ready",
+      checking: "Checking",
+      error: "Error",
+      fallbackEnabled: "Fallback enabled",
+      fallbackDisabled: "Fallback disabled",
+      fallbackUsed: "Fallback used",
+      degraded: "degraded",
+      routePending: "Route pending",
+      unavailable: "Unavailable",
+    },
+  });
+
+  assert.deepEqual(items, [
+    { label: "Active model", value: "default", tone: "ready" },
+    { label: "Provider status", value: "Ready", tone: "ready" },
+    { label: "Fallback policy", value: "Fallback enabled", tone: "partial" },
+    { label: "Route state", value: "Fallback used · degraded", tone: "partial" },
+  ]);
+  assert.equal(items.some((item) => item.value.includes("openrouter")), false);
 });

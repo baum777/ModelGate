@@ -1706,6 +1706,9 @@ function ConsoleShell() {
       session={chatSession}
       workMode={workMode}
       backendHealthy={backendHealthy}
+      routingStatus={{
+        fallbackAllowed: runtimeDiagnostics?.routing.allowFallback ?? null,
+      }}
       activeModelAlias={activeModelAlias}
       availableModels={availableModels}
       modelRegistry={modelRegistry}

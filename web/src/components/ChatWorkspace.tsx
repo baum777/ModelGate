@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from "react";
-import { streamChatCompletion } from "../lib/api.js";
+import { streamChatCompletion, type ChatRouteMetadata } from "../lib/api.js";
 import {
   buildGovernedChatProposal,
   buildOutboundChatMessages,
@@ -56,6 +56,9 @@ type ChatWorkspaceProps = {
   session: ChatSession;
   workMode: WorkMode;
   backendHealthy: boolean | null;
+  routingStatus: {
+    fallbackAllowed: boolean | null;
+  };
   activeModelAlias: string | null;
   availableModels: string[];
   modelRegistry: PublicModelEntry[];
@@ -63,6 +66,86 @@ type ChatWorkspaceProps = {
   onTelemetry: (kind: "info" | "warning" | "error", label: string, detail?: string) => void;
   onSessionChange: (session: ChatSession) => void;
 };
+
+type RoutingStatusTone = "ready" | "partial" | "error" | "muted";
+
+type ChatRoutingStatusCopy = {
+  activeModel: string;
+  providerStatus: string;
+  fallbackPolicy: string;
+  routeState: string;
+  ready: string;
+  checking: string;
+  error: string;
+  fallbackEnabled: string;
+  fallbackDisabled: string;
+  fallbackUsed: string;
+  degraded: string;
+  routePending: string;
+  unavailable: string;
+};
+
+export function buildChatRoutingStatusItems(options: {
+  selectedModel: string;
+  backendHealthy: boolean | null;
+  fallbackAllowed: boolean | null;
+  activeRoute: ChatRouteMetadata | null;
+  copy: ChatRoutingStatusCopy;
+}): Array<{ label: string; value: string; tone: RoutingStatusTone }> {
+  const selectedAlias = options.selectedModel.trim();
+  const providerStatus = options.backendHealthy === true
+    ? { value: options.copy.ready, tone: "ready" as const }
+    : options.backendHealthy === false
+      ? { value: options.copy.error, tone: "error" as const }
+      : { value: options.copy.checking, tone: "partial" as const };
+  const fallbackPolicy = options.fallbackAllowed === true
+    ? { value: options.copy.fallbackEnabled, tone: "partial" as const }
+    : options.fallbackAllowed === false
+      ? { value: options.copy.fallbackDisabled, tone: "ready" as const }
+      : { value: options.copy.checking, tone: "muted" as const };
+  const routeState = (() => {
+    if (!options.activeRoute) {
+      return { value: options.copy.routePending, tone: "muted" as const };
+    }
+
+    const routeSignals = [
+      options.activeRoute.fallbackUsed ? options.copy.fallbackUsed : null,
+      options.activeRoute.degraded ? options.copy.degraded : null,
+    ].filter((value): value is string => Boolean(value));
+
+    if (routeSignals.length > 0) {
+      return { value: routeSignals.join(" · "), tone: "partial" as const };
+    }
+
+    return {
+      value: `${options.activeRoute.selectedAlias} · ${options.activeRoute.taskClass}`,
+      tone: "ready" as const,
+    };
+  })();
+
+  return [
+    {
+      label: options.copy.activeModel,
+      value: selectedAlias || options.copy.unavailable,
+      tone: selectedAlias ? "ready" : "error",
+    },
+    {
+      label: options.copy.providerStatus,
+      value: providerStatus.value,
+      tone: providerStatus.tone,
+    },
+    {
+      label: options.copy.fallbackPolicy,
+      value: fallbackPolicy.value,
+      tone: fallbackPolicy.tone,
+    },
+    {
+      label: options.copy.routeState,
+      value: routeState.value,
+      tone: routeState.tone,
+    },
+  ];
+}
 
 export function resolveChatComposerBlockReason(options: {
   executionMode: ChatExecutionMode;
@@ -637,6 +720,27 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     executionRunning,
     copy: ui.chat.composerLocked
   });
+  const routingStatusItems = buildChatRoutingStatusItems({
+    selectedModel,
+    backendHealthy: props.backendHealthy,
+    fallbackAllowed: props.routingStatus.fallbackAllowed,
+    activeRoute: chatState.activeRoute,
+    copy: {
+      activeModel: ui.chat.routingStatus.activeModel,
+      providerStatus: ui.chat.routingStatus.providerStatus,
+      fallbackPolicy: ui.chat.routingStatus.fallbackPolicy,
+      routeState: ui.chat.routingStatus.routeState,
+      ready: ui.common.ready,
+      checking: ui.shell.healthChecking,
+      error: ui.common.error,
+      fallbackEnabled: ui.chat.routingStatus.fallbackEnabled,
+      fallbackDisabled: ui.chat.routingStatus.fallbackDisabled,
+      fallbackUsed: ui.chat.routingStatus.fallbackUsed,
+      degraded: ui.chat.routeDegraded,
+      routePending: ui.chat.routePending,
+      unavailable: ui.settings.unavailable,
+    },
+  });
 
   const notices = useMemo(
     () => [
@@ -858,6 +962,15 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
 
           <div ref={messageEndRef} />
         </div>
+
+        <section className="chat-routing-status-strip" data-testid="chat-routing-status" aria-label={ui.chat.routingStatus.title}>
+          {routingStatusItems.map((item) => (
+            <div className={`chat-routing-status-item chat-routing-status-item-${item.tone}`} key={item.label}>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </div>
+          ))}
+        </section>
 
         <form className="composer governed-composer" onSubmit={handleSubmit}>
           <textarea

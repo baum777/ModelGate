@@ -19,6 +19,69 @@ const MODELS_OK = {
   providerTarget: "openrouter/auto",
 };
 
+const DIAGNOSTICS_OK = {
+  ok: true,
+  service: "mosaicstack-test",
+  runtimeMode: "local",
+  diagnosticsGeneratedAt: "2026-04-30T12:00:00.000Z",
+  processStartedAt: "2026-04-30T11:58:00.000Z",
+  uptimeMs: 120000,
+  models: {
+    defaultPublicAlias: "default",
+    publicAliases: ["default"],
+  },
+  routing: {
+    mode: "policy",
+    allowFallback: true,
+    failClosed: true,
+    requireBackendOwnedResolution: true,
+  },
+  rateLimit: {
+    enabled: true,
+    windowMs: 60000,
+    limits: {
+      chat: 30,
+      auth_login: 8,
+      github_propose: 10,
+      github_execute: 6,
+      matrix_execute: 6,
+    },
+    blockedByScope: {
+      chat: 0,
+      auth_login: 0,
+      github_propose: 0,
+      github_execute: 0,
+      matrix_execute: 0,
+    },
+  },
+  actionStore: {
+    mode: "memory",
+  },
+  github: {
+    configured: true,
+    ready: true,
+  },
+  matrix: {
+    configured: false,
+    ready: false,
+  },
+  journal: {
+    enabled: true,
+    mode: "memory",
+    maxEntries: 500,
+    exposeRecentLimit: 50,
+    recentCount: 0,
+  },
+  counters: {
+    chatRequests: 0,
+    chatStreamStarted: 0,
+    chatStreamCompleted: 0,
+    chatStreamError: 0,
+    chatStreamAborted: 0,
+    upstreamError: 0,
+  },
+};
+
 const MATRIX_WHOAMI_OK = {
   ok: true,
   userId: "@user:matrix.example",
@@ -97,6 +160,21 @@ const CHAT_STREAM = [
   "",
 ].join("\n");
 
+const CHAT_STREAM_FALLBACK = [
+  "event: start",
+  'data: {"ok":true,"model":"default"}',
+  "",
+  "event: route",
+  'data: {"ok":true,"route":{"selectedAlias":"default","taskClass":"dialog","fallbackUsed":true,"degraded":true,"streaming":true}}',
+  "",
+  "event: token",
+  'data: {"delta":"Hello from fallback route"}',
+  "",
+  "event: done",
+  'data: {"ok":true,"model":"default","text":"Hello from fallback route","route":{"selectedAlias":"default","taskClass":"dialog","fallbackUsed":true,"degraded":true,"streaming":true}}',
+  "",
+].join("\n");
+
 type MatrixStatus = "ok" | "error" | "malformed";
 
 async function installBaseMocks(
@@ -116,6 +194,14 @@ async function installBaseMocks(
       status: 200,
       contentType: "application/json",
       body: JSON.stringify(MODELS_OK),
+    });
+  });
+
+  await page.route("**/diagnostics", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(DIAGNOSTICS_OK),
     });
   });
 
@@ -648,6 +734,43 @@ test("chat enforces proposal-first execution and sends backend request only on a
   await expect(page.getByTestId("chat-connection-state")).toHaveText("Completed");
   await expect(page.locator(".thread-block-agent")).toHaveCount(1);
   expect(chatRequests).toBe(1);
+});
+
+test("chat routing status strip reflects backend routing without exposing provider targets", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+
+  await page.route("**/chat", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "text/event-stream; charset=utf-8",
+      body: CHAT_STREAM_FALLBACK,
+    });
+  });
+
+  await loadConsole(page);
+
+  const routingStatus = page.getByTestId("chat-routing-status");
+  await expect(routingStatus).toBeVisible();
+  await expect(routingStatus).toContainText("Active model");
+  await expect(routingStatus).toContainText("default");
+  await expect(routingStatus).toContainText("Provider status");
+  await expect(routingStatus).toContainText("Ready");
+  await expect(routingStatus).toContainText("Fallback enabled");
+  await expect(routingStatus).toContainText("Route pending");
+
+  await page.getByTestId("chat-composer").fill("Show route status.");
+  await page.getByTestId("chat-send").click();
+  await page.getByTestId("chat-decision-zone").getByRole("button", { name: "Approve" }).click();
+
+  await expect(routingStatus).toContainText("Fallback used");
+  await expect(routingStatus).toContainText("degraded");
+  await expect(page.locator("body")).not.toContainText("openrouter/auto");
+  await expect(page.locator("body")).not.toContainText("sk-test");
 });
 
 test("chat abort keeps fail-closed behavior and does not fabricate assistant completion", async ({ page }) => {
