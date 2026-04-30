@@ -6,6 +6,12 @@ import {
   SettingsWorkspace,
   type SettingsTruthSnapshot,
 } from "../src/components/SettingsWorkspace.js";
+import {
+  FlowIndicator,
+  GovernanceSpine,
+  SystemLayerFrame,
+  SystemNode,
+} from "../src/components/system-visuals/index.js";
 import type { IntegrationsStatusResponse, JournalEntry } from "../src/lib/api.js";
 import { deriveSettingsLoginAdapters } from "../src/lib/settings-login-adapters.js";
 
@@ -170,19 +176,64 @@ test("Settings workspace renders integration cards and keeps secrets out of the 
   assert.match(markup, /GitHub/);
   assert.match(markup, /Matrix/);
   assert.match(markup, /data-testid="settings-adapter-github"/);
+  assert.match(markup, /data-system-layer="execution"/);
+  assert.match(markup, /data-system-node-kind="github"/);
+  assert.match(markup, /aria-label="GitHub integration node, status connected"/);
+  assert.match(markup, /GitHub system status: connected/);
   assert.match(markup, /aria-label="GitHub Reverify"/);
   assert.match(markup, /data-testid="settings-adapter-matrix-action-connect"/);
+  assert.match(markup, /data-system-node-kind="matrix"/);
+  assert.match(markup, /aria-label="Matrix integration node, status disconnected"/);
+  assert.match(markup, /Matrix system status: disconnected/);
+  assert.match(markup, /data-flow-state="connected"/);
   assert.match(markup, /href="\/api\/auth\/matrix\/start\?returnTo=%2Fconsole%3Fmode%3Dsettings"/);
   assert.match(markup, /stub-github-operator/);
   assert.match(markup, /Credential source/);
   assert.match(markup, /Connect available/);
   assert.match(markup, /OpenRouter (Modelle|models)/);
+  assert.match(markup, /data-system-node-kind="openrouter"/);
+  assert.match(markup, /aria-label="OpenRouter integration node, status connected"/);
   assert.match(markup, /OpenRouter model 1/);
   assert.match(markup, /data-testid="openrouter-model-input"/);
   assert.match(markup, /data-testid="openrouter-model-add"/);
   assert.doesNotMatch(markup, /name=".*token/i);
   assert.doesNotMatch(markup, /type="password"/i);
   assert.doesNotMatch(markup, /sk-test/);
+});
+
+test("System visual primitives render accessible layer, node, flow, and spine semantics", () => {
+  const markup = renderToStaticMarkup(
+    React.createElement(
+      GovernanceSpine,
+      { active: true },
+      React.createElement(
+        SystemLayerFrame,
+        { layer: "governance", active: true },
+        React.createElement(
+          React.Fragment,
+          null,
+          React.createElement(SystemNode, {
+            label: "Policy Gate",
+            kind: "generic",
+            status: "blocked",
+          }),
+          React.createElement(FlowIndicator, {
+            state: "blocked",
+            direction: "vertical",
+            label: "Policy decision",
+          }),
+        ),
+      ),
+    ),
+  );
+
+  assert.match(markup, /data-governance-spine="true"/);
+  assert.match(markup, /data-system-layer="governance"/);
+  assert.match(markup, /data-system-node-kind="generic"/);
+  assert.match(markup, /aria-label="Policy Gate integration node, status blocked"/);
+  assert.match(markup, /Policy Gate system status: blocked/);
+  assert.match(markup, /data-flow-state="blocked"/);
+  assert.match(markup, /aria-label="Policy decision flow, blocked, vertical"/);
 });
 
 test("Settings login adapters map connected and reconnect states for governed CTAs", () => {

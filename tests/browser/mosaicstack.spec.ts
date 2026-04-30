@@ -595,7 +595,7 @@ test("locale toggle switches key copy and persists across reload", async ({ page
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
 });
 
-test("workspace guide presents three navigable cards", async ({ page }) => {
+test("workspace guide presents comprehensive navigable chat cards", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
   await loadConsole(page);
   await setLocale(page, "de");
@@ -603,15 +603,21 @@ test("workspace guide presents three navigable cards", async ({ page }) => {
   await page.getByTestId("guide-chat").click();
   const dialog = page.getByRole("dialog", { name: "Chat-Guide" });
   await expect(dialog).toBeVisible();
-  await expect(page.getByTestId("guide-chat-card")).toContainText("Composer zuerst");
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Arbeitsbereiche und Arbeitsmodus");
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Basis");
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Expert");
 
   await dialog.getByRole("button", { name: "Weiter" }).click();
-  await expect(page.getByTestId("guide-chat-card")).toContainText("Best Practice");
-  await expect(page.getByTestId("guide-chat-card")).toContainText("Vorschlag vor Ausführung");
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Guide, Status und Diagnostik");
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Diagnostik öffnen");
 
   await dialog.getByRole("button", { name: "Weiter" }).click();
-  await expect(page.getByTestId("guide-chat-card")).toContainText("Logik");
-  await expect(page.getByTestId("guide-chat-card")).toContainText("Backend-eigener Stream");
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Ausführungsmodus");
+
+  await dialog.getByRole("button", { name: "Weiter" }).click();
+  await dialog.getByRole("button", { name: "Weiter" }).click();
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Enter bereitet den nächsten Schritt vor");
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Shift+Enter");
 });
 
 test("chat enforces proposal-first execution and sends backend request only on approve", async ({ page }) => {
@@ -633,7 +639,7 @@ test("chat enforces proposal-first execution and sends backend request only on a
 
   await loadConsole(page);
   await page.getByTestId("chat-composer").fill("Please propose a safe backend action.");
-  await page.getByTestId("chat-send").click();
+  await page.getByTestId("chat-composer").press("Enter");
 
   await expect(page.getByTestId("chat-proposal-card")).toBeVisible();
   expect(chatRequests).toBe(0);

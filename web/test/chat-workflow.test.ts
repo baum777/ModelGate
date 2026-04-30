@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { readSseEvents } from "../src/lib/api.js";
-import { resolveChatComposerBlockReason, resolveChatScrollBehavior, resolveChatStreamStatusLabel } from "../src/components/ChatWorkspace.js";
+import { getWorkspaceGuide } from "../src/components/GuideOverlay.js";
+import {
+  resolveChatComposerBlockReason,
+  resolveChatScrollBehavior,
+  resolveChatStreamStatusLabel,
+  shouldSubmitChatComposerOnKey
+} from "../src/components/ChatWorkspace.js";
 import {
   buildGovernedChatProposal,
   chatReducer,
@@ -22,6 +29,39 @@ function encodeChunks(chunks: string[]) {
     }
   });
 }
+
+test("chat composer submits on Enter and preserves Shift+Enter for multiline input", () => {
+  assert.equal(shouldSubmitChatComposerOnKey({ key: "Enter", shiftKey: false, isComposing: false }), true);
+  assert.equal(shouldSubmitChatComposerOnKey({ key: "Enter", shiftKey: true, isComposing: false }), false);
+  assert.equal(shouldSubmitChatComposerOnKey({ key: "Enter", shiftKey: false, isComposing: true }), false);
+  assert.equal(shouldSubmitChatComposerOnKey({ key: "a", shiftKey: false, isComposing: false }), false);
+});
+
+test("chat guide covers visible interactive chat features", () => {
+  const guide = getWorkspaceGuide("de", "chat");
+  const guideText = guide.cards
+    .flatMap((card) => [card.eyebrow, card.title, card.body, ...card.points])
+    .join("\n");
+
+  assert.match(guideText, /Basis/);
+  assert.match(guideText, /Expert/);
+  assert.match(guideText, /Diagnostik/);
+  assert.match(guideText, /Enter/);
+  assert.match(guideText, /Shift\+Enter/);
+  assert.match(guideText, /Ausführungsmodus/);
+  assert.match(guideText, /Modellalias/);
+  assert.match(guideText, /Freigabe/);
+});
+
+test("chat visual review styles expose active mode color and subtle hidden guide scrolling", () => {
+  const styles = readFileSync("web/src/styles.css", "utf8");
+
+  assert.match(styles, /\.chat-toolbar-controls\s+\.mode-toggle-button-active/);
+  assert.match(styles, /\.chat-toolbar-controls\s+\.mode-toggle-button-active[\s\S]*linear-gradient/);
+  assert.match(styles, /\.guide-card[\s\S]*overflow-y:\s*auto/);
+  assert.match(styles, /\.guide-card[\s\S]*scrollbar-width:\s*none/);
+  assert.match(styles, /\.guide-card::-webkit-scrollbar[\s\S]*display:\s*none/);
+});
 
 test("chat reducer finalizes exactly one assistant draft on done with route metadata", async () => {
   const events: Array<{ event: string; data: string }> = [];

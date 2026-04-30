@@ -96,6 +96,16 @@ export function resolveChatComposerBlockReason(options: {
   return null;
 }
 
+export function shouldSubmitChatComposerOnKey(event: {
+  key: string;
+  shiftKey: boolean;
+  isComposing?: boolean;
+  nativeEvent?: { isComposing?: boolean };
+}) {
+  const composing = event.isComposing ?? event.nativeEvent?.isComposing ?? false;
+  return event.key === "Enter" && !event.shiftKey && !composing;
+}
+
 export function resolveChatScrollBehavior(connectionState: ConnectionState): ScrollBehavior {
   return connectionState === "streaming" || connectionState === "submitting" ? "auto" : "smooth";
 }
@@ -855,6 +865,14 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             aria-label={ui.chat.title}
             value={chatState.input}
             onChange={(event) => dispatch({ type: "set_input", input: event.target.value })}
+            onKeyDown={(event) => {
+              if (!shouldSubmitChatComposerOnKey(event)) {
+                return;
+              }
+
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }}
             placeholder={ui.chat.composerPlaceholder}
             rows={4}
             disabled={Boolean(composerBlockReason)}

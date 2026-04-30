@@ -8,6 +8,14 @@ import {
   type WorkMode,
 } from "../lib/work-mode.js";
 import type { SettingsLoginAdapter } from "../lib/settings-login-adapters.js";
+import {
+  FlowIndicator,
+  GovernanceSpine,
+  SystemLayerFrame,
+  SystemNode,
+  type FlowIndicatorState,
+  type SystemNodeStatus,
+} from "./system-visuals/index.js";
 
 export type DiagnosticEntry = {
   kind: "info" | "warning" | "error";
@@ -89,6 +97,52 @@ type SettingsWorkspaceProps = {
     action: "connect" | "reconnect" | "disconnect" | "reverify"
   ) => void;
 };
+
+function getIntegrationNodeStatus(status: SettingsLoginAdapter["status"]): SystemNodeStatus {
+  if (status === "connected") {
+    return "connected";
+  }
+
+  if (status === "checking") {
+    return "pending";
+  }
+
+  if (status === "auth_expired" || status === "missing_server_config" || status === "scope_denied" || status === "disabled_by_policy") {
+    return "blocked";
+  }
+
+  if (status === "upstream_unreachable" || status === "error") {
+    return "error";
+  }
+
+  return "disconnected";
+}
+
+function getIntegrationFlowState(status: SettingsLoginAdapter["status"]): FlowIndicatorState {
+  const nodeStatus = getIntegrationNodeStatus(status);
+
+  if (nodeStatus === "connected") {
+    return "connected";
+  }
+
+  if (nodeStatus === "pending") {
+    return "pending";
+  }
+
+  if (nodeStatus === "blocked") {
+    return "blocked";
+  }
+
+  if (nodeStatus === "error") {
+    return "error";
+  }
+
+  return "idle";
+}
+
+function isActiveNodeStatus(status: SystemNodeStatus) {
+  return status === "connected" || status === "pending" || status === "executing";
+}
 
 export function SettingsWorkspace({
   workMode,
@@ -248,10 +302,21 @@ export function SettingsWorkspace({
             </div>
           </header>
 
-          <div className="settings-adapter-list">
-            {loginAdapters.map((adapter) => (
-              <section
+          <GovernanceSpine
+            active={loginAdapters.some((adapter) => getIntegrationNodeStatus(adapter.status) === "connected")}
+            blocked={loginAdapters.some((adapter) => getIntegrationNodeStatus(adapter.status) === "blocked")}
+            className="settings-access-spine"
+          >
+            <div className="settings-adapter-list">
+              {loginAdapters.map((adapter) => {
+                const nodeStatus = getIntegrationNodeStatus(adapter.status);
+                const flowState = getIntegrationFlowState(adapter.status);
+
+                return (
+              <SystemLayerFrame
                 key={adapter.id}
+                layer="execution"
+                active={isActiveNodeStatus(nodeStatus)}
                 className={`settings-adapter-row settings-adapter-row-${adapter.status}`}
                 data-testid={`settings-adapter-${adapter.id}`}
               >
@@ -260,13 +325,28 @@ export function SettingsWorkspace({
                     <span className={`status-pill status-${adapter.status === "connected" ? "ready" : adapter.status === "error" || adapter.status === "missing_server_config" || adapter.status === "auth_expired" || adapter.status === "scope_denied" || adapter.status === "upstream_unreachable" ? "error" : "partial"}`}>
                       {adapterCopy.status[adapter.status]}
                     </span>
-                    <h2>{adapter.label}</h2>
+                    <div className="settings-adapter-title-stack">
+                      <h2>{adapter.label}</h2>
+                      <SystemNode
+                        label={adapter.label}
+                        kind={adapter.id}
+                        status={nodeStatus}
+                      >
+                        {adapterCopy.status[adapter.status]}
+                      </SystemNode>
+                    </div>
                   </div>
                   <p className="muted-copy">{adapter.safeIdentityLabel}</p>
                   <p>{adapter.scopeSummary}</p>
                 </div>
 
                 <div className="settings-adapter-actions">
+                  <FlowIndicator
+                    state={flowState}
+                    direction="horizontal"
+                    label={`${adapter.label} action path`}
+                    className="settings-adapter-flow"
+                  />
                   {adapter.primaryAction === "connect" || adapter.primaryAction === "reconnect" ? (
                     <a
                       className={`primary-link-button${adapter.status === "checking" ? " is-disabled" : ""}`}
@@ -345,9 +425,11 @@ export function SettingsWorkspace({
                     ))}
                   </div>
                 ) : null}
-              </section>
-            ))}
-          </div>
+              </SystemLayerFrame>
+                );
+              })}
+            </div>
+          </GovernanceSpine>
         </article>
 
         <article className="workspace-card settings-identity-card">
@@ -431,13 +513,24 @@ export function SettingsWorkspace({
           <p className="muted-copy">{ui.settings.modelChoiceNote}</p>
         </article>
 
-        <article className="workspace-card openrouter-model-card">
+        <SystemLayerFrame
+          layer="execution"
+          active={truthSnapshot.models.availableCount > 0 || openRouterModels.length > 0}
+          className="workspace-card openrouter-model-card"
+        >
           <header className="card-header">
             <div>
               <span>{openRouterCopy.title}</span>
               <strong>{ui.settings.backendPolicy}</strong>
             </div>
           </header>
+          <SystemNode
+            label="OpenRouter"
+            kind="openrouter"
+            status={truthSnapshot.models.availableCount > 0 || openRouterModels.length > 0 ? "connected" : "disconnected"}
+          >
+            {truthSnapshot.models.registrySourceLabel}
+          </SystemNode>
           <p className="muted-copy">{openRouterCopy.subtitle}</p>
           <form
             className="settings-inline-form"
@@ -481,7 +574,7 @@ export function SettingsWorkspace({
               ))}
             </div>
           )}
-        </article>
+        </SystemLayerFrame>
 
         {expertMode ? (
         <article className="workspace-card settings-diagnostics-card">

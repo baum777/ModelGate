@@ -35,22 +35,46 @@ const GUIDE_COPY: Record<Locale, Record<GuideKey, GuideContent>> = {
       title: "Chat guide",
       cards: [
         {
-          eyebrow: "Setup",
-          title: "Composer first",
-          body: "Chat is for the next prompt. The thread and composer are the primary surface.",
-          points: ["Write in the composer.", "Use the toolbar only for mode and public alias.", "Keep diagnostics in Expert."],
+          eyebrow: "Workspace",
+          title: "Workspaces and work mode",
+          body: "The left rail switches between Chat, GitHub, Matrix, Review, and Settings; the work-mode toggle controls disclosure.",
+          points: ["Use Beginner for the focused daily view.", "Use Expert for route, alias, diagnostics, and provenance context.", "Changing work mode does not change backend authority."],
         },
         {
-          eyebrow: "Best practice",
-          title: "Proposal before execution",
-          body: "Use governed mode when the prompt may lead to a concrete action.",
-          points: ["Write one clear intent.", "Review the prepared proposal.", "Approve only when the consequence matches."],
+          eyebrow: "Guide",
+          title: "Guide, status, and diagnostics",
+          body: "The Guide explains the current workspace; diagnostics and status panels show whether the console can safely act.",
+          points: ["Use Guide controls, dots, and arrow keys to move through cards.", "Open diagnostics when backend or routing state is unclear.", "Status strips and the right rail are evidence surfaces, not execution shortcuts."],
         },
         {
-          eyebrow: "Logic",
-          title: "Backend-owned stream",
-          body: "The browser renders state, but execution truth stays server-side.",
-          points: ["Approval creates an execution receipt.", "Malformed streams fail closed.", "Provider targets stay hidden."],
+          eyebrow: "Mode",
+          title: "Execution mode",
+          body: "The execution-mode toggle chooses whether the next prompt is read-only chat or a governed proposal.",
+          points: ["Read-only mode sends a direct prompt without external writes.", "Governed mode prepares a proposal before backend execution.", "Running execution locks the toggle until the current path settles."],
+        },
+        {
+          eyebrow: "Routing",
+          title: "Public model alias",
+          body: "Expert mode can expose the public model alias selector without revealing provider IDs as UI truth.",
+          points: ["Pick an alias only when the backend reports it available.", "The alias is routing input, not a provider credential.", "If no alias is available, the composer remains fail-closed."],
+        },
+        {
+          eyebrow: "Composer",
+          title: "Enter prepares the next step",
+          body: "The composer is the main input surface for the chat workspace.",
+          points: ["Press Enter to submit the current input.", "Press Shift+Enter to keep writing on a new line.", "In governed mode, submit means prepare proposal; approval is still separate."],
+        },
+        {
+          eyebrow: "Approval",
+          title: "Proposal, approval, and receipts",
+          body: "Governed execution separates intent, approval, execution, and evidence.",
+          points: ["Review the proposal consequence before approving.", "Reject unclear proposals instead of executing them.", "Receipts and thread blocks show the recorded outcome."],
+        },
+        {
+          eyebrow: "Runtime",
+          title: "Stop, new session, and fail-closed state",
+          body: "Runtime controls are deliberately narrow so the browser cannot bypass backend truth.",
+          points: ["Stop execution cancels only an active stream.", "New session resets the visible workspace state.", "Backend unavailable keeps action controls disabled rather than guessing."],
         },
       ],
     },
@@ -172,22 +196,46 @@ const GUIDE_COPY: Record<Locale, Record<GuideKey, GuideContent>> = {
       title: "Chat-Guide",
       cards: [
         {
-          eyebrow: "Aufbau",
-          title: "Composer zuerst",
-          body: "Chat ist für den nächsten Prompt. Thread und Composer sind die Hauptfläche.",
-          points: ["Im Composer schreiben.", "Toolbar nur für Modus und öffentlichen Alias nutzen.", "Diagnostik bleibt im Expert-Modus."],
+          eyebrow: "Workspace",
+          title: "Arbeitsbereiche und Arbeitsmodus",
+          body: "Die linke Leiste wechselt zwischen Chat, GitHub, Matrix, Prüfung und Einstellungen; der Arbeitsmodus steuert die Detailtiefe.",
+          points: ["Basis zeigt die fokussierte Daily-Ansicht.", "Expert zeigt Route, Alias, Diagnostik und Provenienz-Kontext.", "Der Arbeitsmodus ändert keine Backend-Autorität."],
         },
         {
-          eyebrow: "Best Practice",
-          title: "Vorschlag vor Ausführung",
-          body: "Nutze den freigabepflichtigen Modus, wenn aus dem Prompt eine konkrete Aktion entstehen kann.",
-          points: ["Eine klare Absicht formulieren.", "Den vorbereiteten Vorschlag prüfen.", "Nur bei passender Konsequenz freigeben."],
+          eyebrow: "Guide",
+          title: "Guide, Status und Diagnostik",
+          body: "Der Guide erklärt den aktuellen Arbeitsbereich; Diagnostik und Statusflächen zeigen, ob die Konsole sicher handeln kann.",
+          points: ["Guide-Steuerung, Punkte und Pfeiltasten wechseln Karten.", "Diagnostik öffnen, wenn Backend- oder Routing-Zustand unklar ist.", "Statusleisten und rechte Rail sind Evidence-Flächen, keine Ausführungsabkürzungen."],
         },
         {
-          eyebrow: "Logik",
-          title: "Backend-eigener Stream",
-          body: "Der Browser rendert Zustand, aber Ausführungswahrheit bleibt serverseitig.",
-          points: ["Freigabe erzeugt einen Ausführungsbeleg.", "Fehlerhafte Streams schließen fail-closed.", "Provider-Ziele bleiben verborgen."],
+          eyebrow: "Modus",
+          title: "Ausführungsmodus",
+          body: "Der Ausführungsmodus legt fest, ob der nächste Prompt read-only läuft oder zuerst als governierter Vorschlag vorbereitet wird.",
+          points: ["Nur Lesen sendet einen direkten Prompt ohne externe Writes.", "Freigabe nötig bereitet vor der Backend-Ausführung einen Vorschlag vor.", "Während Ausführung läuft, bleibt der Toggle gesperrt."],
+        },
+        {
+          eyebrow: "Routing",
+          title: "Öffentlicher Modellalias",
+          body: "Expert kann den öffentlichen Modellalias zeigen, ohne Provider-IDs zur UI-Wahrheit zu machen.",
+          points: ["Alias nur wählen, wenn das Backend ihn verfügbar meldet.", "Der Alias ist Routing-Eingabe, kein Credential.", "Ohne verfügbaren Alias bleibt der Composer fail-closed."],
+        },
+        {
+          eyebrow: "Composer",
+          title: "Enter bereitet den nächsten Schritt vor",
+          body: "Der Composer ist die zentrale Eingabefläche im Chat-Arbeitsbereich.",
+          points: ["Enter sendet die aktuelle Eingabe ab.", "Shift+Enter erzeugt eine neue Zeile.", "Im governierten Modus bedeutet Absenden: Vorschlag vorbereiten; Freigabe bleibt getrennt."],
+        },
+        {
+          eyebrow: "Freigabe",
+          title: "Vorschlag, Freigabe und Belege",
+          body: "Governierte Ausführung trennt Absicht, Freigabe, Ausführung und Evidence.",
+          points: ["Konsequenz des Vorschlags vor Freigabe prüfen.", "Unklare Vorschläge ablehnen statt ausführen.", "Belege und Thread-Blöcke zeigen das aufgezeichnete Ergebnis."],
+        },
+        {
+          eyebrow: "Runtime",
+          title: "Stop, neue Session und fail-closed Zustand",
+          body: "Runtime-Kontrollen bleiben eng, damit der Browser keine Backend-Wahrheit umgehen kann.",
+          points: ["Stop bricht nur einen aktiven Stream ab.", "Neue Session setzt den sichtbaren Workspace-Zustand zurück.", "Backend nicht verfügbar hält Aktionskontrollen deaktiviert, statt zu raten."],
         },
       ],
     },
@@ -398,6 +446,8 @@ export function GuideOverlay({ content, testId }: GuideOverlayProps) {
             <article
               className="guide-card"
               data-testid={`${testId}-card`}
+              aria-label={`${activeCard.eyebrow}: ${activeCard.title}`}
+              tabIndex={0}
               onPointerDown={(event) => setPointerStartX(event.clientX)}
               onPointerUp={handlePointerUp}
               onPointerCancel={() => setPointerStartX(null)}
