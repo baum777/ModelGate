@@ -666,6 +666,22 @@ test("left rail workspace tabs keep keyboard focus names in compact layout", asy
   await expect(matrixTab).toHaveCSS("outline-style", "solid");
 });
 
+test("console shell avoids page-level horizontal overflow in compact desktop layout", async ({ page }) => {
+  await page.setViewportSize({ width: 916, height: 688 });
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await loadConsole(page);
+
+  const overflow = await page.evaluate(() => ({
+    htmlClientWidth: document.documentElement.clientWidth,
+    htmlScrollWidth: document.documentElement.scrollWidth,
+    bodyClientWidth: document.body.clientWidth,
+    bodyScrollWidth: document.body.scrollWidth,
+  }));
+
+  expect(overflow.htmlScrollWidth).toBeLessThanOrEqual(overflow.htmlClientWidth);
+  expect(overflow.bodyScrollWidth).toBeLessThanOrEqual(overflow.bodyClientWidth);
+});
+
 test("locale toggle switches key copy and persists across reload", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
   await loadConsole(page);
@@ -704,6 +720,30 @@ test("workspace guide presents comprehensive navigable chat cards", async ({ pag
   await dialog.getByRole("button", { name: "Weiter" }).click();
   await expect(page.getByTestId("guide-chat-card")).toContainText("Enter bereitet den nächsten Schritt vor");
   await expect(page.getByTestId("guide-chat-card")).toContainText("Shift+Enter");
+});
+
+test("all workspace guides expose detailed operational cards", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await loadConsole(page);
+
+  const workspaces = [
+    { tab: "chat", guide: "guide-chat", title: "Chat guide", expected: "backend status" },
+    { tab: "github", guide: "guide-github", title: "GitHub guide", expected: "GitHub readiness" },
+    { tab: "matrix", guide: "guide-matrix", title: "Matrix guide", expected: "explicit target" },
+    { tab: "review", guide: "guide-review", title: "Review guide", expected: "human decision" },
+    { tab: "settings", guide: "guide-settings", title: "Settings guide", expected: "backend authority" },
+  ];
+
+  for (const workspace of workspaces) {
+    await page.getByTestId(`tab-${workspace.tab}`).click();
+    await page.getByTestId(workspace.guide).click();
+    const dialog = page.getByRole("dialog", { name: workspace.title });
+    await expect(dialog).toBeVisible();
+    await expect.poll(() => dialog.locator(".guide-card-dot").count()).toBeGreaterThanOrEqual(6);
+    await expect(dialog).toContainText(workspace.expected);
+    await dialog.getByRole("button", { name: "Close" }).click();
+    await expect(dialog).toHaveCount(0);
+  }
 });
 
 test("chat enforces proposal-first execution and sends backend request only on approve", async ({ page }) => {

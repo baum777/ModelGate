@@ -54,6 +54,26 @@ test("chat guide covers visible interactive chat features", () => {
   assert.match(guideText, /Freigabe/);
 });
 
+test("all workspace guides provide detailed operational walkthroughs in both locales", () => {
+  const guideKeys = ["chat", "github", "matrix", "review", "settings"] as const;
+
+  for (const locale of ["en", "de"] as const) {
+    for (const key of guideKeys) {
+      const guide = getWorkspaceGuide(locale, key);
+      const guideText = guide.cards
+        .flatMap((card) => [card.eyebrow, card.title, card.body, ...card.points])
+        .join("\n");
+
+      assert.ok(guide.cards.length >= 6, `${locale}/${key} should have at least six guide cards`);
+      assert.ok(
+        guide.cards.every((card) => card.points.length >= 4),
+        `${locale}/${key} guide cards should include detailed point lists`,
+      );
+      assert.match(guideText, locale === "de" ? /Backend|backend|Freigabe|Diagnostik|Status/ : /Backend|backend|approval|diagnostics|status/i);
+    }
+  }
+});
+
 test("chat visual review styles expose active mode color and subtle hidden guide scrolling", () => {
   const styles = readFileSync("web/src/styles.css", "utf8");
 
@@ -62,6 +82,15 @@ test("chat visual review styles expose active mode color and subtle hidden guide
   assert.match(styles, /\.guide-card[\s\S]*overflow-y:\s*auto/);
   assert.match(styles, /\.guide-card[\s\S]*scrollbar-width:\s*none/);
   assert.match(styles, /\.guide-card::-webkit-scrollbar[\s\S]*display:\s*none/);
+});
+
+test("console shell styles hide native scrollbars and clip page-level horizontal overflow", () => {
+  const styles = readFileSync("web/src/styles.css", "utf8");
+
+  assert.match(styles, /scrollbar-width:\s*none/);
+  assert.match(styles, /::-webkit-scrollbar[\s\S]*display:\s*none/);
+  assert.match(styles, /html,\s*body,\s*#root[\s\S]*overflow-x:\s*hidden/);
+  assert.match(styles, /\.app-shell-console[\s\S]*max-width:\s*100vw/);
 });
 
 test("chat reducer finalizes exactly one assistant draft on done with route metadata", async () => {

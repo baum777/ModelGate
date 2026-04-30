@@ -5641,8 +5641,59 @@ textarea:focus {
     justify-content: flex-start;
   }
 
-  .github-hero-steps {
-    grid-template-columns: 1fr;
-    text-align: left;
+    .github-hero-steps {
+      grid-template-columns: 1fr;
+      text-align: left;
+    }
   }
+
+/* Console overflow guard: keep panes scrollable while hiding native rails and page-level x overflow. */
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.app-shell-console {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+.global-header-shell,
+.console-layout,
+.bottom-diagnostics-layer {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.console-layout > *,
+.workspace-frame-card,
+.workspace-frame-body,
+.workspace-panel,
+.chat-card {
+  min-width: 0;
+}
+
+.workspace-sidebar,
+.workspace-context,
+.console-main {
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
