@@ -1,0 +1,38 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - heading "MosaicStack Konsole" [level=1] [ref=e7]
+      - paragraph [ref=e8]: Governance-first Operator-Shell.
+    - generic [ref=e9]:
+      - button "Switch to light mode" [ref=e10] [cursor=pointer]: ☀
+      - group "Sprache" [ref=e11]:
+        - 'button "Sprache: Englisch" [ref=e12] [cursor=pointer]': EN
+        - 'button "Sprache: Deutsch" [pressed] [ref=e13] [cursor=pointer]': DE
+      - generic [ref=e14]: Backend Wird geprüft
+  - generic [ref=e15]:
+    - complementary [ref=e16]:
+      - generic [ref=e17]:
+        - paragraph [ref=e18]: Arbeitsbereiche
+        - navigation "Arbeitsbereiche" [ref=e19]:
+          - button "Chat" [ref=e20] [cursor=pointer]:
+            - img [ref=e21]
+          - button "GitHub" [ref=e23] [cursor=pointer]:
+            - img [ref=e24]
+          - button "Matrix" [ref=e27] [cursor=pointer]:
+            - img [ref=e28]
+          - button "Prüfung" [ref=e33] [cursor=pointer]:
+            - img [ref=e34]
+          - button "Einstellungen" [ref=e36] [cursor=pointer]:
+            - img [ref=e37]
+    - status [ref=e43]: Wird geprüft
+    - region "Diagnostik" [ref=e44]:
+      - generic [ref=e45]:
+        - generic [ref=e46]: "Status:"
+        - strong [ref=e47]: Wird geprüft
+      - generic [ref=e48]:
+        - generic [ref=e49]: "Modus:"
+        - strong [ref=e50]: Matrix
+      - generic [ref=e51]:
+        - generic [ref=e52]: "Diagnostik:"
+        - strong [ref=e53]: n/a
+      - button "Diagnostik öffnen" [ref=e54] [cursor=pointer]

@@ -23,6 +23,7 @@ type GuideContent = {
 type GuideOverlayProps = {
   content: GuideContent;
   testId: string;
+  ctaClassName?: string;
 };
 
 const GUIDE_COPY: Record<Locale, Record<GuideKey, GuideContent>> = {
@@ -502,7 +503,7 @@ function clampCardIndex(index: number, cardCount: number) {
   return Math.min(Math.max(index, 0), cardCount - 1);
 }
 
-export function GuideOverlay({ content, testId }: GuideOverlayProps) {
+export function GuideOverlay({ content, testId, ctaClassName }: GuideOverlayProps) {
   const [open, setOpen] = useState(false);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [pointerStartX, setPointerStartX] = useState<number | null>(null);
@@ -560,7 +561,7 @@ export function GuideOverlay({ content, testId }: GuideOverlayProps) {
     <>
       <button
         type="button"
-        className="secondary-button guide-cta"
+        className={`secondary-button guide-cta${ctaClassName ? ` ${ctaClassName}` : ""}`}
         data-testid={testId}
         aria-haspopup="dialog"
         aria-expanded={open}

@@ -1,0 +1,63 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - heading "MosaicStack Konsole" [level=1] [ref=e7]
+    - generic [ref=e8]:
+      - button "Switch to light mode" [ref=e9] [cursor=pointer]: ☀
+      - group "Sprache" [ref=e10]:
+        - 'button "Sprache: Englisch" [ref=e11] [cursor=pointer]': EN
+        - 'button "Sprache: Deutsch" [pressed] [ref=e12] [cursor=pointer]': DE
+      - generic [ref=e13]: Backend Wird geprüft
+  - generic [ref=e14]:
+    - complementary [ref=e15]:
+      - generic [ref=e16]:
+        - paragraph [ref=e17]: Arbeitsbereiche
+        - navigation "Arbeitsbereiche" [ref=e18]:
+          - button "Chat" [ref=e19] [cursor=pointer]:
+            - img [ref=e20]
+            - strong [ref=e23]: Chat
+          - button "GitHub" [ref=e24] [cursor=pointer]:
+            - img [ref=e25]
+            - strong [ref=e29]: GitHub
+          - button "Matrix" [ref=e30] [cursor=pointer]:
+            - img [ref=e31]
+            - strong [ref=e37]: Matrix
+          - button "Prüfung" [ref=e38] [cursor=pointer]:
+            - img [ref=e39]
+            - strong [ref=e42]: Prüfung
+          - button "Einstellungen" [ref=e43] [cursor=pointer]:
+            - img [ref=e44]
+            - strong [ref=e48]: Einstellungen
+      - generic [ref=e50]:
+        - generic [ref=e51]:
+          - paragraph [ref=e52]: Arbeitsmodus
+          - generic [ref=e53]:
+            - group "Beginner-Modus" [ref=e54]:
+              - button "Basis" [pressed] [ref=e55] [cursor=pointer]
+              - button "Experte" [ref=e56] [cursor=pointer]
+            - paragraph [ref=e57]: Geführt und ruhig. Erst lesen, Änderungen vorab prüfen, bewusst freigeben.
+        - generic [ref=e58]: Entwurf
+      - region "Chat Sessions" [ref=e59]:
+        - generic [ref=e60]:
+          - generic [ref=e61]:
+            - paragraph [ref=e62]: Chat Sessions
+            - strong [ref=e63]: 1 insgesamt
+          - button "Neue Session" [ref=e64] [cursor=pointer]
+        - article [ref=e66]:
+          - button "New chat Entwurf Aktiv" [ref=e67] [cursor=pointer]:
+            - generic [ref=e68]:
+              - generic [ref=e69]:
+                - strong [ref=e70]: New chat
+                - generic [ref=e71]: Entwurf
+              - generic [ref=e72]: Aktiv
+    - status [ref=e76]: Wird geprüft
+    - region "Diagnostik" [ref=e77]:
+      - generic [ref=e78]:
+        - generic [ref=e79]: "Status:"
+        - strong [ref=e80]: Wird geprüft
+      - generic [ref=e81]:
+        - generic [ref=e82]: "Modus:"
+        - strong [ref=e83]: Chat
+      - generic [ref=e84]:
+        - generic [ref=e85]: "Diagnostik:"
+        - strong [ref=e86]: n/a
+      - button "Diagnostik öffnen" [ref=e87] [cursor=pointer]
