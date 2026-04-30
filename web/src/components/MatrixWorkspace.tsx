@@ -1179,17 +1179,19 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       ) : null}{" "}
       <section className="matrix-grid">
         {" "}
-        <section
+        <details
           className="workspace-card matrix-topic-card matrix-secondary-panel"
           data-testid="matrix-topic-update-panel"
         >
           {" "}
-          <header className="card-header">
+          <summary className="matrix-dropdown-summary">
             <div>
               <span>{ui.matrix.topicTitle}</span>
               <strong>{ui.matrix.scopeNotice}</strong>
             </div>
-          </header>{" "}
+            <span className="matrix-dropdown-chevron" aria-hidden="true">v</span>
+          </summary>{" "}
+          <div className="matrix-dropdown-body">
           <div className="info-block">
             <p className="info-label">{props.expertMode ? ui.matrix.roomId : ui.matrix.roomPickerRoom}</p>
             <div className="input-row">
@@ -1472,15 +1474,18 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 : ui.matrix.roomPickerChoose}
             </p>
           )}{" "}
-        </section>{" "}
-        <section className="workspace-card matrix-scope-card matrix-secondary-panel">
+          </div>
+        </details>{" "}
+        <details className="workspace-card matrix-scope-card matrix-secondary-panel">
           {" "}
-          <header className="card-header">
+          <summary className="matrix-dropdown-summary">
             <div>
               <span>{ui.matrix.scopeTitle}</span>
               <strong>{ui.matrix.scopeNotice}</strong>
             </div>
-          </header>{" "}
+            <span className="matrix-dropdown-chevron" aria-hidden="true">v</span>
+          </summary>{" "}
+          <div className="matrix-dropdown-body">
           <div className="explore-stack">
             {" "}
             <div className="info-block">
@@ -1763,7 +1768,8 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               </div>
             ) : null}{" "}
           </div>{" "}
-        </section>{" "}
+          </div>
+        </details>{" "}
         <section className="workspace-card matrix-composer-panel matrix-composer-focus-card" data-testid="matrix-composer-panel">
           <header className="card-header">
             <div>

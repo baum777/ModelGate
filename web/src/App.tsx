@@ -2085,15 +2085,15 @@ function ConsoleShell() {
 
         <section className="bottom-diagnostics-layer" aria-label={ui.shell.diagnosticsLabel}>
           <div className="diagnostic-signal diagnostic-signal-primary">
-            <SectionLabel>{ui.shell.healthTitle}</SectionLabel>
+            <span>{ui.shell.healthTitle}:</span>
             <strong>{healthState.label}</strong>
           </div>
           <div className="diagnostic-signal">
-            <SectionLabel>{ui.shell.modeLabel}</SectionLabel>
+            <span>{ui.shell.modeLabel}:</span>
             <strong>{workspaceName}</strong>
           </div>
           <div className="diagnostic-signal">
-            <SectionLabel>{ui.shell.diagnosticsLabel}</SectionLabel>
+            <span>{ui.shell.diagnosticsLabel}:</span>
             <strong>{telemetry.length > 0 ? telemetry[telemetry.length - 1].label : ui.common.na}</strong>
           </div>
           <button
