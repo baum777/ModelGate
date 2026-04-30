@@ -16,6 +16,10 @@ export const EnvSchema = z.object({
   OPENROUTER_MODEL: z.string().trim().min(1).default("openrouter/auto"),
   OPENROUTER_MODELS: z.string().trim().default(""),
   OPENROUTER_REQUEST_TIMEOUT_MS: z.string().trim().default("15000"),
+  USER_CREDENTIALS_ENCRYPTION_KEY: z.string().trim().default(""),
+  USER_CREDENTIALS_PROFILE_SECRET: z.string().trim().default(""),
+  USER_CREDENTIALS_STORE_MODE: z.string().trim().default("file"),
+  USER_CREDENTIALS_STORE_PATH: z.string().trim().default(".local-ai/state/users"),
   APP_NAME: z.string().trim().min(1).default("local-openrouter-chat"),
   DEFAULT_SYSTEM_PROMPT: z
     .string()
@@ -103,6 +107,10 @@ export type AppEnv = {
   OPENROUTER_MODEL: string;
   OPENROUTER_MODELS: string[];
   OPENROUTER_REQUEST_TIMEOUT_MS: number;
+  USER_CREDENTIALS_ENCRYPTION_KEY: string;
+  USER_CREDENTIALS_PROFILE_SECRET: string;
+  USER_CREDENTIALS_STORE_MODE: string;
+  USER_CREDENTIALS_STORE_PATH: string;
   APP_NAME: string;
   DEFAULT_SYSTEM_PROMPT: string;
   CORS_ORIGINS: string[];
@@ -224,6 +232,10 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     OPENROUTER_MODEL: parsed.OPENROUTER_MODEL.trim(),
     OPENROUTER_MODELS: parseCsvList(parsed.OPENROUTER_MODELS),
     OPENROUTER_REQUEST_TIMEOUT_MS: Number.parseInt(parsed.OPENROUTER_REQUEST_TIMEOUT_MS.trim(), 10),
+    USER_CREDENTIALS_ENCRYPTION_KEY: parsed.USER_CREDENTIALS_ENCRYPTION_KEY.trim(),
+    USER_CREDENTIALS_PROFILE_SECRET: parsed.USER_CREDENTIALS_PROFILE_SECRET.trim(),
+    USER_CREDENTIALS_STORE_MODE: parsed.USER_CREDENTIALS_STORE_MODE.trim().toLowerCase() === "memory" ? "memory" : "file",
+    USER_CREDENTIALS_STORE_PATH: parsed.USER_CREDENTIALS_STORE_PATH.trim() || ".local-ai/state/users",
     APP_NAME: parsed.APP_NAME.trim(),
     DEFAULT_SYSTEM_PROMPT: parsed.DEFAULT_SYSTEM_PROMPT.trim(),
     CORS_ORIGINS: parseCsvList(parsed.CORS_ORIGINS),

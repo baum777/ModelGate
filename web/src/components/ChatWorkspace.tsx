@@ -589,7 +589,6 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       await streamChatCompletion(
         {
           modelAlias: proposal.modelAlias ?? selectedModel ?? undefined,
-          model: proposal.modelAlias ?? selectedModel ?? undefined,
           messages: outboundMessages
         },
         {

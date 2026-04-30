@@ -90,15 +90,23 @@ type SettingsWorkspaceProps = {
   onClearDiagnostics: () => void;
   truthSnapshot: SettingsTruthSnapshot;
   loginAdapters: SettingsLoginAdapter[];
-  openRouterModels: Array<{
-    alias: string;
-    label: string;
-    description: string;
-  }>;
+  openRouterCredentialStatus: {
+    configured: boolean;
+    models: Array<{
+      alias: string;
+      label: string;
+      source: "user_configured";
+    }>;
+  };
+  openRouterApiKeyInput: string;
   openRouterModelInput: string;
+  onOpenRouterApiKeyInputChange: (value: string) => void;
   onOpenRouterModelInputChange: (value: string) => void;
-  onAddOpenRouterModel: () => void;
-  isAddingOpenRouterModel: boolean;
+  onSaveOpenRouterCredentials: () => void;
+  onTestOpenRouterCredentials: () => void;
+  isSavingOpenRouterCredentials: boolean;
+  isTestingOpenRouterCredentials: boolean;
+  openRouterCredentialMessage: string | null;
   buildIntegrationStartUrl: (provider: "github" | "matrix") => string;
   onIntegrationAction: (
     provider: "github" | "matrix",
@@ -161,11 +169,16 @@ export function SettingsWorkspace({
   onClearDiagnostics,
   truthSnapshot,
   loginAdapters,
-  openRouterModels,
+  openRouterCredentialStatus,
+  openRouterApiKeyInput,
   openRouterModelInput,
+  onOpenRouterApiKeyInputChange,
   onOpenRouterModelInputChange,
-  onAddOpenRouterModel,
-  isAddingOpenRouterModel,
+  onSaveOpenRouterCredentials,
+  onTestOpenRouterCredentials,
+  isSavingOpenRouterCredentials,
+  isTestingOpenRouterCredentials,
+  openRouterCredentialMessage,
   buildIntegrationStartUrl,
   onIntegrationAction,
   verificationResults,
@@ -257,21 +270,31 @@ export function SettingsWorkspace({
   const openRouterCopy = locale === "de"
     ? {
         title: "OpenRouter Modelle",
-        subtitle: "Modelle zuerst hier registrieren; danach erscheinen sie als backend-owned Aliase im Chat.",
+        subtitle: "Speichere deinen eigenen OpenRouter API Key backend-seitig. Der Browser zeigt danach nur einen maskierten Status.",
+        keyLabel: "OpenRouter API Key",
         inputLabel: "OpenRouter Modell-ID",
+        keyPlaceholder: "sk-or-v1-...",
         placeholder: "provider/model",
-        add: "Modell hinzufügen",
-        adding: "Wird hinzugefügt",
-        empty: "Noch keine zusätzlichen OpenRouter-Modelle registriert.",
+        save: "Speichern",
+        saving: "Speichert",
+        test: "Verbindung testen",
+        testing: "Test läuft",
+        configured: "OpenRouter key configured",
+        empty: "Noch kein OpenRouter-Key für dieses lokale Profil gespeichert.",
       }
     : {
         title: "OpenRouter models",
-        subtitle: "Register models here first; then they appear as backend-owned aliases in Chat.",
+        subtitle: "Store your own OpenRouter API key on the backend. The browser only shows masked status after save.",
+        keyLabel: "OpenRouter API key",
         inputLabel: "OpenRouter model ID",
+        keyPlaceholder: "sk-or-v1-...",
         placeholder: "provider/model",
-        add: "Add model",
-        adding: "Adding",
-        empty: "No additional OpenRouter models registered yet.",
+        save: "Save",
+        saving: "Saving",
+        test: "Test connection",
+        testing: "Testing",
+        configured: "OpenRouter key configured",
+        empty: "No OpenRouter key is configured for this local profile yet.",
       };
   const verificationCopy = locale === "de"
     ? {
@@ -615,7 +638,7 @@ export function SettingsWorkspace({
 
         <SystemLayerFrame
           layer="execution"
-          active={truthSnapshot.models.availableCount > 0 || openRouterModels.length > 0}
+          active={openRouterCredentialStatus.configured}
           className="workspace-card openrouter-model-card"
         >
           <header className="card-header">
@@ -627,18 +650,32 @@ export function SettingsWorkspace({
           <SystemNode
             label="OpenRouter"
             kind="openrouter"
-            status={truthSnapshot.models.availableCount > 0 || openRouterModels.length > 0 ? "connected" : "disconnected"}
+            status={openRouterCredentialStatus.configured ? "connected" : "disconnected"}
           >
-            {truthSnapshot.models.registrySourceLabel}
+            {openRouterCredentialStatus.configured ? openRouterCopy.configured : truthSnapshot.models.registrySourceLabel}
           </SystemNode>
           <p className="muted-copy">{openRouterCopy.subtitle}</p>
+          {openRouterCredentialMessage ? (
+            <p className="status-pill status-ready">{openRouterCredentialMessage}</p>
+          ) : null}
           <form
             className="settings-inline-form"
             onSubmit={(event) => {
               event.preventDefault();
-              onAddOpenRouterModel();
+              onSaveOpenRouterCredentials();
             }}
           >
+            <label htmlFor="openrouter-api-key-input">{openRouterCopy.keyLabel}</label>
+            <input
+              id="openrouter-api-key-input"
+              data-testid="openrouter-api-key-input"
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              value={openRouterApiKeyInput}
+              onChange={(event) => onOpenRouterApiKeyInputChange(event.target.value)}
+              placeholder={openRouterCopy.keyPlaceholder}
+            />
             <label htmlFor="openrouter-model-input">{openRouterCopy.inputLabel}</label>
             <div className="settings-inline-controls">
               <input
@@ -654,22 +691,31 @@ export function SettingsWorkspace({
               />
               <button
                 type="submit"
-                data-testid="openrouter-model-add"
-                disabled={isAddingOpenRouterModel || openRouterModelInput.trim().length === 0}
+                data-testid="openrouter-credentials-save"
+                disabled={isSavingOpenRouterCredentials || openRouterApiKeyInput.trim().length === 0 || openRouterModelInput.trim().length === 0}
               >
-                {isAddingOpenRouterModel ? openRouterCopy.adding : openRouterCopy.add}
+                {isSavingOpenRouterCredentials ? openRouterCopy.saving : openRouterCopy.save}
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                data-testid="openrouter-credentials-test"
+                onClick={onTestOpenRouterCredentials}
+                disabled={isTestingOpenRouterCredentials || openRouterApiKeyInput.trim().length === 0 || openRouterModelInput.trim().length === 0}
+              >
+                {isTestingOpenRouterCredentials ? openRouterCopy.testing : openRouterCopy.test}
               </button>
             </div>
           </form>
-          {openRouterModels.length === 0 ? (
+          {openRouterCredentialStatus.models.length === 0 ? (
             <p className="empty-state">{openRouterCopy.empty}</p>
           ) : (
             <div className="settings-model-list">
-              {openRouterModels.map((model) => (
+              {openRouterCredentialStatus.models.map((model) => (
                 <div key={model.alias}>
                   <span>{model.alias}</span>
                   <strong>{model.label}</strong>
-                  <p>{model.description}</p>
+                  <p>{model.source}</p>
                 </div>
               ))}
             </div>

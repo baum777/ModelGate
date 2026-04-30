@@ -37,12 +37,15 @@ import {
   fetchIntegrationsStatus,
   fetchJournalRecent,
   fetchModels,
-  postOpenRouterModel,
   postIntegrationControlAction,
+  fetchOpenRouterCredentialStatus,
+  saveOpenRouterCredentials,
+  testOpenRouterCredentials,
   testSettingsConnection,
   type DiagnosticsResponse,
   type IntegrationsStatusResponse,
-  type JournalEntry
+  type JournalEntry,
+  type OpenRouterCredentialStatusResponse
 } from "./lib/api.js";
 import {
   deriveSettingsLoginAdapters,
@@ -103,6 +106,11 @@ const SETTINGS_VERIFICATION_INITIAL: Record<SettingsVerificationTarget, Settings
     detail: "",
     checkedAt: null,
   },
+};
+
+const OPENROUTER_CREDENTIAL_STATUS_EMPTY: OpenRouterCredentialStatusResponse = {
+  configured: false,
+  models: [],
 };
 
 function scheduleWorkspacePreload(callback: () => void) {
@@ -518,8 +526,12 @@ function ConsoleShell() {
     default?: boolean;
     available?: boolean;
   }>>([]);
+  const [openRouterCredentialStatus, setOpenRouterCredentialStatus] = useState<OpenRouterCredentialStatusResponse>(OPENROUTER_CREDENTIAL_STATUS_EMPTY);
+  const [openRouterApiKeyInput, setOpenRouterApiKeyInput] = useState("");
   const [openRouterModelInput, setOpenRouterModelInput] = useState("");
-  const [isAddingOpenRouterModel, setIsAddingOpenRouterModel] = useState(false);
+  const [isSavingOpenRouterCredentials, setIsSavingOpenRouterCredentials] = useState(false);
+  const [isTestingOpenRouterCredentials, setIsTestingOpenRouterCredentials] = useState(false);
+  const [openRouterCredentialMessage, setOpenRouterCredentialMessage] = useState<string | null>(null);
   const [runtimeDiagnostics, setRuntimeDiagnostics] = useState<DiagnosticsResponse | null>(null);
   const [integrationsStatus, setIntegrationsStatus] = useState<IntegrationsStatusResponse | null>(null);
   const [settingsVerificationResults, setSettingsVerificationResults] = useState(SETTINGS_VERIFICATION_INITIAL);
@@ -545,12 +557,13 @@ function ConsoleShell() {
     let cancelled = false;
 
     async function loadConsoleState() {
-      const [healthResult, modelsResult, diagnosticsResult, journalResult, integrationsResult] = await Promise.allSettled([
+      const [healthResult, modelsResult, diagnosticsResult, journalResult, integrationsResult, openRouterStatusResult] = await Promise.allSettled([
         fetchHealth(),
         fetchModels(),
         fetchDiagnostics(),
         fetchJournalRecent(),
         fetchIntegrationsStatus(),
+        fetchOpenRouterCredentialStatus(),
       ]);
 
       if (cancelled) {
@@ -583,17 +596,35 @@ function ConsoleShell() {
         );
       }
 
+      const userOpenRouterStatus = openRouterStatusResult.status === "fulfilled"
+        ? openRouterStatusResult.value
+        : OPENROUTER_CREDENTIAL_STATUS_EMPTY;
+      setOpenRouterCredentialStatus(userOpenRouterStatus);
+
       if (modelsResult.status === "fulfilled") {
-        const models = modelsResult.value.models;
+        const userModelRegistry = userOpenRouterStatus.models.map((model) => ({
+          alias: model.alias,
+          label: model.label,
+          description: "User-configured OpenRouter model stored in backend profile settings.",
+          capabilities: ["chat", "streaming"],
+          tier: "specialized" as const,
+          streaming: true,
+          recommendedFor: ["user_configured_openrouter"],
+          available: true,
+        }));
+        const registry = [...(modelsResult.value.registry ?? []), ...userModelRegistry];
+        const models = [...modelsResult.value.models, ...userOpenRouterStatus.models.map((model) => model.alias)];
+        const defaultAlias = userOpenRouterStatus.configured ? "user_openrouter_default" : modelsResult.value.defaultModel;
+
         setAvailableModels(models);
-        setActiveModelAlias(modelsResult.value.defaultModel);
-        setModelRegistry(modelsResult.value.registry ?? []);
+        setActiveModelAlias(defaultAlias);
+        setModelRegistry(registry);
         setTelemetry((current) =>
           appendTelemetry(current, {
             id: createId(),
             kind: "info",
             label: appText.telemetryModelAliasLoaded,
-            detail: appText.telemetryModelAliasLoadedDetail(modelsResult.value.defaultModel),
+            detail: appText.telemetryModelAliasLoadedDetail(defaultAlias),
           }),
         );
       } else {
@@ -781,32 +812,84 @@ function ConsoleShell() {
     }
   }, []);
 
-  const handleAddOpenRouterModel = useCallback(async () => {
-    const modelId = openRouterModelInput.trim();
+  const refreshOpenRouterCredentialStatus = useCallback(async () => {
+    const status = await fetchOpenRouterCredentialStatus();
+    setOpenRouterCredentialStatus(status);
 
-    if (!modelId) {
+    if (status.configured) {
+      const userModels: string[] = status.models.map((model) => model.alias);
+      setAvailableModels((current) => [...new Set([...current, ...userModels])]);
+      setModelRegistry((current) => {
+        const withoutUser = current.filter((model) => !userModels.includes(model.alias));
+        const nextUserModels = status.models.map((model) => ({
+          alias: model.alias,
+          label: model.label,
+          description: "User-configured OpenRouter model stored in backend profile settings.",
+          capabilities: ["chat", "streaming"],
+          tier: "specialized" as const,
+          streaming: true,
+          recommendedFor: ["user_configured_openrouter"],
+          available: true,
+        }));
+        return [...withoutUser, ...nextUserModels];
+      });
+      setActiveModelAlias(status.models[0]?.alias ?? "user_openrouter_default");
+    }
+
+    return status;
+  }, []);
+
+  const handleSaveOpenRouterCredentials = useCallback(async () => {
+    const modelId = openRouterModelInput.trim();
+    const apiKey = openRouterApiKeyInput.trim();
+
+    if (!apiKey || !modelId) {
       return;
     }
 
-    setIsAddingOpenRouterModel(true);
+    setIsSavingOpenRouterCredentials(true);
 
     try {
-      const result = await postOpenRouterModel(modelId);
-      setOpenRouterModelInput("");
-      setAvailableModels(result.models);
-      setModelRegistry(result.registry);
-      setActiveModelAlias(result.alias);
-      recordTelemetry("info", "OpenRouter model added", `Backend public alias ${result.alias} is selectable.`);
+      const result = await saveOpenRouterCredentials({ apiKey, modelId });
+      setOpenRouterApiKeyInput("");
+      setOpenRouterCredentialMessage(result.status);
+      await refreshOpenRouterCredentialStatus();
+      recordTelemetry("info", "OpenRouter credentials saved", `Backend public alias ${result.model.alias} is selectable.`);
     } catch (error) {
       recordTelemetry(
         "error",
-        "OpenRouter model add failed",
-        error instanceof Error ? error.message : "Unable to add OpenRouter model.",
+        "OpenRouter credential save failed",
+        error instanceof Error ? error.message : "Unable to save OpenRouter credentials.",
       );
     } finally {
-      setIsAddingOpenRouterModel(false);
+      setIsSavingOpenRouterCredentials(false);
     }
-  }, [openRouterModelInput, recordTelemetry]);
+  }, [openRouterApiKeyInput, openRouterModelInput, recordTelemetry, refreshOpenRouterCredentialStatus]);
+
+  const handleTestOpenRouterCredentials = useCallback(async () => {
+    const modelId = openRouterModelInput.trim();
+    const apiKey = openRouterApiKeyInput.trim();
+
+    if (!apiKey || !modelId) {
+      return;
+    }
+
+    setIsTestingOpenRouterCredentials(true);
+
+    try {
+      const result = await testOpenRouterCredentials({ apiKey, modelId });
+      setOpenRouterCredentialMessage(`Test passed for ${result.model.alias}`);
+      recordTelemetry("info", "OpenRouter credential test passed", `Backend tested alias ${result.model.alias} without saving credentials.`);
+    } catch (error) {
+      recordTelemetry(
+        "error",
+        "OpenRouter credential test failed",
+        error instanceof Error ? error.message : "Unable to test OpenRouter credentials.",
+      );
+    } finally {
+      setIsTestingOpenRouterCredentials(false);
+    }
+  }, [openRouterApiKeyInput, openRouterModelInput, recordTelemetry]);
 
   const handleSettingsVerifyConnection = useCallback(async (target: SettingsVerificationTarget) => {
     setSettingsVerificationResults((current) => ({
@@ -1751,11 +1834,16 @@ function ConsoleShell() {
       onClearDiagnostics={() => setTelemetry([])}
       truthSnapshot={settingsTruthSnapshot}
       loginAdapters={settingsLoginAdapters}
-      openRouterModels={modelRegistry.filter((model) => model.alias !== "default")}
+      openRouterCredentialStatus={openRouterCredentialStatus}
+      openRouterApiKeyInput={openRouterApiKeyInput}
       openRouterModelInput={openRouterModelInput}
+      onOpenRouterApiKeyInputChange={setOpenRouterApiKeyInput}
       onOpenRouterModelInputChange={setOpenRouterModelInput}
-      onAddOpenRouterModel={handleAddOpenRouterModel}
-      isAddingOpenRouterModel={isAddingOpenRouterModel}
+      onSaveOpenRouterCredentials={handleSaveOpenRouterCredentials}
+      onTestOpenRouterCredentials={handleTestOpenRouterCredentials}
+      isSavingOpenRouterCredentials={isSavingOpenRouterCredentials}
+      isTestingOpenRouterCredentials={isTestingOpenRouterCredentials}
+      openRouterCredentialMessage={openRouterCredentialMessage}
       buildIntegrationStartUrl={buildSettingsIntegrationStartUrl}
       onIntegrationAction={handleIntegrationAction}
       verificationResults={settingsVerificationResults}

@@ -28,6 +28,11 @@ import {
   createIntegrationAuthStoreSelection,
   type IntegrationAuthStore
 } from "./lib/integration-auth-store.js";
+import { createLocalProfileSessionManager, type LocalProfileSessionManager } from "./lib/local-profile-session.js";
+import {
+  createUserOpenRouterCredentialStore,
+  type UserOpenRouterCredentialStore
+} from "./lib/openrouter-credential-store.js";
 import { authRoutes } from "./routes/auth.js";
 import { chatRoutes } from "./routes/chat.js";
 import { diagnosticsRoutes } from "./routes/diagnostics.js";
@@ -38,6 +43,7 @@ import { journalRoutes } from "./routes/journal.js";
 import { matrixRoutes } from "./routes/matrix.js";
 import { healthRoutes } from "./routes/health.js";
 import { modelRoutes } from "./routes/models.js";
+import { settingsOpenRouterRoutes } from "./routes/settings-openrouter.js";
 
 export type AppDependencies = {
   env: AppEnv;
@@ -56,6 +62,8 @@ export type AppDependencies = {
   modelRegistry?: ModelRegistry;
   modelCapabilitiesConfig?: ModelCapabilitiesConfig;
   integrationAuthStore?: IntegrationAuthStore;
+  localProfileSessions?: LocalProfileSessionManager;
+  openRouterCredentialStore?: UserOpenRouterCredentialStore;
   integrationFetch?: typeof fetch;
   logger?: boolean;
 };
@@ -120,6 +128,8 @@ export function createApp(deps: AppDependencies) {
     currentEncryptionKey: integrationAuthStoreSelection.encryption.current,
     previousEncryptionKeys: integrationAuthStoreSelection.encryption.previous
   });
+  const localProfileSessions = deps.localProfileSessions ?? createLocalProfileSessionManager(deps.env);
+  const openRouterCredentialStore = deps.openRouterCredentialStore ?? createUserOpenRouterCredentialStore(deps.env);
   const app = Fastify({
     logger: deps.logger ?? true,
     bodyLimit: 1_048_576
@@ -129,6 +139,11 @@ export function createApp(deps: AppDependencies) {
 
   healthRoutes(app, deps.env, modelRegistry);
   modelRoutes(app, modelRegistry);
+  settingsOpenRouterRoutes(app, {
+    profileSessions: localProfileSessions,
+    credentialStore: openRouterCredentialStore,
+    openRouter: deps.openRouter
+  });
   diagnosticsRoutes(app, {
     env: deps.env,
     modelRegistry,
@@ -187,7 +202,9 @@ export function createApp(deps: AppDependencies) {
     authConfig,
     rateLimiter,
     runtimeObservability,
-    runtimeJournal
+    runtimeJournal,
+    profileSessions: localProfileSessions,
+    openRouterCredentialStore
   });
 
   return app;

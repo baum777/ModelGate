@@ -185,11 +185,23 @@ test("Settings workspace renders integration cards and keeps secrets out of the 
       truthSnapshot,
       loginAdapters,
       onIntegrationAction: () => undefined,
-      openRouterModels,
+      openRouterCredentialStatus: {
+        configured: true,
+        models: openRouterModels.map((model) => ({
+          alias: model.alias,
+          label: model.label,
+          source: "user_configured" as const,
+        })),
+      },
+      openRouterApiKeyInput: "",
       openRouterModelInput: "",
+      onOpenRouterApiKeyInputChange: () => undefined,
       onOpenRouterModelInputChange: () => undefined,
-      onAddOpenRouterModel: () => undefined,
-      isAddingOpenRouterModel: false,
+      onSaveOpenRouterCredentials: () => undefined,
+      onTestOpenRouterCredentials: () => undefined,
+      isSavingOpenRouterCredentials: false,
+      isTestingOpenRouterCredentials: false,
+      openRouterCredentialMessage: "OpenRouter key configured",
       buildIntegrationStartUrl: (provider: "github" | "matrix") => `/api/auth/${provider}/start?returnTo=%2Fconsole%3Fmode%3Dsettings`,
       verificationResults: createVerificationFixture(),
       onVerifyConnection: () => undefined,
@@ -216,16 +228,19 @@ test("Settings workspace renders integration cards and keeps secrets out of the 
   assert.match(markup, /OpenRouter (Modelle|models)/);
   assert.match(markup, /data-system-node-kind="openrouter"/);
   assert.match(markup, /aria-label="OpenRouter integration node, status connected"/);
+  assert.match(markup, /OpenRouter key configured/);
   assert.match(markup, /OpenRouter model 1/);
+  assert.match(markup, /data-testid="openrouter-api-key-input"/);
   assert.match(markup, /data-testid="openrouter-model-input"/);
-  assert.match(markup, /data-testid="openrouter-model-add"/);
+  assert.match(markup, /data-testid="openrouter-credentials-save"/);
+  assert.match(markup, /data-testid="openrouter-credentials-test"/);
   assert.match(markup, /data-testid="settings-verification-backend"/);
   assert.match(markup, /data-testid="settings-verification-github-action"/);
   assert.match(markup, /mosaicstack-test \(local\)/);
   assert.match(markup, /Matrix credentials were rejected/);
   assert.doesNotMatch(markup, /name=".*token/i);
-  assert.doesNotMatch(markup, /type="password"/i);
   assert.doesNotMatch(markup, /sk-test/);
+  assert.doesNotMatch(markup, /sk-or-v1-secret/);
 });
 
 test("System visual primitives render accessible layer, node, flow, and spine semantics", () => {

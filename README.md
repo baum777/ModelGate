@@ -114,7 +114,9 @@ cp .env.example .env
 cp web/.env.example web/.env
 ```
 
-Set `OPENROUTER_API_KEY` in `.env`.
+Set `USER_CREDENTIALS_ENCRYPTION_KEY` in `.env`, then enter your OpenRouter API key and model ID in Settings. The Settings flow stores the key backend-side for the local preview profile and never returns the key to the browser.
+
+`OPENROUTER_API_KEY` is a legacy/dev compatibility slot only; it is not the normal shared runtime authority for user chat.
 
 Optional integrations:
 
