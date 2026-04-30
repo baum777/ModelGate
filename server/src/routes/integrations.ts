@@ -148,7 +148,7 @@ function getConnectionStatus(options: {
     return "error";
   }
 
-  if (options.credentialSource !== "not_connected") {
+  if (options.credentialSource === "user_connected" || options.credentialSource === "user_connected_stub") {
     return "connected";
   }
 

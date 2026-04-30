@@ -208,6 +208,38 @@ test("Settings login adapters map connected and reconnect states for governed CT
   assert.equal(matrix?.secondaryAction, null);
 });
 
+test("Settings login adapters do not treat instance credentials as a user login", () => {
+  const fixture = createIntegrationsStatusFixture();
+  const adapters = deriveSettingsLoginAdapters({
+    copy: {
+      checking: "Checking",
+      unavailable: "Unavailable",
+      none: "None",
+    },
+    integrations: {
+      ...fixture,
+      github: {
+        ...fixture.github,
+        status: "connect_available",
+        authState: "not_connected",
+        credentialSource: "instance_configured",
+        labels: {
+          ...fixture.github.labels,
+          identity: "instance service credential",
+        },
+        lastVerifiedAt: null,
+      }
+    }
+  });
+
+  const github = adapters.find((adapter) => adapter.id === "github");
+
+  assert.equal(github?.status, "connect_available");
+  assert.equal(github?.primaryAction, "connect");
+  assert.equal(github?.secondaryAction, null);
+  assert.equal(github?.credentialSource, "instance_configured");
+});
+
 test("Settings login adapters expose missing-server-config requirements", () => {
   const adapters = deriveSettingsLoginAdapters({
     copy: {

@@ -234,7 +234,7 @@ test("disconnect removes stub connection but keeps instance-level status when in
     };
   };
 
-  assert.equal(afterPayload.github.status, "connected");
+  assert.equal(afterPayload.github.status, "connect_available");
   assert.equal(afterPayload.github.credentialSource, "instance_configured");
 });
 
