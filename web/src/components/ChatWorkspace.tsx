@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from "react";
+import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from "react";
 import { streamChatCompletion, type ChatRouteMetadata } from "../lib/api.js";
 import {
   buildGovernedChatProposal,
@@ -84,6 +84,8 @@ type ChatRoutingStatusCopy = {
   routePending: string;
   unavailable: string;
 };
+
+const CHAT_SESSION_SYNC_INTERVAL_MS = 220;
 
 export function buildChatRoutingStatusItems(options: {
   selectedModel: string;
@@ -283,6 +285,30 @@ function buildChatGovernanceRows(options: {
   });
 }
 
+type ThreadMessageCardProps = {
+  message: ChatMessage;
+  expertMode: boolean;
+  operatorLabel: string;
+  agentLabel: string;
+};
+
+const ThreadMessageCard = React.memo(function ThreadMessageCard(props: ThreadMessageCardProps) {
+  const roleLabel = props.message.role === "user" ? props.operatorLabel : props.agentLabel;
+
+  return (
+    <ShellCard
+      variant={props.message.role === "user" ? "muted" : "base"}
+      className={`thread-block ${props.message.role === "user" ? "thread-block-operator" : "thread-block-agent"}`}
+    >
+      <header className="thread-block-header">
+        <SectionLabel>{roleLabel}</SectionLabel>
+        {props.expertMode && props.message.modelAlias ? <StatusBadge tone="muted">{props.message.modelAlias}</StatusBadge> : null}
+      </header>
+      <MarkdownMessage content={props.message.content} />
+    </ShellCard>
+  );
+});
+
 export function ChatWorkspace(props: ChatWorkspaceProps) {
   const { locale, copy: ui } = useLocalization();
   const beginnerMode = isBeginnerMode(props.workMode);
@@ -304,17 +330,32 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const scrollFrameRef = useRef<number | null>(null);
   const tokenBatcherRef = useRef<ReturnType<typeof createTokenBatcher> | null>(null);
-  const modelOptions = props.modelRegistry.length > 0
-    ? props.modelRegistry
-    : props.availableModels.map((alias) => ({
-        alias,
-        label: alias,
-        description: "",
-        capabilities: [],
-        tier: "core" as const,
-        streaming: true,
-        recommendedFor: [],
-      }));
+  const sessionSyncHandleRef = useRef<number | null>(null);
+  const latestSessionRef = useRef<ChatSession | null>(null);
+  const flushSessionSync = useCallback(() => {
+    if (sessionSyncHandleRef.current !== null) {
+      globalThis.clearTimeout(sessionSyncHandleRef.current);
+      sessionSyncHandleRef.current = null;
+    }
+
+    if (latestSessionRef.current) {
+      props.onSessionChange(latestSessionRef.current);
+    }
+  }, [props.onSessionChange]);
+  const modelOptions = useMemo(
+    () => (props.modelRegistry.length > 0
+      ? props.modelRegistry
+      : props.availableModels.map((alias) => ({
+          alias,
+          label: alias,
+          description: "",
+          capabilities: [],
+          tier: "core" as const,
+          streaming: true,
+          recommendedFor: [],
+        }))),
+    [props.availableModels, props.modelRegistry],
+  );
 
   useEffect(() => {
     if (props.activeModelAlias && props.activeModelAlias !== selectedModel) {
@@ -361,8 +402,29 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       },
     };
 
-    props.onSessionChange(nextSession);
-  }, [chatState, executionMode, props.onSessionChange, props.session.id, selectedModel]);
+    latestSessionRef.current = nextSession;
+    const terminalState = chatState.connectionState === "completed" || chatState.connectionState === "error";
+
+    if (terminalState) {
+      flushSessionSync();
+      return;
+    }
+
+    if (sessionSyncHandleRef.current !== null) {
+      return;
+    }
+
+    sessionSyncHandleRef.current = globalThis.setTimeout(() => {
+      sessionSyncHandleRef.current = null;
+      if (latestSessionRef.current) {
+        props.onSessionChange(latestSessionRef.current);
+      }
+    }, CHAT_SESSION_SYNC_INTERVAL_MS);
+  }, [chatState, executionMode, flushSessionSync, props.onSessionChange, props.session.id, selectedModel]);
+
+  useEffect(() => () => {
+    flushSessionSync();
+  }, [flushSessionSync]);
 
   useEffect(() => {
     const schedule = (callback: () => void) => {
@@ -900,17 +962,13 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           ) : null}
 
           {chatState.messages.map((message) => (
-            <ShellCard
+            <ThreadMessageCard
               key={message.id}
-              variant={message.role === "user" ? "muted" : "base"}
-              className={`thread-block ${message.role === "user" ? "thread-block-operator" : "thread-block-agent"}`}
-            >
-              <header className="thread-block-header">
-                <SectionLabel>{message.role === "user" ? ui.chat.operatorInput : ui.chat.agentResponse}</SectionLabel>
-                {expertMode && message.modelAlias ? <StatusBadge tone="muted">{message.modelAlias}</StatusBadge> : null}
-              </header>
-              <MarkdownMessage content={message.content} />
-            </ShellCard>
+              message={message}
+              expertMode={expertMode}
+              operatorLabel={ui.chat.operatorInput}
+              agentLabel={ui.chat.agentResponse}
+            />
           ))}
 
           {draft?.started ? (
