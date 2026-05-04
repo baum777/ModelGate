@@ -66,6 +66,7 @@ type GitHubWorkspaceProps = {
   ) => void;
   onContextChange: (status: GitHubWorkspaceStatus) => void;
   onReviewItemsChange?: (items: ReviewItem[]) => void;
+  onReviewDirtyChange?: (isDirty: boolean) => void;
   onPinChatContext?: (context: PinnedChatContext) => void;
   onSessionChange: (session: GitHubSession) => void;
   githubIntegration: IntegrationStatus | null;
@@ -299,6 +300,19 @@ export function buildGitHubPinnedChatContext(options: {
     excerpt,
     diffPreview: buildRawDiffPreview(options.proposalPlan),
   });
+}
+
+export function isGitHubReviewDirty(options: {
+  proposalPlan: GitHubChangePlan | null;
+  executionResult: GitHubExecuteResult | null;
+  approvalChecked: boolean;
+  executionError: string | null;
+}) {
+  return Boolean(
+    (options.proposalPlan && !options.executionResult)
+    || options.approvalChecked
+    || (options.proposalPlan && options.executionError),
+  );
 }
 
 function verificationStatusCopy(result: GitHubVerifyResult | null, locale: Locale) {
@@ -670,6 +684,12 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     || executionConsumed
     || proposalLoading;
   const verifyDisabled = !executionResult || executing || verifying;
+  const reviewDirty = isGitHubReviewDirty({
+    proposalPlan,
+    executionResult,
+    approvalChecked,
+    executionError,
+  });
 
   useEffect(() => {
     props.onContextChange({
@@ -713,6 +733,10 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       props.onReviewItemsChange(buildGitHubReviewItems(proposalPlan, executionResult, verificationResult, locale));
     }
   }, [executionResult, locale, proposalPlan, props.onReviewItemsChange, verificationResult]);
+
+  useEffect(() => {
+    props.onReviewDirtyChange?.(reviewDirty);
+  }, [props.onReviewDirtyChange, reviewDirty]);
 
   useEffect(() => {
     if (!proposalPlan || proposalPlan.stale) {
@@ -1182,6 +1206,12 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
               </div>
             </article>
           </div>
+
+          {reviewDirty ? (
+            <p className="warning-banner" role="status" data-testid="github-review-dirty-warning">
+              {ui.github.reviewDirtyWarning}
+            </p>
+          ) : null}
 
           <article className="workspace-card github-review-card">
             <header className="card-header">

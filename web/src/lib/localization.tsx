@@ -305,6 +305,8 @@ type GitHubCopy = {
   modelLabel: string;
   pinToChatContext: string;
   pinToChatContextHint: string;
+  reviewDirtyWarning: string;
+  reviewDirtyConfirmNavigation: string;
 };
 
 type MatrixCopy = {
@@ -715,6 +717,8 @@ const EN_COPY: LocalizationCopy = {
     modelLabel: "Model",
     pinToChatContext: "Pin to chat context",
     pinToChatContextHint: "Adds a bounded repo excerpt for the next chat request.",
+    reviewDirtyWarning: "Local review progress is not backend-fresh truth. Execute, verify, or reset before leaving this workspace.",
+    reviewDirtyConfirmNavigation: "You have unsaved local GitHub review progress. Leave this workspace?",
   },
   matrix: {
     title: "Matrix workspace",
@@ -1100,6 +1104,8 @@ const DE_COPY: LocalizationCopy = {
     modelLabel: "Modell",
     pinToChatContext: "In Chat-Kontext fixieren",
     pinToChatContextHint: "Fügt einen begrenzten Repo-Auszug für die nächste Chat-Anfrage hinzu.",
+    reviewDirtyWarning: "Lokaler Review-Fortschritt ist keine backend-frische Wahrheit. Vor dem Verlassen ausführen, prüfen oder zurücksetzen.",
+    reviewDirtyConfirmNavigation: "Es gibt ungespeicherten lokalen GitHub-Review-Fortschritt. Arbeitsbereich trotzdem verlassen?",
   },
   matrix: {
     title: "Matrix-Arbeitsbereich",

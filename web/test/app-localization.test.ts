@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import App from "../src/App.js";
+import App, { shouldConfirmGitHubReviewNavigation } from "../src/App.js";
 import { LocaleProvider } from "../src/lib/localization.js";
 
 test("app shell renders core EN labels", () => {
@@ -33,4 +33,30 @@ test("app shell renders core DE labels", () => {
   assert.match(markup, /Sprache/);
   assert.match(markup, /Neue Session/);
   assert.doesNotMatch(markup, /Wiederaufnehmbare Sessions pro Arbeitsbereich/);
+});
+
+test("GitHub tab navigation guard only triggers when leaving GitHub with local dirty review state", () => {
+  assert.equal(shouldConfirmGitHubReviewNavigation({
+    currentMode: "github",
+    nextMode: "chat",
+    githubReviewDirty: true,
+  }), true);
+
+  assert.equal(shouldConfirmGitHubReviewNavigation({
+    currentMode: "github",
+    nextMode: "github",
+    githubReviewDirty: true,
+  }), false);
+
+  assert.equal(shouldConfirmGitHubReviewNavigation({
+    currentMode: "chat",
+    nextMode: "matrix",
+    githubReviewDirty: true,
+  }), false);
+
+  assert.equal(shouldConfirmGitHubReviewNavigation({
+    currentMode: "github",
+    nextMode: "review",
+    githubReviewDirty: false,
+  }), false);
 });

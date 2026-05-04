@@ -149,6 +149,16 @@ function isWorkspaceMode(value: string | null): value is WorkspaceMode {
     || value === "settings";
 }
 
+export function shouldConfirmGitHubReviewNavigation(options: {
+  currentMode: WorkspaceMode;
+  nextMode: WorkspaceMode;
+  githubReviewDirty: boolean;
+}) {
+  return options.currentMode === "github"
+    && options.nextMode !== "github"
+    && options.githubReviewDirty;
+}
+
 function readUrlWorkspaceMode() {
   if (typeof window === "undefined") {
     return null;
@@ -538,6 +548,7 @@ function ConsoleShell() {
   const [matrixContext, setMatrixContext] = useState<MatrixWorkspaceStatus>(() => createDefaultMatrixContext());
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [pinnedChatContext, setPinnedChatContext] = useState<PinnedChatContext | null>(null);
+  const [githubReviewDirty, setGitHubReviewDirty] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const workspaceSaveHandleRef = useRef<number | null>(null);
   const latestWorkspaceStateRef = useRef(workspaceState);
@@ -754,6 +765,20 @@ function ConsoleShell() {
   }, []);
 
   const handleWorkspaceTabSelect = useCallback((nextMode: WorkspaceMode) => {
+    if (shouldConfirmGitHubReviewNavigation({
+      currentMode: mode,
+      nextMode,
+      githubReviewDirty,
+    })) {
+      const allowLeave = typeof window === "undefined"
+        ? true
+        : window.confirm(ui.github.reviewDirtyConfirmNavigation);
+
+      if (!allowLeave) {
+        return;
+      }
+    }
+
     setMode(nextMode);
 
     if (isSessionWorkspace(nextMode)) {
@@ -762,7 +787,7 @@ function ConsoleShell() {
         return selectSession(current, nextMode, activeSessionId);
       });
     }
-  }, []);
+  }, [githubReviewDirty, mode, ui.github.reviewDirtyConfirmNavigation]);
 
   const handlePinChatContext = useCallback((context: PinnedChatContext) => {
     setPinnedChatContext(context);
@@ -1785,6 +1810,7 @@ function ConsoleShell() {
       onTelemetry={recordTelemetry}
       onContextChange={setGitHubContext}
       onReviewItemsChange={updateGitHubReviewItems}
+      onReviewDirtyChange={setGitHubReviewDirty}
       onPinChatContext={handlePinChatContext}
       onSessionChange={handleGitHubSessionChange}
       githubIntegration={integrationsStatus?.github ?? null}

@@ -4,6 +4,7 @@ import {
   describeRepositoryAccess,
   buildGitHubReviewItems,
   buildGitHubPinnedChatContext,
+  isGitHubReviewDirty,
 } from "../src/components/GitHubWorkspace.js";
 import type { GitHubChangePlan, GitHubExecuteResult, GitHubVerifyResult } from "../src/lib/github-api.js";
 import { buildPinnedChatContextPrompt } from "../src/lib/pinned-chat-context.js";
@@ -186,4 +187,49 @@ test("pinned chat context prompt appends bounded local context block", () => {
   assert.match(pinnedPrompt, /\[Local GitHub context\]/);
   assert.match(pinnedPrompt, /Repository: acme\/console/);
   assert.match(pinnedPrompt, /Find logic regressions in the execute gate\./);
+});
+
+test("GitHub review dirty state tracks unsaved local review progress", () => {
+  const proposalPlan = {
+    planId: "plan-dirty",
+  } as GitHubChangePlan;
+
+  assert.equal(isGitHubReviewDirty({
+    proposalPlan,
+    executionResult: null,
+    approvalChecked: false,
+    executionError: null,
+  }), true);
+
+  assert.equal(isGitHubReviewDirty({
+    proposalPlan: null,
+    executionResult: null,
+    approvalChecked: true,
+    executionError: null,
+  }), true);
+
+  assert.equal(isGitHubReviewDirty({
+    proposalPlan,
+    executionResult: {
+      planId: "plan-dirty",
+      status: "executed",
+      branchName: "feature",
+      baseSha: "base",
+      headSha: "head",
+      commitSha: "commit",
+      prNumber: 10,
+      prUrl: "https://example.test/pr/10",
+      targetBranch: "main",
+      executedAt: "2026-05-04T08:30:00.000Z",
+    },
+    approvalChecked: false,
+    executionError: null,
+  }), false);
+
+  assert.equal(isGitHubReviewDirty({
+    proposalPlan,
+    executionResult: null,
+    approvalChecked: false,
+    executionError: "stale execute failed",
+  }), true);
 });
