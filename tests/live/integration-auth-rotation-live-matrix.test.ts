@@ -167,7 +167,7 @@ function createMatrixAuthStore(
 
 function createMatrixLiveEnv(config: MatrixLiveRotationConfig) {
   return createTestEnv({
-    MOSAIC_STACK_SESSION_SECRET: "",
+    MOSAIC_STACK_SESSION_SECRET: "integration-auth-live-rotation-session-secret",
     MATRIX_LOGIN_TOKEN_TYPE: config.matrixLoginTokenType
   });
 }

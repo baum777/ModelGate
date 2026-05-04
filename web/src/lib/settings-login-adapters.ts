@@ -55,6 +55,25 @@ function summarizeCapabilities(capabilities: {
   return `read:${capabilities.read} propose:${capabilities.propose} execute:${capabilities.execute} verify:${capabilities.verify}`;
 }
 
+function buildSafeIdentityLabel(options: {
+  provider: "github" | "matrix";
+  status: SettingsLoginAdapterStatus;
+  identity: string | null;
+  fallback: string;
+}) {
+  const identity = options.identity?.trim() ?? "";
+
+  if (identity.length === 0) {
+    return options.fallback;
+  }
+
+  if (options.provider === "github" && options.status === "connected") {
+    return `Connected as ${identity}`;
+  }
+
+  return identity;
+}
+
 function primaryActionForStatus(status: SettingsLoginAdapterStatus): SettingsLoginAdapterAction {
   if (status === "connected") {
     return "reverify";
@@ -135,7 +154,12 @@ export function deriveSettingsLoginAdapters(input: DeriveSettingsLoginAdaptersIn
       credentialSource: github.credentialSource,
       primaryAction: primaryActionForStatus(github.status),
       secondaryAction: secondaryActionForStatus(github.status),
-      safeIdentityLabel: github.labels.identity ?? copy.unavailable,
+      safeIdentityLabel: buildSafeIdentityLabel({
+        provider: "github",
+        status: github.status,
+        identity: github.labels.identity,
+        fallback: copy.unavailable
+      }),
       scopeSummary: github.labels.scope ?? copy.none,
       capabilitySummary: summarizeCapabilities(github.capabilities),
       executionMode: github.executionMode,
@@ -156,7 +180,12 @@ export function deriveSettingsLoginAdapters(input: DeriveSettingsLoginAdaptersIn
       credentialSource: matrix.credentialSource,
       primaryAction: primaryActionForStatus(matrix.status),
       secondaryAction: secondaryActionForStatus(matrix.status),
-      safeIdentityLabel: matrix.labels.identity ?? copy.unavailable,
+      safeIdentityLabel: buildSafeIdentityLabel({
+        provider: "matrix",
+        status: matrix.status,
+        identity: matrix.labels.identity,
+        fallback: copy.unavailable
+      }),
       scopeSummary: matrix.labels.scope ?? copy.none,
       capabilitySummary: summarizeCapabilities(matrix.capabilities),
       executionMode: matrix.executionMode,

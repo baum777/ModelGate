@@ -54,6 +54,7 @@ type GitHubOAuthConfig = {
   configured: boolean;
   clientId: string;
   clientSecret: string;
+  callbackUrl: string | null;
   authorizeUrl: string;
   tokenUrl: string;
   scopes: string[];
@@ -78,6 +79,28 @@ function isProductionDeployment() {
 
 function normalizeBaseUrl(input: string) {
   return input.trim().replace(/\/+$/, "");
+}
+
+function normalizeHttpUrl(input: string): URL | null {
+  const trimmed = input.trim();
+
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  let parsed: URL;
+
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return null;
+  }
+
+  return parsed;
 }
 
 function buildIntegrationSessionCookie(value: string, maxAgeSeconds: number) {
@@ -208,17 +231,23 @@ function createStubCallbackUrl(provider: IntegrationProvider, state: string) {
 function resolveGitHubOAuthConfig(env: AppEnv): GitHubOAuthConfig {
   const clientId = env.GITHUB_OAUTH_CLIENT_ID.trim();
   const clientSecret = env.GITHUB_OAUTH_CLIENT_SECRET.trim();
+  const callbackUrlRaw = env.GITHUB_OAUTH_CALLBACK_URL.trim();
+  const callbackUrlParsed = normalizeHttpUrl(callbackUrlRaw);
+  const callbackPathValid = callbackUrlParsed?.pathname === "/api/auth/github/callback";
+  const callbackUrl = callbackPathValid ? callbackUrlParsed.toString() : null;
+  const sessionSecretReady = env.MOSAIC_STACK_SESSION_SECRET.trim().length > 0;
   const configured = clientId.length > 0 || clientSecret.length > 0;
-  const enabled = clientId.length > 0 && clientSecret.length > 0;
+  const enabled = clientId.length > 0 && clientSecret.length > 0 && callbackUrl !== null && sessionSecretReady;
 
   return {
     enabled,
     configured,
     clientId,
     clientSecret,
+    callbackUrl,
     authorizeUrl: normalizeBaseUrl(env.GITHUB_OAUTH_AUTHORIZE_URL || "https://github.com/login/oauth/authorize"),
     tokenUrl: normalizeBaseUrl(env.GITHUB_OAUTH_TOKEN_URL || "https://github.com/login/oauth/access_token"),
-    scopes: env.GITHUB_OAUTH_SCOPES.length > 0 ? env.GITHUB_OAUTH_SCOPES : ["repo", "read:user"]
+    scopes: env.GITHUB_OAUTH_SCOPES.length > 0 ? env.GITHUB_OAUTH_SCOPES : ["read:user", "user:email"]
   };
 }
 
@@ -639,7 +668,6 @@ function registerProviderStartRoute(
     });
     maybeSetSessionCookie(reply, cookieSessionId, session.sessionId, session.created);
 
-    const origin = resolveRequestOrigin(request);
     reply.header("Cache-Control", "no-store");
 
     if (provider === "github") {
@@ -648,7 +676,7 @@ function registerProviderStartRoute(
       if (oauthConfig.enabled) {
         const url = new URL(oauthConfig.authorizeUrl);
         url.searchParams.set("client_id", oauthConfig.clientId);
-        url.searchParams.set("redirect_uri", `${origin}/api/auth/github/callback`);
+        url.searchParams.set("redirect_uri", oauthConfig.callbackUrl ?? "");
         url.searchParams.set("state", intent.state);
         url.searchParams.set("scope", oauthConfig.scopes.join(" "));
         return reply.redirect(url.toString(), 302);
@@ -666,6 +694,7 @@ function registerProviderStartRoute(
     }
 
     if (provider === "matrix" && deps.matrixConfig.baseUrl) {
+      const origin = resolveRequestOrigin(request);
       try {
         const flowTypes = await fetchMatrixLoginFlows(deps);
 
@@ -721,12 +750,15 @@ function registerProviderCallbackRoute(
 
     const cookieSessionId = readIntegrationSessionCookie(request);
     maybeSetSessionCookie(reply, cookieSessionId, intent.sessionId, false);
-    const origin = resolveRequestOrigin(request);
-
     try {
       if (provider === "github") {
         const query = parsedQuery.data as z.infer<typeof GitHubCallbackQuerySchema>;
         const oauthConfig = resolveGitHubOAuthConfig(deps.env);
+
+        if (oauthConfig.configured && !oauthConfig.enabled) {
+          deps.authStore.setErrorCode(intent.sessionId, provider, "missing_server_config");
+          return sendIntegrationAuthError(reply, "missing_server_config", statusForErrorCode("missing_server_config"));
+        }
 
         if (oauthConfig.enabled) {
           if (query.error) {
@@ -735,15 +767,15 @@ function registerProviderCallbackRoute(
           }
 
           if (!query.code) {
-            deps.authStore.setErrorCode(intent.sessionId, provider, "callback_failed");
-            return sendIntegrationAuthError(reply, "callback_failed", statusForErrorCode("callback_failed"));
+            deps.authStore.setErrorCode(intent.sessionId, provider, "invalid_request");
+            return sendIntegrationAuthError(reply, "invalid_request", statusForErrorCode("invalid_request"));
           }
 
           const exchange = await exchangeGitHubCode(
             deps,
             query.code,
             query.state,
-            `${origin}/api/auth/github/callback`
+            oauthConfig.callbackUrl ?? ""
           );
 
           const stored = deps.authStore.storeCredential(intent.sessionId, provider, exchange.credential);
@@ -843,9 +875,11 @@ function registerProviderDisconnectRoute(
   deps: IntegrationAuthRouteDependencies,
   provider: IntegrationProvider
 ) {
-  const path = provider === "github" ? "/api/auth/github/disconnect" : "/api/auth/matrix/disconnect";
+  const paths = provider === "github"
+    ? ["/api/auth/github/disconnect", "/api/auth/github/logout"]
+    : ["/api/auth/matrix/disconnect"];
 
-  app.post(path, async (request, reply) => {
+  const handler = async (request: FastifyRequest, reply: FastifyReply) => {
     const sessionId = readIntegrationSessionCookie(request);
     reply.header("Cache-Control", "no-store");
 
@@ -865,7 +899,11 @@ function registerProviderDisconnectRoute(
       provider,
       disconnected: true
     });
-  });
+  };
+
+  for (const path of paths) {
+    app.post(path, handler);
+  }
 }
 
 function registerProviderReverifyRoute(
@@ -932,6 +970,36 @@ function registerProviderReverifyRoute(
   });
 }
 
+function registerGitHubStatusRoute(
+  app: FastifyInstance,
+  deps: IntegrationAuthRouteDependencies
+) {
+  app.get("/api/auth/github/status", async (request, reply) => {
+    const sessionId = readIntegrationSessionCookie(request);
+    const connection = deps.authStore.readConnection(sessionId, "github");
+    const oauthConfig = resolveGitHubOAuthConfig(deps.env);
+    const connected = connection?.connected === true;
+    const status = connected
+      ? "connected"
+      : oauthConfig.configured && !oauthConfig.enabled
+        ? "missing_server_config"
+        : "not_connected";
+
+    reply.header("Cache-Control", "no-store");
+    return reply.status(200).send({
+      ok: true,
+      provider: "github",
+      status,
+      connected,
+      oauthReady: oauthConfig.enabled,
+      identity: connected ? (connection?.safeIdentityLabel ?? null) : null,
+      credentialSource: connected ? connection?.source ?? "not_connected" : "not_connected",
+      lastVerifiedAt: connected ? connection?.lastVerifiedAt ?? null : null,
+      lastErrorCode: connection?.lastErrorCode ?? null
+    });
+  });
+}
+
 export function integrationAuthRoutes(app: FastifyInstance, deps: IntegrationAuthRouteDependencies) {
   registerProviderStartRoute(app, deps, "github");
   registerProviderStartRoute(app, deps, "matrix");
@@ -941,4 +1009,5 @@ export function integrationAuthRoutes(app: FastifyInstance, deps: IntegrationAut
   registerProviderDisconnectRoute(app, deps, "matrix");
   registerProviderReverifyRoute(app, deps, "github");
   registerProviderReverifyRoute(app, deps, "matrix");
+  registerGitHubStatusRoute(app, deps);
 }

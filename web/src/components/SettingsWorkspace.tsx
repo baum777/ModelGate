@@ -248,7 +248,7 @@ export function SettingsWorkspace({
 
   function getActionLabel(adapter: SettingsLoginAdapter, action: "connect" | "reconnect" | "disconnect" | "reverify") {
     if (adapter.id === "github" && (action === "connect" || action === "reconnect")) {
-      return locale === "de" ? "GitHub verbinden" : "Connect your GitHub";
+      return locale === "de" ? "GitHub verbinden" : "Connect GitHub";
     }
 
     return adapterCopy.action[action];
