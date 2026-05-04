@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApprovalTransitionCard,
   DecisionZone,
@@ -77,6 +77,7 @@ const ANALYSIS_QUESTION =
   "Beschreibe die Projektstruktur und nenne die sichere nächste Aktion.";
 const PROPOSAL_OBJECTIVE =
   "Erstelle einen sicheren Änderungsvorschlag für das gewählte Repo.";
+const GITHUB_SESSION_SYNC_INTERVAL_MS = 220;
 
 type GitHubLocaleText = {
   repoLoadFailed: string;
@@ -453,6 +454,18 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     props.session.metadata.verificationError,
   );
   const repoSelectRef = useRef<HTMLSelectElement | null>(null);
+  const sessionSyncHandleRef = useRef<number | null>(null);
+  const latestSessionRef = useRef<GitHubSession | null>(null);
+  const flushSessionSync = useCallback(() => {
+    if (sessionSyncHandleRef.current !== null) {
+      globalThis.clearTimeout(sessionSyncHandleRef.current);
+      sessionSyncHandleRef.current = null;
+    }
+
+    if (latestSessionRef.current) {
+      props.onSessionChange(latestSessionRef.current);
+    }
+  }, [props.onSessionChange]);
   const githubIdentityLabel = props.githubIntegration?.labels.identity ?? (locale === "de" ? "Nicht verbunden" : "Not connected");
   const githubConnected = props.githubIntegration?.credentialSource === "user_connected";
   const githubConnectAction = props.githubIntegration?.status && props.githubIntegration.status !== "connect_available" && props.githubIntegration.status !== "not_connected"
@@ -490,7 +503,18 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       metadata: snapshotMetadata,
     };
 
-    props.onSessionChange(nextSession);
+    latestSessionRef.current = nextSession;
+
+    if (sessionSyncHandleRef.current !== null) {
+      return;
+    }
+
+    sessionSyncHandleRef.current = globalThis.setTimeout(() => {
+      sessionSyncHandleRef.current = null;
+      if (latestSessionRef.current) {
+        props.onSessionChange(latestSessionRef.current);
+      }
+    }, GITHUB_SESSION_SYNC_INTERVAL_MS);
   }, [
     analysisBundle,
     approvalChecked,
@@ -505,6 +529,10 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     verificationError,
     verificationResult,
   ]);
+
+  useEffect(() => () => {
+    flushSessionSync();
+  }, [flushSessionSync]);
 
   useEffect(() => {
     let cancelled = false;
