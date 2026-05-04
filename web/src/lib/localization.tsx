@@ -247,6 +247,11 @@ type ChatCopy = {
     fallbackDisabled: string;
     fallbackUsed: string;
   };
+  pinnedContext: {
+    title: string;
+    localState: string;
+    clear: string;
+  };
 };
 
 type GitHubCopy = {
@@ -298,6 +303,8 @@ type GitHubCopy = {
   defaultBranch: string;
   loadingSelection: string;
   modelLabel: string;
+  pinToChatContext: string;
+  pinToChatContextHint: string;
 };
 
 type MatrixCopy = {
@@ -651,6 +658,11 @@ const EN_COPY: LocalizationCopy = {
       fallbackDisabled: "Fallback disabled",
       fallbackUsed: "Fallback used",
     },
+    pinnedContext: {
+      title: "Pinned GitHub context",
+      localState: "Local UI context only. Backend truth is still resolved at execution time.",
+      clear: "Clear pinned context",
+    },
   },
   github: {
     title: "GitHub workspace",
@@ -701,6 +713,8 @@ const EN_COPY: LocalizationCopy = {
     defaultBranch: "Default branch",
     loadingSelection: "Loading allowed repositories...",
     modelLabel: "Model",
+    pinToChatContext: "Pin to chat context",
+    pinToChatContextHint: "Adds a bounded repo excerpt for the next chat request.",
   },
   matrix: {
     title: "Matrix workspace",
@@ -1029,6 +1043,11 @@ const DE_COPY: LocalizationCopy = {
       fallbackDisabled: "Fallback inaktiv",
       fallbackUsed: "Fallback genutzt",
     },
+    pinnedContext: {
+      title: "Fixierter GitHub-Kontext",
+      localState: "Nur lokaler UI-Kontext. Backend-Wahrheit wird weiter erst bei Ausführung aufgelöst.",
+      clear: "Fixierten Kontext entfernen",
+    },
   },
   github: {
     title: "GitHub-Arbeitsbereich",
@@ -1079,6 +1098,8 @@ const DE_COPY: LocalizationCopy = {
     defaultBranch: "Hauptzweig",
     loadingSelection: "Erlaubte Repos werden geladen...",
     modelLabel: "Modell",
+    pinToChatContext: "In Chat-Kontext fixieren",
+    pinToChatContextHint: "Fügt einen begrenzten Repo-Auszug für die nächste Chat-Anfrage hinzu.",
   },
   matrix: {
     title: "Matrix-Arbeitsbereich",

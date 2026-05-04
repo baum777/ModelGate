@@ -39,6 +39,7 @@ import {
   isExpertMode,
   type WorkMode,
 } from "../lib/work-mode.js";
+import { buildPinnedChatContextPrompt, type PinnedChatContext } from "../lib/pinned-chat-context.js";
 
 type PublicModelEntry = {
   alias: string;
@@ -65,6 +66,8 @@ type ChatWorkspaceProps = {
   onActiveModelAliasChange: (alias: string) => void;
   onTelemetry: (kind: "info" | "warning" | "error", label: string, detail?: string) => void;
   onSessionChange: (session: ChatSession) => void;
+  pinnedContext: PinnedChatContext | null;
+  onClearPinnedContext: () => void;
 };
 
 type RoutingStatusTone = "ready" | "partial" | "error" | "muted";
@@ -502,17 +505,17 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     abortRef.current?.abort();
   }
 
-  function createProposal() {
-    const trimmed = chatState.input.trim();
+  function createProposal(prompt: string) {
+    const trimmedPrompt = prompt.trim();
 
-    if (!trimmed) {
+    if (!trimmedPrompt) {
       return;
     }
 
     dispatch({
       type: "create_proposal",
       proposal: buildGovernedChatProposal({
-        prompt: trimmed,
+        prompt: trimmedPrompt,
         modelAlias: selectedModel || null,
         consequence: buildProposalConsequence(locale, selectedModel || null),
         createdAt: new Date().toISOString(),
@@ -754,12 +757,14 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       return;
     }
 
+    const prompt = buildPinnedChatContextPrompt(trimmed, props.pinnedContext, locale);
+
     if (executionMode === "governed") {
-      createProposal();
+      createProposal(prompt);
       return;
     }
 
-    await executeDirectPrompt(trimmed);
+    await executeDirectPrompt(prompt);
   }
 
   const pendingProposal = chatState.pendingProposal;
@@ -1029,6 +1034,30 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             </div>
           ))}
         </section>
+
+        {props.pinnedContext ? (
+          <ShellCard variant="muted" className="chat-pinned-context" data-testid="chat-pinned-context">
+            <header className="chat-pinned-context-header">
+              <SectionLabel>{ui.chat.pinnedContext.title}</SectionLabel>
+              <StatusBadge tone="partial">{ui.shell.workspaceTabs.github.label}</StatusBadge>
+            </header>
+            <p className="chat-pinned-context-summary">{props.pinnedContext.summary}</p>
+            <p className="chat-pinned-context-meta">
+              {`${props.pinnedContext.repoFullName} · ${props.pinnedContext.ref}${props.pinnedContext.path ? ` · ${props.pinnedContext.path}` : ""}`}
+            </p>
+            <div className="action-row">
+              <span className="muted-copy">{ui.chat.pinnedContext.localState}</span>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={props.onClearPinnedContext}
+                data-testid="chat-pinned-context-clear"
+              >
+                {ui.chat.pinnedContext.clear}
+              </button>
+            </div>
+          </ShellCard>
+        ) : null}
 
         <form className="composer governed-composer" onSubmit={handleSubmit}>
           <textarea

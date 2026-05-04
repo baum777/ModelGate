@@ -19,6 +19,7 @@ import {
   type GitHubVerifyResult,
 } from "../lib/github-api.js";
 import type { IntegrationStatus } from "../lib/api.js";
+import { createPinnedChatContext, type PinnedChatContext } from "../lib/pinned-chat-context.js";
 import type { ReviewItem } from "./ReviewWorkspace.js";
 import {
   deriveSessionStatus,
@@ -65,6 +66,7 @@ type GitHubWorkspaceProps = {
   ) => void;
   onContextChange: (status: GitHubWorkspaceStatus) => void;
   onReviewItemsChange?: (items: ReviewItem[]) => void;
+  onPinChatContext?: (context: PinnedChatContext) => void;
   onSessionChange: (session: GitHubSession) => void;
   githubIntegration: IntegrationStatus | null;
   onIntegrationAction: (
@@ -273,6 +275,30 @@ function buildRawDiffPreview(plan: GitHubChangePlan | null) {
     ].join("\n"))
     .join("\n\n")
     .slice(0, 1600);
+}
+
+export function buildGitHubPinnedChatContext(options: {
+  selectedRepo: GitHubRepoSummary | null;
+  analysisBundle: GitHubContextBundle | null;
+  proposalPlan: GitHubChangePlan | null;
+}): PinnedChatContext | null {
+  if (!options.selectedRepo || !options.analysisBundle) {
+    return null;
+  }
+
+  const summary = options.proposalPlan?.summary ?? options.analysisBundle.question;
+  const firstAnalysisFile = options.analysisBundle.files[0] ?? null;
+  const firstDiffFile = options.proposalPlan?.diff[0] ?? null;
+  const excerpt = firstAnalysisFile?.excerpt ?? firstDiffFile?.patch ?? "";
+
+  return createPinnedChatContext({
+    repoFullName: options.selectedRepo.fullName,
+    ref: options.proposalPlan?.baseRef ?? options.analysisBundle.ref ?? options.selectedRepo.defaultBranch,
+    path: firstAnalysisFile?.path ?? firstDiffFile?.path ?? null,
+    summary,
+    excerpt,
+    diffPreview: buildRawDiffPreview(options.proposalPlan),
+  });
 }
 
 function verificationStatusCopy(result: GitHubVerifyResult | null, locale: Locale) {
@@ -924,6 +950,14 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     : analysisBundle
       ? ui.github.readOnly
       : ui.github.nextStepAnalysis;
+  const pinnableChatContext = useMemo(
+    () => buildGitHubPinnedChatContext({
+      selectedRepo,
+      analysisBundle,
+      proposalPlan,
+    }),
+    [analysisBundle, proposalPlan, selectedRepo],
+  );
   const heroSteps = [
     {
       title: ui.github.nextStepChooseRepo,
@@ -1164,13 +1198,32 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
 
             {analysisBundle ? (
               <div className="github-review-body">
-                <div className="github-review-summary">
-                  <p className="info-label">{ui.github.analysisTitle}</p>
-                  <strong>{analysisBundle.question}</strong>
-                  <p className="muted-copy">
-                    {analysisBundle.files.length} · {analysisBundle.tokenBudget.truncated ? ui.shell.statusPartial : ui.shell.statusReady}
-                  </p>
-                </div>
+              <div className="github-review-summary">
+                <p className="info-label">{ui.github.analysisTitle}</p>
+                <strong>{analysisBundle.question}</strong>
+                <p className="muted-copy">
+                  {analysisBundle.files.length} · {analysisBundle.tokenBudget.truncated ? ui.shell.statusPartial : ui.shell.statusReady}
+                </p>
+                {props.onPinChatContext ? (
+                  <div className="action-row github-pin-context-row">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => {
+                        if (!pinnableChatContext) {
+                          return;
+                        }
+
+                        props.onPinChatContext?.(pinnableChatContext);
+                      }}
+                      disabled={!pinnableChatContext}
+                    >
+                      {ui.github.pinToChatContext}
+                    </button>
+                    <span className="muted-copy">{ui.github.pinToChatContextHint}</span>
+                  </div>
+                ) : null}
+              </div>
 
                 <div className="github-file-chip-row">
                   {analysisFiles.map((file) => (

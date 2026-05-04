@@ -74,6 +74,7 @@ import {
   resolvePersistedWorkMode,
   type WorkMode,
 } from "./lib/work-mode.js";
+import type { PinnedChatContext } from "./lib/pinned-chat-context.js";
 
 const loadChatWorkspace = () => import("./components/ChatWorkspace.js");
 const loadGitHubWorkspace = () => import("./components/GitHubWorkspace.js");
@@ -536,6 +537,7 @@ function ConsoleShell() {
   const [githubContext, setGitHubContext] = useState<GitHubWorkspaceStatus>(() => createDefaultGitHubContext());
   const [matrixContext, setMatrixContext] = useState<MatrixWorkspaceStatus>(() => createDefaultMatrixContext());
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
+  const [pinnedChatContext, setPinnedChatContext] = useState<PinnedChatContext | null>(null);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const workspaceSaveHandleRef = useRef<number | null>(null);
   const latestWorkspaceStateRef = useRef(workspaceState);
@@ -760,6 +762,19 @@ function ConsoleShell() {
         return selectSession(current, nextMode, activeSessionId);
       });
     }
+  }, []);
+
+  const handlePinChatContext = useCallback((context: PinnedChatContext) => {
+    setPinnedChatContext(context);
+    setMode("chat");
+    setWorkspaceState((current) => {
+      const activeSessionId = current.activeSessionIdByWorkspace.chat;
+      return selectSession(current, "chat", activeSessionId);
+    });
+  }, []);
+
+  const handleClearPinnedChatContext = useCallback(() => {
+    setPinnedChatContext(null);
   }, []);
 
   const handleWorkspaceSessionCreate = useCallback((workspace: WorkspaceKind) => {
@@ -1758,6 +1773,8 @@ function ConsoleShell() {
       onActiveModelAliasChange={setActiveModelAlias}
       onTelemetry={recordTelemetry}
       onSessionChange={handleChatSessionChange}
+      pinnedContext={pinnedChatContext}
+      onClearPinnedContext={handleClearPinnedChatContext}
     />
   ) : mode === "github" ? (
     <GitHubWorkspace
@@ -1768,6 +1785,7 @@ function ConsoleShell() {
       onTelemetry={recordTelemetry}
       onContextChange={setGitHubContext}
       onReviewItemsChange={updateGitHubReviewItems}
+      onPinChatContext={handlePinChatContext}
       onSessionChange={handleGitHubSessionChange}
       githubIntegration={integrationsStatus?.github ?? null}
       onIntegrationAction={handleIntegrationAction}
