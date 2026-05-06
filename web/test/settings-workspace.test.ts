@@ -427,6 +427,7 @@ test("Settings login adapters expose missing-server-config requirements", () => 
         ...createIntegrationsStatusFixture().github,
         status: "missing_server_config",
         credentialSource: "not_connected",
+        requirements: ["GITHUB_OAUTH_CLIENT_ID", "GITHUB_OAUTH_CLIENT_SECRET"],
       }
     }
   });
@@ -435,5 +436,5 @@ test("Settings login adapters expose missing-server-config requirements", () => 
 
   assert.equal(github?.status, "missing_server_config");
   assert.equal(github?.primaryAction, "reconnect");
-  assert.deepEqual(github?.requirements, ["GITHUB_TOKEN", "GITHUB_ALLOWED_REPOS"]);
+  assert.deepEqual(github?.requirements, ["GITHUB_OAUTH_CLIENT_ID", "GITHUB_OAUTH_CLIENT_SECRET"]);
 });

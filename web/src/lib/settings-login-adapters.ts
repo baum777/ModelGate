@@ -139,12 +139,12 @@ export function deriveSettingsLoginAdapters(input: DeriveSettingsLoginAdaptersIn
   const github = input.integrations.github;
   const matrix = input.integrations.matrix;
 
-  const githubRequirements = github.status === "missing_server_config"
-    ? ["GITHUB_TOKEN", "GITHUB_ALLOWED_REPOS"]
-    : [];
-  const matrixRequirements = matrix.status === "missing_server_config"
+  const githubRequirements = github.requirements ?? (github.status === "missing_server_config"
+    ? ["GITHUB_OAUTH_CLIENT_ID", "GITHUB_OAUTH_CLIENT_SECRET", "GITHUB_OAUTH_CALLBACK_URL", "MOSAIC_STACK_SESSION_SECRET"]
+    : []);
+  const matrixRequirements = matrix.requirements ?? (matrix.status === "missing_server_config"
     ? ["MATRIX_ENABLED", "MATRIX_BASE_URL", "MATRIX_ACCESS_TOKEN"]
-    : [];
+    : []);
 
   return [
     {

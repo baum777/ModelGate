@@ -161,6 +161,7 @@ export type IntegrationStatus = {
   };
   lastVerifiedAt: string | null;
   lastErrorCode: string | null;
+  requirements?: string[];
 };
 
 export type IntegrationsStatusResponse = {
