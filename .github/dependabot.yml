@@ -4,7 +4,34 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps(actions)"
+    groups:
+      github-actions-all:
+        patterns:
+          - "*"
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 6
+    versioning-strategy: "increase-if-necessary"
+    commit-message:
+      prefix: "deps(npm)"
+    groups:
+      npm-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+        patterns:
+          - "*"
+      npm-major:
+        update-types:
+          - "major"
+        patterns:
+          - "*"
+      npm-security:
+        applies-to: "security-updates"
+        patterns:
+          - "*"
