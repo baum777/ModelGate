@@ -1,25 +1,35 @@
-export type SettingsLoginAdapterStatus =
-  | "available"
-  | "connected"
-  | "locked"
-  | "checking"
-  | "unavailable"
-  | "error";
+import type {
+  IntegrationConnectionStatus,
+  IntegrationsStatusResponse
+} from "./api.js";
+
+export type SettingsLoginAdapterStatus = IntegrationConnectionStatus | "checking";
 
 export type SettingsLoginAdapterAction =
   | "connect"
+  | "reconnect"
   | "disconnect"
-  | "open"
-  | "retry"
-  | "configure";
+  | "reverify";
+
+export type SettingsCredentialSource =
+  | "instance_configured"
+  | "user_connected"
+  | "user_connected_stub"
+  | "not_connected";
 
 export type SettingsLoginAdapter = {
-  id: "github" | "matrix" | "chat";
+  id: "github" | "matrix";
   label: string;
   status: SettingsLoginAdapterStatus;
   primaryAction: SettingsLoginAdapterAction;
+  secondaryAction: SettingsLoginAdapterAction | null;
+  credentialSource: SettingsCredentialSource;
   safeIdentityLabel: string;
   scopeSummary: string;
+  capabilitySummary: string;
+  executionMode: "disabled" | "approval_required" | "enabled";
+  lastVerifiedAt: string | null;
+  lastErrorCode: string | null;
   expertDetails: Array<{ label: string; value: string }>;
   requirements: string[];
   authority: string;
@@ -27,133 +37,168 @@ export type SettingsLoginAdapter = {
 
 type SettingsLoginAdapterCopy = {
   checking: string;
-  ready: string;
   unavailable: string;
-  error: string;
   none: string;
-  configureBackend: string;
-  connect: string;
-  disconnect: string;
-  open: string;
-  retry: string;
 };
 
 export type DeriveSettingsLoginAdaptersInput = {
   copy: SettingsLoginAdapterCopy;
-  backend: {
-    healthy: boolean | null;
-    label: string;
-  };
-  github: {
-    configured: boolean | null;
-    ready: boolean | null;
-    connectionLabel: string;
-    repositoryLabel: string;
-    accessLabel: string;
-  };
-  matrix: {
-    configured: boolean | null;
-    ready: boolean | null;
-    identityLabel: string;
-    connectionLabel: string;
-    homeserverLabel: string;
-    scopeLabel: string;
-  };
-  chat: {
-    activeAlias: string | null;
-    availableCount: number;
-  };
+  integrations: IntegrationsStatusResponse | null;
 };
 
-function statusActionLabel(action: SettingsLoginAdapterAction, copy: SettingsLoginAdapterCopy) {
-  switch (action) {
-    case "connect":
-      return copy.connect;
-    case "disconnect":
-      return copy.disconnect;
-    case "open":
-      return copy.open;
-    case "retry":
-      return copy.retry;
-    case "configure":
-      return copy.configureBackend;
-    default:
-      return action;
-  }
+function summarizeCapabilities(capabilities: {
+  read: string;
+  propose: string;
+  execute: string;
+  verify: string;
+}) {
+  return `read:${capabilities.read} propose:${capabilities.propose} execute:${capabilities.execute} verify:${capabilities.verify}`;
 }
 
-export function deriveSettingsLoginAdapters(input: DeriveSettingsLoginAdaptersInput): SettingsLoginAdapter[] {
-  const { copy } = input;
-  const githubStatus: SettingsLoginAdapterStatus = input.github.configured === false || input.github.ready === false
-      ? "unavailable"
-      : "available";
-  const matrixStatus: SettingsLoginAdapterStatus = input.matrix.connectionLabel === copy.error
-    ? "error"
-    : input.matrix.configured === false || input.matrix.ready === false
-      ? "unavailable"
-      : input.matrix.connectionLabel === copy.checking
-        ? "checking"
-        : "available";
-  const chatStatus: SettingsLoginAdapterStatus = input.backend.healthy === false
-    ? "unavailable"
-    : input.backend.healthy === null
-      ? "checking"
-      : "available";
+function buildSafeIdentityLabel(options: {
+  provider: "github" | "matrix";
+  status: SettingsLoginAdapterStatus;
+  identity: string | null;
+  fallback: string;
+}) {
+  const identity = options.identity?.trim() ?? "";
 
-  const adapters: SettingsLoginAdapter[] = [
+  if (identity.length === 0) {
+    return options.fallback;
+  }
+
+  if (options.provider === "github" && options.status === "connected") {
+    return `Connected as ${identity}`;
+  }
+
+  return identity;
+}
+
+function primaryActionForStatus(status: SettingsLoginAdapterStatus): SettingsLoginAdapterAction {
+  if (status === "connected") {
+    return "reverify";
+  }
+
+  if (status === "connect_available" || status === "not_connected") {
+    return "connect";
+  }
+
+  return "reconnect";
+}
+
+function secondaryActionForStatus(status: SettingsLoginAdapterStatus): SettingsLoginAdapterAction | null {
+  if (status === "connected") {
+    return "disconnect";
+  }
+
+  return null;
+}
+
+function buildCheckingAdapters(copy: SettingsLoginAdapterCopy): SettingsLoginAdapter[] {
+  const shared = {
+    status: "checking" as const,
+    credentialSource: "not_connected" as const,
+    primaryAction: "connect" as const,
+    secondaryAction: null,
+    safeIdentityLabel: copy.checking,
+    capabilitySummary: copy.checking,
+    executionMode: "disabled" as const,
+    lastVerifiedAt: null,
+    lastErrorCode: null,
+    expertDetails: [
+      { label: "Status", value: copy.checking }
+    ],
+    requirements: []
+  };
+
+  return [
     {
       id: "github",
       label: "GitHub",
-      status: githubStatus,
-      primaryAction: githubStatus === "unavailable" ? "configure" : "open",
-      safeIdentityLabel: githubStatus === "unavailable" ? copy.unavailable : input.github.connectionLabel,
-      scopeSummary: input.github.repositoryLabel,
-      expertDetails: [
-        { label: "Authority", value: "/api/github/*" },
-        { label: "Configured", value: input.github.configured === null ? copy.unavailable : String(input.github.configured) },
-        { label: "Ready", value: input.github.ready === null ? copy.unavailable : String(input.github.ready) },
-        { label: "Access", value: input.github.accessLabel }
-      ],
-      requirements: githubStatus === "unavailable" ? ["GITHUB_TOKEN", "GITHUB_ALLOWED_REPOS"] : [],
-      authority: "/api/github/*"
+      ...shared,
+      scopeSummary: copy.checking,
+      authority: "/api/auth/github/* + /api/github/*"
     },
     {
       id: "matrix",
       label: "Matrix",
-      status: matrixStatus,
-      primaryAction: matrixStatus === "unavailable" ? "configure" : matrixStatus === "error" ? "retry" : "open",
-      safeIdentityLabel: input.matrix.identityLabel,
-      scopeSummary: input.matrix.scopeLabel,
-      expertDetails: [
-        { label: "Authority", value: "/api/matrix/whoami + /api/matrix/*" },
-        { label: "Configured", value: input.matrix.configured === null ? copy.unavailable : String(input.matrix.configured) },
-        { label: "Ready", value: input.matrix.ready === null ? copy.unavailable : String(input.matrix.ready) },
-        { label: "Homeserver", value: input.matrix.homeserverLabel }
-      ],
-      requirements: matrixStatus === "unavailable" ? ["MATRIX_ENABLED", "MATRIX_BASE_URL", "MATRIX_ACCESS_TOKEN"] : [],
-      authority: "/api/matrix/*"
-    },
-    {
-      id: "chat",
-      label: "Chat",
-      status: chatStatus,
-      primaryAction: chatStatus === "unavailable" ? "retry" : "open",
-      safeIdentityLabel: input.chat.activeAlias ?? copy.none,
-      scopeSummary: `${input.chat.availableCount} public alias(es)`,
-      expertDetails: [
-        { label: "Authority", value: "/health, /models, /chat" },
-        { label: "Backend", value: input.backend.label }
-      ],
-      requirements: chatStatus === "unavailable" ? ["OPENROUTER_API_KEY"] : [],
-      authority: "/chat"
+      ...shared,
+      scopeSummary: copy.checking,
+      authority: "/api/auth/matrix/* + /api/matrix/*"
     }
   ];
+}
 
-  return adapters.map((adapter) => ({
-    ...adapter,
-    expertDetails: [
-      ...adapter.expertDetails,
-      { label: "Primary action", value: statusActionLabel(adapter.primaryAction, copy) }
-    ]
-  }));
+export function deriveSettingsLoginAdapters(input: DeriveSettingsLoginAdaptersInput): SettingsLoginAdapter[] {
+  const { copy } = input;
+
+  if (!input.integrations) {
+    return buildCheckingAdapters(copy);
+  }
+
+  const github = input.integrations.github;
+  const matrix = input.integrations.matrix;
+
+  const githubRequirements = github.status === "missing_server_config"
+    ? ["GITHUB_TOKEN", "GITHUB_ALLOWED_REPOS"]
+    : [];
+  const matrixRequirements = matrix.status === "missing_server_config"
+    ? ["MATRIX_ENABLED", "MATRIX_BASE_URL", "MATRIX_ACCESS_TOKEN"]
+    : [];
+
+  return [
+    {
+      id: "github",
+      label: "GitHub",
+      status: github.status,
+      credentialSource: github.credentialSource,
+      primaryAction: primaryActionForStatus(github.status),
+      secondaryAction: secondaryActionForStatus(github.status),
+      safeIdentityLabel: buildSafeIdentityLabel({
+        provider: "github",
+        status: github.status,
+        identity: github.labels.identity,
+        fallback: copy.unavailable
+      }),
+      scopeSummary: github.labels.scope ?? copy.none,
+      capabilitySummary: summarizeCapabilities(github.capabilities),
+      executionMode: github.executionMode,
+      lastVerifiedAt: github.lastVerifiedAt,
+      lastErrorCode: github.lastErrorCode,
+      expertDetails: [
+        { label: "Allowed repos", value: github.labels.allowedReposStatus ?? copy.none },
+        { label: "Capabilities", value: summarizeCapabilities(github.capabilities) },
+        { label: "Execution mode", value: github.executionMode }
+      ],
+      requirements: githubRequirements,
+      authority: "/api/auth/github/* + /api/github/*"
+    },
+    {
+      id: "matrix",
+      label: "Matrix",
+      status: matrix.status,
+      credentialSource: matrix.credentialSource,
+      primaryAction: primaryActionForStatus(matrix.status),
+      secondaryAction: secondaryActionForStatus(matrix.status),
+      safeIdentityLabel: buildSafeIdentityLabel({
+        provider: "matrix",
+        status: matrix.status,
+        identity: matrix.labels.identity,
+        fallback: copy.unavailable
+      }),
+      scopeSummary: matrix.labels.scope ?? copy.none,
+      capabilitySummary: summarizeCapabilities(matrix.capabilities),
+      executionMode: matrix.executionMode,
+      lastVerifiedAt: matrix.lastVerifiedAt,
+      lastErrorCode: matrix.lastErrorCode,
+      expertDetails: [
+        { label: "Homeserver", value: matrix.labels.homeserver ?? copy.none },
+        { label: "Room access", value: matrix.labels.roomAccess ?? copy.none },
+        { label: "Capabilities", value: summarizeCapabilities(matrix.capabilities) },
+        { label: "Execution mode", value: matrix.executionMode }
+      ],
+      requirements: matrixRequirements,
+      authority: "/api/auth/matrix/* + /api/matrix/*"
+    }
+  ];
 }

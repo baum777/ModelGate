@@ -1,0 +1,139 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e7]: MOSAICSTACK
+      - heading "MosaicStack Konsole" [level=1] [ref=e8]
+      - paragraph [ref=e9]: Governance-first Operator-Shell. Laufzeitwahrheit bleibt backend-owned.
+    - generic [ref=e10]:
+      - button "Switch to dark mode" [ref=e11] [cursor=pointer]: ☾
+      - group "Sprache" [ref=e12]:
+        - 'button "Sprache: Englisch" [ref=e13] [cursor=pointer]': EN
+        - 'button "Sprache: Deutsch" [pressed] [ref=e14] [cursor=pointer]': DE
+      - generic [ref=e15]: Backend Wird geprüft
+  - generic [ref=e16]:
+    - complementary [ref=e17]:
+      - generic [ref=e18]:
+        - paragraph [ref=e19]: Arbeitsbereiche
+        - navigation "Arbeitsbereiche" [ref=e20]:
+          - button "Chat" [ref=e21] [cursor=pointer]:
+            - img [ref=e22]
+            - strong [ref=e25]: Chat
+          - button "GitHub" [ref=e26] [cursor=pointer]:
+            - img [ref=e27]
+            - strong [ref=e31]: GitHub
+          - button "Matrix" [ref=e32] [cursor=pointer]:
+            - img [ref=e33]
+            - strong [ref=e39]: Matrix
+          - button "Prüfung" [ref=e40] [cursor=pointer]:
+            - img [ref=e41]
+            - strong [ref=e44]: Prüfung
+          - button "Einstellungen" [ref=e45] [cursor=pointer]:
+            - img [ref=e46]
+            - strong [ref=e50]: Einstellungen
+      - generic [ref=e52]:
+        - generic [ref=e53]:
+          - paragraph [ref=e54]: Arbeitsmodus
+          - generic [ref=e55]:
+            - group "Beginner-Modus" [ref=e56]:
+              - button "Basis" [pressed] [ref=e57] [cursor=pointer]
+              - button "Experte" [ref=e58] [cursor=pointer]
+            - paragraph [ref=e59]: Geführt und ruhig. Erst lesen, Änderungen vorab prüfen, bewusst freigeben.
+        - generic [ref=e60]: Entwurf
+      - region "Chat Sessions" [ref=e61]:
+        - generic [ref=e62]:
+          - generic [ref=e63]:
+            - paragraph [ref=e64]: Chat Sessions
+            - strong [ref=e65]: 1 insgesamt
+          - button "Neue Session" [ref=e66] [cursor=pointer]
+        - article [ref=e68]:
+          - button "New chat Entwurf Aktiv" [ref=e69] [cursor=pointer]:
+            - generic [ref=e70]:
+              - generic [ref=e71]:
+                - strong [ref=e72]: New chat
+                - generic [ref=e73]: Entwurf
+              - generic [ref=e74]: Aktiv
+    - generic [ref=e78]:
+      - generic [ref=e80]:
+        - paragraph [ref=e81]: Einstellungen
+        - heading "Einstellungen" [level=1] [ref=e82]
+        - button "Guide" [ref=e84] [cursor=pointer]
+      - generic [ref=e85]:
+        - article [ref=e86]:
+          - generic [ref=e88]:
+            - generic [ref=e89]: Ansicht
+            - strong [ref=e90]: Beginner-Modus
+          - paragraph [ref=e91]: "Sicherer Standard: Writes bleiben bis Vorschau und Freigabe gesperrt."
+          - generic [ref=e92]:
+            - button "Basis" [ref=e93] [cursor=pointer]
+            - button "Experte" [ref=e94] [cursor=pointer]
+        - article [ref=e95]:
+          - generic [ref=e97]:
+            - generic [ref=e98]: Zugänge
+            - strong [ref=e99]: Gemeinsame Infrastruktur bedeutet nicht gemeinsame Autorität. Der Browser spiegelt nur Wahrheit wider, die der Backend-Server bereits belegen kann.
+          - generic [ref=e100]:
+            - generic [ref=e101]:
+              - generic [ref=e102]:
+                - generic [ref=e103]:
+                  - generic [ref=e104]: Wird geprüft
+                  - heading "GitHub" [level=2] [ref=e105]
+                - paragraph [ref=e106]: Wird geprüft
+                - paragraph [ref=e107]: Wird geprüft
+              - button "GitHub Verbinden" [disabled] [ref=e109]: Verbinden
+            - generic [ref=e110]:
+              - generic [ref=e111]:
+                - generic [ref=e112]:
+                  - generic [ref=e113]: Wird geprüft
+                  - heading "Matrix" [level=2] [ref=e114]
+                - paragraph [ref=e115]: Wird geprüft
+                - paragraph [ref=e116]: Wird geprüft
+              - button "Matrix Verbinden" [disabled] [ref=e118]: Verbinden
+        - article [ref=e119]:
+          - generic [ref=e121]:
+            - generic [ref=e122]: Identität und Verbindung
+            - strong [ref=e123]: Gemeinsame Infrastruktur bedeutet nicht gemeinsame Autorität. Der Browser spiegelt nur Wahrheit wider, die der Backend-Server bereits belegen kann.
+          - generic [ref=e124]:
+            - generic [ref=e125]:
+              - generic [ref=e126]: Backend
+              - strong [ref=e127]: Wird geprüft
+            - generic [ref=e128]:
+              - generic [ref=e129]: GitHub-Handlungsidentität
+              - strong [ref=e130]: Wird geprüft
+            - generic [ref=e131]:
+              - generic [ref=e132]: GitHub-Verbindung
+              - strong [ref=e133]: Wird geprüft
+            - generic [ref=e134]:
+              - generic [ref=e135]: Matrix-Handlungsidentität
+              - strong [ref=e136]: Wird geprüft
+          - paragraph [ref=e137]: Backend-Status wird geladen.
+        - article [ref=e138]:
+          - generic [ref=e140]:
+            - generic [ref=e141]: Modelle
+            - strong [ref=e142]: Modellwahl bleibt alias-basiert. Provider-Zuordnung und Backend-Pfade bleiben serverseitig und werden im Browser nicht als Wahrheit behandelt.
+          - generic [ref=e143]:
+            - generic [ref=e144]:
+              - generic [ref=e145]: Modelle
+              - strong [ref=e146]: Keine
+            - generic [ref=e147]:
+              - generic [ref=e148]: Quelle
+              - strong [ref=e149]: "0"
+            - generic [ref=e150]:
+              - generic [ref=e151]: Quelle
+              - strong [ref=e152]: n/a
+          - paragraph [ref=e153]: Modellwahl bleibt alias-basiert.
+    - complementary [ref=e154]:
+      - generic [ref=e155]:
+        - generic [ref=e156]:
+          - paragraph [ref=e157]: Status
+          - generic [ref=e158]: Wird geprüft
+        - generic [ref=e159]:
+          - paragraph [ref=e160]: "Sicherer Standard: Writes bleiben bis Vorschau und Freigabe gesperrt."
+          - paragraph [ref=e161]: Backend-Health wird geladen.
+      - generic [ref=e162]:
+        - generic [ref=e163]:
+          - paragraph [ref=e164]: Nächster Schritt
+          - generic [ref=e165]: Teilweise
+        - generic [ref=e166]:
+          - generic [ref=e168]:
+            - generic [ref=e169]: Backend
+            - strong [ref=e170]: Wird geprüft
+          - paragraph [ref=e171]: Basismodus blendet Diagnostik standardmäßig aus. Bei Störungen wird sie sichtbar.

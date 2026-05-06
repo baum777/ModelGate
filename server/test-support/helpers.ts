@@ -17,7 +17,7 @@ export function createTestEnv(overrides: Partial<AppEnv> = {}): AppEnv {
     OPENROUTER_MODEL: overrides.OPENROUTER_MODEL ?? "openrouter/auto",
     OPENROUTER_MODELS: overrides.OPENROUTER_MODELS ?? ["openrouter/auto", "anthropic/claude-3.5-sonnet"],
     OPENROUTER_REQUEST_TIMEOUT_MS: overrides.OPENROUTER_REQUEST_TIMEOUT_MS ?? 15000,
-    APP_NAME: overrides.APP_NAME ?? "modelgate-test",
+    APP_NAME: overrides.APP_NAME ?? "mosaicstack-test",
     DEFAULT_SYSTEM_PROMPT: overrides.DEFAULT_SYSTEM_PROMPT ?? "Backend-owned system prompt.",
     CORS_ORIGINS: overrides.CORS_ORIGINS ?? ["http://localhost:5173"],
     CHAT_MODEL: overrides.CHAT_MODEL ?? overrides.OPENROUTER_MODEL ?? "openrouter/auto",
@@ -41,7 +41,7 @@ export function createTestEnv(overrides: Partial<AppEnv> = {}): AppEnv {
     GITHUB_AGENT_API_KEY: overrides.GITHUB_AGENT_API_KEY ?? "",
     GITHUB_API_BASE_URL: overrides.GITHUB_API_BASE_URL ?? "https://api.github.com",
     GITHUB_DEFAULT_OWNER: overrides.GITHUB_DEFAULT_OWNER ?? "",
-    GITHUB_BRANCH_PREFIX: overrides.GITHUB_BRANCH_PREFIX ?? "modelgate/github",
+    GITHUB_BRANCH_PREFIX: overrides.GITHUB_BRANCH_PREFIX ?? "mosaicstack/github",
     GITHUB_REQUEST_TIMEOUT_MS: overrides.GITHUB_REQUEST_TIMEOUT_MS ?? 8000,
     GITHUB_PLAN_TTL_MS: overrides.GITHUB_PLAN_TTL_MS ?? 720000,
     GITHUB_ACTION_STORE_MODE: overrides.GITHUB_ACTION_STORE_MODE ?? "memory",
@@ -55,6 +55,20 @@ export function createTestEnv(overrides: Partial<AppEnv> = {}): AppEnv {
     GITHUB_APP_ID: overrides.GITHUB_APP_ID ?? "",
     GITHUB_APP_PRIVATE_KEY: overrides.GITHUB_APP_PRIVATE_KEY ?? "",
     GITHUB_APP_INSTALLATION_ID: overrides.GITHUB_APP_INSTALLATION_ID ?? "",
+    GITHUB_OAUTH_CLIENT_ID: overrides.GITHUB_OAUTH_CLIENT_ID ?? "",
+    GITHUB_OAUTH_CLIENT_SECRET: overrides.GITHUB_OAUTH_CLIENT_SECRET ?? "",
+    GITHUB_OAUTH_CALLBACK_URL: overrides.GITHUB_OAUTH_CALLBACK_URL ?? "http://127.0.0.1:8787/api/auth/github/callback",
+    GITHUB_OAUTH_AUTHORIZE_URL: overrides.GITHUB_OAUTH_AUTHORIZE_URL ?? "https://github.com/login/oauth/authorize",
+    GITHUB_OAUTH_TOKEN_URL: overrides.GITHUB_OAUTH_TOKEN_URL ?? "https://github.com/login/oauth/access_token",
+    GITHUB_OAUTH_SCOPES: overrides.GITHUB_OAUTH_SCOPES ?? ["read:user", "user:email"],
+    MATRIX_SSO_REDIRECT_PATH: overrides.MATRIX_SSO_REDIRECT_PATH ?? "/_matrix/client/v3/login/sso/redirect",
+    MATRIX_LOGIN_TOKEN_TYPE: overrides.MATRIX_LOGIN_TOKEN_TYPE ?? "m.login.token",
+    INTEGRATION_AUTH_STORE_MODE: overrides.INTEGRATION_AUTH_STORE_MODE ?? "memory",
+    INTEGRATION_AUTH_STORE_FILE_PATH: overrides.INTEGRATION_AUTH_STORE_FILE_PATH ?? ".local-ai/state/integration-auth-store.test.json",
+    INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID: overrides.INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID ?? "test-key",
+    INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_VERSION: overrides.INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_VERSION ?? "1",
+    INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY: overrides.INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY ?? "",
+    INTEGRATION_AUTH_ENCRYPTION_PREVIOUS_KEYS: overrides.INTEGRATION_AUTH_ENCRYPTION_PREVIOUS_KEYS ?? "",
     RATE_LIMIT_ENABLED: overrides.RATE_LIMIT_ENABLED ?? true,
     RATE_LIMIT_WINDOW_MS: overrides.RATE_LIMIT_WINDOW_MS ?? 60_000,
     RATE_LIMIT_CHAT_MAX: overrides.RATE_LIMIT_CHAT_MAX ?? 30,
@@ -68,9 +82,9 @@ export function createTestEnv(overrides: Partial<AppEnv> = {}): AppEnv {
     JOURNAL_FILE_PATH: overrides.JOURNAL_FILE_PATH ?? ".local-ai/state/runtime-journal.json",
     JOURNAL_MAX_ENTRIES: overrides.JOURNAL_MAX_ENTRIES ?? 500,
     JOURNAL_EXPOSE_RECENT_LIMIT: overrides.JOURNAL_EXPOSE_RECENT_LIMIT ?? 50,
-    MODEL_GATE_ADMIN_PASSWORD: overrides.MODEL_GATE_ADMIN_PASSWORD ?? "test-admin-password",
-    MODEL_GATE_SESSION_SECRET: overrides.MODEL_GATE_SESSION_SECRET ?? "test-session-secret",
-    MODEL_GATE_SESSION_TTL_SECONDS: overrides.MODEL_GATE_SESSION_TTL_SECONDS ?? 86_400
+    MOSAIC_STACK_ADMIN_PASSWORD: overrides.MOSAIC_STACK_ADMIN_PASSWORD ?? "test-admin-password",
+    MOSAIC_STACK_SESSION_SECRET: overrides.MOSAIC_STACK_SESSION_SECRET ?? "test-session-secret",
+    MOSAIC_STACK_SESSION_TTL_SECONDS: overrides.MOSAIC_STACK_SESSION_TTL_SECONDS ?? 86_400
   };
 }
 
@@ -134,6 +148,14 @@ export function createTestMatrixConfig(overrides: Partial<MatrixConfig> = {}): M
     tokenExpiresAt: overrides.tokenExpiresAt ?? null,
     expectedUserId: overrides.expectedUserId ?? null,
     requestTimeoutMs: overrides.requestTimeoutMs ?? 5000,
+    evidenceWritesEnabled: overrides.evidenceWritesEnabled ?? false,
+    evidenceWritesRequired: overrides.evidenceWritesRequired ?? false,
+    evidenceRooms: overrides.evidenceRooms ?? {
+      approvals: null,
+      provenance: null,
+      verification: null,
+      topicChanges: null
+    },
     issues: overrides.issues ?? []
   };
 }
@@ -186,6 +208,9 @@ export function createMockMatrixClient(overrides: Partial<MatrixClient> = {}): M
     })),
     updateRoomTopic: overrides.updateRoomTopic ?? (async () => ({
       transactionId: "txn_test"
+    })),
+    sendRoomMessage: overrides.sendRoomMessage ?? (async () => ({
+      transactionId: "$message:matrix.example"
     }))
   };
 }
@@ -204,7 +229,7 @@ export function createTestGitHubConfig(overrides: Partial<GitHubConfig> = {}): G
     allowedRepoSet: overrides.allowedRepoSet ?? new Set(allowedRepos),
     agentApiKey: overrides.agentApiKey ?? null,
     defaultOwner: overrides.defaultOwner ?? "acme",
-    branchPrefix: overrides.branchPrefix ?? "modelgate/github",
+    branchPrefix: overrides.branchPrefix ?? "mosaicstack/github",
     requestTimeoutMs: overrides.requestTimeoutMs ?? 5000,
     planTtlMs: overrides.planTtlMs ?? 720000,
     maxContextFiles: overrides.maxContextFiles ?? 6,

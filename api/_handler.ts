@@ -38,6 +38,7 @@ export function normalizeVercelRequestUrl(originalUrl: string) {
     normalized.pathname.startsWith("/api/")
     && !normalized.pathname.startsWith("/api/auth/")
     && !normalized.pathname.startsWith("/api/matrix/")
+    && !normalized.pathname.startsWith("/api/integrations/")
     && !normalized.pathname.startsWith("/api/github/")
   ) {
     normalized.pathname = normalized.pathname.slice(4);

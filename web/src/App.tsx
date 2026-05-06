@@ -1,20 +1,17 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ChatWorkspace } from "./components/ChatWorkspace.js";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  GitHubWorkspace,
   type GitHubWorkspaceStatus,
 } from "./components/GitHubWorkspace.js";
 import {
-  MatrixWorkspace,
   type MatrixWorkspaceStatus,
 } from "./components/MatrixWorkspace.js";
 import {
-  ReviewWorkspace,
   type ReviewItem,
 } from "./components/ReviewWorkspace.js";
 import {
-  SettingsWorkspace,
   type DiagnosticEntry,
+  type SettingsVerificationState,
+  type SettingsVerificationTarget,
 } from "./components/SettingsWorkspace.js";
 import { SessionList } from "./components/SessionList.js";
 import {
@@ -34,11 +31,17 @@ import {
   useLocalization,
 } from "./lib/localization.js";
 import {
+  buildIntegrationConnectStartUrl,
   fetchDiagnostics,
   fetchHealth,
+  fetchIntegrationsStatus,
   fetchJournalRecent,
   fetchModels,
+  postOpenRouterModel,
+  postIntegrationControlAction,
+  testSettingsConnection,
   type DiagnosticsResponse,
+  type IntegrationsStatusResponse,
   type JournalEntry
 } from "./lib/api.js";
 import {
@@ -71,6 +74,51 @@ import {
   resolvePersistedWorkMode,
   type WorkMode,
 } from "./lib/work-mode.js";
+import type { PinnedChatContext } from "./lib/pinned-chat-context.js";
+
+const loadChatWorkspace = () => import("./components/ChatWorkspace.js");
+const loadGitHubWorkspace = () => import("./components/GitHubWorkspace.js");
+const loadMatrixWorkspace = () => import("./components/MatrixWorkspace.js");
+const loadReviewWorkspace = () => import("./components/ReviewWorkspace.js");
+const loadSettingsWorkspace = () => import("./components/SettingsWorkspace.js");
+
+const ChatWorkspace = lazy(() => loadChatWorkspace().then((module) => ({ default: module.ChatWorkspace })));
+const GitHubWorkspace = lazy(() => loadGitHubWorkspace().then((module) => ({ default: module.GitHubWorkspace })));
+const MatrixWorkspace = lazy(() => loadMatrixWorkspace().then((module) => ({ default: module.MatrixWorkspace })));
+const ReviewWorkspace = lazy(() => loadReviewWorkspace().then((module) => ({ default: module.ReviewWorkspace })));
+const SettingsWorkspace = lazy(() => loadSettingsWorkspace().then((module) => ({ default: module.SettingsWorkspace })));
+
+const SETTINGS_VERIFICATION_INITIAL: Record<SettingsVerificationTarget, SettingsVerificationState> = {
+  backend: {
+    status: "idle",
+    detail: "",
+    checkedAt: null,
+  },
+  github: {
+    status: "idle",
+    detail: "",
+    checkedAt: null,
+  },
+  matrix: {
+    status: "idle",
+    detail: "",
+    checkedAt: null,
+  },
+};
+
+function scheduleWorkspacePreload(callback: () => void) {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  if ("requestIdleCallback" in window) {
+    const handle = window.requestIdleCallback(callback, { timeout: 1800 });
+    return () => window.cancelIdleCallback(handle);
+  }
+
+  const handle = globalThis.setTimeout(callback, 900);
+  return () => globalThis.clearTimeout(handle);
+}
 
 type WorkspaceMode = "chat" | "github" | "matrix" | "review" | "settings";
 
@@ -87,7 +135,55 @@ type PersistedShellState = {
   expertMode?: boolean;
 };
 
-const SHELL_STORAGE_KEY = "modelgate.console.shell.v2";
+const SHELL_STORAGE_KEY = "mosaicstack.console.shell.v2";
+const THEME_STORAGE_KEY = "mg-theme";
+const WORKSPACE_STATE_SAVE_INTERVAL_MS = 250;
+
+type ThemeMode = "dark" | "light";
+
+function isWorkspaceMode(value: string | null): value is WorkspaceMode {
+  return value === "chat"
+    || value === "github"
+    || value === "matrix"
+    || value === "review"
+    || value === "settings";
+}
+
+export function shouldConfirmGitHubReviewNavigation(options: {
+  currentMode: WorkspaceMode;
+  nextMode: WorkspaceMode;
+  githubReviewDirty: boolean;
+}) {
+  return options.currentMode === "github"
+    && options.nextMode !== "github"
+    && options.githubReviewDirty;
+}
+
+function readUrlWorkspaceMode() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const url = new URL(window.location.href);
+  const requestedMode = url.searchParams.get("mode");
+  return isWorkspaceMode(requestedMode) ? requestedMode : null;
+}
+
+function replaceConsoleUrl(mode?: WorkspaceMode) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+  url.pathname = "/console";
+  url.searchParams.delete("console");
+
+  if (mode) {
+    url.searchParams.set("mode", mode);
+  }
+
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+}
 
 function createId() {
   return crypto.randomUUID();
@@ -221,8 +317,93 @@ function nowIso() {
 }
 
 export default function App() {
+  return shouldRenderConsole() ? <ConsoleShell /> : <PublicPreview />;
+}
+
+function shouldRenderConsole() {
+  if (typeof window === "undefined") {
+    return true;
+  }
+
+  const url = new URL(window.location.href);
+  return url.pathname === "/console" || url.searchParams.get("console") === "1";
+}
+
+function useTheme() {
+  const [theme, setTheme] = useState<ThemeMode>(() => {
+    if (typeof window === "undefined") {
+      return "dark";
+    }
+
+    const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
+
+    if (saved === "dark" || saved === "light") {
+      return saved;
+    }
+
+    return "dark";
+  });
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
+  return {
+    theme,
+    toggleTheme: () => setTheme((current) => current === "dark" ? "light" : "dark"),
+  };
+}
+
+function PublicPreview() {
+  return (
+    <main className="app-shell public-preview" data-testid="public-preview">
+      <section className="public-preview-card">
+        <div className="mosaicstack-mark" aria-hidden="true" />
+        <p className="app-kicker">MOSAICSTACK</p>
+        <h1>MosaicStack</h1>
+        <p className="hero-copy">
+          Public preview shell. Governed workspace access stays separate from this route.
+        </p>
+        <a className="secondary-button public-preview-link" href="/console">
+          Open governed console
+        </a>
+      </section>
+    </main>
+  );
+}
+
+function RouteStatusLadder({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: Array<{
+    label: string;
+    value: string;
+    tone?: "ready" | "partial" | "error" | "muted";
+  }>;
+}) {
+  return (
+    <div className="route-status-ladder" aria-label={title}>
+      {rows.map((row) => (
+        <div className={`route-status-step route-status-step-${row.tone ?? "muted"}`} key={row.label}>
+          <span>{row.label}</span>
+          <strong>{row.value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ConsoleShell() {
   const persisted = readPersistedShellState();
   const { locale, setLocale, copy: ui } = useLocalization();
+  const { theme, toggleTheme } = useTheme();
   const appText = useMemo(
     () => locale === "de"
       ? {
@@ -329,7 +510,7 @@ export default function App() {
     }),
     [ui],
   );
-  const [mode, setMode] = useState<WorkspaceMode>(persisted?.activeTab ?? "chat");
+  const [mode, setMode] = useState<WorkspaceMode>(() => readUrlWorkspaceMode() ?? persisted?.activeTab ?? "chat");
   const [workMode, setWorkMode] = useState<WorkMode>(() => resolvePersistedWorkMode(persisted));
   const expertMode = isExpertMode(workMode);
   const workModeVisibility = getWorkModeVisibility(workMode);
@@ -349,30 +530,51 @@ export default function App() {
     default?: boolean;
     available?: boolean;
   }>>([]);
+  const [openRouterModelInput, setOpenRouterModelInput] = useState("");
+  const [isAddingOpenRouterModel, setIsAddingOpenRouterModel] = useState(false);
   const [runtimeDiagnostics, setRuntimeDiagnostics] = useState<DiagnosticsResponse | null>(null);
+  const [integrationsStatus, setIntegrationsStatus] = useState<IntegrationsStatusResponse | null>(null);
+  const [settingsVerificationResults, setSettingsVerificationResults] = useState(SETTINGS_VERIFICATION_INITIAL);
   const [runtimeJournalEntries, setRuntimeJournalEntries] = useState<JournalEntry[]>([]);
   const [restoredSession] = useState(() => {
     if (typeof window === "undefined") {
       return false;
     }
 
-    return window.localStorage.getItem("modelgate.console.workspaces.v1") !== null;
+    return window.localStorage.getItem("mosaicstack.console.workspaces.v1") !== null;
   });
   const [telemetry, setTelemetry] = useState<TelemetryEntry[]>([]);
   const [githubContext, setGitHubContext] = useState<GitHubWorkspaceStatus>(() => createDefaultGitHubContext());
   const [matrixContext, setMatrixContext] = useState<MatrixWorkspaceStatus>(() => createDefaultMatrixContext());
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
+  const [pinnedChatContext, setPinnedChatContext] = useState<PinnedChatContext | null>(null);
+  const [githubReviewDirty, setGitHubReviewDirty] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const workspaceSaveHandleRef = useRef<number | null>(null);
+  const latestWorkspaceStateRef = useRef(workspaceState);
+  const flushWorkspaceState = useCallback(() => {
+    if (workspaceSaveHandleRef.current !== null) {
+      globalThis.clearTimeout(workspaceSaveHandleRef.current);
+      workspaceSaveHandleRef.current = null;
+    }
+
+    saveWorkspaceState(latestWorkspaceStateRef.current);
+  }, []);
+
+  useEffect(() => {
+    replaceConsoleUrl(mode);
+  }, [mode]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadConsoleState() {
-      const [healthResult, modelsResult, diagnosticsResult, journalResult] = await Promise.allSettled([
+      const [healthResult, modelsResult, diagnosticsResult, journalResult, integrationsResult] = await Promise.allSettled([
         fetchHealth(),
         fetchModels(),
         fetchDiagnostics(),
         fetchJournalRecent(),
+        fetchIntegrationsStatus(),
       ]);
 
       if (cancelled) {
@@ -454,6 +656,12 @@ export default function App() {
       } else {
         setRuntimeJournalEntries([]);
       }
+
+      if (integrationsResult.status === "fulfilled") {
+        setIntegrationsStatus(integrationsResult.value);
+      } else {
+        setIntegrationsStatus(null);
+      }
     }
 
     void loadConsoleState();
@@ -472,8 +680,43 @@ export default function App() {
   }, [expertMode, mode, workMode]);
 
   useEffect(() => {
-    saveWorkspaceState(workspaceState);
-  }, [workspaceState]);
+    latestWorkspaceStateRef.current = workspaceState;
+
+    if (workspaceSaveHandleRef.current !== null) {
+      return;
+    }
+
+    workspaceSaveHandleRef.current = globalThis.setTimeout(() => {
+      flushWorkspaceState();
+    }, WORKSPACE_STATE_SAVE_INTERVAL_MS);
+  }, [flushWorkspaceState, workspaceState]);
+
+  useEffect(() => () => {
+    flushWorkspaceState();
+  }, [flushWorkspaceState]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return;
+    }
+
+    const handlePageHide = () => {
+      flushWorkspaceState();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        flushWorkspaceState();
+      }
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [flushWorkspaceState]);
 
   useEffect(() => {
     if (!workModeVisibility.showDiagnosticsByDefault) {
@@ -484,6 +727,16 @@ export default function App() {
   useEffect(() => {
     setDiagnosticsOpen(false);
   }, [mode]);
+
+  useEffect(() => scheduleWorkspacePreload(() => {
+    void Promise.all([
+      loadChatWorkspace(),
+      loadGitHubWorkspace(),
+      loadMatrixWorkspace(),
+      loadReviewWorkspace(),
+      loadSettingsWorkspace(),
+    ]);
+  }), []);
 
   const recordTelemetry = useCallback(
     (kind: TelemetryEntry["kind"], label: string, detail?: string) => {
@@ -512,6 +765,20 @@ export default function App() {
   }, []);
 
   const handleWorkspaceTabSelect = useCallback((nextMode: WorkspaceMode) => {
+    if (shouldConfirmGitHubReviewNavigation({
+      currentMode: mode,
+      nextMode,
+      githubReviewDirty,
+    })) {
+      const allowLeave = typeof window === "undefined"
+        ? true
+        : window.confirm(ui.github.reviewDirtyConfirmNavigation);
+
+      if (!allowLeave) {
+        return;
+      }
+    }
+
     setMode(nextMode);
 
     if (isSessionWorkspace(nextMode)) {
@@ -520,6 +787,19 @@ export default function App() {
         return selectSession(current, nextMode, activeSessionId);
       });
     }
+  }, [githubReviewDirty, mode, ui.github.reviewDirtyConfirmNavigation]);
+
+  const handlePinChatContext = useCallback((context: PinnedChatContext) => {
+    setPinnedChatContext(context);
+    setMode("chat");
+    setWorkspaceState((current) => {
+      const activeSessionId = current.activeSessionIdByWorkspace.chat;
+      return selectSession(current, "chat", activeSessionId);
+    });
+  }, []);
+
+  const handleClearPinnedChatContext = useCallback(() => {
+    setPinnedChatContext(null);
   }, []);
 
   const handleWorkspaceSessionCreate = useCallback((workspace: WorkspaceKind) => {
@@ -574,6 +854,126 @@ export default function App() {
     setMode(workspace);
     setWorkspaceState((current) => selectSession(current, workspace, sessionId));
   }, []);
+
+  const refreshIntegrationsStatus = useCallback(async () => {
+    try {
+      const nextStatus = await fetchIntegrationsStatus();
+      setIntegrationsStatus(nextStatus);
+    } catch {
+      setIntegrationsStatus(null);
+    }
+  }, []);
+
+  const handleAddOpenRouterModel = useCallback(async () => {
+    const modelId = openRouterModelInput.trim();
+
+    if (!modelId) {
+      return;
+    }
+
+    setIsAddingOpenRouterModel(true);
+
+    try {
+      const result = await postOpenRouterModel(modelId);
+      setOpenRouterModelInput("");
+      setAvailableModels(result.models);
+      setModelRegistry(result.registry);
+      setActiveModelAlias(result.alias);
+      recordTelemetry("info", "OpenRouter model added", `Backend public alias ${result.alias} is selectable.`);
+    } catch (error) {
+      recordTelemetry(
+        "error",
+        "OpenRouter model add failed",
+        error instanceof Error ? error.message : "Unable to add OpenRouter model.",
+      );
+    } finally {
+      setIsAddingOpenRouterModel(false);
+    }
+  }, [openRouterModelInput, recordTelemetry]);
+
+  const handleSettingsVerifyConnection = useCallback(async (target: SettingsVerificationTarget) => {
+    setSettingsVerificationResults((current) => ({
+      ...current,
+      [target]: {
+        ...current[target],
+        status: "checking",
+        detail: "",
+      }
+    }));
+
+    try {
+      const result = await testSettingsConnection(target);
+      const checkedAt = new Date().toISOString();
+
+      if (target === "backend") {
+        setBackendHealthy(true);
+      } else {
+        await refreshIntegrationsStatus();
+      }
+
+      setSettingsVerificationResults((current) => ({
+        ...current,
+        [target]: {
+          status: "passed",
+          detail: result.detail,
+          checkedAt,
+        }
+      }));
+      recordTelemetry(
+        "info",
+        locale === "de" ? "Verbindung geprüft" : "Connection verified",
+        `${target}: ${result.detail}`
+      );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Connection check failed";
+
+      if (target === "backend") {
+        setBackendHealthy(false);
+      } else {
+        await refreshIntegrationsStatus();
+      }
+
+      setSettingsVerificationResults((current) => ({
+        ...current,
+        [target]: {
+          status: "failed",
+          detail,
+          checkedAt: new Date().toISOString(),
+        }
+      }));
+      recordTelemetry(
+        "warning",
+        locale === "de" ? "Verbindungsprüfung fehlgeschlagen" : "Connection verification failed",
+        `${target}: ${detail}`
+      );
+    }
+  }, [locale, recordTelemetry, refreshIntegrationsStatus]);
+
+  const handleIntegrationAction = useCallback(async (
+    provider: "github" | "matrix",
+    action: "connect" | "reconnect" | "disconnect" | "reverify"
+  ) => {
+    if (action === "connect" || action === "reconnect") {
+      window.location.assign(buildIntegrationConnectStartUrl(provider, "/console?mode=settings"));
+      return;
+    }
+
+    try {
+      await postIntegrationControlAction(provider, action);
+    } catch (error) {
+      recordTelemetry(
+        "warning",
+        locale === "de" ? "Integrationsaktion fehlgeschlagen" : "Integration action failed",
+        error instanceof Error ? error.message : undefined
+      );
+    } finally {
+      await refreshIntegrationsStatus();
+    }
+  }, [locale, recordTelemetry, refreshIntegrationsStatus]);
+
+  const buildSettingsIntegrationStartUrl = useCallback((provider: "github" | "matrix") => (
+    buildIntegrationConnectStartUrl(provider, "/console?mode=settings")
+  ), []);
 
   const handleWorkspaceSessionArchive = useCallback((workspace: WorkspaceKind, sessionId: string) => {
     setWorkspaceState((current) =>
@@ -667,6 +1067,68 @@ export default function App() {
       ? [{ label: ui.review.approvalNeeded, value: matrixContext.approvalLabel }]
       : []),
   ];
+  const routeOwnershipRows = mode === "github"
+    ? [
+        {
+          label: "identity",
+          value: githubAccountLabel,
+          tone: githubReady === true ? "ready" as const : githubReady === false ? "error" as const : "partial" as const,
+        },
+        {
+          label: "config",
+          value: runtimeDiagnostics?.github.configured ? ui.settings.configured : runtimeDiagnostics ? ui.settings.notConfigured : ui.shell.healthChecking,
+          tone: runtimeDiagnostics?.github.configured ? "ready" as const : runtimeDiagnostics ? "error" as const : "partial" as const,
+        },
+        {
+          label: "scope",
+          value: githubContext.repositoryLabel,
+          tone: githubContext.repositoryLabel === ui.github.noRepoSelected ? "partial" as const : "ready" as const,
+        },
+        {
+          label: "execute",
+          value: githubContext.approvalLabel,
+          tone: githubContext.approvalLabel === ui.common.none ? "muted" as const : "partial" as const,
+        },
+        {
+          label: "verify",
+          value: githubContext.resultLabel,
+          tone: githubContext.resultLabel === ui.github.verifyResult ? "muted" as const : "ready" as const,
+        },
+      ]
+    : mode === "matrix"
+      ? [
+          {
+            label: "identity",
+            value: matrixContext.identityLabel,
+            tone: runtimeDiagnostics?.matrix.configured ? "ready" as const : runtimeDiagnostics ? "error" as const : "partial" as const,
+          },
+          {
+            label: "rooms",
+            value: matrixContext.connectionLabel,
+            tone: matrixContext.connectionLabel === ui.shell.healthChecking ? "partial" as const : "ready" as const,
+          },
+          {
+            label: "scope",
+            value: matrixContext.scopeLabel,
+            tone: matrixContext.scopeLabel === ui.matrix.scopeUnresolved ? "partial" as const : "ready" as const,
+          },
+          {
+            label: "analyze",
+            value: matrixContext.summaryLabel,
+            tone: matrixContext.summaryLabel === ui.matrix.scopeSummaryUnavailable ? "muted" as const : "ready" as const,
+          },
+          {
+            label: "execute",
+            value: matrixContext.approvalLabel,
+            tone: matrixContext.approvalLabel === ui.common.none ? "muted" as const : "partial" as const,
+          },
+          {
+            label: "verify",
+            value: matrixContext.expertDetails.sseLifecycle,
+            tone: matrixContext.expertDetails.sseLifecycle === ui.common.loading ? "muted" as const : "ready" as const,
+          },
+        ]
+      : [];
   const reviewHasStale = reviewItems.some((item) => item.status === "stale");
   const reviewHasPending = reviewItems.some((item) => item.status === "pending_review");
   const reviewHasExecuting = reviewItems.some((item) => item.status === "approved");
@@ -770,58 +1232,15 @@ export default function App() {
   const settingsLoginAdapters = useMemo(() => deriveSettingsLoginAdapters({
     copy: {
       checking: ui.shell.healthChecking,
-      ready: ui.shell.statusReady,
       unavailable: ui.shell.healthUnavailable,
-      error: ui.shell.statusError,
       none: ui.common.none,
-      configureBackend: locale === "de" ? "Server konfigurieren" : "Configure server",
-      connect: locale === "de" ? "Verbinden" : "Connect",
-      disconnect: locale === "de" ? "Trennen" : "Disconnect",
-      open: locale === "de" ? "Öffnen" : "Open",
-      retry: locale === "de" ? "Erneut prüfen" : "Retry",
     },
-    backend: {
-      healthy: backendHealthy,
-      label: settingsTruthSnapshot.backend.label,
-    },
-    github: {
-      configured: runtimeDiagnostics?.github.configured ?? null,
-      ready: runtimeDiagnostics?.github.ready ?? null,
-      connectionLabel: githubContext.connectionLabel,
-      repositoryLabel: githubContext.repositoryLabel,
-      accessLabel: githubAccessLabel,
-    },
-    matrix: {
-      configured: runtimeDiagnostics?.matrix.configured ?? null,
-      ready: runtimeDiagnostics?.matrix.ready ?? null,
-      identityLabel: matrixContext.identityLabel,
-      connectionLabel: matrixContext.connectionLabel,
-      homeserverLabel: matrixContext.homeserverLabel,
-      scopeLabel: matrixContext.scopeLabel,
-    },
-    chat: {
-      activeAlias: activeModelAlias,
-      availableCount: availableModels.length,
-    },
+    integrations: integrationsStatus
   }), [
-    activeModelAlias,
-    availableModels.length,
-    backendHealthy,
-    githubAccessLabel,
-    githubContext.accessLabel,
-    githubContext.connectionLabel,
-    githubContext.repositoryLabel,
-    locale,
-    matrixContext.connectionLabel,
-    matrixContext.homeserverLabel,
-    matrixContext.identityLabel,
-    matrixContext.scopeLabel,
-    runtimeDiagnostics?.github.configured,
-    runtimeDiagnostics?.github.ready,
-    runtimeDiagnostics?.matrix.configured,
-    runtimeDiagnostics?.matrix.ready,
-    settingsTruthSnapshot.backend.label,
-    ui,
+    integrationsStatus,
+    ui.common.none,
+    ui.shell.healthChecking,
+    ui.shell.healthUnavailable
   ]);
 
   const settingsRows: StatusPanelRow[] = [
@@ -1370,12 +1789,17 @@ export default function App() {
       session={chatSession}
       workMode={workMode}
       backendHealthy={backendHealthy}
+      routingStatus={{
+        fallbackAllowed: runtimeDiagnostics?.routing.allowFallback ?? null,
+      }}
       activeModelAlias={activeModelAlias}
       availableModels={availableModels}
       modelRegistry={modelRegistry}
       onActiveModelAliasChange={setActiveModelAlias}
       onTelemetry={recordTelemetry}
       onSessionChange={handleChatSessionChange}
+      pinnedContext={pinnedChatContext}
+      onClearPinnedContext={handleClearPinnedChatContext}
     />
   ) : mode === "github" ? (
     <GitHubWorkspace
@@ -1386,7 +1810,11 @@ export default function App() {
       onTelemetry={recordTelemetry}
       onContextChange={setGitHubContext}
       onReviewItemsChange={updateGitHubReviewItems}
+      onReviewDirtyChange={setGitHubReviewDirty}
+      onPinChatContext={handlePinChatContext}
       onSessionChange={handleGitHubSessionChange}
+      githubIntegration={integrationsStatus?.github ?? null}
+      onIntegrationAction={handleIntegrationAction}
     />
   ) : mode === "matrix" ? (
     <MatrixWorkspace
@@ -1410,7 +1838,15 @@ export default function App() {
       onClearDiagnostics={() => setTelemetry([])}
       truthSnapshot={settingsTruthSnapshot}
       loginAdapters={settingsLoginAdapters}
-      onOpenWorkspace={handleWorkspaceTabSelect}
+      openRouterModels={modelRegistry.filter((model) => model.alias !== "default")}
+      openRouterModelInput={openRouterModelInput}
+      onOpenRouterModelInputChange={setOpenRouterModelInput}
+      onAddOpenRouterModel={handleAddOpenRouterModel}
+      isAddingOpenRouterModel={isAddingOpenRouterModel}
+      buildIntegrationStartUrl={buildSettingsIntegrationStartUrl}
+      onIntegrationAction={handleIntegrationAction}
+      verificationResults={settingsVerificationResults}
+      onVerifyConnection={handleSettingsVerifyConnection}
     />
   );
   const statusToneForBadge = currentStatusTone === "error" ? "error" : currentStatusTone === "ready" ? "ready" : "partial";
@@ -1419,12 +1855,21 @@ export default function App() {
     <main className="app-shell app-shell-console" data-testid="app-shell">
       <header className="global-header global-header-shell">
         <div className="brand-block">
+          <div className="mosaicstack-mark" aria-hidden="true" />
           <p className="app-kicker">{ui.shell.appKicker}</p>
           <h1>{ui.shell.appTitle}</h1>
           <p className="app-deck">{ui.shell.appDeck}</p>
         </div>
 
         <div className="header-actions">
+          <button
+            type="button"
+            className="theme-toggle-button"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {theme === "dark" ? "☀" : "☾"}
+          </button>
           <div className="shell-language-toggle" role="group" aria-label={ui.shell.languageLabel}>
             <button
               type="button"
@@ -1447,7 +1892,9 @@ export default function App() {
               {ui.shell.languageOptionGerman}
             </button>
           </div>
-          <StatusBadge tone={healthState.tone}>{ui.shell.backendPrefix} {healthState.label}</StatusBadge>
+          {healthState.tone === "ready" ? null : (
+            <StatusBadge tone={healthState.tone}>{ui.shell.backendPrefix} {healthState.label}</StatusBadge>
+          )}
         </div>
       </header>
 
@@ -1462,8 +1909,10 @@ export default function App() {
                   type="button"
                   className={mode === workspaceMode ? "workspace-tab workspace-tab-active workspace-tab-vertical workspace-tab-shell-active" : "workspace-tab workspace-tab-vertical"}
                   onClick={() => handleWorkspaceTabSelect(workspaceMode)}
+                  aria-label={ui.shell.workspaceTabs[workspaceMode].label}
                   aria-current={mode === workspaceMode ? "page" : undefined}
                   data-testid={`tab-${workspaceMode}`}
+                  title={ui.shell.workspaceTabs[workspaceMode].label}
                 >
                   <WorkspaceIcon mode={workspaceMode} />
                   <span>
@@ -1504,7 +1953,11 @@ export default function App() {
 
         <section className="console-main shell-center-main">
           <ShellCard variant="base" className="workspace-frame-card">
-            <div className="workspace-frame-body">{workspaceSurface}</div>
+            <div className="workspace-frame-body">
+              <Suspense fallback={<p className="empty-state" role="status">{ui.shell.healthChecking}</p>}>
+                {workspaceSurface}
+              </Suspense>
+            </div>
           </ShellCard>
         </section>
 
@@ -1531,6 +1984,22 @@ export default function App() {
               </div>
             ) : null}
           </TruthRailSection>
+
+          {routeOwnershipRows.length > 0 ? (
+            <TruthRailSection
+              title={mode === "github" ? "GitHub route ownership" : "Matrix route ownership"}
+              testId="truth-rail-route-ownership"
+              badge={<StatusBadge tone="muted">backend-owned</StatusBadge>}
+            >
+              <MutedSystemCopy>
+                GitHub and Matrix are not browser integrations. The console sends governed intent; backend owns credentials, execution, verification, and sanitized errors.
+              </MutedSystemCopy>
+              <RouteStatusLadder
+                title={mode === "github" ? "GitHub status ladder" : "Matrix status ladder"}
+                rows={routeOwnershipRows}
+              />
+            </TruthRailSection>
+          ) : null}
 
           {approvalSummary.hasApprovals || expertMode ? (
             <TruthRailSection
@@ -1612,6 +2081,28 @@ export default function App() {
           </TruthRailSection>
           ) : null}
         </aside>
+
+        <section className="bottom-diagnostics-layer" aria-label={ui.shell.diagnosticsLabel}>
+          <div className="diagnostic-signal diagnostic-signal-primary">
+            <SectionLabel>{ui.shell.healthTitle}</SectionLabel>
+            <strong>{healthState.label}</strong>
+          </div>
+          <div className="diagnostic-signal">
+            <SectionLabel>{ui.shell.modeLabel}</SectionLabel>
+            <strong>{workspaceName}</strong>
+          </div>
+          <div className="diagnostic-signal">
+            <SectionLabel>{ui.shell.diagnosticsLabel}</SectionLabel>
+            <strong>{telemetry.length > 0 ? telemetry[telemetry.length - 1].label : ui.common.na}</strong>
+          </div>
+          <button
+            type="button"
+            className="secondary-button bottom-diagnostics-action"
+            onClick={() => setDiagnosticsOpen((current) => !current)}
+          >
+            {diagnosticsOpen ? ui.shell.diagnosticsHide : ui.shell.diagnosticsShow}
+          </button>
+        </section>
       </section>
     </main>
   );

@@ -10,7 +10,14 @@ const MatrixEnvSchema = z.object({
   MATRIX_CLIENT_ID: z.string().trim().default(""),
   MATRIX_TOKEN_EXPIRES_AT: z.string().trim().default(""),
   MATRIX_EXPECTED_USER_ID: z.string().trim().default(""),
-  MATRIX_REQUEST_TIMEOUT_MS: z.string().trim().default("5000")
+  MATRIX_REQUEST_TIMEOUT_MS: z.string().trim().default("5000"),
+  MATRIX_EVIDENCE_ROOM_ID: z.string().trim().default(""),
+  MATRIX_EVIDENCE_APPROVALS_ROOM_ID: z.string().trim().default(""),
+  MATRIX_EVIDENCE_PROVENANCE_ROOM_ID: z.string().trim().default(""),
+  MATRIX_EVIDENCE_VERIFICATION_ROOM_ID: z.string().trim().default(""),
+  MATRIX_EVIDENCE_TOPIC_CHANGE_ROOM_ID: z.string().trim().default(""),
+  MATRIX_EVIDENCE_WRITES_ENABLED: z.string().trim().default("false"),
+  MATRIX_EVIDENCE_WRITES_REQUIRED: z.string().trim().default("false")
 });
 
 export type MatrixConfig = {
@@ -25,6 +32,14 @@ export type MatrixConfig = {
   tokenExpiresAt: string | null;
   expectedUserId: string | null;
   requestTimeoutMs: number;
+  evidenceWritesEnabled: boolean;
+  evidenceWritesRequired: boolean;
+  evidenceRooms: {
+    approvals: string | null;
+    provenance: string | null;
+    verification: string | null;
+    topicChanges: string | null;
+  };
   issues: string[];
 };
 
@@ -115,6 +130,9 @@ export function createMatrixConfig(source: NodeJS.ProcessEnv = process.env): Mat
   const tokenExpiresAt = normalizeTokenExpiry(parsed.MATRIX_TOKEN_EXPIRES_AT);
   const expectedUserId = normalizeUserId(parsed.MATRIX_EXPECTED_USER_ID);
   const requestTimeoutMs = parseTimeout(parsed.MATRIX_REQUEST_TIMEOUT_MS);
+  const evidenceWritesEnabledParse = parseBoolean(parsed.MATRIX_EVIDENCE_WRITES_ENABLED);
+  const evidenceWritesRequiredParse = parseBoolean(parsed.MATRIX_EVIDENCE_WRITES_REQUIRED);
+  const evidenceRoomId = parsed.MATRIX_EVIDENCE_ROOM_ID.trim() || null;
   const issues: string[] = [];
 
   if (!enabledParse.valid) {
@@ -123,6 +141,14 @@ export function createMatrixConfig(source: NodeJS.ProcessEnv = process.env): Mat
 
   if (!requiredParse.valid) {
     issues.push("MATRIX_REQUIRED must be a boolean value");
+  }
+
+  if (!evidenceWritesEnabledParse.valid) {
+    issues.push("MATRIX_EVIDENCE_WRITES_ENABLED must be a boolean value");
+  }
+
+  if (!evidenceWritesRequiredParse.valid) {
+    issues.push("MATRIX_EVIDENCE_WRITES_REQUIRED must be a boolean value");
   }
 
   if (enabledParse.value && !baseUrl) {
@@ -169,6 +195,14 @@ export function createMatrixConfig(source: NodeJS.ProcessEnv = process.env): Mat
     tokenExpiresAt: ready ? tokenExpiresAt : null,
     expectedUserId: ready ? expectedUserId : null,
     requestTimeoutMs: requestTimeoutMs ?? 5000,
+    evidenceWritesEnabled: ready && evidenceWritesEnabledParse.value,
+    evidenceWritesRequired: ready && evidenceWritesRequiredParse.value,
+    evidenceRooms: {
+      approvals: parsed.MATRIX_EVIDENCE_APPROVALS_ROOM_ID.trim() || evidenceRoomId,
+      provenance: parsed.MATRIX_EVIDENCE_PROVENANCE_ROOM_ID.trim() || evidenceRoomId,
+      verification: parsed.MATRIX_EVIDENCE_VERIFICATION_ROOM_ID.trim() || evidenceRoomId,
+      topicChanges: parsed.MATRIX_EVIDENCE_TOPIC_CHANGE_ROOM_ID.trim() || evidenceRoomId
+    },
     issues
   };
 }
@@ -186,6 +220,14 @@ export function createDisabledMatrixConfig(): MatrixConfig {
     tokenExpiresAt: null,
     expectedUserId: null,
     requestTimeoutMs: 5000,
+    evidenceWritesEnabled: false,
+    evidenceWritesRequired: false,
+    evidenceRooms: {
+      approvals: null,
+      provenance: null,
+      verification: null,
+      topicChanges: null
+    },
     issues: []
   };
 }

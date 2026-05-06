@@ -1,5 +1,5 @@
-import React, { useEffect, useReducer, useRef, useState, type FormEvent } from "react";
-import { streamChatCompletion } from "../lib/api.js";
+import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from "react";
+import { streamChatCompletion, type ChatRouteMetadata } from "../lib/api.js";
 import {
   buildGovernedChatProposal,
   buildOutboundChatMessages,
@@ -18,7 +18,7 @@ import {
   deriveSessionTitle,
   type ChatSession
 } from "../lib/workspace-state.js";
-import { getConnectionStateLabel, useLocalization } from "../lib/localization.js";
+import { useLocalization } from "../lib/localization.js";
 import {
   ApprovalTransitionCard,
   DecisionZone,
@@ -39,6 +39,7 @@ import {
   isExpertMode,
   type WorkMode,
 } from "../lib/work-mode.js";
+import { buildPinnedChatContextPrompt, type PinnedChatContext } from "../lib/pinned-chat-context.js";
 
 type PublicModelEntry = {
   alias: string;
@@ -56,13 +57,100 @@ type ChatWorkspaceProps = {
   session: ChatSession;
   workMode: WorkMode;
   backendHealthy: boolean | null;
+  routingStatus: {
+    fallbackAllowed: boolean | null;
+  };
   activeModelAlias: string | null;
   availableModels: string[];
   modelRegistry: PublicModelEntry[];
   onActiveModelAliasChange: (alias: string) => void;
   onTelemetry: (kind: "info" | "warning" | "error", label: string, detail?: string) => void;
   onSessionChange: (session: ChatSession) => void;
+  pinnedContext: PinnedChatContext | null;
+  onClearPinnedContext: () => void;
 };
+
+type RoutingStatusTone = "ready" | "partial" | "error" | "muted";
+
+type ChatRoutingStatusCopy = {
+  activeModel: string;
+  providerStatus: string;
+  fallbackPolicy: string;
+  routeState: string;
+  ready: string;
+  checking: string;
+  error: string;
+  fallbackEnabled: string;
+  fallbackDisabled: string;
+  fallbackUsed: string;
+  degraded: string;
+  routePending: string;
+  unavailable: string;
+};
+
+const CHAT_SESSION_SYNC_INTERVAL_MS = 220;
+
+export function buildChatRoutingStatusItems(options: {
+  selectedModel: string;
+  backendHealthy: boolean | null;
+  fallbackAllowed: boolean | null;
+  activeRoute: ChatRouteMetadata | null;
+  copy: ChatRoutingStatusCopy;
+}): Array<{ label: string; value: string; tone: RoutingStatusTone }> {
+  const selectedAlias = options.selectedModel.trim();
+  const providerStatus = options.backendHealthy === true
+    ? { value: options.copy.ready, tone: "ready" as const }
+    : options.backendHealthy === false
+      ? { value: options.copy.error, tone: "error" as const }
+      : { value: options.copy.checking, tone: "partial" as const };
+  const fallbackPolicy = options.fallbackAllowed === true
+    ? { value: options.copy.fallbackEnabled, tone: "partial" as const }
+    : options.fallbackAllowed === false
+      ? { value: options.copy.fallbackDisabled, tone: "ready" as const }
+      : { value: options.copy.checking, tone: "muted" as const };
+  const routeState = (() => {
+    if (!options.activeRoute) {
+      return { value: options.copy.routePending, tone: "muted" as const };
+    }
+
+    const routeSignals = [
+      options.activeRoute.fallbackUsed ? options.copy.fallbackUsed : null,
+      options.activeRoute.degraded ? options.copy.degraded : null,
+    ].filter((value): value is string => Boolean(value));
+
+    if (routeSignals.length > 0) {
+      return { value: routeSignals.join(" · "), tone: "partial" as const };
+    }
+
+    return {
+      value: `${options.activeRoute.selectedAlias} · ${options.activeRoute.taskClass}`,
+      tone: "ready" as const,
+    };
+  })();
+
+  return [
+    {
+      label: options.copy.activeModel,
+      value: selectedAlias || options.copy.unavailable,
+      tone: selectedAlias ? "ready" : "error",
+    },
+    {
+      label: options.copy.providerStatus,
+      value: providerStatus.value,
+      tone: providerStatus.tone,
+    },
+    {
+      label: options.copy.fallbackPolicy,
+      value: fallbackPolicy.value,
+      tone: fallbackPolicy.tone,
+    },
+    {
+      label: options.copy.routeState,
+      value: routeState.value,
+      tone: routeState.tone,
+    },
+  ];
+}
 
 export function resolveChatComposerBlockReason(options: {
   executionMode: ChatExecutionMode;
@@ -94,6 +182,16 @@ export function resolveChatComposerBlockReason(options: {
   }
 
   return null;
+}
+
+export function shouldSubmitChatComposerOnKey(event: {
+  key: string;
+  shiftKey: boolean;
+  isComposing?: boolean;
+  nativeEvent?: { isComposing?: boolean };
+}) {
+  const composing = event.isComposing ?? event.nativeEvent?.isComposing ?? false;
+  return event.key === "Enter" && !event.shiftKey && !composing;
 }
 
 export function resolveChatScrollBehavior(connectionState: ConnectionState): ScrollBehavior {
@@ -148,6 +246,26 @@ function formatTimestamp(locale: "en" | "de", value: string | undefined) {
   return parsed.toLocaleString(locale);
 }
 
+function formatConnectionStateLabel(state: ConnectionState) {
+  return state.charAt(0).toUpperCase() + state.slice(1);
+}
+
+function resolveConnectionStateTone(state: ConnectionState) {
+  if (state === "completed") {
+    return "ready";
+  }
+
+  if (state === "error") {
+    return "error";
+  }
+
+  if (state === "submitting" || state === "streaming") {
+    return "partial";
+  }
+
+  return "muted";
+}
+
 function buildProposalConsequence(locale: "en" | "de", modelAlias: string | null) {
   const alias = modelAlias ?? "selected public alias";
   return locale === "de"
@@ -170,6 +288,30 @@ function buildChatGovernanceRows(options: {
   });
 }
 
+type ThreadMessageCardProps = {
+  message: ChatMessage;
+  expertMode: boolean;
+  operatorLabel: string;
+  agentLabel: string;
+};
+
+const ThreadMessageCard = React.memo(function ThreadMessageCard(props: ThreadMessageCardProps) {
+  const roleLabel = props.message.role === "user" ? props.operatorLabel : props.agentLabel;
+
+  return (
+    <ShellCard
+      variant={props.message.role === "user" ? "muted" : "base"}
+      className={`thread-block ${props.message.role === "user" ? "thread-block-operator" : "thread-block-agent"}`}
+    >
+      <header className="thread-block-header">
+        <SectionLabel>{roleLabel}</SectionLabel>
+        {props.expertMode && props.message.modelAlias ? <StatusBadge tone="muted">{props.message.modelAlias}</StatusBadge> : null}
+      </header>
+      <MarkdownMessage content={props.message.content} />
+    </ShellCard>
+  );
+});
+
 export function ChatWorkspace(props: ChatWorkspaceProps) {
   const { locale, copy: ui } = useLocalization();
   const beginnerMode = isBeginnerMode(props.workMode);
@@ -191,6 +333,32 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const scrollFrameRef = useRef<number | null>(null);
   const tokenBatcherRef = useRef<ReturnType<typeof createTokenBatcher> | null>(null);
+  const sessionSyncHandleRef = useRef<number | null>(null);
+  const latestSessionRef = useRef<ChatSession | null>(null);
+  const flushSessionSync = useCallback(() => {
+    if (sessionSyncHandleRef.current !== null) {
+      globalThis.clearTimeout(sessionSyncHandleRef.current);
+      sessionSyncHandleRef.current = null;
+    }
+
+    if (latestSessionRef.current) {
+      props.onSessionChange(latestSessionRef.current);
+    }
+  }, [props.onSessionChange]);
+  const modelOptions = useMemo(
+    () => (props.modelRegistry.length > 0
+      ? props.modelRegistry
+      : props.availableModels.map((alias) => ({
+          alias,
+          label: alias,
+          description: "",
+          capabilities: [],
+          tier: "core" as const,
+          streaming: true,
+          recommendedFor: [],
+        }))),
+    [props.availableModels, props.modelRegistry],
+  );
 
   useEffect(() => {
     if (props.activeModelAlias && props.activeModelAlias !== selectedModel) {
@@ -237,8 +405,29 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       },
     };
 
-    props.onSessionChange(nextSession);
-  }, [chatState, executionMode, props.onSessionChange, props.session.id, selectedModel]);
+    latestSessionRef.current = nextSession;
+    const terminalState = chatState.connectionState === "completed" || chatState.connectionState === "error";
+
+    if (terminalState) {
+      flushSessionSync();
+      return;
+    }
+
+    if (sessionSyncHandleRef.current !== null) {
+      return;
+    }
+
+    sessionSyncHandleRef.current = globalThis.setTimeout(() => {
+      sessionSyncHandleRef.current = null;
+      if (latestSessionRef.current) {
+        props.onSessionChange(latestSessionRef.current);
+      }
+    }, CHAT_SESSION_SYNC_INTERVAL_MS);
+  }, [chatState, executionMode, flushSessionSync, props.onSessionChange, props.session.id, selectedModel]);
+
+  useEffect(() => () => {
+    flushSessionSync();
+  }, [flushSessionSync]);
 
   useEffect(() => {
     const schedule = (callback: () => void) => {
@@ -260,6 +449,16 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     if (scrollFrameRef.current !== null) {
       cancel(scrollFrameRef.current);
       scrollFrameRef.current = null;
+    }
+
+    const hasThreadActivity = chatState.messages.length > 0
+      || chatState.receipts.length > 0
+      || chatState.notices.length > 0
+      || Boolean(chatState.pendingProposal)
+      || Boolean(chatState.currentAssistantDraft?.started);
+
+    if (!hasThreadActivity) {
+      return;
     }
 
     scrollFrameRef.current = schedule(() => {
@@ -306,17 +505,17 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     abortRef.current?.abort();
   }
 
-  function createProposal() {
-    const trimmed = chatState.input.trim();
+  function createProposal(prompt: string) {
+    const trimmedPrompt = prompt.trim();
 
-    if (!trimmed) {
+    if (!trimmedPrompt) {
       return;
     }
 
     dispatch({
       type: "create_proposal",
       proposal: buildGovernedChatProposal({
-        prompt: trimmed,
+        prompt: trimmedPrompt,
         modelAlias: selectedModel || null,
         consequence: buildProposalConsequence(locale, selectedModel || null),
         createdAt: new Date().toISOString(),
@@ -558,12 +757,14 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       return;
     }
 
+    const prompt = buildPinnedChatContextPrompt(trimmed, props.pinnedContext, locale);
+
     if (executionMode === "governed") {
-      createProposal();
+      createProposal(prompt);
       return;
     }
 
-    await executeDirectPrompt(trimmed);
+    await executeDirectPrompt(prompt);
   }
 
   const pendingProposal = chatState.pendingProposal;
@@ -577,12 +778,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     || chatState.connectionState === "streaming";
   const modelUnresolved = selectedModel.trim().length === 0;
   const backendUnreachable = props.backendHealthy === false;
-  const streamStatusLabel = resolveChatStreamStatusLabel({
-    streamState: chatState.streamState,
-    connectionState: chatState.connectionState,
-    copy: ui.chat.streamStatus
-  });
-
+  const connectionStateTone = resolveConnectionStateTone(chatState.connectionState);
   const composerBlockReason = resolveChatComposerBlockReason({
     executionMode,
     backendUnreachable,
@@ -591,16 +787,40 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     executionRunning,
     copy: ui.chat.composerLocked
   });
+  const routingStatusItems = buildChatRoutingStatusItems({
+    selectedModel,
+    backendHealthy: props.backendHealthy,
+    fallbackAllowed: props.routingStatus.fallbackAllowed,
+    activeRoute: chatState.activeRoute,
+    copy: {
+      activeModel: ui.chat.routingStatus.activeModel,
+      providerStatus: ui.chat.routingStatus.providerStatus,
+      fallbackPolicy: ui.chat.routingStatus.fallbackPolicy,
+      routeState: ui.chat.routingStatus.routeState,
+      ready: ui.common.ready,
+      checking: ui.shell.healthChecking,
+      error: ui.common.error,
+      fallbackEnabled: ui.chat.routingStatus.fallbackEnabled,
+      fallbackDisabled: ui.chat.routingStatus.fallbackDisabled,
+      fallbackUsed: ui.chat.routingStatus.fallbackUsed,
+      degraded: ui.chat.routeDegraded,
+      routePending: ui.chat.routePending,
+      unavailable: ui.settings.unavailable,
+    },
+  });
 
-  const notices = [
-    ...chatState.notices,
-    ...(warning && !chatState.notices.some((notice) => notice.message === warning)
-      ? [{ id: `warning-${warning}`, level: "system" as const, message: warning, createdAt: new Date().toISOString() }]
-      : []),
-    ...(error && !chatState.notices.some((notice) => notice.message === error)
-      ? [{ id: `error-${error}`, level: "error" as const, message: error, createdAt: new Date().toISOString() }]
-      : [])
-  ];
+  const notices = useMemo(
+    () => [
+      ...chatState.notices,
+      ...(warning && !chatState.notices.some((notice) => notice.message === warning)
+        ? [{ id: `warning-${warning}`, level: "system" as const, message: warning, createdAt: "" }]
+        : []),
+      ...(error && !chatState.notices.some((notice) => notice.message === error)
+        ? [{ id: `error-${error}`, level: "error" as const, message: error, createdAt: "" }]
+        : [])
+    ],
+    [chatState.notices, error, warning],
+  );
 
   return (
     <section
@@ -611,9 +831,26 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       <section className="chat-toolbar">
         <div className="chat-toolbar-copy">
           <SectionLabel>{ui.chat.title}</SectionLabel>
-          <strong data-testid="chat-connection-state">{getConnectionStateLabel(locale, chatState.connectionState)}</strong>
-          <span className="chat-stream-status">{streamStatusLabel}</span>
+          <span
+            className={`shell-badge shell-badge-${connectionStateTone} chat-connection-state`}
+            data-testid="chat-connection-state"
+          >
+            {formatConnectionStateLabel(chatState.connectionState)}
+          </span>
           {beginnerMode ? <span className="chat-stream-status">{workModeCopy.controlHint}</span> : null}
+        </div>
+        <div className="runtime-actions chat-toolbar-actions chat-toolbar-primary-actions">
+          <GuideOverlay content={getWorkspaceGuide(locale, "chat")} testId="guide-chat" />
+          {executionRunning ? (
+            <button type="button" className="ghost-button" onClick={stopExecution}>
+              {ui.chat.stopExecution}
+            </button>
+          ) : null}
+          {notices.length > 0 ? (
+            <button type="button" className="secondary-button" onClick={() => dispatch({ type: "clear_notices" })}>
+              {ui.chat.clearNotices}
+            </button>
+          ) : null}
         </div>
 
         <div className="chat-toolbar-controls">
@@ -664,28 +901,15 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               {props.availableModels.length === 0 ? (
                 <option value="">{ui.chat.noModels}</option>
               ) : (
-                props.availableModels.map((model) => (
-                  <option key={model} value={model}>
-                    {model}
+                modelOptions.map((model) => (
+                  <option key={model.alias} value={model.alias}>
+                    {model.label}
                   </option>
                 ))
               )}
             </select>
           </div>
           ) : null}
-          <div className="runtime-actions chat-toolbar-actions">
-            <GuideOverlay content={getWorkspaceGuide(locale, "chat")} testId="guide-chat" />
-            {executionRunning ? (
-              <button type="button" className="ghost-button" onClick={stopExecution}>
-                {ui.chat.stopExecution}
-              </button>
-            ) : null}
-            {notices.length > 0 ? (
-              <button type="button" className="secondary-button" onClick={() => dispatch({ type: "clear_notices" })}>
-                {ui.chat.clearNotices}
-              </button>
-            ) : null}
-          </div>
         </div>
       </section>
 
@@ -693,7 +917,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
         {beginnerMode ? (
           <ShellCard variant="muted" className="work-mode-guidance-card">
             <SectionLabel>{workModeCopy.label}</SectionLabel>
-            <p>{locale === "de" ? "Schreibe dein Ziel. ModelGate erstellt im geführten Modus zuerst einen Vorschlag, danach entscheidest du." : "Write the goal. In guided mode ModelGate prepares a proposal first, then you decide."}</p>
+            <p>{locale === "de" ? "Schreibe dein Ziel. MosaicStack erstellt im geführten Modus zuerst einen Vorschlag, danach entscheidest du." : "Write the goal. In guided mode MosaicStack prepares a proposal first, then you decide."}</p>
           </ShellCard>
         ) : null}
         {expertMode && chatState.activeRoute ? (
@@ -743,17 +967,13 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           ) : null}
 
           {chatState.messages.map((message) => (
-            <ShellCard
+            <ThreadMessageCard
               key={message.id}
-              variant={message.role === "user" ? "muted" : "base"}
-              className={`thread-block ${message.role === "user" ? "thread-block-operator" : "thread-block-agent"}`}
-            >
-              <header className="thread-block-header">
-                <SectionLabel>{message.role === "user" ? ui.chat.operatorInput : ui.chat.agentResponse}</SectionLabel>
-                {expertMode && message.modelAlias ? <StatusBadge tone="muted">{message.modelAlias}</StatusBadge> : null}
-              </header>
-              <MarkdownMessage content={message.content} />
-            </ShellCard>
+              message={message}
+              expertMode={expertMode}
+              operatorLabel={ui.chat.operatorInput}
+              agentLabel={ui.chat.agentResponse}
+            />
           ))}
 
           {draft?.started ? (
@@ -806,21 +1026,59 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           <div ref={messageEndRef} />
         </div>
 
+        <section className="chat-routing-status-strip" data-testid="chat-routing-status" aria-label={ui.chat.routingStatus.title}>
+          {routingStatusItems.map((item) => (
+            <div className={`chat-routing-status-item chat-routing-status-item-${item.tone}`} key={item.label}>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </div>
+          ))}
+        </section>
+
+        {props.pinnedContext ? (
+          <ShellCard variant="muted" className="chat-pinned-context" data-testid="chat-pinned-context">
+            <header className="chat-pinned-context-header">
+              <SectionLabel>{ui.chat.pinnedContext.title}</SectionLabel>
+              <StatusBadge tone="partial">{ui.shell.workspaceTabs.github.label}</StatusBadge>
+            </header>
+            <p className="chat-pinned-context-summary">{props.pinnedContext.summary}</p>
+            <p className="chat-pinned-context-meta">
+              {`${props.pinnedContext.repoFullName} · ${props.pinnedContext.ref}${props.pinnedContext.path ? ` · ${props.pinnedContext.path}` : ""}`}
+            </p>
+            <div className="action-row">
+              <span className="muted-copy">{ui.chat.pinnedContext.localState}</span>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={props.onClearPinnedContext}
+                data-testid="chat-pinned-context-clear"
+              >
+                {ui.chat.pinnedContext.clear}
+              </button>
+            </div>
+          </ShellCard>
+        ) : null}
+
         <form className="composer governed-composer" onSubmit={handleSubmit}>
           <textarea
             data-testid="chat-composer"
             aria-label={ui.chat.title}
             value={chatState.input}
             onChange={(event) => dispatch({ type: "set_input", input: event.target.value })}
+            onKeyDown={(event) => {
+              if (!shouldSubmitChatComposerOnKey(event)) {
+                return;
+              }
+
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }}
             placeholder={ui.chat.composerPlaceholder}
             rows={4}
             disabled={Boolean(composerBlockReason)}
           />
 
           <div className="composer-footer">
-            <p className="hint">
-              {composerBlockReason ?? (executionMode === "direct" ? ui.chat.composerHelperDirect : ui.chat.composerHelper)}
-            </p>
             <button
               type="submit"
               data-testid="chat-send"

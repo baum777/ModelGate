@@ -2,7 +2,7 @@
   - generic [ref=e4]:
     - generic [ref=e5]:
       - paragraph [ref=e6]: SOVEREIGN CONSOLE
-      - heading "Thin consumer overlay for ModelGate" [level=1] [ref=e7]
+      - heading "Thin consumer overlay for MosaicStack" [level=1] [ref=e7]
       - paragraph [ref=e8]: The backend owns provider calls, routing, Matrix writes, and stream framing. The browser only renders, consumes, and submits intent.
     - generic [ref=e9]:
       - generic [ref=e11]: Backend healthy

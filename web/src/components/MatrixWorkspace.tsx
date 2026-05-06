@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApprovalTransitionCard,
   DecisionZone,
@@ -48,6 +48,9 @@ import { getWorkModeCopy, type WorkMode } from "../lib/work-mode.js";
 
 type WorkflowStatus = "loading" | "partial" | "ready" | "error";
 type LoadStatus = "idle" | "loading" | "ready" | "error";
+
+const MATRIX_VISIBLE_LIST_LIMIT = 80;
+const MATRIX_SESSION_SYNC_INTERVAL_MS = 220;
 
 export type MatrixWorkspaceStatus = {
   identityLabel: string;
@@ -370,10 +373,35 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   const [composerTarget, setComposerTarget] = useState<MatrixComposerTarget>(persisted.composerTarget);
   const [draftContent, setDraftContent] = useState<string>(persisted.draftContent);
   const [lastActionResult, setLastActionResult] = useState<string | null>(persisted.lastActionResult);
+  const sessionSyncHandleRef = useRef<number | null>(null);
+  const latestSessionRef = useRef<MatrixSession | null>(null);
+  const flushSessionSync = useCallback(() => {
+    if (sessionSyncHandleRef.current !== null) {
+      globalThis.clearTimeout(sessionSyncHandleRef.current);
+      sessionSyncHandleRef.current = null;
+    }
+
+    if (latestSessionRef.current) {
+      props.onSessionChange(latestSessionRef.current);
+    }
+  }, [props.onSessionChange]);
   const summaryLoading = scopeSummaryStatus === "loading";
   const selectedSpaces = useMemo(
     () => selectedSpaceIds.filter((value) => value.trim().length > 0),
     [selectedSpaceIds],
+  );
+  const selectedRoomIdSet = useMemo(() => new Set(selectedRoomIds), [selectedRoomIds]);
+  const visibleJoinedRooms = useMemo(
+    () => joinedRooms.slice(0, MATRIX_VISIBLE_LIST_LIMIT),
+    [joinedRooms],
+  );
+  const visibleScopeSummaryItems = useMemo(
+    () => scopeSummary?.items.slice(0, MATRIX_VISIBLE_LIST_LIMIT) ?? [],
+    [scopeSummary],
+  );
+  const visibleHierarchyRooms = useMemo(
+    () => spaceHierarchy?.rooms?.slice(0, MATRIX_VISIBLE_LIST_LIMIT) ?? [],
+    [spaceHierarchy],
   );
   const matrixReviewItems = useMemo<ReviewItem[]>(
     () => buildMatrixReviewItems(topicPlan, topicExecution, topicVerification, whoami?.userId ?? null, locale),
@@ -522,7 +550,18 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       metadata: snapshotMetadata,
     };
 
-    props.onSessionChange(nextSession);
+    latestSessionRef.current = nextSession;
+
+    if (sessionSyncHandleRef.current !== null) {
+      return;
+    }
+
+    sessionSyncHandleRef.current = globalThis.setTimeout(() => {
+      sessionSyncHandleRef.current = null;
+      if (latestSessionRef.current) {
+        props.onSessionChange(latestSessionRef.current);
+      }
+    }, MATRIX_SESSION_SYNC_INTERVAL_MS);
   }, [
     composerMode,
     composerTarget,
@@ -565,6 +604,10 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     topicVerifyError,
     topicVerifyLoading,
   ]);
+
+  useEffect(() => () => {
+    flushSessionSync();
+  }, [flushSessionSync]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1098,11 +1141,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
           <div className="workspace-hero-actions">
             <GuideOverlay content={getWorkspaceGuide(locale, "matrix")} testId="guide-matrix" />
           </div>{" "}
-          {props.restoredSession ? (
-            <div className="restored-banner" data-testid="matrix-restored-banner">
-              RESTORED_SESSION: {ui.matrix.scopeNotice}
-            </div>
-          ) : null}
           {props.expertMode ? (
             <div className="chip-row" aria-label={ui.matrix.scopeNotice}>
               <span className="workflow-chip workflow-chip-complete">{ui.matrix.scopeTitle}</span>
@@ -1502,8 +1540,8 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 {joinedRooms.length === 0 ? (
                   <p className="empty-state">{ui.matrix.roomPickerEmpty}</p>
                 ) : (
-                  joinedRooms.map((room) => {
-                    const active = selectedRoomIds.includes(room.roomId);
+                  visibleJoinedRooms.map((room) => {
+                    const active = selectedRoomIdSet.has(room.roomId);
                     return (
                       <button
                         key={room.roomId}
@@ -1539,6 +1577,9 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                     );
                   })
                 )}{" "}
+                {joinedRooms.length > visibleJoinedRooms.length ? (
+                  <p className="muted-copy">+{joinedRooms.length - visibleJoinedRooms.length}</p>
+                ) : null}{" "}
               </div>{" "}
               {roomsError ? (
                 <p className="error-banner" data-testid="matrix-rooms-error">{roomsError}</p>
@@ -1656,7 +1697,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                     </span>
                   </div>
                   <div className="scope-summary-list">
-                    {scopeSummary.items.map((item) => (
+                    {visibleScopeSummaryItems.map((item) => (
                       <article
                         key={item.roomId}
                         className={`scope-summary-item ${item.roomId === provenanceRoomId ? "scope-summary-item-active" : ""}`}
@@ -1679,6 +1720,9 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                         </div>
                       </article>
                     ))}
+                    {scopeSummary.items.length > visibleScopeSummaryItems.length ? (
+                      <p className="muted-copy">+{scopeSummary.items.length - visibleScopeSummaryItems.length}</p>
+                    ) : null}
                   </div>
                 </div>
               ) : (
@@ -1715,7 +1759,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                     ) : null}{" "}
                     {spaceHierarchy?.rooms?.length ? (
                       <div className="scope-summary-list">
-                        {spaceHierarchy.rooms.map((room, index) => (
+                        {visibleHierarchyRooms.map((room, index) => (
                           <article
                             key={room.room_id ?? room.name ?? String(index)}
                             className="scope-summary-item"
@@ -1729,6 +1773,9 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                             </small>
                           </article>
                         ))}
+                        {spaceHierarchy.rooms.length > visibleHierarchyRooms.length ? (
+                          <p className="muted-copy">+{spaceHierarchy.rooms.length - visibleHierarchyRooms.length}</p>
+                        ) : null}
                       </div>
                     ) : (
                       <p className="empty-state">

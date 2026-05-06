@@ -47,7 +47,7 @@ export const EnvSchema = z.object({
   GITHUB_AGENT_API_KEY: z.string().trim().default(""),
   GITHUB_API_BASE_URL: z.string().trim().default("https://api.github.com"),
   GITHUB_DEFAULT_OWNER: z.string().trim().default(""),
-  GITHUB_BRANCH_PREFIX: z.string().trim().default("modelgate/github"),
+  GITHUB_BRANCH_PREFIX: z.string().trim().default("mosaicstack/github"),
   GITHUB_REQUEST_TIMEOUT_MS: z.string().trim().default("8000"),
   GITHUB_PLAN_TTL_MS: z.string().trim().default("720000"),
   GITHUB_ACTION_STORE_MODE: z.string().trim().default("memory"),
@@ -61,6 +61,20 @@ export const EnvSchema = z.object({
   GITHUB_APP_ID: z.string().trim().default(""),
   GITHUB_APP_PRIVATE_KEY: z.string().trim().default(""),
   GITHUB_APP_INSTALLATION_ID: z.string().trim().default(""),
+  GITHUB_OAUTH_CLIENT_ID: z.string().trim().default(""),
+  GITHUB_OAUTH_CLIENT_SECRET: z.string().trim().default(""),
+  GITHUB_OAUTH_CALLBACK_URL: z.string().trim().default(""),
+  GITHUB_OAUTH_AUTHORIZE_URL: z.string().trim().default("https://github.com/login/oauth/authorize"),
+  GITHUB_OAUTH_TOKEN_URL: z.string().trim().default("https://github.com/login/oauth/access_token"),
+  GITHUB_OAUTH_SCOPES: z.string().trim().default("read:user,user:email"),
+  MATRIX_SSO_REDIRECT_PATH: z.string().trim().default("/_matrix/client/v3/login/sso/redirect"),
+  MATRIX_LOGIN_TOKEN_TYPE: z.string().trim().default("m.login.token"),
+  INTEGRATION_AUTH_STORE_MODE: z.string().trim().default("file"),
+  INTEGRATION_AUTH_STORE_FILE_PATH: z.string().trim().default(".local-ai/state/integration-auth-store.json"),
+  INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID: z.string().trim().default(""),
+  INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_VERSION: z.string().trim().default("1"),
+  INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY: z.string().trim().default(""),
+  INTEGRATION_AUTH_ENCRYPTION_PREVIOUS_KEYS: z.string().trim().default(""),
   RATE_LIMIT_ENABLED: z.string().trim().default("true"),
   RATE_LIMIT_WINDOW_MS: z.string().trim().default("60000"),
   RATE_LIMIT_CHAT_MAX: z.string().trim().default("30"),
@@ -74,9 +88,9 @@ export const EnvSchema = z.object({
   JOURNAL_FILE_PATH: z.string().trim().default(".local-ai/state/runtime-journal.json"),
   JOURNAL_MAX_ENTRIES: z.string().trim().default("500"),
   JOURNAL_EXPOSE_RECENT_LIMIT: z.string().trim().default("50"),
-  MODEL_GATE_ADMIN_PASSWORD: z.string().trim().default(""),
-  MODEL_GATE_SESSION_SECRET: z.string().trim().default(""),
-  MODEL_GATE_SESSION_TTL_SECONDS: z.string().trim().default("86400")
+  MOSAIC_STACK_ADMIN_PASSWORD: z.string().trim().default(""),
+  MOSAIC_STACK_SESSION_SECRET: z.string().trim().default(""),
+  MOSAIC_STACK_SESSION_TTL_SECONDS: z.string().trim().default("86400")
 });
 
 export type AppEnv = {
@@ -128,6 +142,20 @@ export type AppEnv = {
   GITHUB_APP_ID: string;
   GITHUB_APP_PRIVATE_KEY: string;
   GITHUB_APP_INSTALLATION_ID: string;
+  GITHUB_OAUTH_CLIENT_ID: string;
+  GITHUB_OAUTH_CLIENT_SECRET: string;
+  GITHUB_OAUTH_CALLBACK_URL: string;
+  GITHUB_OAUTH_AUTHORIZE_URL: string;
+  GITHUB_OAUTH_TOKEN_URL: string;
+  GITHUB_OAUTH_SCOPES: string[];
+  MATRIX_SSO_REDIRECT_PATH: string;
+  MATRIX_LOGIN_TOKEN_TYPE: string;
+  INTEGRATION_AUTH_STORE_MODE: string;
+  INTEGRATION_AUTH_STORE_FILE_PATH: string;
+  INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID: string;
+  INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_VERSION: string;
+  INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY: string;
+  INTEGRATION_AUTH_ENCRYPTION_PREVIOUS_KEYS: string;
   RATE_LIMIT_ENABLED: boolean;
   RATE_LIMIT_WINDOW_MS: number;
   RATE_LIMIT_CHAT_MAX: number;
@@ -141,9 +169,9 @@ export type AppEnv = {
   JOURNAL_FILE_PATH: string;
   JOURNAL_MAX_ENTRIES: number;
   JOURNAL_EXPOSE_RECENT_LIMIT: number;
-  MODEL_GATE_ADMIN_PASSWORD: string;
-  MODEL_GATE_SESSION_SECRET: string;
-  MODEL_GATE_SESSION_TTL_SECONDS: number;
+  MOSAIC_STACK_ADMIN_PASSWORD: string;
+  MOSAIC_STACK_SESSION_SECRET: string;
+  MOSAIC_STACK_SESSION_TTL_SECONDS: number;
 };
 
 function parsePositiveIntOrDefault(input: string, fallback: number) {
@@ -222,7 +250,7 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     GITHUB_AGENT_API_KEY: parsed.GITHUB_AGENT_API_KEY.trim(),
     GITHUB_API_BASE_URL: parsed.GITHUB_API_BASE_URL.trim().replace(/\/+$/, "") || "https://api.github.com",
     GITHUB_DEFAULT_OWNER: parsed.GITHUB_DEFAULT_OWNER.trim(),
-    GITHUB_BRANCH_PREFIX: parsed.GITHUB_BRANCH_PREFIX.trim() || "modelgate/github",
+    GITHUB_BRANCH_PREFIX: parsed.GITHUB_BRANCH_PREFIX.trim() || "mosaicstack/github",
     GITHUB_REQUEST_TIMEOUT_MS: Number.parseInt(parsed.GITHUB_REQUEST_TIMEOUT_MS.trim(), 10),
     GITHUB_PLAN_TTL_MS: Number.parseInt(parsed.GITHUB_PLAN_TTL_MS.trim(), 10),
     GITHUB_ACTION_STORE_MODE: parsed.GITHUB_ACTION_STORE_MODE.trim() || "memory",
@@ -236,6 +264,20 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     GITHUB_APP_ID: parsed.GITHUB_APP_ID.trim(),
     GITHUB_APP_PRIVATE_KEY: parsed.GITHUB_APP_PRIVATE_KEY.trim(),
     GITHUB_APP_INSTALLATION_ID: parsed.GITHUB_APP_INSTALLATION_ID.trim(),
+    GITHUB_OAUTH_CLIENT_ID: parsed.GITHUB_OAUTH_CLIENT_ID.trim(),
+    GITHUB_OAUTH_CLIENT_SECRET: parsed.GITHUB_OAUTH_CLIENT_SECRET.trim(),
+    GITHUB_OAUTH_CALLBACK_URL: parsed.GITHUB_OAUTH_CALLBACK_URL.trim(),
+    GITHUB_OAUTH_AUTHORIZE_URL: parsed.GITHUB_OAUTH_AUTHORIZE_URL.trim() || "https://github.com/login/oauth/authorize",
+    GITHUB_OAUTH_TOKEN_URL: parsed.GITHUB_OAUTH_TOKEN_URL.trim() || "https://github.com/login/oauth/access_token",
+    GITHUB_OAUTH_SCOPES: parseCsvList(parsed.GITHUB_OAUTH_SCOPES),
+    MATRIX_SSO_REDIRECT_PATH: parsed.MATRIX_SSO_REDIRECT_PATH.trim() || "/_matrix/client/v3/login/sso/redirect",
+    MATRIX_LOGIN_TOKEN_TYPE: parsed.MATRIX_LOGIN_TOKEN_TYPE.trim() || "m.login.token",
+    INTEGRATION_AUTH_STORE_MODE: parsed.INTEGRATION_AUTH_STORE_MODE.trim() || "file",
+    INTEGRATION_AUTH_STORE_FILE_PATH: parsed.INTEGRATION_AUTH_STORE_FILE_PATH.trim() || ".local-ai/state/integration-auth-store.json",
+    INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID: parsed.INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID.trim(),
+    INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_VERSION: parsed.INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_VERSION.trim() || "1",
+    INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY: parsed.INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY.trim(),
+    INTEGRATION_AUTH_ENCRYPTION_PREVIOUS_KEYS: parsed.INTEGRATION_AUTH_ENCRYPTION_PREVIOUS_KEYS.trim(),
     RATE_LIMIT_ENABLED: parseBoolean(parsed.RATE_LIMIT_ENABLED.trim()),
     RATE_LIMIT_WINDOW_MS: parsePositiveIntWithPolicy(
       parsed.RATE_LIMIT_WINDOW_MS,
@@ -279,9 +321,9 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     JOURNAL_FILE_PATH: parsed.JOURNAL_FILE_PATH.trim() || ".local-ai/state/runtime-journal.json",
     JOURNAL_MAX_ENTRIES: parsePositiveIntOrDefault(parsed.JOURNAL_MAX_ENTRIES, 500),
     JOURNAL_EXPOSE_RECENT_LIMIT: parsePositiveIntOrDefault(parsed.JOURNAL_EXPOSE_RECENT_LIMIT, 50),
-    MODEL_GATE_ADMIN_PASSWORD: parsed.MODEL_GATE_ADMIN_PASSWORD.trim(),
-    MODEL_GATE_SESSION_SECRET: parsed.MODEL_GATE_SESSION_SECRET.trim(),
-    MODEL_GATE_SESSION_TTL_SECONDS: parsePositiveIntOrDefault(parsed.MODEL_GATE_SESSION_TTL_SECONDS, 86_400)
+    MOSAIC_STACK_ADMIN_PASSWORD: parsed.MOSAIC_STACK_ADMIN_PASSWORD.trim(),
+    MOSAIC_STACK_SESSION_SECRET: parsed.MOSAIC_STACK_SESSION_SECRET.trim(),
+    MOSAIC_STACK_SESSION_TTL_SECONDS: parsePositiveIntOrDefault(parsed.MOSAIC_STACK_SESSION_TTL_SECONDS, 86_400)
   };
 
   return normalized;

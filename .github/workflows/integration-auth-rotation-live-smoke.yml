@@ -1,0 +1,37 @@
+name: Integration auth rotation live smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run integration auth rotation live smoke
+        env:
+          INTEGRATION_AUTH_ROTATION_LIVE_ENABLED: ${{ secrets.INTEGRATION_AUTH_ROTATION_LIVE_ENABLED }}
+          GITHUB_OAUTH_CLIENT_ID: ${{ secrets.GITHUB_OAUTH_CLIENT_ID }}
+          GITHUB_OAUTH_CLIENT_SECRET: ${{ secrets.GITHUB_OAUTH_CLIENT_SECRET }}
+          INTEGRATION_AUTH_ROTATION_LIVE_GITHUB_CODE_VN: ${{ secrets.INTEGRATION_AUTH_ROTATION_LIVE_GITHUB_CODE_VN }}
+          INTEGRATION_AUTH_ROTATION_LIVE_GITHUB_CODE_VN1: ${{ secrets.INTEGRATION_AUTH_ROTATION_LIVE_GITHUB_CODE_VN1 }}
+          INTEGRATION_AUTH_ROTATION_LIVE_KEY_VN_ID: ${{ secrets.INTEGRATION_AUTH_ROTATION_LIVE_KEY_VN_ID }}
+          INTEGRATION_AUTH_ROTATION_LIVE_KEY_VN_VERSION: ${{ secrets.INTEGRATION_AUTH_ROTATION_LIVE_KEY_VN_VERSION }}
+          INTEGRATION_AUTH_ROTATION_LIVE_KEY_VN_MATERIAL: ${{ secrets.INTEGRATION_AUTH_ROTATION_LIVE_KEY_VN_MATERIAL }}
+          INTEGRATION_AUTH_ROTATION_LIVE_KEY_VN1_ID: ${{ secrets.INTEGRATION_AUTH_ROTATION_LIVE_KEY_VN1_ID }}
+          INTEGRATION_AUTH_ROTATION_LIVE_KEY_VN1_VERSION: ${{ secrets.INTEGRATION_AUTH_ROTATION_LIVE_KEY_VN1_VERSION }}
+          INTEGRATION_AUTH_ROTATION_LIVE_KEY_VN1_MATERIAL: ${{ secrets.INTEGRATION_AUTH_ROTATION_LIVE_KEY_VN1_MATERIAL }}
+          INTEGRATION_AUTH_ROTATION_LIVE_EXPECTED_GITHUB_LOGIN: ${{ secrets.INTEGRATION_AUTH_ROTATION_LIVE_EXPECTED_GITHUB_LOGIN }}
+        run: npm run test:integration-auth-rotation-live

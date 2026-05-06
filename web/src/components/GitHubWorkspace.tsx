@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApprovalTransitionCard,
   DecisionZone,
@@ -18,6 +18,8 @@ import {
   type GitHubRepoSummary,
   type GitHubVerifyResult,
 } from "../lib/github-api.js";
+import type { IntegrationStatus } from "../lib/api.js";
+import { createPinnedChatContext, type PinnedChatContext } from "../lib/pinned-chat-context.js";
 import type { ReviewItem } from "./ReviewWorkspace.js";
 import {
   deriveSessionStatus,
@@ -31,7 +33,7 @@ import {
 } from "../lib/governance-metadata.js";
 import { useLocalization, type Locale } from "../lib/localization.js";
 import { GuideOverlay, getWorkspaceGuide } from "./GuideOverlay.js";
-import { getWorkModeCopy, isExpertMode, type WorkMode } from "../lib/work-mode.js";
+import { isExpertMode, type WorkMode } from "../lib/work-mode.js";
 
 export type GitHubWorkspaceStatus = {
   repositoryLabel: string;
@@ -64,13 +66,21 @@ type GitHubWorkspaceProps = {
   ) => void;
   onContextChange: (status: GitHubWorkspaceStatus) => void;
   onReviewItemsChange?: (items: ReviewItem[]) => void;
+  onReviewDirtyChange?: (isDirty: boolean) => void;
+  onPinChatContext?: (context: PinnedChatContext) => void;
   onSessionChange: (session: GitHubSession) => void;
+  githubIntegration: IntegrationStatus | null;
+  onIntegrationAction: (
+    provider: "github" | "matrix",
+    action: "connect" | "reconnect" | "disconnect" | "reverify"
+  ) => void;
 };
 
 const ANALYSIS_QUESTION =
   "Beschreibe die Projektstruktur und nenne die sichere nächste Aktion.";
 const PROPOSAL_OBJECTIVE =
   "Erstelle einen sicheren Änderungsvorschlag für das gewählte Repo.";
+const GITHUB_SESSION_SYNC_INTERVAL_MS = 220;
 
 type GitHubLocaleText = {
   repoLoadFailed: string;
@@ -268,6 +278,43 @@ function buildRawDiffPreview(plan: GitHubChangePlan | null) {
     .slice(0, 1600);
 }
 
+export function buildGitHubPinnedChatContext(options: {
+  selectedRepo: GitHubRepoSummary | null;
+  analysisBundle: GitHubContextBundle | null;
+  proposalPlan: GitHubChangePlan | null;
+}): PinnedChatContext | null {
+  if (!options.selectedRepo || !options.analysisBundle) {
+    return null;
+  }
+
+  const summary = options.proposalPlan?.summary ?? options.analysisBundle.question;
+  const firstAnalysisFile = options.analysisBundle.files[0] ?? null;
+  const firstDiffFile = options.proposalPlan?.diff[0] ?? null;
+  const excerpt = firstAnalysisFile?.excerpt ?? firstDiffFile?.patch ?? "";
+
+  return createPinnedChatContext({
+    repoFullName: options.selectedRepo.fullName,
+    ref: options.proposalPlan?.baseRef ?? options.analysisBundle.ref ?? options.selectedRepo.defaultBranch,
+    path: firstAnalysisFile?.path ?? firstDiffFile?.path ?? null,
+    summary,
+    excerpt,
+    diffPreview: buildRawDiffPreview(options.proposalPlan),
+  });
+}
+
+export function isGitHubReviewDirty(options: {
+  proposalPlan: GitHubChangePlan | null;
+  executionResult: GitHubExecuteResult | null;
+  approvalChecked: boolean;
+  executionError: string | null;
+}) {
+  return Boolean(
+    (options.proposalPlan && !options.executionResult)
+    || options.approvalChecked
+    || (options.proposalPlan && options.executionError),
+  );
+}
+
 function verificationStatusCopy(result: GitHubVerifyResult | null, locale: Locale) {
   switch (result?.status) {
     case "verified":
@@ -413,7 +460,6 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
   const { locale, copy: ui } = useLocalization();
   const localText = useMemo(() => getGitHubLocaleText(locale), [locale]);
   const expertMode = isExpertMode(props.workMode);
-  const workModeCopy = getWorkModeCopy(locale, props.workMode);
   const [repos, setRepos] = useState<GitHubRepoSummary[]>([]);
   const [reposLoading, setReposLoading] = useState(true);
   const [reposError, setReposError] = useState<string | null>(null);
@@ -448,6 +494,24 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     props.session.metadata.verificationError,
   );
   const repoSelectRef = useRef<HTMLSelectElement | null>(null);
+  const sessionSyncHandleRef = useRef<number | null>(null);
+  const latestSessionRef = useRef<GitHubSession | null>(null);
+  const flushSessionSync = useCallback(() => {
+    if (sessionSyncHandleRef.current !== null) {
+      globalThis.clearTimeout(sessionSyncHandleRef.current);
+      sessionSyncHandleRef.current = null;
+    }
+
+    if (latestSessionRef.current) {
+      props.onSessionChange(latestSessionRef.current);
+    }
+  }, [props.onSessionChange]);
+  const githubIdentityLabel = props.githubIntegration?.labels.identity ?? (locale === "de" ? "Nicht verbunden" : "Not connected");
+  const githubConnected = props.githubIntegration?.credentialSource === "user_connected";
+  const githubConnectAction = props.githubIntegration?.status && props.githubIntegration.status !== "connect_available" && props.githubIntegration.status !== "not_connected"
+    ? "reconnect"
+    : "connect";
+  const githubConnectLabel = locale === "de" ? "GitHub verbinden" : "Connect your GitHub";
 
   useEffect(() => {
     const snapshotMetadata = {
@@ -479,7 +543,18 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       metadata: snapshotMetadata,
     };
 
-    props.onSessionChange(nextSession);
+    latestSessionRef.current = nextSession;
+
+    if (sessionSyncHandleRef.current !== null) {
+      return;
+    }
+
+    sessionSyncHandleRef.current = globalThis.setTimeout(() => {
+      sessionSyncHandleRef.current = null;
+      if (latestSessionRef.current) {
+        props.onSessionChange(latestSessionRef.current);
+      }
+    }, GITHUB_SESSION_SYNC_INTERVAL_MS);
   }, [
     analysisBundle,
     approvalChecked,
@@ -494,6 +569,10 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     verificationError,
     verificationResult,
   ]);
+
+  useEffect(() => () => {
+    flushSessionSync();
+  }, [flushSessionSync]);
 
   useEffect(() => {
     let cancelled = false;
@@ -579,7 +658,10 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       ? selectedRepo.fullName
       : ui.github.repoSelected
     : ui.github.noRepoSelected;
-  const rawDiffPreview = expertMode ? buildRawDiffPreview(proposalPlan) : null;
+  const rawDiffPreview = useMemo(
+    () => expertMode ? buildRawDiffPreview(proposalPlan) : null,
+    [expertMode, proposalPlan],
+  );
   const currentRequestId = requestId;
   const stalePlanBlocked = Boolean(
     proposalPlan?.stale
@@ -602,6 +684,12 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     || executionConsumed
     || proposalLoading;
   const verifyDisabled = !executionResult || executing || verifying;
+  const reviewDirty = isGitHubReviewDirty({
+    proposalPlan,
+    executionResult,
+    approvalChecked,
+    executionError,
+  });
 
   useEffect(() => {
     props.onContextChange({
@@ -645,6 +733,10 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       props.onReviewItemsChange(buildGitHubReviewItems(proposalPlan, executionResult, verificationResult, locale));
     }
   }, [executionResult, locale, proposalPlan, props.onReviewItemsChange, verificationResult]);
+
+  useEffect(() => {
+    props.onReviewDirtyChange?.(reviewDirty);
+  }, [props.onReviewDirtyChange, reviewDirty]);
 
   useEffect(() => {
     if (!proposalPlan || proposalPlan.stale) {
@@ -882,16 +974,36 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     : analysisBundle
       ? ui.github.readOnly
       : ui.github.nextStepAnalysis;
-  const nextStepTitle = !hasSelection
-    ? `${ui.github.nextStepLabel}: ${ui.github.nextStepChooseRepo}.`
-    : proposalPlan
-      ? `${ui.github.nextStepLabel}: ${ui.github.nextStepProposal}.`
-      : `${ui.github.nextStepLabel}: ${ui.github.nextStepAnalysis}.`;
-  const nextStepDescription = !hasSelection
-    ? ui.github.actionReadBody
-    : proposalPlan
-      ? ui.github.approveHelper
-      : ui.github.actionReadBody;
+  const pinnableChatContext = useMemo(
+    () => buildGitHubPinnedChatContext({
+      selectedRepo,
+      analysisBundle,
+      proposalPlan,
+    }),
+    [analysisBundle, proposalPlan, selectedRepo],
+  );
+  const heroSteps = [
+    {
+      title: ui.github.nextStepChooseRepo,
+      description: locale === "de" ? "Wähle ein erlaubtes Repository aus der Liste." : "Pick an allowed repository from the list.",
+    },
+    {
+      title: githubConnectLabel,
+      description: locale === "de" ? "Verbinde GitHub, damit Vorschau und Analyse möglich sind." : "Connect GitHub so analysis and previews can run.",
+    },
+    {
+      title: ui.github.nextStepAnalysis,
+      description: ui.github.actionReadBody,
+    },
+    {
+      title: ui.github.nextStepProposal,
+      description: ui.github.actionProposalBody,
+    },
+    {
+      title: ui.review.approvalNeeded,
+      description: ui.github.approveHelper,
+    },
+  ];
 
   const workspaceNotice = proposalPlan && stalePlanBlocked
     ? ui.github.workspaceNoticeStale
@@ -919,22 +1031,53 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             {hasSelection ? ui.github.readOnlyActive : ui.github.nextStepChooseRepo}
           </p>
           <h1>{ui.github.title}</h1>
-          {expertMode ? (
-            <p className="hero-copy">
-              {ui.github.intro}
-            </p>
-          ) : (
-            <p className="hero-copy">{workModeCopy.controlHint}</p>
-          )}
+          <ol className="github-hero-steps">
+            {heroSteps.map((step) => (
+              <li className="github-hero-step" key={step.title}>
+                <strong>{step.title}</strong>
+                <p>{step.description}</p>
+              </li>
+            ))}
+          </ol>
           <div className="workspace-hero-actions">
             <GuideOverlay content={getWorkspaceGuide(locale, "github")} testId="guide-github" />
           </div>
         </div>
 
         <aside className="mini-panel github-mini-panel">
-          <label htmlFor="github-repo-select">{ui.github.repoSelectLabel}</label>
+          <article className="github-repo-card" data-testid="github-integration-card">
+            <div className="github-repo-card-header">
+              <div>
+                <span>GitHub OAuth</span>
+                {githubConnected ? <strong>{githubIdentityLabel}</strong> : null}
+              </div>
+              {githubConnected ? (
+                <span className="status-pill status-ready">
+                  {locale === "de" ? "Verbunden" : "Connected"}
+                </span>
+              ) : null}
+            </div>
+            <div className="action-row">
+              {githubConnected ? (
+                <>
+                  <button type="button" onClick={() => props.onIntegrationAction("github", "reverify")}>
+                    {locale === "de" ? "Erneut prüfen" : "Reverify"}
+                  </button>
+                  <button type="button" className="secondary-button" onClick={() => props.onIntegrationAction("github", "disconnect")}>
+                    {locale === "de" ? "Trennen" : "Disconnect"}
+                  </button>
+                </>
+              ) : (
+                <button type="button" onClick={() => props.onIntegrationAction("github", githubConnectAction)}>
+                  {githubConnectLabel}
+                </button>
+              )}
+            </div>
+          </article>
+
           <select
             id="github-repo-select"
+            aria-label={ui.github.repoSelectLabel}
             ref={repoSelectRef}
             value={selectedRepoFullName}
             onChange={(event) => handleRepoChange(event.target.value)}
@@ -972,20 +1115,15 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             <p>{reposLoading ? ui.github.loadingRepos : ui.github.noRepos}</p>
           )}
 
-          <div className="github-hero-note">
-            <p className="info-label">{ui.github.nextStepLabel}</p>
-            <strong>{nextStepTitle}</strong>
-            <p>{nextStepDescription}</p>
-            {workspaceNotice ? (
-              <p
-                className={proposalPlan && stalePlanBlocked ? "warning-banner" : "error-banner"}
-                role={proposalPlan && stalePlanBlocked ? "status" : "alert"}
-                data-testid="github-workspace-notice"
-              >
-                {workspaceNotice}
-              </p>
-            ) : null}
-          </div>
+          {workspaceNotice ? (
+            <p
+              className={proposalPlan && stalePlanBlocked ? "warning-banner" : "error-banner"}
+              role={proposalPlan && stalePlanBlocked ? "status" : "alert"}
+              data-testid="github-workspace-notice"
+            >
+              {workspaceNotice}
+            </p>
+          ) : null}
         </aside>
       </section>
 
@@ -1069,6 +1207,12 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             </article>
           </div>
 
+          {reviewDirty ? (
+            <p className="warning-banner" role="status" data-testid="github-review-dirty-warning">
+              {ui.github.reviewDirtyWarning}
+            </p>
+          ) : null}
+
           <article className="workspace-card github-review-card">
             <header className="card-header">
               <div>
@@ -1084,13 +1228,32 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
 
             {analysisBundle ? (
               <div className="github-review-body">
-                <div className="github-review-summary">
-                  <p className="info-label">{ui.github.analysisTitle}</p>
-                  <strong>{analysisBundle.question}</strong>
-                  <p className="muted-copy">
-                    {analysisBundle.files.length} · {analysisBundle.tokenBudget.truncated ? ui.shell.statusPartial : ui.shell.statusReady}
-                  </p>
-                </div>
+              <div className="github-review-summary">
+                <p className="info-label">{ui.github.analysisTitle}</p>
+                <strong>{analysisBundle.question}</strong>
+                <p className="muted-copy">
+                  {analysisBundle.files.length} · {analysisBundle.tokenBudget.truncated ? ui.shell.statusPartial : ui.shell.statusReady}
+                </p>
+                {props.onPinChatContext ? (
+                  <div className="action-row github-pin-context-row">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => {
+                        if (!pinnableChatContext) {
+                          return;
+                        }
+
+                        props.onPinChatContext?.(pinnableChatContext);
+                      }}
+                      disabled={!pinnableChatContext}
+                    >
+                      {ui.github.pinToChatContext}
+                    </button>
+                    <span className="muted-copy">{ui.github.pinToChatContextHint}</span>
+                  </div>
+                ) : null}
+              </div>
 
                 <div className="github-file-chip-row">
                   {analysisFiles.map((file) => (

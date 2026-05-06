@@ -141,6 +141,8 @@ type SettingsCopy = {
   diagnosticsEmpty: string;
   clearDiagnostics: string;
   connectionTruthNote: string;
+  modelAliasLabel: string;
+  modelCountLabel: string;
   modelSourceLabel: string;
   diagnosticsSummary: string;
   runtimeModeLabel: string;
@@ -235,6 +237,21 @@ type ChatCopy = {
   routePending: string;
   routeFallback: string;
   routeDegraded: string;
+  routingStatus: {
+    title: string;
+    activeModel: string;
+    providerStatus: string;
+    fallbackPolicy: string;
+    routeState: string;
+    fallbackEnabled: string;
+    fallbackDisabled: string;
+    fallbackUsed: string;
+  };
+  pinnedContext: {
+    title: string;
+    localState: string;
+    clear: string;
+  };
 };
 
 type GitHubCopy = {
@@ -286,6 +303,10 @@ type GitHubCopy = {
   defaultBranch: string;
   loadingSelection: string;
   modelLabel: string;
+  pinToChatContext: string;
+  pinToChatContextHint: string;
+  reviewDirtyWarning: string;
+  reviewDirtyConfirmNavigation: string;
 };
 
 type MatrixCopy = {
@@ -405,9 +426,9 @@ const EN_COPY: LocalizationCopy = {
     justNow: "just now",
   },
   shell: {
-    appKicker: "MODELGATE",
-    appTitle: "ModelGate Console",
-    appDeck: "Governance-first operator shell. Runtime truth stays backend-owned.",
+    appKicker: "MOSAICSTACK",
+    appTitle: "MosaicStack Console",
+    appDeck: "Governance-first operator shell.",
     workspaceConsoleKicker: "WORKSPACE CONSOLE",
     workspaceConsoleTitle: "Choose workspace",
     workspaceConsoleNote: "Navigation, session context, and disclosure stay pinned on the left.",
@@ -534,6 +555,8 @@ const EN_COPY: LocalizationCopy = {
     diagnosticsEmpty: "No local diagnostic events yet.",
     clearDiagnostics: "Clear diagnostics",
     connectionTruthNote: "Backend truth and connection truth stay separated from advisory copy.",
+    modelAliasLabel: "Active alias",
+    modelCountLabel: "Registered models",
     modelSourceLabel: "Source",
     diagnosticsSummary: "Safe runtime diagnostics",
     runtimeModeLabel: "Runtime mode",
@@ -627,6 +650,21 @@ const EN_COPY: LocalizationCopy = {
     routePending: "Route pending",
     routeFallback: "Fallback",
     routeDegraded: "degraded",
+    routingStatus: {
+      title: "Chat routing status",
+      activeModel: "Active model",
+      providerStatus: "Provider status",
+      fallbackPolicy: "Fallback policy",
+      routeState: "Route state",
+      fallbackEnabled: "Fallback enabled",
+      fallbackDisabled: "Fallback disabled",
+      fallbackUsed: "Fallback used",
+    },
+    pinnedContext: {
+      title: "Pinned GitHub context",
+      localState: "Local UI context only. Backend truth is still resolved at execution time.",
+      clear: "Clear pinned context",
+    },
   },
   github: {
     title: "GitHub workspace",
@@ -677,6 +715,10 @@ const EN_COPY: LocalizationCopy = {
     defaultBranch: "Default branch",
     loadingSelection: "Loading allowed repositories...",
     modelLabel: "Model",
+    pinToChatContext: "Pin to chat context",
+    pinToChatContextHint: "Adds a bounded repo excerpt for the next chat request.",
+    reviewDirtyWarning: "Local review progress is not backend-fresh truth. Execute, verify, or reset before leaving this workspace.",
+    reviewDirtyConfirmNavigation: "You have unsaved local GitHub review progress. Leave this workspace?",
   },
   matrix: {
     title: "Matrix workspace",
@@ -771,9 +813,9 @@ const DE_COPY: LocalizationCopy = {
     justNow: "gerade eben",
   },
   shell: {
-    appKicker: "MODELGATE",
-    appTitle: "ModelGate Konsole",
-    appDeck: "Governance-first Operator-Shell. Laufzeitwahrheit bleibt backend-owned.",
+    appKicker: "MOSAICSTACK",
+    appTitle: "MosaicStack Konsole",
+    appDeck: "Governance-first Operator-Shell.",
     workspaceConsoleKicker: "WORKSPACE CONSOLE",
     workspaceConsoleTitle: "Arbeitsbereich wählen",
     workspaceConsoleNote: "Navigation, Sessionkontext und Offenlegung bleiben links fixiert.",
@@ -900,6 +942,8 @@ const DE_COPY: LocalizationCopy = {
     diagnosticsEmpty: "Noch keine lokalen Diagnoseereignisse.",
     clearDiagnostics: "Diagnostik leeren",
     connectionTruthNote: "Backend-Wahrheit und Verbindungswahrheit bleiben von Advisory-Text getrennt.",
+    modelAliasLabel: "Aktiver Alias",
+    modelCountLabel: "Registrierte Modelle",
     modelSourceLabel: "Quelle",
     diagnosticsSummary: "Sichere Runtime-Diagnostik",
     runtimeModeLabel: "Runtime-Modus",
@@ -993,6 +1037,21 @@ const DE_COPY: LocalizationCopy = {
     routePending: "Route ausstehend",
     routeFallback: "Fallback",
     routeDegraded: "degradiert",
+    routingStatus: {
+      title: "Chat-Routing-Status",
+      activeModel: "Aktives Modell",
+      providerStatus: "Provider-Status",
+      fallbackPolicy: "Fallback-Policy",
+      routeState: "Routing-Zustand",
+      fallbackEnabled: "Fallback aktiv",
+      fallbackDisabled: "Fallback inaktiv",
+      fallbackUsed: "Fallback genutzt",
+    },
+    pinnedContext: {
+      title: "Fixierter GitHub-Kontext",
+      localState: "Nur lokaler UI-Kontext. Backend-Wahrheit wird weiter erst bei Ausführung aufgelöst.",
+      clear: "Fixierten Kontext entfernen",
+    },
   },
   github: {
     title: "GitHub-Arbeitsbereich",
@@ -1043,6 +1102,10 @@ const DE_COPY: LocalizationCopy = {
     defaultBranch: "Hauptzweig",
     loadingSelection: "Erlaubte Repos werden geladen...",
     modelLabel: "Modell",
+    pinToChatContext: "In Chat-Kontext fixieren",
+    pinToChatContextHint: "Fügt einen begrenzten Repo-Auszug für die nächste Chat-Anfrage hinzu.",
+    reviewDirtyWarning: "Lokaler Review-Fortschritt ist keine backend-frische Wahrheit. Vor dem Verlassen ausführen, prüfen oder zurücksetzen.",
+    reviewDirtyConfirmNavigation: "Es gibt ungespeicherten lokalen GitHub-Review-Fortschritt. Arbeitsbereich trotzdem verlassen?",
   },
   matrix: {
     title: "Matrix-Arbeitsbereich",
@@ -1152,7 +1215,7 @@ function writeStoredLocale(locale: Locale) {
   }
 }
 
-export const LOCALE_STORAGE_KEY = "modelgate.console.locale.v1";
+export const LOCALE_STORAGE_KEY = "mosaicstack.console.locale.v1";
 
 export function normalizeLocale(value: string | null | undefined): Locale {
   return value?.toLowerCase().startsWith("de") ? "de" : "en";

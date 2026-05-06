@@ -86,6 +86,85 @@ test("chat routing resolves one public alias and never leaks provider targets", 
   assert.doesNotMatch(response.body, /google\/gemma|anthropic\/claude/);
 });
 
+test("settings-added OpenRouter models become selectable backend-owned aliases", async (t) => {
+  const env = createTestEnv();
+  const app = createApp({
+    env,
+    openRouter: createMockOpenRouterClient({
+      createChatCompletion: async (_request, selection) => {
+        assert.equal(selection.publicModelAlias, "openrouter-1");
+        assert.deepEqual(selection.providerTargets, ["anthropic/claude-3.5-sonnet"]);
+        return {
+          model: selection.publicModelAlias,
+          text: "ok"
+        };
+      }
+    }),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const addResponse = await app.inject({
+    method: "POST",
+    url: "/models/openrouter",
+    payload: {
+      modelId: "anthropic/claude-3.5-sonnet"
+    }
+  });
+
+  assert.equal(addResponse.statusCode, 200);
+  const addPayload = JSON.parse(addResponse.body) as {
+    ok: boolean;
+    alias: string;
+  };
+  assert.equal(addPayload.ok, true);
+  assert.equal(addPayload.alias, "openrouter-1");
+
+  const modelsResponse = await app.inject({
+    method: "GET",
+    url: "/models"
+  });
+
+  assert.equal(modelsResponse.statusCode, 200);
+  const modelsPayload = JSON.parse(modelsResponse.body) as {
+    models: string[];
+    registry: Array<{ alias: string; label: string }>;
+  };
+  assert.deepEqual(modelsPayload.models, ["default", "openrouter-1"]);
+  assert.equal(modelsPayload.registry[1]?.label, "OpenRouter model 1");
+  assert.doesNotMatch(modelsResponse.body, /anthropic\/claude/);
+
+  const chatResponse = await app.inject({
+    method: "POST",
+    url: "/chat",
+    payload: {
+      modelAlias: "openrouter-1",
+      messages: [
+        {
+          role: "user",
+          content: "hello"
+        }
+      ]
+    }
+  });
+
+  assert.equal(chatResponse.statusCode, 200);
+  const chatPayload = JSON.parse(chatResponse.body) as {
+    ok: boolean;
+    model: string;
+    route: {
+      selectedAlias: string;
+    };
+  };
+  assert.equal(chatPayload.ok, true);
+  assert.equal(chatPayload.model, "openrouter-1");
+  assert.equal(chatPayload.route.selectedAlias, "openrouter-1");
+  assert.doesNotMatch(chatResponse.body, /anthropic\/claude/);
+});
+
 test("streaming route metadata arrives before tokens", async (t) => {
   const env = createTestEnv();
   const app = createApp({

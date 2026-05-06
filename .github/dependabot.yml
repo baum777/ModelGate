@@ -1,0 +1,64 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "autoupdate"
+    reviewers:
+      - "baum777"
+    commit-message:
+      prefix: "deps(actions)"
+    groups:
+      github-actions-all:
+        patterns:
+          - "*"
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:30"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 6
+    labels:
+      - "dependencies"
+      - "autoupdate"
+    cooldown:
+      semver-major-days: 14
+      semver-minor-days: 3
+      semver-patch-days: 1
+      include:
+        - "typescript"
+        - "tsx"
+        - "vite"
+        - "@vitejs/*"
+        - "@types/*"
+        - "@playwright/*"
+    versioning-strategy: "increase-if-necessary"
+    reviewers:
+      - "baum777"
+    commit-message:
+      prefix: "deps(npm)"
+    groups:
+      npm-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+        patterns:
+          - "*"
+      npm-major:
+        update-types:
+          - "major"
+        patterns:
+          - "*"
+      npm-security:
+        applies-to: "security-updates"
+        patterns:
+          - "*"

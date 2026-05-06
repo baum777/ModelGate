@@ -73,7 +73,7 @@ function normalizeBackendBaseUrl(env) {
 function normalizeTopicPrefix(value) {
   const prefix = String(value ?? "").replace(/\s+/g, " ").trim();
 
-  return prefix || "ModelGate smoke";
+  return prefix || "MosaicStack smoke";
 }
 
 function buildSmokeTopic(prefix, now = new Date(), randomSuffix = randomBytes(4).toString("hex")) {
@@ -308,6 +308,24 @@ function normalizePlanResponse(payload, expectedTopic) {
   return plan;
 }
 
+function readPlanBeforeTopic(plan) {
+  if (plan?.diff && typeof plan.diff === "object" && "before" in plan.diff) {
+    return plan.diff.before ?? null;
+  }
+
+  if ("currentValue" in plan && (typeof plan.currentValue === "string" || plan.currentValue === null)) {
+    return plan.currentValue;
+  }
+
+  const action = Array.isArray(plan.actions) ? plan.actions[0] : null;
+
+  if (action && typeof action === "object" && (typeof action.currentValue === "string" || action.currentValue === null)) {
+    return action.currentValue;
+  }
+
+  return null;
+}
+
 function normalizeVerificationResponse(payload, expectedTopic) {
   if (!payload || typeof payload !== "object" || payload.ok !== true) {
     return null;
@@ -324,6 +342,25 @@ function normalizeVerificationResponse(payload, expectedTopic) {
   }
 
   return verification;
+}
+
+function normalizeEvidenceReceipts(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((entry) =>
+      entry
+      && typeof entry === "object"
+      && typeof entry.eventType === "string"
+      && typeof entry.transactionId === "string"
+      && entry.transactionId.trim().length > 0
+    )
+    .map((entry) => ({
+      eventType: entry.eventType,
+      transactionId: entry.transactionId
+    }));
 }
 
 async function runUpdateLifecycle(fetchImpl, backendBaseUrl, roomId, topic, options = {}) {
@@ -460,8 +497,12 @@ async function runUpdateLifecycle(fetchImpl, backendBaseUrl, roomId, topic, opti
   const result = {
     roomId,
     planId: plan.planId,
-    beforeTopic: plan.diff.before,
+    beforeTopic: readPlanBeforeTopic(plan),
     targetTopic: topic,
+    evidence: {
+      execute: normalizeEvidenceReceipts(executed.result.evidence),
+      verify: normalizeEvidenceReceipts(verification.evidence)
+    },
     verification: {
       status: verification.status,
       expected: verification.expected,

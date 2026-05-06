@@ -1,0 +1,77 @@
+{
+  "skill": "repo-intake-sot-mapper",
+  "repoRoot": ".",
+  "canonicalSourceFiles": [
+    "AGENTS.md",
+    "README.md",
+    "package.json",
+    ".gitignore",
+    "docs/model-routing.md",
+    "docs/routing-matrix.md",
+    "docs/settings-login-adapter-mapping.md",
+    "docs/test-matrix.md",
+    "server/README.md",
+    "server/src/lib/env.ts",
+    ".codex/repo-intake-inputs.json"
+  ],
+  "primaryDocs": [
+    "README.md",
+    "docs/model-routing.md",
+    "docs/routing-matrix.md",
+    "docs/settings-login-adapter-mapping.md",
+    "docs/test-matrix.md",
+    "server/README.md"
+  ],
+  "governanceFiles": [
+    "AGENTS.md",
+    "README.md",
+    "docs/routing-matrix.md",
+    "docs/test-matrix.md",
+    ".codex/repo-intake-inputs.json"
+  ],
+  "likelyEntrypoints": [
+    "api/",
+    "server/",
+    "web/",
+    "tests/",
+    "config/"
+  ],
+  "testCommands": [
+    "C:/nvm4w/nodejs/node.exe C:/workspace/main_projects/codex-workflow-core/scripts/tools/validate-local-input-contract.mjs --contract C:/workspace/main_projects/MosaicStack/.codex/repo-intake-inputs.json",
+    "git diff --check",
+    "npm run typecheck",
+    "npm test",
+    "npm run build"
+  ],
+  "ignorePaths": [
+    ".git",
+    "node_modules",
+    "dist",
+    "coverage",
+    "test-results",
+    ".local-ai",
+    ".env",
+    ".env.local",
+    ".env.router",
+    ".vercel",
+    "server/node_modules",
+    "server/dist",
+    "web/node_modules",
+    "web/dist"
+  ],
+  "journalPaths": [
+    "server/src/lib/runtime-journal.ts",
+    "server/src/routes/journal.ts",
+    "server/test/runtime-journal.test.ts"
+  ],
+  "evidenceLogPaths": [
+    "docs/test-matrix.md",
+    "server/src/lib/workflow-model-router.ts",
+    "server/src/lib/llm-router.ts",
+    "server/src/lib/local-evidence-log.ts",
+    "server/test/router-evidence-log.test.ts",
+    "server/test/workflow-model-router.test.ts",
+    "server/test/llm-router.test.ts"
+  ],
+  "notes": "MosaicStack local generated/private evidence is intentionally repo-local and gitignored under .local-ai/. Runtime journal defaults to JOURNAL_FILE_PATH=.local-ai/state/runtime-journal.json when file mode is enabled; default JOURNAL_STORE_MODE is memory. Workflow model routing evidence defaults to MODEL_ROUTING_LOG_PATH=.local-ai/logs/WORKFLOW_MODEL_ROUTING.log.md when MODEL_ROUTING_LOG_ENABLED=true. Deterministic LLM router evidence defaults to LLM_ROUTER_LOG_PATH=.local-ai/logs/ROUTER_DECISIONS.log.md, LLM_MODEL_RUN_LOG_PATH=.local-ai/logs/MODEL_RUNS.log.md, and LLM_PROMPT_EVIDENCE_LOG_PATH=.local-ai/logs/PROMPT_EVIDENCE.log.md when router logging is enabled. GitHub action and integration auth state defaults are .local-ai/state/github-action-store.json and .local-ai/state/integration-auth-store.json when their file-backed modes are active. These paths are local/generated/private, not canonical source truth, not CI/premerge enforcement, and not autonomous trigger wiring."
+}

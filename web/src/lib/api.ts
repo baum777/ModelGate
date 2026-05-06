@@ -42,6 +42,15 @@ export type ModelResponse = {
   source: string;
 };
 
+export type AddOpenRouterModelResponse = {
+  ok: true;
+  alias: string;
+  model: ModelResponse["registry"][number];
+  models: string[];
+  registry: ModelResponse["registry"];
+  source: string;
+};
+
 export type DiagnosticsResponse = {
   ok: true;
   service: string;
@@ -105,6 +114,70 @@ export type DiagnosticsResponse = {
   };
 };
 
+export type IntegrationConnectionStatus =
+  | "not_connected"
+  | "connect_available"
+  | "connected"
+  | "auth_expired"
+  | "missing_server_config"
+  | "scope_denied"
+  | "upstream_unreachable"
+  | "disabled_by_policy"
+  | "error";
+
+export type IntegrationCredentialSource =
+  | "instance_configured"
+  | "user_connected"
+  | "user_connected_stub"
+  | "not_connected";
+
+export type IntegrationAuthState =
+  | "user_connected"
+  | "user_connected_stub"
+  | "auth_expired"
+  | "not_configured"
+  | "error"
+  | "not_connected";
+
+export type IntegrationCapability = {
+  read: "available" | "blocked" | "unknown";
+  propose: "available" | "blocked" | "unknown";
+  execute: "available" | "approval_required" | "blocked" | "unknown";
+  verify: "available" | "blocked" | "unknown";
+};
+
+export type IntegrationStatus = {
+  status: IntegrationConnectionStatus;
+  authState?: IntegrationAuthState;
+  credentialSource: IntegrationCredentialSource;
+  capabilities: IntegrationCapability;
+  executionMode: "disabled" | "approval_required" | "enabled";
+  labels: {
+    identity: string | null;
+    scope: string | null;
+    allowedReposStatus?: "configured" | "restricted" | "missing";
+    homeserver?: string | null;
+    roomAccess?: "readable" | "blocked" | "unknown";
+  };
+  lastVerifiedAt: string | null;
+  lastErrorCode: string | null;
+};
+
+export type IntegrationsStatusResponse = {
+  ok: true;
+  generatedAt: string;
+  github: IntegrationStatus;
+  matrix: IntegrationStatus;
+};
+
+export type SettingsConnectionTestTarget = "backend" | "github" | "matrix";
+
+export type SettingsConnectionTestResult = {
+  ok: true;
+  target: SettingsConnectionTestTarget;
+  detail: string;
+};
+
 export type JournalEntry = {
   id: string;
   timestamp: string;
@@ -160,6 +233,7 @@ const API_BASE_URL = (
   importMetaEnv.VITE_API_BASE_URL
   ?? (importMetaEnv.PROD ? "" : "http://127.0.0.1:8787")
 ).replace(/\/+$/, "");
+const CHAT_STREAM_IDLE_TIMEOUT_MS = 45_000;
 
 function resolveApiUrl(path: string) {
   return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
@@ -295,6 +369,23 @@ export async function fetchModels(): Promise<ModelResponse> {
   return response.json() as Promise<ModelResponse>;
 }
 
+export async function postOpenRouterModel(modelId: string): Promise<AddOpenRouterModelResponse> {
+  const response = await fetch(resolveApiUrl("/models/openrouter"), {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ modelId })
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return response.json() as Promise<AddOpenRouterModelResponse>;
+}
+
 export async function fetchDiagnostics(): Promise<DiagnosticsResponse> {
   const response = await fetch(resolveApiUrl("/diagnostics"), {
     credentials: "include"
@@ -330,6 +421,93 @@ export async function fetchJournalRecent(options?: { limit?: number; source?: Jo
   return response.json() as Promise<JournalRecentResponse>;
 }
 
+export async function fetchIntegrationsStatus(): Promise<IntegrationsStatusResponse> {
+  const response = await fetch(resolveApiUrl("/api/integrations/status"), {
+    credentials: "include"
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return response.json() as Promise<IntegrationsStatusResponse>;
+}
+
+export async function testSettingsConnection(target: SettingsConnectionTestTarget): Promise<SettingsConnectionTestResult> {
+  if (target === "backend") {
+    const health = await fetchHealth();
+
+    return {
+      ok: true,
+      target,
+      detail: `${health.service} (${health.mode})`
+    };
+  }
+
+  const path = target === "github" ? "/api/github/repos" : "/api/matrix/whoami";
+  const response = await fetch(resolveApiUrl(path), {
+    credentials: "include"
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  const payload = await response.json() as unknown;
+
+  if (target === "github") {
+    const repos = typeof payload === "object"
+      && payload !== null
+      && Array.isArray((payload as { repos?: unknown }).repos)
+      ? (payload as { repos: unknown[] }).repos.length
+      : 0;
+
+    return {
+      ok: true,
+      target,
+      detail: `${repos} repository${repos === 1 ? "" : "ies"} visible`
+    };
+  }
+
+  const matrixPayload = typeof payload === "object" && payload !== null
+    ? payload as { userId?: unknown; homeserver?: unknown }
+    : {};
+  const userId = typeof matrixPayload.userId === "string" && matrixPayload.userId.trim().length > 0
+    ? matrixPayload.userId.trim()
+    : "Matrix identity";
+  const homeserver = typeof matrixPayload.homeserver === "string" && matrixPayload.homeserver.trim().length > 0
+    ? matrixPayload.homeserver.trim()
+    : "configured homeserver";
+
+  return {
+    ok: true,
+    target,
+    detail: `${userId} on ${homeserver}`
+  };
+}
+
+export async function postIntegrationControlAction(provider: "github" | "matrix", action: "disconnect" | "reverify") {
+  const response = await fetch(resolveApiUrl(`/api/auth/${provider}/${action}`), {
+    method: "POST",
+    credentials: "include"
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return response.json() as Promise<{
+    ok: true;
+    provider: "github" | "matrix";
+  }>;
+}
+
+export function buildIntegrationConnectStartUrl(provider: "github" | "matrix", returnTo = "/console?mode=settings") {
+  const params = new URLSearchParams();
+  params.set("returnTo", returnTo);
+  return resolveApiUrl(`/api/auth/${provider}/start?${params.toString()}`);
+}
+
 export async function streamChatCompletion(
   body: {
     model?: string;
@@ -343,206 +521,268 @@ export async function streamChatCompletion(
   handlers: ChatStreamHandlers,
   signal?: AbortSignal
 ) {
-  const response = await fetch(resolveApiUrl("/chat"), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    credentials: "include",
-    body: JSON.stringify({
-      ...body,
-      stream: true
-    }),
-    signal
-  });
+  const timeoutController = new AbortController();
+  let idleTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  let timedOut = false;
 
-  const contentType = response.headers.get("content-type") ?? "";
+  const clearIdleTimeout = () => {
+    if (idleTimeoutHandle !== null) {
+      clearTimeout(idleTimeoutHandle);
+      idleTimeoutHandle = null;
+    }
+  };
 
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
+  const resetIdleTimeout = () => {
+    clearIdleTimeout();
+    idleTimeoutHandle = setTimeout(() => {
+      timedOut = true;
+      timeoutController.abort();
+    }, CHAT_STREAM_IDLE_TIMEOUT_MS);
+  };
+
+  const abortFromCaller = () => {
+    timeoutController.abort(signal?.reason);
+  };
+
+  if (signal?.aborted) {
+    abortFromCaller();
+  } else {
+    signal?.addEventListener("abort", abortFromCaller, { once: true });
   }
 
-  if (!contentType.includes("text/event-stream")) {
-    throw new Error("Expected an SSE response from the chat endpoint");
+  resetIdleTimeout();
+
+  let response: Response;
+
+  try {
+    response = await fetch(resolveApiUrl("/chat"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        ...body,
+        stream: true
+      }),
+      signal: timeoutController.signal
+    });
+  } catch (error) {
+    if (timedOut) {
+      handlers.onMalformed?.("Stream timed out before terminal frame. Partial output was preserved.");
+      clearIdleTimeout();
+      signal?.removeEventListener("abort", abortFromCaller);
+      return;
+    }
+
+    clearIdleTimeout();
+    signal?.removeEventListener("abort", abortFromCaller);
+    throw error;
   }
 
-  if (!response.body) {
-    throw new Error("The chat stream response did not include a body");
-  }
+  try {
+    const contentType = response.headers.get("content-type") ?? "";
 
-  let sawStart = false;
-  let sawTerminal = false;
+    if (!response.ok) {
+      throw new Error(await readErrorMessage(response));
+    }
 
-  function parseJson<T>(eventName: string, eventData: string) {
+    if (!contentType.includes("text/event-stream")) {
+      throw new Error("Expected an SSE response from the chat endpoint");
+    }
+
+    if (!response.body) {
+      throw new Error("The chat stream response did not include a body");
+    }
+
+    let sawStart = false;
+    let sawTerminal = false;
+
+    function parseJson<T>(eventName: string, eventData: string) {
+      try {
+        return JSON.parse(eventData) as T;
+      } catch {
+        handlers.onMalformed?.(`Malformed ${eventName} payload in backend SSE stream.`);
+        return null;
+      }
+    }
+
     try {
-      return JSON.parse(eventData) as T;
-    } catch {
-      handlers.onMalformed?.(`Malformed ${eventName} payload in backend SSE stream.`);
-      return null;
-    }
-  }
+      for await (const event of readSseEvents(response.body)) {
+        resetIdleTimeout();
 
-  for await (const event of readSseEvents(response.body)) {
-    if (event.event === "start") {
-      const payload = parseJson<{ ok?: unknown; model?: unknown }>("start", event.data);
+        if (event.event === "start") {
+          const payload = parseJson<{ ok?: unknown; model?: unknown }>("start", event.data);
 
-      if (!payload) {
-        continue;
-      }
+          if (!payload) {
+            continue;
+          }
 
-      if (payload.ok !== true || typeof payload.model !== "string" || payload.model.trim().length === 0) {
-        handlers.onMalformed?.("Backend stream start frame was incomplete.");
-        continue;
-      }
+          if (payload.ok !== true || typeof payload.model !== "string" || payload.model.trim().length === 0) {
+            handlers.onMalformed?.("Backend stream start frame was incomplete.");
+            continue;
+          }
 
-      sawStart = true;
-      handlers.onStart?.({
-        ok: true,
-        model: payload.model
-      });
-      continue;
-    }
-
-    if (event.event === "token" || event.event === "delta") {
-      if (!sawStart) {
-        handlers.onMalformed?.("Received token before stream start.");
-        continue;
-      }
-
-      const payload = parseJson<{ delta?: unknown }>("token", event.data);
-
-      if (payload && typeof payload.delta === "string" && payload.delta.length > 0) {
-        handlers.onToken?.(payload.delta);
-      }
-
-      continue;
-    }
-
-    if (event.event === "route") {
-      if (!sawStart) {
-        handlers.onMalformed?.("Received route before stream start.");
-        continue;
-      }
-
-      const payload = parseJson<{ ok?: unknown; route?: unknown }>("route", event.data);
-
-      if (!payload) {
-        continue;
-      }
-
-      if (payload.ok !== true || !payload.route || typeof payload.route !== "object") {
-        handlers.onMalformed?.("Backend route frame was incomplete.");
-        continue;
-      }
-
-      const route = payload.route as Partial<ChatRouteMetadata>;
-
-      if (
-        typeof route.selectedAlias !== "string"
-        || typeof route.taskClass !== "string"
-        || typeof route.fallbackUsed !== "boolean"
-        || typeof route.degraded !== "boolean"
-        || typeof route.streaming !== "boolean"
-      ) {
-        handlers.onMalformed?.("Backend route frame had invalid fields.");
-        continue;
-      }
-
-      handlers.onRoute?.({
-        ok: true,
-        route: {
-          selectedAlias: route.selectedAlias,
-          taskClass: route.taskClass as ChatRouteMetadata["taskClass"],
-          fallbackUsed: route.fallbackUsed,
-          degraded: route.degraded,
-          streaming: route.streaming,
-          policyVersion: typeof route.policyVersion === "string" ? route.policyVersion : undefined,
-          decisionReason: typeof route.decisionReason === "string" ? route.decisionReason : undefined,
-          retryCount: typeof route.retryCount === "number" ? route.retryCount : undefined
+          sawStart = true;
+          handlers.onStart?.({
+            ok: true,
+            model: payload.model
+          });
+          continue;
         }
-      });
-      continue;
-    }
 
-    if (event.event === "done") {
-      if (!sawStart) {
-        handlers.onMalformed?.("Received done before stream start.");
-        continue;
-      }
+        if (event.event === "token" || event.event === "delta") {
+          if (!sawStart) {
+            handlers.onMalformed?.("Received token before stream start.");
+            continue;
+          }
 
-      const payload = parseJson<{ ok?: unknown; model?: unknown; text?: unknown; route?: unknown }>("done", event.data);
+          const payload = parseJson<{ delta?: unknown }>("token", event.data);
 
-      if (!payload) {
-        continue;
-      }
+          if (payload && typeof payload.delta === "string" && payload.delta.length > 0) {
+            handlers.onToken?.(payload.delta);
+          }
 
-      if (
-        payload.ok !== true
-        || typeof payload.model !== "string"
-        || typeof payload.text !== "string"
-        || !payload.route
-        || typeof payload.route !== "object"
-      ) {
-        handlers.onMalformed?.("Backend stream terminal frame was incomplete.");
-        continue;
-      }
-
-      const route = payload.route as Partial<ChatRouteMetadata>;
-
-      if (
-        typeof route.selectedAlias !== "string"
-        || typeof route.taskClass !== "string"
-        || typeof route.fallbackUsed !== "boolean"
-        || typeof route.degraded !== "boolean"
-        || typeof route.streaming !== "boolean"
-      ) {
-        handlers.onMalformed?.("Backend stream terminal route metadata was incomplete.");
-        continue;
-      }
-
-      sawTerminal = true;
-      handlers.onDone?.({
-        ok: true,
-        model: payload.model,
-        text: payload.text,
-        route: {
-          selectedAlias: route.selectedAlias,
-          taskClass: route.taskClass as ChatRouteMetadata["taskClass"],
-          fallbackUsed: route.fallbackUsed,
-          degraded: route.degraded,
-          streaming: route.streaming,
-          policyVersion: typeof route.policyVersion === "string" ? route.policyVersion : undefined,
-          decisionReason: typeof route.decisionReason === "string" ? route.decisionReason : undefined,
-          retryCount: typeof route.retryCount === "number" ? route.retryCount : undefined
+          continue;
         }
-      });
-      continue;
-    }
 
-    if (event.event === "error") {
-      if (!sawStart) {
-        handlers.onMalformed?.("Received error before stream start.");
-        continue;
+        if (event.event === "route") {
+          if (!sawStart) {
+            handlers.onMalformed?.("Received route before stream start.");
+            continue;
+          }
+
+          const payload = parseJson<{ ok?: unknown; route?: unknown }>("route", event.data);
+
+          if (!payload) {
+            continue;
+          }
+
+          if (payload.ok !== true || !payload.route || typeof payload.route !== "object") {
+            handlers.onMalformed?.("Backend route frame was incomplete.");
+            continue;
+          }
+
+          const route = payload.route as Partial<ChatRouteMetadata>;
+
+          if (
+            typeof route.selectedAlias !== "string"
+            || typeof route.taskClass !== "string"
+            || typeof route.fallbackUsed !== "boolean"
+            || typeof route.degraded !== "boolean"
+            || typeof route.streaming !== "boolean"
+          ) {
+            handlers.onMalformed?.("Backend route frame had invalid fields.");
+            continue;
+          }
+
+          handlers.onRoute?.({
+            ok: true,
+            route: {
+              selectedAlias: route.selectedAlias,
+              taskClass: route.taskClass as ChatRouteMetadata["taskClass"],
+              fallbackUsed: route.fallbackUsed,
+              degraded: route.degraded,
+              streaming: route.streaming,
+              policyVersion: typeof route.policyVersion === "string" ? route.policyVersion : undefined,
+              decisionReason: typeof route.decisionReason === "string" ? route.decisionReason : undefined,
+              retryCount: typeof route.retryCount === "number" ? route.retryCount : undefined
+            }
+          });
+          continue;
+        }
+
+        if (event.event === "done") {
+          if (!sawStart) {
+            handlers.onMalformed?.("Received done before stream start.");
+            continue;
+          }
+
+          const payload = parseJson<{ ok?: unknown; model?: unknown; text?: unknown; route?: unknown }>("done", event.data);
+
+          if (!payload) {
+            continue;
+          }
+
+          if (
+            payload.ok !== true
+            || typeof payload.model !== "string"
+            || typeof payload.text !== "string"
+            || !payload.route
+            || typeof payload.route !== "object"
+          ) {
+            handlers.onMalformed?.("Backend stream terminal frame was incomplete.");
+            continue;
+          }
+
+          const route = payload.route as Partial<ChatRouteMetadata>;
+
+          if (
+            typeof route.selectedAlias !== "string"
+            || typeof route.taskClass !== "string"
+            || typeof route.fallbackUsed !== "boolean"
+            || typeof route.degraded !== "boolean"
+            || typeof route.streaming !== "boolean"
+          ) {
+            handlers.onMalformed?.("Backend stream terminal route metadata was incomplete.");
+            continue;
+          }
+
+          sawTerminal = true;
+          handlers.onDone?.({
+            ok: true,
+            model: payload.model,
+            text: payload.text,
+            route: {
+              selectedAlias: route.selectedAlias,
+              taskClass: route.taskClass as ChatRouteMetadata["taskClass"],
+              fallbackUsed: route.fallbackUsed,
+              degraded: route.degraded,
+              streaming: route.streaming,
+              policyVersion: typeof route.policyVersion === "string" ? route.policyVersion : undefined,
+              decisionReason: typeof route.decisionReason === "string" ? route.decisionReason : undefined,
+              retryCount: typeof route.retryCount === "number" ? route.retryCount : undefined
+            }
+          });
+          break;
+        }
+
+        if (event.event === "error") {
+          if (!sawStart) {
+            handlers.onMalformed?.("Received error before stream start.");
+            continue;
+          }
+
+          const payload = parseJson<{ ok?: unknown; error?: { message?: unknown } }>("error", event.data);
+
+          if (!payload) {
+            continue;
+          }
+
+          sawTerminal = true;
+          const message = payload.error && typeof payload.error.message === "string" ? payload.error.message : "Request failed";
+          handlers.onError?.(message);
+          break;
+        }
+
+        handlers.onMalformed?.(`Unknown SSE event "${event.event}" from backend.`);
+      }
+    } catch (error) {
+      if (timedOut) {
+        handlers.onMalformed?.("Stream timed out before terminal frame. Partial output was preserved.");
+        return;
       }
 
-      const payload = parseJson<{ ok?: unknown; error?: { message?: unknown } }>("error", event.data);
-
-      if (!payload) {
-        continue;
-      }
-
-      sawTerminal = true;
-      const message = payload.error && typeof payload.error.message === "string" ? payload.error.message : "Request failed";
-      handlers.onError?.(message);
-      continue;
+      throw error;
     }
 
-    handlers.onMalformed?.(`Unknown SSE event "${event.event}" from backend.`);
-  }
-
-  if (!sawStart) {
-    handlers.onMalformed?.("Stream ended without a start frame.");
-  } else if (!sawTerminal) {
-    handlers.onMalformed?.("Stream ended without a terminal frame.");
+    if (!sawStart) {
+      handlers.onMalformed?.("Stream ended without a start frame.");
+    } else if (!sawTerminal) {
+      handlers.onMalformed?.("Stream ended without a terminal frame.");
+    }
+  } finally {
+    clearIdleTimeout();
+    signal?.removeEventListener("abort", abortFromCaller);
   }
 }

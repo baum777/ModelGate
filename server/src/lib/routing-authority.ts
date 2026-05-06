@@ -69,8 +69,16 @@ function buildDecisionReason(policy: WorkflowModelPolicy, taskClass: RouteTaskCl
   ].join(";");
 }
 
-function sanitizeProviderTargets(policy: WorkflowModelPolicy) {
-  return [...new Set(policy.candidateModels.map((value) => value.trim()).filter(Boolean))];
+function resolveProviderTargetsForAlias(options: {
+  selection: ResolvedModelSelection;
+  defaultModelAlias: string;
+  policy: WorkflowModelPolicy;
+}) {
+  const targets = options.selection.publicModelAlias === options.defaultModelAlias
+    ? options.policy.candidateModels
+    : options.selection.providerTargets;
+
+  return [...new Set(targets.map((value) => value.trim()).filter(Boolean))];
 }
 
 export function resolveChatRouteDecision(options: {
@@ -88,7 +96,11 @@ export function resolveChatRouteDecision(options: {
   }
 
   const policy = resolveChatModel(options.env, options.modelCapabilitiesConfig);
-  const providerTargets = sanitizeProviderTargets(policy);
+  const providerTargets = resolveProviderTargetsForAlias({
+    selection: resolution.selection,
+    defaultModelAlias: options.modelRegistry.defaultModelAlias,
+    policy
+  });
 
   if (providerTargets.length === 0) {
     throw new Error("Chat route resolution failed: no provider targets available");

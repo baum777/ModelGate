@@ -1,4 +1,4 @@
-# ModelGate Console Implementation Plan
+# MosaicStack Console Implementation Plan
 
 ## Objective
 

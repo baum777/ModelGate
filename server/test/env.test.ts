@@ -13,7 +13,7 @@ test("env parsing allows Matrix-only startup without an OpenRouter key", () => {
     OPENROUTER_BASE_URL: "https://openrouter.ai/api/v1",
     OPENROUTER_MODEL: "openrouter/auto",
     OPENROUTER_MODELS: "",
-    APP_NAME: "modelgate-test",
+    APP_NAME: "mosaicstack-test",
     DEFAULT_SYSTEM_PROMPT: "prompt",
     CORS_ORIGINS: "http://localhost:5173",
     CHAT_MODEL: "google/gemma-4-31b-it:free",
@@ -32,6 +32,12 @@ test("env parsing allows Matrix-only startup without an OpenRouter key", () => {
     MATRIX_VERIFY_AFTER_EXECUTE: "true",
     MATRIX_ALLOWED_ACTION_TYPES: "set_room_topic",
     MATRIX_FAIL_CLOSED: "true",
+    INTEGRATION_AUTH_STORE_MODE: "file",
+    INTEGRATION_AUTH_STORE_FILE_PATH: ".local-ai/state/integration-auth-store.test.json",
+    INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID: "active-key",
+    INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_VERSION: "3",
+    INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY: "active-key-secret",
+    INTEGRATION_AUTH_ENCRYPTION_PREVIOUS_KEYS: "legacy@1:legacy-secret",
     GITHUB_ACTION_STORE_MODE: "file",
     GITHUB_ACTION_STORE_FILE_PATH: ".local-ai/state/github-action-store.test.json",
     RATE_LIMIT_ENABLED: "true",
@@ -47,9 +53,9 @@ test("env parsing allows Matrix-only startup without an OpenRouter key", () => {
     JOURNAL_FILE_PATH: ".local-ai/state/runtime-journal.test.json",
     JOURNAL_MAX_ENTRIES: "250",
     JOURNAL_EXPOSE_RECENT_LIMIT: "25",
-    MODEL_GATE_ADMIN_PASSWORD: "admin-password",
-    MODEL_GATE_SESSION_SECRET: "session-secret",
-    MODEL_GATE_SESSION_TTL_SECONDS: "43200"
+    MOSAIC_STACK_ADMIN_PASSWORD: "admin-password",
+    MOSAIC_STACK_SESSION_SECRET: "session-secret",
+    MOSAIC_STACK_SESSION_TTL_SECONDS: "43200"
   });
 
   assert.equal(env.OPENROUTER_API_KEY, "");
@@ -58,7 +64,7 @@ test("env parsing allows Matrix-only startup without an OpenRouter key", () => {
   assert.equal(env.OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B, "nemotron-key");
   assert.equal(env.PORT, 8787);
   assert.equal(env.HOST, "127.0.0.1");
-  assert.equal(env.APP_NAME, "modelgate-test");
+  assert.equal(env.APP_NAME, "mosaicstack-test");
   assert.equal(env.CHAT_MODEL, "google/gemma-4-31b-it:free");
   assert.equal(env.CODE_AGENT_MODEL, "qwen/qwen3-coder:free");
   assert.equal(env.STRUCTURED_PLAN_MODEL, "");
@@ -75,6 +81,12 @@ test("env parsing allows Matrix-only startup without an OpenRouter key", () => {
   assert.equal(env.MATRIX_VERIFY_AFTER_EXECUTE, true);
   assert.deepEqual(env.MATRIX_ALLOWED_ACTION_TYPES, ["set_room_topic"]);
   assert.equal(env.MATRIX_FAIL_CLOSED, true);
+  assert.equal(env.INTEGRATION_AUTH_STORE_MODE, "file");
+  assert.equal(env.INTEGRATION_AUTH_STORE_FILE_PATH, ".local-ai/state/integration-auth-store.test.json");
+  assert.equal(env.INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID, "active-key");
+  assert.equal(env.INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_VERSION, "3");
+  assert.equal(env.INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY, "active-key-secret");
+  assert.equal(env.INTEGRATION_AUTH_ENCRYPTION_PREVIOUS_KEYS, "legacy@1:legacy-secret");
   assert.equal(env.GITHUB_ACTION_STORE_MODE, "file");
   assert.equal(env.GITHUB_ACTION_STORE_FILE_PATH, ".local-ai/state/github-action-store.test.json");
   assert.equal(env.RATE_LIMIT_ENABLED, true);
@@ -90,9 +102,16 @@ test("env parsing allows Matrix-only startup without an OpenRouter key", () => {
   assert.equal(env.JOURNAL_FILE_PATH, ".local-ai/state/runtime-journal.test.json");
   assert.equal(env.JOURNAL_MAX_ENTRIES, 250);
   assert.equal(env.JOURNAL_EXPOSE_RECENT_LIMIT, 25);
-  assert.equal(env.MODEL_GATE_ADMIN_PASSWORD, "admin-password");
-  assert.equal(env.MODEL_GATE_SESSION_SECRET, "session-secret");
-  assert.equal(env.MODEL_GATE_SESSION_TTL_SECONDS, 43200);
+  assert.equal(env.MOSAIC_STACK_ADMIN_PASSWORD, "admin-password");
+  assert.equal(env.MOSAIC_STACK_SESSION_SECRET, "session-secret");
+  assert.equal(env.MOSAIC_STACK_SESSION_TTL_SECONDS, 43200);
+});
+
+test("env parsing fails closed for malformed rate-limit numbers when configured", () => {
+  assert.throws(() => createEnv({
+    RATE_LIMIT_FAIL_CLOSED: "true",
+    RATE_LIMIT_WINDOW_MS: "invalid"
+  }), /RATE_LIMIT_WINDOW_MS must be a positive integer/);
 });
 
 test("env parsing fails closed for malformed rate-limit numbers when configured", () => {

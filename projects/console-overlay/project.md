@@ -2,7 +2,7 @@
 
 ## Objective
 
-Maintain `ModelGate` as a backend-first console overlay with explicit authority separation between backend execution truth and browser rendering.
+Maintain `MosaicStack` as a backend-first console overlay with explicit authority separation between backend execution truth and browser rendering.
 
 ## Scope
 

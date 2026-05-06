@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readSseEvents } from "../src/lib/api.js";
-import { resolveChatComposerBlockReason, resolveChatScrollBehavior, resolveChatStreamStatusLabel } from "../src/components/ChatWorkspace.js";
+import { readSseEvents, streamChatCompletion } from "../src/lib/api.js";
+import { getWorkspaceGuide } from "../src/components/GuideOverlay.js";
+import {
+  buildChatRoutingStatusItems,
+  resolveChatComposerBlockReason,
+  resolveChatScrollBehavior,
+  resolveChatStreamStatusLabel,
+  shouldSubmitChatComposerOnKey
+} from "../src/components/ChatWorkspace.js";
 import {
   buildGovernedChatProposal,
   chatReducer,
@@ -22,6 +30,95 @@ function encodeChunks(chunks: string[]) {
     }
   });
 }
+
+function createSseResponse(chunks: string[], options?: { keepOpen?: boolean; signal?: AbortSignal }) {
+  const encoder = new TextEncoder();
+  const keepOpen = options?.keepOpen ?? false;
+
+  return new Response(new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+
+      if (keepOpen) {
+        options?.signal?.addEventListener("abort", () => {
+          controller.error(new DOMException("Aborted", "AbortError"));
+        }, { once: true });
+        return;
+      }
+
+      controller.close();
+    }
+  }), {
+    status: 200,
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8"
+    }
+  });
+}
+
+test("chat composer submits on Enter and preserves Shift+Enter for multiline input", () => {
+  assert.equal(shouldSubmitChatComposerOnKey({ key: "Enter", shiftKey: false, isComposing: false }), true);
+  assert.equal(shouldSubmitChatComposerOnKey({ key: "Enter", shiftKey: true, isComposing: false }), false);
+  assert.equal(shouldSubmitChatComposerOnKey({ key: "Enter", shiftKey: false, isComposing: true }), false);
+  assert.equal(shouldSubmitChatComposerOnKey({ key: "a", shiftKey: false, isComposing: false }), false);
+});
+
+test("chat guide covers visible interactive chat features", () => {
+  const guide = getWorkspaceGuide("de", "chat");
+  const guideText = guide.cards
+    .flatMap((card) => [card.eyebrow, card.title, card.body, ...card.points])
+    .join("\n");
+
+  assert.match(guideText, /Basis/);
+  assert.match(guideText, /Expert/);
+  assert.match(guideText, /Diagnostik/);
+  assert.match(guideText, /Enter/);
+  assert.match(guideText, /Shift\+Enter/);
+  assert.match(guideText, /Ausführungsmodus/);
+  assert.match(guideText, /Modellalias/);
+  assert.match(guideText, /Freigabe/);
+});
+
+test("all workspace guides provide detailed operational walkthroughs in both locales", () => {
+  const guideKeys = ["chat", "github", "matrix", "review", "settings"] as const;
+
+  for (const locale of ["en", "de"] as const) {
+    for (const key of guideKeys) {
+      const guide = getWorkspaceGuide(locale, key);
+      const guideText = guide.cards
+        .flatMap((card) => [card.eyebrow, card.title, card.body, ...card.points])
+        .join("\n");
+
+      assert.ok(guide.cards.length >= 6, `${locale}/${key} should have at least six guide cards`);
+      assert.ok(
+        guide.cards.every((card) => card.points.length >= 4),
+        `${locale}/${key} guide cards should include detailed point lists`,
+      );
+      assert.match(guideText, locale === "de" ? /Backend|backend|Freigabe|Diagnostik|Status/ : /Backend|backend|approval|diagnostics|status/i);
+    }
+  }
+});
+
+test("chat visual review styles expose active mode color and subtle hidden guide scrolling", () => {
+  const styles = readFileSync("web/src/styles.css", "utf8");
+
+  assert.match(styles, /\.chat-toolbar-controls\s+\.mode-toggle-button-active/);
+  assert.match(styles, /\.chat-toolbar-controls\s+\.mode-toggle-button-active[\s\S]*linear-gradient/);
+  assert.match(styles, /\.guide-card[\s\S]*overflow-y:\s*auto/);
+  assert.match(styles, /\.guide-card[\s\S]*scrollbar-width:\s*none/);
+  assert.match(styles, /\.guide-card::-webkit-scrollbar[\s\S]*display:\s*none/);
+});
+
+test("console shell styles hide native scrollbars and clip page-level horizontal overflow", () => {
+  const styles = readFileSync("web/src/styles.css", "utf8");
+
+  assert.match(styles, /scrollbar-width:\s*none/);
+  assert.match(styles, /::-webkit-scrollbar[\s\S]*display:\s*none/);
+  assert.match(styles, /html,\s*body,\s*#root[\s\S]*overflow-x:\s*hidden/);
+  assert.match(styles, /\.app-shell-console[\s\S]*max-width:\s*100vw/);
+});
 
 test("chat reducer finalizes exactly one assistant draft on done with route metadata", async () => {
   const events: Array<{ event: string; data: string }> = [];
@@ -116,6 +213,76 @@ test("chat reducer surfaces malformed stream ordering", () => {
   assert.equal(state.currentAssistantDraft, null);
   assert.equal(state.lastStreamWarning, "Received token before stream start.");
   assert.equal(state.messages.length, 1);
+});
+
+test("stream chat marks missing terminal frames as malformed", async () => {
+  const originalFetch = globalThis.fetch;
+  const tokens: string[] = [];
+  const malformed: string[] = [];
+
+  globalThis.fetch = async () => createSseResponse([
+    "event: start\ndata: {\"ok\":true,\"model\":\"default\"}\n\n",
+    "event: token\ndata: {\"delta\":\"Partial\"}\n\n"
+  ]);
+
+  try {
+    await streamChatCompletion(
+      {
+        modelAlias: "default",
+        messages: [{ role: "user", content: "hello" }]
+      },
+      {
+        onToken: (delta) => tokens.push(delta),
+        onMalformed: (message) => malformed.push(message)
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.deepEqual(tokens, ["Partial"]);
+  assert.deepEqual(malformed, ["Stream ended without a terminal frame."]);
+});
+
+test("stream chat times out with explicit malformed feedback", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const malformed: string[] = [];
+  const tokens: string[] = [];
+
+  globalThis.setTimeout = ((handler: Parameters<typeof setTimeout>[0], timeout?: Parameters<typeof setTimeout>[1], ...args: unknown[]) =>
+    originalSetTimeout(handler, Math.min(typeof timeout === "number" ? timeout : 0, 5), ...args)
+  ) as typeof setTimeout;
+
+  globalThis.fetch = async (_input, init) => createSseResponse(
+    [
+      "event: start\ndata: {\"ok\":true,\"model\":\"default\"}\n\n",
+      "event: token\ndata: {\"delta\":\"Hel\"}\n\n"
+    ],
+    {
+      keepOpen: true,
+      signal: init?.signal as AbortSignal | undefined
+    }
+  );
+
+  try {
+    await streamChatCompletion(
+      {
+        modelAlias: "default",
+        messages: [{ role: "user", content: "hello" }]
+      },
+      {
+        onToken: (delta) => tokens.push(delta),
+        onMalformed: (message) => malformed.push(message)
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+  }
+
+  assert.deepEqual(tokens, ["Hel"]);
+  assert.deepEqual(malformed, ["Stream timed out before terminal frame. Partial output was preserved."]);
 });
 
 test("chat reducer records rejected proposal receipts", () => {
@@ -444,4 +611,42 @@ test("stream status helper prefers malformed and cancelled over base connection 
     connectionState: "error",
     copy
   }), "unverifiable");
+});
+
+test("chat routing status summarizes alias, backend, fallback policy, and route metadata without provider targets", () => {
+  const items = buildChatRoutingStatusItems({
+    selectedModel: "default",
+    backendHealthy: true,
+    fallbackAllowed: true,
+    activeRoute: {
+      selectedAlias: "default",
+      taskClass: "dialog",
+      fallbackUsed: true,
+      degraded: true,
+      streaming: true,
+    },
+    copy: {
+      activeModel: "Active model",
+      providerStatus: "Provider status",
+      fallbackPolicy: "Fallback policy",
+      routeState: "Route state",
+      ready: "Ready",
+      checking: "Checking",
+      error: "Error",
+      fallbackEnabled: "Fallback enabled",
+      fallbackDisabled: "Fallback disabled",
+      fallbackUsed: "Fallback used",
+      degraded: "degraded",
+      routePending: "Route pending",
+      unavailable: "Unavailable",
+    },
+  });
+
+  assert.deepEqual(items, [
+    { label: "Active model", value: "default", tone: "ready" },
+    { label: "Provider status", value: "Ready", tone: "ready" },
+    { label: "Fallback policy", value: "Fallback enabled", tone: "partial" },
+    { label: "Route state", value: "Fallback used · degraded", tone: "partial" },
+  ]);
+  assert.equal(items.some((item) => item.value.includes("openrouter")), false);
 });

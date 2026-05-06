@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 const HEALTH_OK = {
   ok: true,
-  service: "modelgate-test",
+  service: "mosaicstack-test",
   mode: "local",
   upstream: "openrouter",
   defaultModel: "default",
@@ -17,6 +17,69 @@ const MODELS_OK = {
   models: ["default"],
   source: "backend-policy",
   providerTarget: "openrouter/auto",
+};
+
+const DIAGNOSTICS_OK = {
+  ok: true,
+  service: "mosaicstack-test",
+  runtimeMode: "local",
+  diagnosticsGeneratedAt: "2026-04-30T12:00:00.000Z",
+  processStartedAt: "2026-04-30T11:58:00.000Z",
+  uptimeMs: 120000,
+  models: {
+    defaultPublicAlias: "default",
+    publicAliases: ["default"],
+  },
+  routing: {
+    mode: "policy",
+    allowFallback: true,
+    failClosed: true,
+    requireBackendOwnedResolution: true,
+  },
+  rateLimit: {
+    enabled: true,
+    windowMs: 60000,
+    limits: {
+      chat: 30,
+      auth_login: 8,
+      github_propose: 10,
+      github_execute: 6,
+      matrix_execute: 6,
+    },
+    blockedByScope: {
+      chat: 0,
+      auth_login: 0,
+      github_propose: 0,
+      github_execute: 0,
+      matrix_execute: 0,
+    },
+  },
+  actionStore: {
+    mode: "memory",
+  },
+  github: {
+    configured: true,
+    ready: true,
+  },
+  matrix: {
+    configured: false,
+    ready: false,
+  },
+  journal: {
+    enabled: true,
+    mode: "memory",
+    maxEntries: 500,
+    exposeRecentLimit: 50,
+    recentCount: 0,
+  },
+  counters: {
+    chatRequests: 0,
+    chatStreamStarted: 0,
+    chatStreamCompleted: 0,
+    chatStreamError: 0,
+    chatStreamAborted: 0,
+    upstreamError: 0,
+  },
 };
 
 const MATRIX_WHOAMI_OK = {
@@ -40,6 +103,48 @@ const MATRIX_ROOMS_OK = {
   ],
 };
 
+const INTEGRATIONS_STATUS_OK = {
+  ok: true,
+  generatedAt: "2026-04-27T12:00:00.000Z",
+  github: {
+    status: "connect_available",
+    credentialSource: "not_connected",
+    capabilities: {
+      read: "blocked",
+      propose: "blocked",
+      execute: "blocked",
+      verify: "blocked",
+    },
+    executionMode: "disabled",
+    labels: {
+      identity: null,
+      scope: "No allowed repositories configured.",
+      allowedReposStatus: "missing",
+    },
+    lastVerifiedAt: null,
+    lastErrorCode: null,
+  },
+  matrix: {
+    status: "connect_available",
+    credentialSource: "not_connected",
+    capabilities: {
+      read: "blocked",
+      propose: "blocked",
+      execute: "blocked",
+      verify: "blocked",
+    },
+    executionMode: "disabled",
+    labels: {
+      identity: null,
+      scope: "Matrix scope unavailable until backend config is ready.",
+      homeserver: null,
+      roomAccess: "unknown",
+    },
+    lastVerifiedAt: null,
+    lastErrorCode: null,
+  },
+};
+
 const CHAT_STREAM = [
   "event: start",
   'data: {"ok":true,"model":"default"}',
@@ -55,11 +160,26 @@ const CHAT_STREAM = [
   "",
 ].join("\n");
 
+const CHAT_STREAM_FALLBACK = [
+  "event: start",
+  'data: {"ok":true,"model":"default"}',
+  "",
+  "event: route",
+  'data: {"ok":true,"route":{"selectedAlias":"default","taskClass":"dialog","fallbackUsed":true,"degraded":true,"streaming":true}}',
+  "",
+  "event: token",
+  'data: {"delta":"Hello from fallback route"}',
+  "",
+  "event: done",
+  'data: {"ok":true,"model":"default","text":"Hello from fallback route","route":{"selectedAlias":"default","taskClass":"dialog","fallbackUsed":true,"degraded":true,"streaming":true}}',
+  "",
+].join("\n");
+
 type MatrixStatus = "ok" | "error" | "malformed";
 
 async function installBaseMocks(
   page: Page,
-  options?: { matrixStatus?: MatrixStatus },
+  options?: { matrixStatus?: MatrixStatus; integrationsStatus?: typeof INTEGRATIONS_STATUS_OK },
 ) {
   await page.route("**/health", async (route) => {
     await route.fulfill({
@@ -74,6 +194,22 @@ async function installBaseMocks(
       status: 200,
       contentType: "application/json",
       body: JSON.stringify(MODELS_OK),
+    });
+  });
+
+  await page.route("**/diagnostics", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(DIAGNOSTICS_OK),
+    });
+  });
+
+  await page.route("**/api/integrations/status", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(options?.integrationsStatus ?? INTEGRATIONS_STATUS_OK),
     });
   });
 
@@ -282,7 +418,7 @@ async function installGitHubWorkspaceMocks(page: Page, options: GitHubWorkspaceM
           },
           baseRef: "main",
           baseSha: "abc123",
-          branchName: "modelgate/demo-plan",
+          branchName: "mosaicstack/demo-plan",
           targetBranch: "main",
           status: "pending_review",
           stale: false,
@@ -335,7 +471,7 @@ async function installGitHubWorkspaceMocks(page: Page, options: GitHubWorkspaceM
         result: {
           planId: "plan-123",
           status: "executed",
-          branchName: "modelgate/demo-plan",
+          branchName: "mosaicstack/demo-plan",
           baseSha: "abc123",
           headSha: "def456",
           commitSha: "def456",
@@ -374,7 +510,7 @@ async function installGitHubWorkspaceMocks(page: Page, options: GitHubWorkspaceM
           planId: "plan-123",
           status: "verified",
           checkedAt: "2026-04-16T08:31:00.000Z",
-          branchName: "modelgate/demo-plan",
+          branchName: "mosaicstack/demo-plan",
           targetBranch: "main",
           expectedBaseSha: "abc123",
           actualBaseSha: "abc123",
@@ -435,15 +571,58 @@ async function installAbortableChatFetchMock(page: Page) {
 }
 
 async function loadConsole(page: Page) {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/console", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("app-shell")).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText("ModelGate Console")).toBeVisible();
+  await expect(page.getByText("MosaicStack Console")).toBeVisible();
   await expect(page.getByTestId("tab-chat")).toBeVisible();
   await expect(page.getByTestId("tab-github")).toBeVisible();
   await expect(page.getByTestId("tab-matrix")).toBeVisible();
   await expect(page.getByTestId("tab-review")).toBeVisible();
   await expect(page.getByTestId("tab-settings")).toBeVisible();
 }
+
+test("root route renders public preview without console internals", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  await expect(page.getByTestId("public-preview")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("Public preview shell. Governed workspace access stays separate from this route.")).toBeVisible();
+  await expect(page.getByTestId("app-shell")).toHaveCount(0);
+  await expect(page.getByTestId("tab-chat")).toHaveCount(0);
+  await expect(page.getByTestId("truth-rail-health")).toHaveCount(0);
+});
+
+test("console route normalizes legacy query entry and keeps active workspace in the URL", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await page.goto("/?console=1", { waitUntil: "domcontentloaded" });
+
+  await expect(page.getByTestId("app-shell")).toBeVisible({ timeout: 15_000 });
+  await expect(page).toHaveURL(/\/console\?mode=chat$/);
+
+  await page.getByTestId("tab-github").click();
+  await expect(page.getByTestId("github-workspace")).toBeVisible();
+  await expect(page).toHaveURL(/\/console\?mode=github$/);
+
+  await page.goto("/console?mode=matrix", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("matrix-workspace")).toBeVisible({ timeout: 15_000 });
+  await expect(page).toHaveURL(/\/console\?mode=matrix$/);
+});
+
+test("GitHub and Matrix workspaces expose backend route ownership in the truth rail", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await loadConsole(page);
+
+  await page.getByTestId("tab-github").click();
+  await expect(page.getByTestId("truth-rail-route-ownership")).toBeVisible();
+  await expect(page.getByTestId("truth-rail-route-ownership")).toContainText("GitHub and Matrix are not browser integrations.");
+  await expect(page.getByTestId("truth-rail-route-ownership")).toContainText("identity");
+  await expect(page.getByTestId("truth-rail-route-ownership")).toContainText("verify");
+
+  await page.getByTestId("tab-matrix").click();
+  await expect(page.getByTestId("truth-rail-route-ownership")).toBeVisible();
+  await expect(page.getByTestId("truth-rail-route-ownership")).toContainText("analyze");
+  await expect(page.getByTestId("truth-rail-route-ownership")).toContainText("execute");
+});
 
 async function setLocale(page: Page, locale: "en" | "de") {
   const button = locale === "en" ? page.getByTestId("locale-en") : page.getByTestId("locale-de");
@@ -474,6 +653,35 @@ test("shell renders core governed surfaces and keeps secrets out of the DOM", as
   await expect(body).not.toContainText("sk-test-matrix-token");
 });
 
+test("left rail workspace tabs keep keyboard focus names in compact layout", async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 720 });
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await loadConsole(page);
+
+  const matrixTab = page.getByTestId("tab-matrix");
+  await expect(matrixTab).toHaveAttribute("aria-label", "Matrix");
+
+  await matrixTab.focus();
+  await expect(matrixTab).toBeFocused();
+  await expect(matrixTab).toHaveCSS("outline-style", "solid");
+});
+
+test("console shell avoids page-level horizontal overflow in compact desktop layout", async ({ page }) => {
+  await page.setViewportSize({ width: 916, height: 688 });
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await loadConsole(page);
+
+  const overflow = await page.evaluate(() => ({
+    htmlClientWidth: document.documentElement.clientWidth,
+    htmlScrollWidth: document.documentElement.scrollWidth,
+    bodyClientWidth: document.body.clientWidth,
+    bodyScrollWidth: document.body.scrollWidth,
+  }));
+
+  expect(overflow.htmlScrollWidth).toBeLessThanOrEqual(overflow.htmlClientWidth);
+  expect(overflow.bodyScrollWidth).toBeLessThanOrEqual(overflow.bodyClientWidth);
+});
+
 test("locale toggle switches key copy and persists across reload", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
   await loadConsole(page);
@@ -489,7 +697,7 @@ test("locale toggle switches key copy and persists across reload", async ({ page
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
 });
 
-test("workspace guide presents three navigable cards", async ({ page }) => {
+test("workspace guide presents comprehensive navigable chat cards", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
   await loadConsole(page);
   await setLocale(page, "de");
@@ -497,15 +705,45 @@ test("workspace guide presents three navigable cards", async ({ page }) => {
   await page.getByTestId("guide-chat").click();
   const dialog = page.getByRole("dialog", { name: "Chat-Guide" });
   await expect(dialog).toBeVisible();
-  await expect(page.getByTestId("guide-chat-card")).toContainText("Composer zuerst");
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Arbeitsbereiche und Arbeitsmodus");
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Basis");
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Expert");
 
   await dialog.getByRole("button", { name: "Weiter" }).click();
-  await expect(page.getByTestId("guide-chat-card")).toContainText("Best Practice");
-  await expect(page.getByTestId("guide-chat-card")).toContainText("Vorschlag vor Ausführung");
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Guide, Status und Diagnostik");
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Diagnostik öffnen");
 
   await dialog.getByRole("button", { name: "Weiter" }).click();
-  await expect(page.getByTestId("guide-chat-card")).toContainText("Logik");
-  await expect(page.getByTestId("guide-chat-card")).toContainText("Backend-eigener Stream");
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Ausführungsmodus");
+
+  await dialog.getByRole("button", { name: "Weiter" }).click();
+  await dialog.getByRole("button", { name: "Weiter" }).click();
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Enter bereitet den nächsten Schritt vor");
+  await expect(page.getByTestId("guide-chat-card")).toContainText("Shift+Enter");
+});
+
+test("all workspace guides expose detailed operational cards", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await loadConsole(page);
+
+  const workspaces = [
+    { tab: "chat", guide: "guide-chat", title: "Chat guide", expected: "backend status" },
+    { tab: "github", guide: "guide-github", title: "GitHub guide", expected: "GitHub readiness" },
+    { tab: "matrix", guide: "guide-matrix", title: "Matrix guide", expected: "explicit target" },
+    { tab: "review", guide: "guide-review", title: "Review guide", expected: "human decision" },
+    { tab: "settings", guide: "guide-settings", title: "Settings guide", expected: "backend authority" },
+  ];
+
+  for (const workspace of workspaces) {
+    await page.getByTestId(`tab-${workspace.tab}`).click();
+    await page.getByTestId(workspace.guide).click();
+    const dialog = page.getByRole("dialog", { name: workspace.title });
+    await expect(dialog).toBeVisible();
+    await expect.poll(() => dialog.locator(".guide-card-dot").count()).toBeGreaterThanOrEqual(6);
+    await expect(dialog).toContainText(workspace.expected);
+    await dialog.getByRole("button", { name: "Close" }).click();
+    await expect(dialog).toHaveCount(0);
+  }
 });
 
 test("chat enforces proposal-first execution and sends backend request only on approve", async ({ page }) => {
@@ -527,7 +765,7 @@ test("chat enforces proposal-first execution and sends backend request only on a
 
   await loadConsole(page);
   await page.getByTestId("chat-composer").fill("Please propose a safe backend action.");
-  await page.getByTestId("chat-send").click();
+  await page.getByTestId("chat-composer").press("Enter");
 
   await expect(page.getByTestId("chat-proposal-card")).toBeVisible();
   expect(chatRequests).toBe(0);
@@ -536,6 +774,43 @@ test("chat enforces proposal-first execution and sends backend request only on a
   await expect(page.getByTestId("chat-connection-state")).toHaveText("Completed");
   await expect(page.locator(".thread-block-agent")).toHaveCount(1);
   expect(chatRequests).toBe(1);
+});
+
+test("chat routing status strip reflects backend routing without exposing provider targets", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+
+  await page.route("**/chat", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "text/event-stream; charset=utf-8",
+      body: CHAT_STREAM_FALLBACK,
+    });
+  });
+
+  await loadConsole(page);
+
+  const routingStatus = page.getByTestId("chat-routing-status");
+  await expect(routingStatus).toBeVisible();
+  await expect(routingStatus).toContainText("Active model");
+  await expect(routingStatus).toContainText("default");
+  await expect(routingStatus).toContainText("Provider status");
+  await expect(routingStatus).toContainText("Ready");
+  await expect(routingStatus).toContainText("Fallback enabled");
+  await expect(routingStatus).toContainText("Route pending");
+
+  await page.getByTestId("chat-composer").fill("Show route status.");
+  await page.getByTestId("chat-send").click();
+  await page.getByTestId("chat-decision-zone").getByRole("button", { name: "Approve" }).click();
+
+  await expect(routingStatus).toContainText("Fallback used");
+  await expect(routingStatus).toContainText("degraded");
+  await expect(page.locator("body")).not.toContainText("openrouter/auto");
+  await expect(page.locator("body")).not.toContainText("sk-test");
 });
 
 test("chat abort keeps fail-closed behavior and does not fabricate assistant completion", async ({ page }) => {
@@ -819,15 +1094,195 @@ test("Settings keeps diagnostics behind Expert mode and allows clearing local en
   await expect(settingsWorkspace).toContainText("No local diagnostic events yet.");
 });
 
-test("Settings GitHub CTA opens the GitHub workspace without an admin login gate", async ({ page }) => {
+test("Settings GitHub CTA starts backend-owned auth flow and returns to Settings", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
+  let startHits = 0;
+  let callbackHits = 0;
+
+  await page.route("**/api/auth/github/start**", async (route) => {
+    startHits += 1;
+    const url = new URL(route.request().url());
+    expect(url.searchParams.get("returnTo")).toBe("/console?mode=settings");
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html; charset=utf-8",
+      body: "<!doctype html><html><body><script>window.location.replace('/api/auth/github/callback?state=oauth-state&code=oauth-code');</script></body></html>",
+    });
+  });
+
+  await page.route("**/api/auth/github/callback**", async (route) => {
+    callbackHits += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html; charset=utf-8",
+      body: "<!doctype html><html><body><script>window.location.replace('/console?mode=settings');</script></body></html>",
+    });
+  });
+
   await loadConsole(page);
 
   await page.getByTestId("tab-settings").click();
   const settingsWorkspace = page.getByTestId("settings-workspace");
-  const githubAdapter = settingsWorkspace.locator(".settings-adapter-row").filter({ hasText: "GitHub" });
+  const githubAdapter = settingsWorkspace.getByTestId("settings-adapter-github");
 
-  await githubAdapter.getByRole("button", { name: "Open" }).click();
-  await expect(page.getByTestId("github-workspace")).toBeVisible();
-  await expect(page.getByTestId("github-admin-login")).toHaveCount(0);
+  const githubConnect = githubAdapter.getByTestId("settings-adapter-github-action-connect");
+  await expect(githubConnect).toHaveAttribute("href", /\/api\/auth\/github\/start\?returnTo=%2Fconsole%3Fmode%3Dsettings$/);
+  await githubConnect.click();
+  await expect(page).toHaveURL(/\/console\?mode=settings$/);
+  await expect(page.getByTestId("settings-workspace")).toBeVisible();
+  expect(startHits).toBe(1);
+  expect(callbackHits).toBe(1);
+  await expect(page.locator("body")).not.toContainText("sk-test");
+});
+
+test("Settings Matrix CTA starts backend-owned auth flow and returns to Settings", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  let startHits = 0;
+  let callbackHits = 0;
+
+  await page.route("**/api/auth/matrix/start**", async (route) => {
+    startHits += 1;
+    const url = new URL(route.request().url());
+    expect(url.searchParams.get("returnTo")).toBe("/console?mode=settings");
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html; charset=utf-8",
+      body: "<!doctype html><html><body><script>window.location.replace('/api/auth/matrix/callback?state=sso-state&loginToken=live-login-token');</script></body></html>",
+    });
+  });
+
+  await page.route("**/api/auth/matrix/callback**", async (route) => {
+    callbackHits += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html; charset=utf-8",
+      body: "<!doctype html><html><body><script>window.location.replace('/console?mode=settings');</script></body></html>",
+    });
+  });
+
+  await loadConsole(page);
+
+  await page.getByTestId("tab-settings").click();
+  const settingsWorkspace = page.getByTestId("settings-workspace");
+  const matrixAdapter = settingsWorkspace.getByTestId("settings-adapter-matrix");
+
+  const matrixConnect = matrixAdapter.getByTestId("settings-adapter-matrix-action-connect");
+  await expect(matrixConnect).toHaveAttribute("href", /\/api\/auth\/matrix\/start\?returnTo=%2Fconsole%3Fmode%3Dsettings$/);
+  await matrixConnect.click();
+  await expect(page).toHaveURL(/\/console\?mode=settings$/);
+  await expect(page.getByTestId("settings-workspace")).toBeVisible();
+  expect(startHits).toBe(1);
+  expect(callbackHits).toBe(1);
+  await expect(page.locator("body")).not.toContainText("sk-test");
+});
+
+test("Settings connected auth CTAs call backend-owned control routes", async ({ page }) => {
+  const connectedIntegrationsStatus = {
+    ...INTEGRATIONS_STATUS_OK,
+    github: {
+      ...INTEGRATIONS_STATUS_OK.github,
+      status: "connected",
+      credentialSource: "user_connected",
+      capabilities: {
+        read: "available",
+        propose: "available",
+        execute: "approval_required",
+        verify: "available",
+      },
+      executionMode: "approval_required",
+      labels: {
+        identity: "octocat",
+        scope: "2 allowed repos",
+        allowedReposStatus: "configured",
+      },
+      lastVerifiedAt: "2026-04-27T12:00:00.000Z",
+      lastErrorCode: null,
+    },
+  } satisfies typeof INTEGRATIONS_STATUS_OK;
+  await installBaseMocks(page, {
+    matrixStatus: "ok",
+    integrationsStatus: connectedIntegrationsStatus,
+  });
+  let reverifyHits = 0;
+  let disconnectHits = 0;
+
+  await page.route("**/api/auth/github/reverify", async (route) => {
+    reverifyHits += 1;
+    expect(route.request().method()).toBe("POST");
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, provider: "github" }),
+    });
+  });
+
+  await page.route("**/api/auth/github/disconnect", async (route) => {
+    disconnectHits += 1;
+    expect(route.request().method()).toBe("POST");
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, provider: "github" }),
+    });
+  });
+
+  await loadConsole(page);
+  await page.getByTestId("tab-settings").click();
+  const githubAdapter = page.getByTestId("settings-adapter-github");
+
+  await githubAdapter.getByTestId("settings-adapter-github-action-reverify").click();
+  await githubAdapter.getByTestId("settings-adapter-github-action-disconnect").click();
+
+  expect(reverifyHits).toBe(1);
+  expect(disconnectHits).toBe(1);
+  await expect(page.locator("body")).not.toContainText("sk-test");
+});
+
+test("Settings verification buttons call backend-owned read checks without exposing secrets", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  let githubHits = 0;
+
+  await page.route("**/api/github/repos", async (route) => {
+    githubHits += 1;
+    expect(route.request().method()).toBe("GET");
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        checkedAt: "2026-04-30T12:00:00.000Z",
+        repos: [
+          {
+            owner: "octo",
+            repo: "demo",
+            fullName: "octo/demo",
+            defaultBranch: "main",
+            defaultBranchSha: "abc123",
+            description: "Demo repository",
+            isPrivate: false,
+            status: "ready",
+            permissions: { canWrite: true },
+            checkedAt: "2026-04-30T12:00:00.000Z",
+            token: "sk-test-github-token",
+          },
+        ],
+      }),
+    });
+  });
+
+  await loadConsole(page);
+  await page.getByTestId("tab-settings").click();
+  const settingsWorkspace = page.getByTestId("settings-workspace");
+
+  await settingsWorkspace.getByTestId("settings-verification-backend-action").click();
+  await expect(settingsWorkspace.getByTestId("settings-verification-backend")).toContainText("mosaicstack-test");
+
+  await settingsWorkspace.getByTestId("settings-verification-github-action").click();
+  await expect(settingsWorkspace.getByTestId("settings-verification-github")).toContainText("1 repository visible");
+
+  await settingsWorkspace.getByTestId("settings-verification-matrix-action").click();
+  await expect(settingsWorkspace.getByTestId("settings-verification-matrix")).toContainText("@user:matrix.example");
+
+  expect(githubHits).toBe(1);
+  await expect(page.locator("body")).not.toContainText("sk-test");
 });

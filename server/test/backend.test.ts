@@ -77,8 +77,8 @@ test("diagnostics returns safe observability data without exposing secret env va
   const env = createTestEnv({
     OPENROUTER_API_KEY: "secret-openrouter-token",
     GITHUB_TOKEN: "secret-github-token",
-    MODEL_GATE_ADMIN_PASSWORD: "secret-admin-password",
-    MODEL_GATE_SESSION_SECRET: "secret-session-secret",
+    MOSAIC_STACK_ADMIN_PASSWORD: "secret-admin-password",
+    MOSAIC_STACK_SESSION_SECRET: "secret-session-secret",
   });
   const app = createApp({
     env,

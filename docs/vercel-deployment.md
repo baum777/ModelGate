@@ -1,6 +1,6 @@
 # Vercel Deployment
 
-ModelGate is deployed as a static frontend plus serverless API handlers.
+MosaicStack is deployed as a static frontend plus serverless API handlers.
 
 ## Topology
 

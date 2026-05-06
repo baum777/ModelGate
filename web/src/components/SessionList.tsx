@@ -1,4 +1,4 @@
-import React, { type ReactNode } from "react";
+import React, { useMemo, type ReactNode } from "react";
 import type { SessionStatus, WorkspaceKind, WorkspaceSession } from "../lib/workspace-state.js";
 import { sortSessionsByUpdatedAt, workspaceLabel } from "../lib/workspace-state.js";
 import { SectionLabel, StatusBadge } from "./ShellPrimitives.js";
@@ -23,6 +23,34 @@ type SessionListProps<TMetadata> = {
   headerNote?: ReactNode;
   showManagement?: boolean;
 };
+
+const relativeTimeFormatters = new Map<string, Intl.RelativeTimeFormat>();
+const dateTimeFormatters = new Map<string, Intl.DateTimeFormat>();
+
+function getRelativeTimeFormatter(locale: "en" | "de") {
+  const cached = relativeTimeFormatters.get(locale);
+  if (cached) {
+    return cached;
+  }
+
+  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  relativeTimeFormatters.set(locale, formatter);
+  return formatter;
+}
+
+function getDateTimeFormatter(locale: "en" | "de") {
+  const cached = dateTimeFormatters.get(locale);
+  if (cached) {
+    return cached;
+  }
+
+  const formatter = new Intl.DateTimeFormat(locale, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+  dateTimeFormatters.set(locale, formatter);
+  return formatter;
+}
 
 function statusTone(status: SessionStatus) {
   switch (status) {
@@ -53,25 +81,22 @@ function formatRelativeTime(locale: "en" | "de", isoTimestamp: string) {
   }
 
   if (Math.abs(deltaMinutes) < 60) {
-    return new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(-deltaMinutes, "minute");
+    return getRelativeTimeFormatter(locale).format(-deltaMinutes, "minute");
   }
 
   const deltaHours = Math.round(deltaMinutes / 60);
 
   if (Math.abs(deltaHours) < 24) {
-    return new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(-deltaHours, "hour");
+    return getRelativeTimeFormatter(locale).format(-deltaHours, "hour");
   }
 
   const deltaDays = Math.round(deltaHours / 24);
 
   if (Math.abs(deltaDays) < 7) {
-    return new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(-deltaDays, "day");
+    return getRelativeTimeFormatter(locale).format(-deltaDays, "day");
   }
 
-  return new Intl.DateTimeFormat(locale, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(isoTimestamp));
+  return getDateTimeFormatter(locale).format(new Date(isoTimestamp));
 }
 
 export function SessionList<TMetadata>({
@@ -86,7 +111,7 @@ export function SessionList<TMetadata>({
   showManagement = true
 }: SessionListProps<TMetadata>) {
   const { locale, copy: ui } = useLocalization();
-  const sortedSessions = sortSessionsByUpdatedAt(sessions);
+  const sortedSessions = useMemo(() => sortSessionsByUpdatedAt(sessions), [sessions]);
   const workspaceName = workspaceLabel(workspace);
 
   return (

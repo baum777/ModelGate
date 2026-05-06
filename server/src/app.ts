@@ -23,10 +23,17 @@ import {
 } from "./lib/runtime-journal.js";
 import { createRuntimeObservability, type RuntimeObservability } from "./lib/runtime-observability.js";
 import { loadModelCapabilitiesConfig, type ModelCapabilitiesConfig } from "./lib/workflow-model-router.js";
+import {
+  createIntegrationAuthStore,
+  createIntegrationAuthStoreSelection,
+  type IntegrationAuthStore
+} from "./lib/integration-auth-store.js";
 import { authRoutes } from "./routes/auth.js";
 import { chatRoutes } from "./routes/chat.js";
 import { diagnosticsRoutes } from "./routes/diagnostics.js";
 import { githubRoutes } from "./routes/github.js";
+import { integrationAuthRoutes } from "./routes/integration-auth.js";
+import { integrationRoutes } from "./routes/integrations.js";
 import { journalRoutes } from "./routes/journal.js";
 import { matrixRoutes } from "./routes/matrix.js";
 import { healthRoutes } from "./routes/health.js";
@@ -48,6 +55,8 @@ export type AppDependencies = {
   runtimeObservability?: RuntimeObservability;
   modelRegistry?: ModelRegistry;
   modelCapabilitiesConfig?: ModelCapabilitiesConfig;
+  integrationAuthStore?: IntegrationAuthStore;
+  integrationFetch?: typeof fetch;
   logger?: boolean;
 };
 
@@ -104,6 +113,13 @@ export function createApp(deps: AppDependencies) {
     });
   });
   const runtimeObservability = deps.runtimeObservability ?? createRuntimeObservability();
+  const integrationAuthStoreSelection = createIntegrationAuthStoreSelection(deps.env);
+  const integrationAuthStore = deps.integrationAuthStore ?? createIntegrationAuthStore({
+    mode: integrationAuthStoreSelection.mode,
+    filePath: integrationAuthStoreSelection.filePath,
+    currentEncryptionKey: integrationAuthStoreSelection.encryption.current,
+    previousEncryptionKeys: integrationAuthStoreSelection.encryption.previous
+  });
   const app = Fastify({
     logger: deps.logger ?? true,
     bodyLimit: 1_048_576
@@ -131,6 +147,17 @@ export function createApp(deps: AppDependencies) {
     config: authConfig,
     rateLimiter
   });
+  integrationAuthRoutes(app, {
+    env: deps.env,
+    matrixConfig,
+    authStore: integrationAuthStore,
+    fetchImpl: deps.integrationFetch
+  });
+  integrationRoutes(app, {
+    githubConfig,
+    matrixConfig,
+    authStore: integrationAuthStore
+  });
   matrixRoutes(app, {
     config: matrixConfig,
     client: matrixClient,
@@ -143,6 +170,7 @@ export function createApp(deps: AppDependencies) {
     config: githubConfig,
     authConfig,
     client: githubClient,
+    authStore: integrationAuthStore,
     openRouter: deps.openRouter,
     modelRegistry,
     modelCapabilitiesConfig,

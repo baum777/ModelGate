@@ -16,7 +16,7 @@ import {
 } from "../src/lib/workflow-model-router.js";
 
 function createTempRepo() {
-  return mkdtempSync(path.join(os.tmpdir(), "modelgate-model-capabilities-"));
+  return mkdtempSync(path.join(os.tmpdir(), "mosaicstack-model-capabilities-"));
 }
 
 test("model capabilities config loads the runtime contract", () => {

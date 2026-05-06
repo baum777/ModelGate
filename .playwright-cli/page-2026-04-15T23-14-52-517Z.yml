@@ -2,7 +2,7 @@
   - generic [ref=e4]:
     - generic [ref=e5]:
       - paragraph [ref=e6]: SOVEREIGN CONSOLE
-      - heading "Thin consumer overlay for ModelGate" [level=1] [ref=e7]
+      - heading "Thin consumer overlay for MosaicStack" [level=1] [ref=e7]
       - paragraph [ref=e8]: The backend owns provider calls, routing, Matrix writes, and stream framing. The browser only renders, consumes, and submits intent.
     - generic [ref=e9]:
       - generic [ref=e11]: Backend healthy
@@ -112,8 +112,8 @@
                 - button "AI Research Hub | Welcome room · !TwkNsQCHgzqYWIRgkc:matrix.org" [ref=e156] [cursor=pointer]:
                   - generic [ref=e157]: AI Research Hub | Welcome
                   - generic [ref=e158]: room · !TwkNsQCHgzqYWIRgkc:matrix.org
-                - button "ModelGate Test room · !NGKHedIPbruwSXkeYr:matrix.org" [active] [ref=e129] [cursor=pointer]:
-                  - generic [ref=e130]: ModelGate Test
+                - button "MosaicStack Test room · !NGKHedIPbruwSXkeYr:matrix.org" [active] [ref=e129] [cursor=pointer]:
+                  - generic [ref=e130]: MosaicStack Test
                   - generic [ref=e131]: room · !NGKHedIPbruwSXkeYr:matrix.org
                 - button "AI Research Hub | Welcome room · !NUidJRwFOSyYrGFuTc:matrix.org" [ref=e141] [cursor=pointer]:
                   - generic [ref=e142]: AI Research Hub | Welcome

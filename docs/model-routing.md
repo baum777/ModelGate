@@ -1,6 +1,6 @@
 # Model Routing Contract
 
-This document describes the current backend-owned model routing surface in ModelGate.
+This document describes the current backend-owned model routing surface in MosaicStack.
 
 ## Objective
 
@@ -84,6 +84,11 @@ SSE events:
   - `config/llm-router.yml`
 - Runtime env normalization is shared between local and Vercel startup.
 - Legacy `LLM_ROUTER_*` variables remain compatibility inputs for the separate rules-first router module, but chat request routing authority is now centralized in `routing-authority.ts`.
+
+## Vercel Matrix Adapter Posture
+
+- Keep the dedicated Matrix adapter split in `vercel.json` (`api/matrix/[...path].ts` + `/api/matrix/:path*` rewrite) as the current tested deployment posture.
+- Do not merge Matrix routing into only `api/[...path].ts` until route normalization and rewrite equivalence for all Matrix endpoints is proven with explicit tests.
 
 ## Boundary Guarantees
 

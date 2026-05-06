@@ -16,6 +16,11 @@ import {
   type MatrixErrorCode
 } from "../lib/matrix-contract.js";
 import { MatrixClientError, type MatrixClient } from "../lib/matrix-client.js";
+import {
+  createMatrixEvidenceWriter,
+  type MatrixEvidenceInput,
+  type MatrixEvidenceWriteWarning
+} from "../lib/matrix-evidence-writer.js";
 import type { MatrixConfig } from "../lib/matrix-env.js";
 import {
   createMatrixActionStore,
@@ -151,6 +156,58 @@ function validateSupportedMatrixAgentPlan(plan: MatrixAgentPlan) {
   return true;
 }
 
+function evidenceWarnings(warnings: MatrixEvidenceWriteWarning[]) {
+  return warnings.length > 0
+    ? {
+      warnings
+    }
+    : {};
+}
+
+function evidenceReceipts(receipts: Array<{
+  eventType: MatrixEvidenceInput["eventType"];
+  transactionId: string;
+}>) {
+  return receipts.length > 0
+    ? {
+      evidence: receipts
+    }
+    : {};
+}
+
+function planBeforeValue(plan: MatrixActionStoreEntry) {
+  return isMatrixAgentPlan(plan) ? plan.currentValue : plan.diff.before;
+}
+
+function planAfterValue(plan: MatrixActionStoreEntry) {
+  return isMatrixAgentPlan(plan) ? plan.proposedValue : plan.diff.after;
+}
+
+function matrixEvidenceActor(config: MatrixConfig) {
+  return {
+    kind: "backend",
+    id: config.expectedUserId ?? "matrix-backend"
+  };
+}
+
+function matrixEvidenceSource(route: string) {
+  return {
+    surface: "modelgate",
+    route
+  };
+}
+
+function buildMatrixEvidenceInput(
+  deps: MatrixRouteDependencies,
+  event: Omit<MatrixEvidenceInput, "actor" | "authorityDomain">
+): MatrixEvidenceInput {
+  return {
+    ...event,
+    actor: matrixEvidenceActor(deps.config),
+    authorityDomain: "backend"
+  };
+}
+
 function assertExpectedMatrixUser(
   config: MatrixConfig,
   identity: MatrixWhoAmIResponse,
@@ -282,6 +339,11 @@ async function assertMatrixRoomTopicUpdateReady(
 export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies) {
   const store = deps.store ?? createMatrixScopeStore();
   const actionStore = deps.actionStore ?? createMatrixActionStore();
+  const evidenceWriter = createMatrixEvidenceWriter({
+    config: deps.config,
+    client: deps.client,
+    runtimeJournal: deps.runtimeJournal
+  });
 
   app.get("/api/matrix/whoami", async (_request, reply) => {
     if (!deps.config.ready) {
@@ -409,10 +471,39 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
         createdAt,
         expiresAt: new Date(Date.now() + actionStore.ttlMs).toISOString()
       }) as MatrixActionStoreEntry & MatrixAgentPlan;
+      const warnings: MatrixEvidenceWriteWarning[] = [];
+
+      if (scopeSnapshot) {
+        const provenanceEvidence = await evidenceWriter.write(buildMatrixEvidenceInput(deps, {
+          eventType: "matrix_provenance_record",
+          planId: plan.planId,
+          roomId: plan.roomId,
+          scopeId: plan.scopeId,
+          snapshotId: plan.snapshotId,
+          action: "matrix.analyze",
+          status: "created",
+          createdAt,
+          executedAt: null,
+          verifiedAt: null,
+          transactionId: null,
+          before: { text: currentValue ?? "" },
+          after: { text: parsed.data.proposedValue },
+          result: {
+            ok: true,
+            risk: plan.risk
+          },
+          source: matrixEvidenceSource("POST /api/matrix/analyze")
+        }));
+
+        if (!provenanceEvidence.ok) {
+          warnings.push(provenanceEvidence.warning);
+        }
+      }
 
       return reply.status(200).send({
         ok: true,
-        plan: serializeMatrixAgentPlan(plan)
+        plan: serializeMatrixAgentPlan(plan),
+        ...evidenceWarnings(warnings)
       });
     } catch (error) {
       return handleMatrixError(reply, error);
@@ -628,6 +719,8 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
     });
 
     try {
+      const warnings: MatrixEvidenceWriteWarning[] = [];
+      const receipts: Array<{ eventType: MatrixEvidenceInput["eventType"]; transactionId: string }> = [];
       deps.runtimeJournal.append({
         source: "matrix",
         eventType: "matrix_execute_attempted",
@@ -640,6 +733,39 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
           roomId: plan.roomId
         }
       });
+      const approvalEvidence = await evidenceWriter.write(buildMatrixEvidenceInput(deps, {
+        eventType: "matrix_approval_record",
+        planId: plan.planId,
+        roomId: plan.roomId,
+        scopeId: isMatrixAgentPlan(plan) ? plan.scopeId : null,
+        snapshotId: isMatrixAgentPlan(plan) ? plan.snapshotId : null,
+        action: "matrix.topic.update",
+        status: "approved",
+        createdAt: new Date().toISOString(),
+        executedAt: null,
+        verifiedAt: null,
+        transactionId: null,
+        before: { text: planBeforeValue(plan) ?? "" },
+        after: { text: planAfterValue(plan) },
+        result: {
+          ok: true
+        },
+        source: matrixEvidenceSource("POST /api/matrix/actions/:planId/execute")
+      }));
+
+      if (!approvalEvidence.ok) {
+        warnings.push(approvalEvidence.warning);
+
+        if (approvalEvidence.required) {
+          return sendMatrixError(reply, "matrix_unavailable", "Matrix evidence write failed");
+        }
+      } else if (approvalEvidence.transactionId) {
+        receipts.push({
+          eventType: "matrix_approval_record",
+          transactionId: approvalEvidence.transactionId
+        });
+      }
+
       await assertMatrixRoomTopicUpdateReady(deps, plan.roomId);
       const currentTopic = await deps.client.readRoomTopic(plan.roomId);
 
@@ -678,6 +804,34 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
             roomId: plan.roomId
           }
         });
+        const topicEvidence = await evidenceWriter.write(buildMatrixEvidenceInput(deps, {
+          eventType: "matrix_topic_change_record",
+          planId: plan.planId,
+          roomId: plan.roomId,
+          scopeId: plan.scopeId,
+          snapshotId: plan.snapshotId,
+          action: "matrix.topic.update",
+          status: "executed",
+          createdAt: plan.createdAt,
+          executedAt,
+          verifiedAt: null,
+          transactionId: transaction.transactionId,
+          before: { text: plan.currentValue ?? "" },
+          after: { text: plan.proposedValue },
+          result: {
+            ok: true
+          },
+          source: matrixEvidenceSource("POST /api/matrix/actions/:planId/execute")
+        }));
+
+        if (!topicEvidence.ok) {
+          warnings.push(topicEvidence.warning);
+        } else if (topicEvidence.transactionId) {
+          receipts.push({
+            eventType: "matrix_topic_change_record",
+            transactionId: topicEvidence.transactionId
+          });
+        }
 
         return reply.status(200).send({
           ok: true,
@@ -685,7 +839,9 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
             planId: plan.planId,
             status: "executed",
             executedAt,
-            transactionId: transaction.transactionId
+            transactionId: transaction.transactionId,
+            ...evidenceReceipts(receipts),
+            ...evidenceWarnings(warnings)
           }
         });
       }
@@ -720,6 +876,34 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
           roomId: plan.roomId
         }
       });
+      const topicEvidence = await evidenceWriter.write(buildMatrixEvidenceInput(deps, {
+        eventType: "matrix_topic_change_record",
+        planId: plan.planId,
+        roomId: plan.roomId,
+        scopeId: null,
+        snapshotId: null,
+        action: "matrix.topic.update",
+        status: "executed",
+        createdAt: plan.createdAt,
+        executedAt,
+        verifiedAt: null,
+        transactionId: transaction.transactionId,
+        before: { text: plan.diff.before ?? "" },
+        after: { text: plan.diff.after },
+        result: {
+          ok: true
+        },
+        source: matrixEvidenceSource("POST /api/matrix/actions/:planId/execute")
+      }));
+
+      if (!topicEvidence.ok) {
+        warnings.push(topicEvidence.warning);
+      } else if (topicEvidence.transactionId) {
+        receipts.push({
+          eventType: "matrix_topic_change_record",
+          transactionId: topicEvidence.transactionId
+        });
+      }
 
       return reply.status(200).send({
         ok: true,
@@ -727,7 +911,9 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
           planId: plan.planId,
           status: "executed",
           executedAt,
-          transactionId: transaction.transactionId
+          transactionId: transaction.transactionId,
+          ...evidenceReceipts(receipts),
+          ...evidenceWarnings(warnings)
         }
       });
     } catch (error) {
@@ -781,6 +967,8 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
     try {
       const actual = await deps.client.readRoomTopic(plan.roomId);
       const checkedAt = new Date().toISOString();
+      const warnings: MatrixEvidenceWriteWarning[] = [];
+      const receipts: Array<{ eventType: MatrixEvidenceInput["eventType"]; transactionId: string }> = [];
 
       let status: "verified" | "mismatch" | "pending" | "failed" = "pending";
       const expected = isMatrixAgentPlan(plan) ? plan.proposedValue : plan.diff.after;
@@ -816,6 +1004,35 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
           roomId: plan.roomId
         }
       });
+      const verificationEvidence = await evidenceWriter.write(buildMatrixEvidenceInput(deps, {
+        eventType: "matrix_verification_result",
+        planId: plan.planId,
+        roomId: plan.roomId,
+        scopeId: isMatrixAgentPlan(plan) ? plan.scopeId : null,
+        snapshotId: isMatrixAgentPlan(plan) ? plan.snapshotId : null,
+        action: "matrix.verify",
+        status,
+        createdAt: plan.createdAt,
+        executedAt: plan.execution?.executedAt ?? null,
+        verifiedAt: checkedAt,
+        transactionId: plan.execution?.transactionId ?? null,
+        before: { text: expected },
+        after: { text: actual ?? "" },
+        result: {
+          ok: status === "verified",
+          status
+        },
+        source: matrixEvidenceSource("GET /api/matrix/actions/:planId/verify")
+      }));
+
+      if (!verificationEvidence.ok) {
+        warnings.push(verificationEvidence.warning);
+      } else if (verificationEvidence.transactionId) {
+        receipts.push({
+          eventType: "matrix_verification_result",
+          transactionId: verificationEvidence.transactionId
+        });
+      }
 
       return reply.status(200).send({
         ok: true,
@@ -824,7 +1041,9 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
           status,
           checkedAt,
           expected,
-          actual
+          actual,
+          ...evidenceReceipts(receipts),
+          ...evidenceWarnings(warnings)
         }
       });
     } catch (error) {

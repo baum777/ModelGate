@@ -2,7 +2,7 @@
   - generic [ref=e4]:
     - generic [ref=e5]:
       - paragraph [ref=e6]: SOVEREIGN CONSOLE
-      - heading "Thin consumer overlay for ModelGate" [level=1] [ref=e7]
+      - heading "Thin consumer overlay for MosaicStack" [level=1] [ref=e7]
       - paragraph [ref=e8]: The backend owns provider calls, routing, Matrix writes, and stream framing. The browser only renders, consumes, and submits intent.
     - generic [ref=e9]:
       - generic [ref=e11]: Backend healthy
@@ -85,8 +85,8 @@
                 - button "Research Feed room · !QteCZMnSYmFusQQezC:matrix.org" [ref=e126] [cursor=pointer]:
                   - generic [ref=e127]: Research Feed
                   - generic [ref=e128]: room · !QteCZMnSYmFusQQezC:matrix.org
-                - button "ModelGate Test room · !NGKHedIPbruwSXkeYr:matrix.org" [ref=e129] [cursor=pointer]:
-                  - generic [ref=e130]: ModelGate Test
+                - button "MosaicStack Test room · !NGKHedIPbruwSXkeYr:matrix.org" [ref=e129] [cursor=pointer]:
+                  - generic [ref=e130]: MosaicStack Test
                   - generic [ref=e131]: room · !NGKHedIPbruwSXkeYr:matrix.org
                 - button "AI x Crypto room · !SxZJYhGUVlHCLPzoBW:matrix.org" [ref=e132] [cursor=pointer]:
                   - generic [ref=e133]: AI x Crypto
@@ -140,8 +140,8 @@
                   - generic [ref=e320]: "Generated: 16.04.2026, 01:15"
                 - article [ref=e322]:
                   - generic [ref=e323]:
-                    - strong [ref=e324]: ModelGate Test
-                    - text: "#modelgate-test:matrix.org"
+                    - strong [ref=e324]: MosaicStack Test
+                    - text: "#mosaicstack-test:matrix.org"
                   - generic [ref=e325]: 1 members · Room metadata snapshot with 1 joined members
                   - button "View provenance" [ref=e327] [cursor=pointer]
             - generic [ref=e178]:
