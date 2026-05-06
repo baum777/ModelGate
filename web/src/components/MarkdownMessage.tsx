@@ -168,14 +168,14 @@ export const MarkdownMessage = React.memo(function MarkdownMessage({ content, cl
               </a>
             );
           },
-          code: ({ className: codeClassName, children, ...rest }) => {
+          code: ({ className: codeClassName, children }) => {
             const code = String(children ?? "");
             const language = extractFenceLanguage(codeClassName);
             const isFence = Boolean(codeClassName?.includes("language-"));
 
             if (!isFence) {
               return (
-                <code className="chat-inline-code" {...rest}>
+                <code className="chat-inline-code">
                   {children}
                 </code>
               );
