@@ -8,6 +8,9 @@ updates:
       time: "06:00"
       timezone: "Europe/Paris"
     open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "autoupdate"
     reviewers:
       - "baum777"
     commit-message:
@@ -24,6 +27,9 @@ updates:
       time: "06:30"
       timezone: "Europe/Paris"
     open-pull-requests-limit: 6
+    labels:
+      - "dependencies"
+      - "autoupdate"
     cooldown:
       semver-major-days: 14
       semver-minor-days: 3
