@@ -123,9 +123,14 @@ test("github start fails closed when OAuth is not configured instead of using a 
   const startPayload = JSON.parse(start.body) as {
     error: {
       code: string;
+      details: string | null;
     };
   };
   assert.equal(startPayload.error.code, "missing_server_config");
+  assert.equal(
+    startPayload.error.details,
+    "Missing GitHub OAuth server config: GITHUB_OAUTH_CLIENT_ID, GITHUB_OAUTH_CLIENT_SECRET"
+  );
 
   const status = await app.inject({
     method: "GET",
@@ -138,6 +143,7 @@ test("github start fails closed when OAuth is not configured instead of using a 
       status: string;
       authState: string;
       credentialSource: string;
+      requirements: string[];
       lastVerifiedAt: string | null;
     };
   };
@@ -145,7 +151,40 @@ test("github start fails closed when OAuth is not configured instead of using a 
   assert.equal(payload.github.status, "missing_server_config");
   assert.equal(payload.github.authState, "not_configured");
   assert.equal(payload.github.credentialSource, "not_connected");
+  assert.deepEqual(payload.github.requirements, [
+    "GITHUB_OAUTH_CLIENT_ID",
+    "GITHUB_OAUTH_CLIENT_SECRET"
+  ]);
   assert.equal(payload.github.lastVerifiedAt, null);
+});
+
+test("integrations status reports workspace requirements when GitHub OAuth is ready but workspace config is missing", async (t) => {
+  const app = createApp({
+    env: createTestEnv({
+      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
+      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret"
+    }),
+    openRouter: createMockOpenRouterClient(),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const status = await app.inject({
+    method: "GET",
+    url: "/api/integrations/status"
+  });
+  const payload = JSON.parse(status.body) as {
+    github: {
+      status: string;
+      requirements: string[];
+    };
+  };
+
+  assert.equal(payload.github.status, "missing_server_config");
+  assert.deepEqual(payload.github.requirements, ["GITHUB_TOKEN", "GITHUB_ALLOWED_REPOS"]);
 });
 
 test("github auth status endpoint only exposes safe metadata", async (t) => {

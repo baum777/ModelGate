@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { GitHubConfig } from "../lib/github-env.js";
+import type { AppEnv } from "../lib/env.js";
+import { getGitHubOAuthRequirements } from "../lib/integration-auth-config.js";
 import type { MatrixConfig } from "../lib/matrix-env.js";
 import type { IntegrationAuthStore, IntegrationConnectionRecord, IntegrationProvider } from "../lib/integration-auth-store.js";
 
@@ -56,9 +58,11 @@ type IntegrationStatusPayload = {
   };
   lastVerifiedAt: string | null;
   lastErrorCode: string | null;
+  requirements: string[];
 };
 
 type IntegrationRouteDependencies = {
+  env: AppEnv;
   githubConfig: GitHubConfig;
   matrixConfig: MatrixConfig;
   authStore: IntegrationAuthStore;
@@ -221,6 +225,28 @@ function buildGithubScopeLabel(config: GitHubConfig) {
   return `${config.allowedRepos.length} allowed repos`;
 }
 
+function getGitHubWorkspaceRequirements(config: GitHubConfig) {
+  const requirements: string[] = [];
+
+  if (!config.token) {
+    requirements.push("GITHUB_TOKEN");
+  }
+
+  if (config.allowedRepos.length === 0) {
+    requirements.push("GITHUB_ALLOWED_REPOS");
+  }
+
+  return requirements;
+}
+
+function getGitHubStatusRequirements(env: AppEnv, config: GitHubConfig) {
+  const oauthRequirements = getGitHubOAuthRequirements(env);
+
+  return oauthRequirements.length > 0
+    ? oauthRequirements
+    : getGitHubWorkspaceRequirements(config);
+}
+
 function buildMatrixScopeLabel(config: MatrixConfig) {
   if (!config.ready) {
     return "Matrix scope unavailable until backend config is ready.";
@@ -241,7 +267,7 @@ function providerIdentityFallback(provider: IntegrationProvider, credentialSourc
     : null;
 }
 
-function buildGithubStatus(config: GitHubConfig, connection: IntegrationConnectionRecord | null): IntegrationStatusPayload {
+function buildGithubStatus(env: AppEnv, config: GitHubConfig, connection: IntegrationConnectionRecord | null): IntegrationStatusPayload {
   const credentialSource = getCredentialSource(config.ready, connection);
   const lastErrorCode = connection?.lastErrorCode ?? null;
   const hasUserCredential = connection?.connected === true && connection.source === "user_connected";
@@ -271,7 +297,8 @@ function buildGithubStatus(config: GitHubConfig, connection: IntegrationConnecti
       allowedReposStatus: deriveAllowedReposStatus(config)
     },
     lastVerifiedAt: connection?.lastVerifiedAt ?? null,
-    lastErrorCode
+    lastErrorCode,
+    requirements: status === "missing_server_config" ? getGitHubStatusRequirements(env, config) : []
   };
 }
 
@@ -304,7 +331,10 @@ function buildMatrixStatus(config: MatrixConfig, connection: IntegrationConnecti
       roomAccess: config.ready ? "readable" : "unknown"
     },
     lastVerifiedAt: connection?.lastVerifiedAt ?? null,
-    lastErrorCode
+    lastErrorCode,
+    requirements: status === "missing_server_config"
+      ? ["MATRIX_ENABLED", "MATRIX_BASE_URL", "MATRIX_ACCESS_TOKEN"]
+      : []
   };
 }
 
@@ -318,7 +348,7 @@ export function integrationRoutes(app: FastifyInstance, deps: IntegrationRouteDe
     return reply.status(200).send({
       ok: true,
       generatedAt: new Date().toISOString(),
-      github: buildGithubStatus(deps.githubConfig, githubConnection),
+      github: buildGithubStatus(deps.env, deps.githubConfig, githubConnection),
       matrix: buildMatrixStatus(deps.matrixConfig, matrixConnection)
     });
   });

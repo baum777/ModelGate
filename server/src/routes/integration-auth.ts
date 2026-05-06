@@ -1,6 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { AppEnv } from "../lib/env.js";
+import {
+  formatMissingServerConfigDetails,
+  resolveGitHubOAuthConfig
+} from "../lib/integration-auth-config.js";
 import type { IntegrationAuthStore, IntegrationProvider } from "../lib/integration-auth-store.js";
 import type { MatrixConfig } from "../lib/matrix-env.js";
 
@@ -49,17 +53,6 @@ type IntegrationAuthErrorCode =
   | "expected_user_mismatch"
   | "auth_expired";
 
-type GitHubOAuthConfig = {
-  enabled: boolean;
-  configured: boolean;
-  clientId: string;
-  clientSecret: string;
-  callbackUrl: string | null;
-  authorizeUrl: string;
-  tokenUrl: string;
-  scopes: string[];
-};
-
 function parseScopeSet(scopeRaw: string | null): Set<string> {
   if (!scopeRaw) {
     return new Set();
@@ -79,28 +72,6 @@ function isProductionDeployment() {
 
 function normalizeBaseUrl(input: string) {
   return input.trim().replace(/\/+$/, "");
-}
-
-function normalizeHttpUrl(input: string): URL | null {
-  const trimmed = input.trim();
-
-  if (trimmed.length === 0) {
-    return null;
-  }
-
-  let parsed: URL;
-
-  try {
-    parsed = new URL(trimmed);
-  } catch {
-    return null;
-  }
-
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    return null;
-  }
-
-  return parsed;
 }
 
 function buildIntegrationSessionCookie(value: string, maxAgeSeconds: number) {
@@ -218,29 +189,6 @@ function readProviderIdentityFallback(provider: IntegrationProvider) {
   }
 
   return "Matrix user";
-}
-
-function resolveGitHubOAuthConfig(env: AppEnv): GitHubOAuthConfig {
-  const clientId = env.GITHUB_OAUTH_CLIENT_ID.trim();
-  const clientSecret = env.GITHUB_OAUTH_CLIENT_SECRET.trim();
-  const callbackUrlRaw = env.GITHUB_OAUTH_CALLBACK_URL.trim();
-  const callbackUrlParsed = normalizeHttpUrl(callbackUrlRaw);
-  const callbackPathValid = callbackUrlParsed?.pathname === "/api/auth/github/callback";
-  const callbackUrl = callbackPathValid ? callbackUrlParsed.toString() : null;
-  const sessionSecretReady = env.MOSAIC_STACK_SESSION_SECRET.trim().length > 0;
-  const configured = clientId.length > 0 || clientSecret.length > 0;
-  const enabled = clientId.length > 0 && clientSecret.length > 0 && callbackUrl !== null && sessionSecretReady;
-
-  return {
-    enabled,
-    configured,
-    clientId,
-    clientSecret,
-    callbackUrl,
-    authorizeUrl: normalizeBaseUrl(env.GITHUB_OAUTH_AUTHORIZE_URL || "https://github.com/login/oauth/authorize"),
-    tokenUrl: normalizeBaseUrl(env.GITHUB_OAUTH_TOKEN_URL || "https://github.com/login/oauth/access_token"),
-    scopes: env.GITHUB_OAUTH_SCOPES.length > 0 ? env.GITHUB_OAUTH_SCOPES : ["read:user", "user:email"]
-  };
 }
 
 async function requestJson(
@@ -657,7 +605,12 @@ function registerProviderStartRoute(
       const oauthConfig = resolveGitHubOAuthConfig(deps.env);
 
       if (!oauthConfig.enabled) {
-        return sendIntegrationAuthError(reply, "missing_server_config", statusForErrorCode("missing_server_config"));
+        return sendIntegrationAuthError(
+          reply,
+          "missing_server_config",
+          statusForErrorCode("missing_server_config"),
+          formatMissingServerConfigDetails("GitHub OAuth", oauthConfig.requirements) ?? undefined
+        );
       }
 
       const cookieSessionId = readIntegrationSessionCookie(request);
@@ -752,7 +705,12 @@ function registerProviderCallbackRoute(
 
         if (!oauthConfig.enabled) {
           deps.authStore.setErrorCode(intent.sessionId, provider, "missing_server_config");
-          return sendIntegrationAuthError(reply, "missing_server_config", statusForErrorCode("missing_server_config"));
+          return sendIntegrationAuthError(
+            reply,
+            "missing_server_config",
+            statusForErrorCode("missing_server_config"),
+            formatMissingServerConfigDetails("GitHub OAuth", oauthConfig.requirements) ?? undefined
+          );
         }
 
         if (oauthConfig.enabled) {
@@ -981,6 +939,7 @@ function registerGitHubStatusRoute(
       status,
       connected,
       oauthReady: oauthConfig.enabled,
+      requirements: connected || oauthConfig.enabled ? [] : oauthConfig.requirements,
       identity: connected ? (connection?.safeIdentityLabel ?? null) : null,
       credentialSource: connected ? connection?.source ?? "not_connected" : "not_connected",
       lastVerifiedAt: connected ? connection?.lastVerifiedAt ?? null : null,
