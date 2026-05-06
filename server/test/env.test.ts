@@ -113,3 +113,10 @@ test("env parsing fails closed for malformed rate-limit numbers when configured"
     RATE_LIMIT_WINDOW_MS: "invalid"
   }), /RATE_LIMIT_WINDOW_MS must be a positive integer/);
 });
+
+test("env parsing fails closed for malformed rate-limit numbers when configured", () => {
+  assert.throws(() => createEnv({
+    RATE_LIMIT_FAIL_CLOSED: "true",
+    RATE_LIMIT_WINDOW_MS: "invalid"
+  }), /RATE_LIMIT_WINDOW_MS must be a positive integer/);
+});
