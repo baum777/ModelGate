@@ -212,20 +212,12 @@ function sendIntegrationAuthError(
   });
 }
 
-function readProviderStubIdentity(provider: IntegrationProvider) {
+function readProviderIdentityFallback(provider: IntegrationProvider) {
   if (provider === "github") {
-    return "stub-github-operator";
+    return "GitHub user";
   }
 
-  return "@stub-user:matrix.local";
-}
-
-function createStubCallbackUrl(provider: IntegrationProvider, state: string) {
-  if (provider === "github") {
-    return `/api/auth/github/callback?state=${encodeURIComponent(state)}&code=stub_code`;
-  }
-
-  return `/api/auth/matrix/callback?state=${encodeURIComponent(state)}&loginToken=stub_login_token`;
+  return "Matrix user";
 }
 
 function resolveGitHubOAuthConfig(env: AppEnv): GitHubOAuthConfig {
@@ -659,65 +651,68 @@ function registerProviderStartRoute(
       return sendIntegrationAuthError(reply, "invalid_return_to");
     }
 
-    const cookieSessionId = readIntegrationSessionCookie(request);
-    const session = deps.authStore.ensureSession(cookieSessionId);
-    const intent = deps.authStore.createIntent({
-      provider,
-      sessionId: session.sessionId,
-      returnTo
-    });
-    maybeSetSessionCookie(reply, cookieSessionId, session.sessionId, session.created);
-
     reply.header("Cache-Control", "no-store");
 
     if (provider === "github") {
       const oauthConfig = resolveGitHubOAuthConfig(deps.env);
 
-      if (oauthConfig.enabled) {
-        const url = new URL(oauthConfig.authorizeUrl);
-        url.searchParams.set("client_id", oauthConfig.clientId);
-        url.searchParams.set("redirect_uri", oauthConfig.callbackUrl ?? "");
-        url.searchParams.set("state", intent.state);
-        url.searchParams.set("scope", oauthConfig.scopes.join(" "));
-        return reply.redirect(url.toString(), 302);
-      }
-
-      if (oauthConfig.configured) {
-        deps.authStore.setErrorCode(session.sessionId, provider, "missing_server_config");
+      if (!oauthConfig.enabled) {
         return sendIntegrationAuthError(reply, "missing_server_config", statusForErrorCode("missing_server_config"));
       }
+
+      const cookieSessionId = readIntegrationSessionCookie(request);
+      const session = deps.authStore.ensureSession(cookieSessionId);
+      const intent = deps.authStore.createIntent({
+        provider,
+        sessionId: session.sessionId,
+        returnTo
+      });
+      maybeSetSessionCookie(reply, cookieSessionId, session.sessionId, session.created);
+
+      const url = new URL(oauthConfig.authorizeUrl);
+      url.searchParams.set("client_id", oauthConfig.clientId);
+      url.searchParams.set("redirect_uri", oauthConfig.callbackUrl ?? "");
+      url.searchParams.set("state", intent.state);
+      url.searchParams.set("scope", oauthConfig.scopes.join(" "));
+      return reply.redirect(url.toString(), 302);
     }
 
     if (provider === "matrix" && deps.matrixConfig.enabled && !deps.matrixConfig.ready) {
-      deps.authStore.setErrorCode(session.sessionId, provider, "missing_server_config");
       return sendIntegrationAuthError(reply, "missing_server_config", statusForErrorCode("missing_server_config"));
     }
 
-    if (provider === "matrix" && deps.matrixConfig.baseUrl) {
-      const origin = resolveRequestOrigin(request);
-      try {
-        const flowTypes = await fetchMatrixLoginFlows(deps);
-
-        if (!flowTypes.includes("m.login.sso")) {
-          deps.authStore.setErrorCode(session.sessionId, provider, "sso_not_supported");
-          return sendIntegrationAuthError(reply, "sso_not_supported", statusForErrorCode("sso_not_supported"));
-        }
-
-        const callbackUrl = new URL(`${origin}/api/auth/matrix/callback`);
-        callbackUrl.searchParams.set("state", intent.state);
-        const ssoUrl = new URL(`${normalizeBaseUrl(deps.matrixConfig.baseUrl)}${deps.env.MATRIX_SSO_REDIRECT_PATH}`);
-        ssoUrl.searchParams.set("redirectUrl", callbackUrl.toString());
-        return reply.redirect(ssoUrl.toString(), 302);
-      } catch (error) {
-        const code = error instanceof Error && error.message === "upstream_unreachable"
-          ? "upstream_unreachable"
-          : "callback_failed";
-        deps.authStore.setErrorCode(session.sessionId, provider, code);
-        return sendIntegrationAuthError(reply, code as IntegrationAuthErrorCode, statusForErrorCode(code as IntegrationAuthErrorCode));
-      }
+    if (!deps.matrixConfig.baseUrl) {
+      return sendIntegrationAuthError(reply, "missing_server_config", statusForErrorCode("missing_server_config"));
     }
 
-    return reply.redirect(createStubCallbackUrl(provider, intent.state), 302);
+    const origin = resolveRequestOrigin(request);
+    try {
+      const flowTypes = await fetchMatrixLoginFlows(deps);
+
+      if (!flowTypes.includes("m.login.sso")) {
+        return sendIntegrationAuthError(reply, "sso_not_supported", statusForErrorCode("sso_not_supported"));
+      }
+
+      const cookieSessionId = readIntegrationSessionCookie(request);
+      const session = deps.authStore.ensureSession(cookieSessionId);
+      const intent = deps.authStore.createIntent({
+        provider,
+        sessionId: session.sessionId,
+        returnTo
+      });
+      maybeSetSessionCookie(reply, cookieSessionId, session.sessionId, session.created);
+
+      const callbackUrl = new URL(`${origin}/api/auth/matrix/callback`);
+      callbackUrl.searchParams.set("state", intent.state);
+      const ssoUrl = new URL(`${normalizeBaseUrl(deps.matrixConfig.baseUrl)}${deps.env.MATRIX_SSO_REDIRECT_PATH}`);
+      ssoUrl.searchParams.set("redirectUrl", callbackUrl.toString());
+      return reply.redirect(ssoUrl.toString(), 302);
+    } catch (error) {
+      const code = error instanceof Error && error.message === "upstream_unreachable"
+        ? "upstream_unreachable"
+        : "callback_failed";
+      return sendIntegrationAuthError(reply, code as IntegrationAuthErrorCode, statusForErrorCode(code as IntegrationAuthErrorCode));
+    }
   });
 }
 
@@ -755,7 +750,7 @@ function registerProviderCallbackRoute(
         const query = parsedQuery.data as z.infer<typeof GitHubCallbackQuerySchema>;
         const oauthConfig = resolveGitHubOAuthConfig(deps.env);
 
-        if (oauthConfig.configured && !oauthConfig.enabled) {
+        if (!oauthConfig.enabled) {
           deps.authStore.setErrorCode(intent.sessionId, provider, "missing_server_config");
           return sendIntegrationAuthError(reply, "missing_server_config", statusForErrorCode("missing_server_config"));
         }
@@ -800,53 +795,47 @@ function registerProviderCallbackRoute(
         const query = parsedQuery.data as z.infer<typeof MatrixCallbackQuerySchema>;
         const loginToken = query.loginToken ?? query.login_token;
 
-        if (deps.matrixConfig.baseUrl) {
-          if (query.error) {
-            deps.authStore.setErrorCode(intent.sessionId, provider, "callback_failed");
-            return sendIntegrationAuthError(
-              reply,
-              "callback_failed",
-              statusForErrorCode("callback_failed"),
-              query.error
-            );
-          }
-
-          if (!loginToken || loginToken.trim().length === 0 || loginToken === "stub_login_token") {
-            deps.authStore.setErrorCode(intent.sessionId, provider, "login_token_invalid");
-            return sendIntegrationAuthError(
-              reply,
-              "login_token_invalid",
-              statusForErrorCode("login_token_invalid")
-            );
-          }
-
-          const exchange = await exchangeMatrixLoginToken(deps, loginToken);
-          const stored = deps.authStore.storeCredential(intent.sessionId, provider, exchange.credential);
-
-          if (!stored) {
-            deps.authStore.setErrorCode(intent.sessionId, provider, "missing_server_config");
-            return sendIntegrationAuthError(reply, "missing_server_config", statusForErrorCode("missing_server_config"));
-          }
-
-          deps.authStore.markConnected({
-            provider,
-            sessionId: intent.sessionId,
-            safeIdentityLabel: exchange.safeIdentityLabel,
-            source: "user_connected"
-          });
-          reply.header("Cache-Control", "no-store");
-          return reply.redirect(intent.returnTo, 302);
+        if (!deps.matrixConfig.baseUrl) {
+          deps.authStore.setErrorCode(intent.sessionId, provider, "missing_server_config");
+          return sendIntegrationAuthError(reply, "missing_server_config", statusForErrorCode("missing_server_config"));
         }
-      }
 
-      deps.authStore.markConnected({
-        provider,
-        sessionId: intent.sessionId,
-        safeIdentityLabel: readProviderStubIdentity(provider),
-        source: "user_connected_stub"
-      });
-      reply.header("Cache-Control", "no-store");
-      return reply.redirect(intent.returnTo, 302);
+        if (query.error) {
+          deps.authStore.setErrorCode(intent.sessionId, provider, "callback_failed");
+          return sendIntegrationAuthError(
+            reply,
+            "callback_failed",
+            statusForErrorCode("callback_failed"),
+            query.error
+          );
+        }
+
+        if (!loginToken || loginToken.trim().length === 0 || loginToken === "stub_login_token") {
+          deps.authStore.setErrorCode(intent.sessionId, provider, "login_token_invalid");
+          return sendIntegrationAuthError(
+            reply,
+            "login_token_invalid",
+            statusForErrorCode("login_token_invalid")
+          );
+        }
+
+        const exchange = await exchangeMatrixLoginToken(deps, loginToken);
+        const stored = deps.authStore.storeCredential(intent.sessionId, provider, exchange.credential);
+
+        if (!stored) {
+          deps.authStore.setErrorCode(intent.sessionId, provider, "missing_server_config");
+          return sendIntegrationAuthError(reply, "missing_server_config", statusForErrorCode("missing_server_config"));
+        }
+
+        deps.authStore.markConnected({
+          provider,
+          sessionId: intent.sessionId,
+          safeIdentityLabel: exchange.safeIdentityLabel,
+          source: "user_connected"
+        });
+        reply.header("Cache-Control", "no-store");
+        return reply.redirect(intent.returnTo, 302);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "callback_failed";
       const code = (
@@ -927,7 +916,7 @@ function registerProviderReverifyRoute(
     }
 
     try {
-      let safeIdentityLabel = connection.safeIdentityLabel ?? readProviderStubIdentity(provider);
+      let safeIdentityLabel = connection.safeIdentityLabel ?? readProviderIdentityFallback(provider);
 
       if (connection.source === "user_connected") {
         const credential = deps.authStore.readCredential(sessionId, provider);

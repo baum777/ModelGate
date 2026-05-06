@@ -101,7 +101,7 @@ test("integration callback rejects state mismatch and does not establish a conne
   assert.equal(payload.github.credentialSource, "not_connected");
 });
 
-test("successful stub callback sets connected status and exposes sanitized timestamps", async (t) => {
+test("github start fails closed when OAuth is not configured instead of using a stub callback", async (t) => {
   const app = createApp({
     env: createTestEnv(),
     openRouter: createMockOpenRouterClient(),
@@ -117,30 +117,19 @@ test("successful stub callback sets connected status and exposes sanitized times
     url: "/api/auth/github/start"
   });
 
-  assert.equal(start.statusCode, 302);
-  const location = start.headers.location;
-  const sessionCookie = readSetCookie(start);
-  assert.equal(typeof location, "string");
-  assert.ok((location as string).startsWith("/api/auth/github/callback?state="));
-  assert.ok(sessionCookie);
-
-  const callback = await app.inject({
-    method: "GET",
-    url: location as string,
-    headers: {
-      cookie: sessionCookie ?? ""
-    }
-  });
-
-  assert.equal(callback.statusCode, 302);
-  assert.equal(callback.headers.location, "/console?mode=settings");
+  assert.equal(start.statusCode, 503);
+  assert.equal(start.headers.location, undefined);
+  assert.equal(readSetCookie(start), null);
+  const startPayload = JSON.parse(start.body) as {
+    error: {
+      code: string;
+    };
+  };
+  assert.equal(startPayload.error.code, "missing_server_config");
 
   const status = await app.inject({
     method: "GET",
-    url: "/api/integrations/status",
-    headers: {
-      cookie: sessionCookie ?? ""
-    }
+    url: "/api/integrations/status"
   });
 
   assert.equal(status.statusCode, 200);
@@ -150,17 +139,13 @@ test("successful stub callback sets connected status and exposes sanitized times
       authState: string;
       credentialSource: string;
       lastVerifiedAt: string | null;
-      labels: {
-        identity: string | null;
-      };
     };
   };
 
-  assert.equal(payload.github.status, "connected");
-  assert.equal(payload.github.authState, "user_connected_stub");
-  assert.equal(payload.github.credentialSource, "user_connected_stub");
-  assert.equal(payload.github.labels.identity, "stub-github-operator");
-  assert.ok(payload.github.lastVerifiedAt);
+  assert.equal(payload.github.status, "missing_server_config");
+  assert.equal(payload.github.authState, "not_configured");
+  assert.equal(payload.github.credentialSource, "not_connected");
+  assert.equal(payload.github.lastVerifiedAt, null);
 });
 
 test("github auth status endpoint only exposes safe metadata", async (t) => {
@@ -258,14 +243,43 @@ test("github auth status endpoint only exposes safe metadata", async (t) => {
   assert.doesNotMatch(status.body, /github-client-secret/);
 });
 
-test("disconnect removes stub connection but keeps instance-level status when instance config exists", async (t) => {
+test("disconnect removes user OAuth connection but keeps instance-level status when instance config exists", async (t) => {
   const app = createApp({
     env: createTestEnv({
       GITHUB_TOKEN: "instance-github-token",
       GITHUB_ALLOWED_REPOS: ["octo/demo"],
-      GITHUB_AGENT_API_KEY: "instance-admin-key"
+      GITHUB_AGENT_API_KEY: "instance-admin-key",
+      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
+      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
+      MOSAIC_STACK_SESSION_SECRET: "disconnect-session-secret",
+      ...TEST_ENCRYPTION_KEY
     }),
     openRouter: createMockOpenRouterClient(),
+    integrationFetch: async (input) => {
+      const url = String(input);
+
+      if (url.startsWith("https://github.com/login/oauth/access_token")) {
+        return new Response(JSON.stringify({
+          access_token: "gho_disconnect_test_token",
+          token_type: "bearer",
+          scope: "read:user,user:email"
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      if (url === "https://api.github.com/user") {
+        return new Response(JSON.stringify({
+          login: "octocat"
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      return new Response(null, { status: 404 });
+    },
     logger: false
   });
 
@@ -281,9 +295,12 @@ test("disconnect removes stub connection but keeps instance-level status when in
 
   assert.ok(sessionCookie);
 
+  const state = readGitHubStateFromAuthorizeLocation(String(start.headers.location ?? ""));
+  assert.ok(state);
+
   await app.inject({
     method: "GET",
-    url: start.headers.location as string,
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=disconnect_code`,
     headers: {
       cookie: sessionCookie ?? ""
     }
@@ -302,7 +319,7 @@ test("disconnect removes stub connection but keeps instance-level status when in
       credentialSource: string;
     };
   };
-  assert.equal(beforePayload.github.credentialSource, "user_connected_stub");
+  assert.equal(beforePayload.github.credentialSource, "user_connected");
 
   const disconnect = await app.inject({
     method: "POST",
@@ -335,8 +352,38 @@ test("disconnect removes stub connection but keeps instance-level status when in
 
 test("github logout alias clears connection the same as disconnect", async (t) => {
   const app = createApp({
-    env: createTestEnv(),
+    env: createTestEnv({
+      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
+      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
+      MOSAIC_STACK_SESSION_SECRET: "logout-session-secret",
+      ...TEST_ENCRYPTION_KEY
+    }),
     openRouter: createMockOpenRouterClient(),
+    integrationFetch: async (input) => {
+      const url = String(input);
+
+      if (url.startsWith("https://github.com/login/oauth/access_token")) {
+        return new Response(JSON.stringify({
+          access_token: "gho_logout_test_token",
+          token_type: "bearer",
+          scope: "read:user,user:email"
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      if (url === "https://api.github.com/user") {
+        return new Response(JSON.stringify({
+          login: "octocat"
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      return new Response(null, { status: 404 });
+    },
     logger: false
   });
 
@@ -351,10 +398,12 @@ test("github logout alias clears connection the same as disconnect", async (t) =
   const sessionCookie = readSetCookie(start);
 
   assert.ok(sessionCookie);
+  const state = readGitHubStateFromAuthorizeLocation(String(start.headers.location ?? ""));
+  assert.ok(state);
 
   await app.inject({
     method: "GET",
-    url: start.headers.location as string,
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=logout_code`,
     headers: {
       cookie: sessionCookie ?? ""
     }
@@ -379,7 +428,7 @@ test("github logout alias clears connection the same as disconnect", async (t) =
   assert.equal(payload.disconnected, true);
 });
 
-test("reverify updates lastVerifiedAt deterministically for a connected stub session", async (t) => {
+test("matrix start fails closed when Matrix login is not configured instead of using a stub session", async (t) => {
   const app = createApp({
     env: createTestEnv(),
     openRouter: createMockOpenRouterClient(),
@@ -394,56 +443,34 @@ test("reverify updates lastVerifiedAt deterministically for a connected stub ses
     method: "GET",
     url: "/api/auth/matrix/start"
   });
-  const sessionCookie = readSetCookie(start);
-  assert.ok(sessionCookie);
 
-  await app.inject({
-    method: "GET",
-    url: start.headers.location as string,
-    headers: {
-      cookie: sessionCookie ?? ""
-    }
-  });
+  assert.equal(start.statusCode, 503);
+  assert.equal(start.headers.location, undefined);
+  assert.equal(readSetCookie(start), null);
+  const startPayload = JSON.parse(start.body) as {
+    error: {
+      code: string;
+    };
+  };
+  assert.equal(startPayload.error.code, "missing_server_config");
 
-  const before = await app.inject({
+  const status = await app.inject({
     method: "GET",
-    url: "/api/integrations/status",
-    headers: {
-      cookie: sessionCookie ?? ""
-    }
+    url: "/api/integrations/status"
   });
-  const beforePayload = JSON.parse(before.body) as {
+  const payload = JSON.parse(status.body) as {
     matrix: {
+      status: string;
+      authState: string;
+      credentialSource: string;
       lastVerifiedAt: string | null;
     };
   };
 
-  const reverify = await app.inject({
-    method: "POST",
-    url: "/api/auth/matrix/reverify",
-    headers: {
-      cookie: sessionCookie ?? ""
-    }
-  });
-
-  assert.equal(reverify.statusCode, 200);
-
-  const after = await app.inject({
-    method: "GET",
-    url: "/api/integrations/status",
-    headers: {
-      cookie: sessionCookie ?? ""
-    }
-  });
-  const afterPayload = JSON.parse(after.body) as {
-    matrix: {
-      lastVerifiedAt: string | null;
-    };
-  };
-
-  assert.ok(beforePayload.matrix.lastVerifiedAt);
-  assert.ok(afterPayload.matrix.lastVerifiedAt);
-  assert.notEqual(afterPayload.matrix.lastVerifiedAt, beforePayload.matrix.lastVerifiedAt);
+  assert.equal(payload.matrix.status, "connect_available");
+  assert.equal(payload.matrix.authState, "not_configured");
+  assert.equal(payload.matrix.credentialSource, "not_connected");
+  assert.equal(payload.matrix.lastVerifiedAt, null);
 });
 
 test("integrations status never exposes backend secrets", async (t) => {

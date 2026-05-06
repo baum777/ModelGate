@@ -22,7 +22,7 @@ function createIntegrationsStatusFixture(): IntegrationsStatusResponse {
     generatedAt: "2026-04-27T12:00:00.000Z",
     github: {
       status: "connected",
-      credentialSource: "user_connected_stub",
+      credentialSource: "user_connected",
       capabilities: {
         read: "available",
         propose: "available",
@@ -31,7 +31,7 @@ function createIntegrationsStatusFixture(): IntegrationsStatusResponse {
       },
       executionMode: "approval_required",
       labels: {
-        identity: "stub-github-operator",
+        identity: "octocat",
         scope: "2 allowed repos",
         allowedReposStatus: "configured",
       },
@@ -205,12 +205,13 @@ test("Settings workspace renders integration cards and keeps secrets out of the 
   assert.match(markup, /GitHub system status: connected/);
   assert.match(markup, /aria-label="GitHub Reverify"/);
   assert.match(markup, /data-testid="settings-adapter-matrix-action-connect"/);
+  assert.match(markup, />Connect Matrix</);
   assert.match(markup, /data-system-node-kind="matrix"/);
   assert.match(markup, /aria-label="Matrix integration node, status disconnected"/);
   assert.match(markup, /Matrix system status: disconnected/);
   assert.match(markup, /data-flow-state="connected"/);
   assert.match(markup, /href="\/api\/auth\/matrix\/start\?returnTo=%2Fconsole%3Fmode%3Dsettings"/);
-  assert.match(markup, /Connected as stub-github-operator/);
+  assert.match(markup, /Connected as octocat/);
   assert.match(markup, /Credential source/);
   assert.match(markup, /Connect available/);
   assert.match(markup, /OpenRouter (Modelle|models)/);
@@ -279,7 +280,7 @@ test("Settings login adapters map connected and reconnect states for governed CT
   assert.equal(github?.status, "connected");
   assert.equal(github?.primaryAction, "reverify");
   assert.equal(github?.secondaryAction, "disconnect");
-  assert.equal(github?.credentialSource, "user_connected_stub");
+  assert.equal(github?.credentialSource, "user_connected");
 
   assert.equal(matrix?.status, "connect_available");
   assert.equal(matrix?.primaryAction, "connect");
