@@ -6,6 +6,9 @@
     "server",
     "web"
   ],
+  "dependencies": {
+    "react": "^19.2.5"
+  },
   "scripts": {
     "dev:server": "npm run dev --workspace server",
     "dev:web": "npm run dev --workspace web",
@@ -31,6 +34,7 @@
     "dev": "npm run dev:server"
   },
   "devDependencies": {
-    "@playwright/test": "^1.52.0"
+    "@playwright/test": "^1.52.0",
+    "@types/react": "^19.2.14"
   }
 }
