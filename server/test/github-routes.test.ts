@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { createGitHubClient } from "../src/lib/github-client.js";
-import { createTestEnv, createMockOpenRouterClient, createTestGitHubConfig } from "../test-support/helpers.js";
+import { createTestEnv, createMockOpenRouterClient, createTestGitHubConfig, createTestSessionCookie } from "../test-support/helpers.js";
 
 function makeJsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
@@ -13,6 +13,8 @@ function makeJsonResponse(body: unknown, status = 200, headers: Record<string, s
     }
   });
 }
+
+const TEST_SESSION_COOKIE = createTestSessionCookie();
 
 test("github routes return not configured when the feature is disabled", async (t) => {
   const app = createApp({
@@ -27,7 +29,10 @@ test("github routes return not configured when the feature is disabled", async (
 
   const response = await app.inject({
     method: "GET",
-    url: "/api/github/repos"
+    url: "/api/github/repos",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    }
   });
 
   assert.equal(response.statusCode, 503);
@@ -137,16 +142,21 @@ test("github routes return repository summaries and file context from the backen
 
   const reposResponse = await app.inject({
     method: "GET",
-    url: "/api/github/repos"
+    url: "/api/github/repos",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    }
   });
 
   assert.equal(reposResponse.statusCode, 200);
   const reposBody = JSON.parse(reposResponse.body) as {
     ok: true;
     checkedAt: string;
+    credentialSource: string;
     repos: Array<{ fullName: string; status: string; defaultBranchSha: string | null }>;
   };
   assert.equal(reposBody.ok, true);
+  assert.equal(reposBody.credentialSource, "instance_config");
   assert.match(reposBody.checkedAt, /^\d{4}-\d{2}-\d{2}T/);
   assert.equal(reposBody.repos.length, 1);
   assert.equal(reposBody.repos[0]?.fullName, "acme/widget");
@@ -155,15 +165,20 @@ test("github routes return repository summaries and file context from the backen
 
   const treeResponse = await app.inject({
     method: "GET",
-    url: "/api/github/repos/acme/widget/tree?ref=main&path=src&depth=1&maxEntries=10"
+    url: "/api/github/repos/acme/widget/tree?ref=main&path=src&depth=1&maxEntries=10",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    }
   });
 
   assert.equal(treeResponse.statusCode, 200);
   const treeBody = JSON.parse(treeResponse.body) as {
     ok: true;
+    credentialSource: string;
     tree: { rootPath: string; entries: Array<{ path: string }> };
   };
   assert.equal(treeBody.ok, true);
+  assert.equal(treeBody.credentialSource, "instance_config");
   assert.equal(treeBody.tree.rootPath, "src");
   assert.deepEqual(treeBody.tree.entries.map((entry) => entry.path), [
     "src",
@@ -172,15 +187,20 @@ test("github routes return repository summaries and file context from the backen
 
   const fileResponse = await app.inject({
     method: "GET",
-    url: "/api/github/repos/acme/widget/file?path=src/index.ts&ref=main"
+    url: "/api/github/repos/acme/widget/file?path=src/index.ts&ref=main",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    }
   });
 
   assert.equal(fileResponse.statusCode, 200);
   const fileBody = JSON.parse(fileResponse.body) as {
     ok: true;
+    credentialSource: string;
     file: { path: string; content: string; encoding: string; binary: boolean; truncated: boolean };
   };
   assert.equal(fileBody.ok, true);
+  assert.equal(fileBody.credentialSource, "instance_config");
   assert.equal(fileBody.file.path, "src/index.ts");
   assert.equal(fileBody.file.encoding, "utf-8");
   assert.equal(fileBody.file.binary, false);
@@ -224,7 +244,10 @@ test("github routes fail closed for invalid paths and repos outside the allowlis
 
   const invalidPathResponse = await app.inject({
     method: "GET",
-    url: "/api/github/repos/acme/widget/file?path=../secret&ref=main"
+    url: "/api/github/repos/acme/widget/file?path=../secret&ref=main",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    }
   });
 
   assert.equal(invalidPathResponse.statusCode, 400);
@@ -238,7 +261,10 @@ test("github routes fail closed for invalid paths and repos outside the allowlis
 
   const treeResponse = await app.inject({
     method: "GET",
-    url: "/api/github/repos/acme/widget/tree?path=../secret"
+    url: "/api/github/repos/acme/widget/tree?path=../secret",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    }
   });
 
   assert.equal(treeResponse.statusCode, 400);
@@ -252,7 +278,10 @@ test("github routes fail closed for invalid paths and repos outside the allowlis
 
   const forbiddenResponse = await app.inject({
     method: "GET",
-    url: "/api/github/repos/other/widget/tree?ref=main"
+    url: "/api/github/repos/other/widget/tree?ref=main",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    }
   });
 
   assert.equal(forbiddenResponse.statusCode, 403);
@@ -296,7 +325,10 @@ test("github routes sanitize upstream authorization failures", async (t) => {
 
   const response = await app.inject({
     method: "GET",
-    url: "/api/github/repos/acme/widget/tree?ref=main"
+    url: "/api/github/repos/acme/widget/tree?ref=main",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    }
   });
 
   assert.equal(response.statusCode, 401);
@@ -309,4 +341,248 @@ test("github routes sanitize upstream authorization failures", async (t) => {
   });
   assert.doesNotMatch(response.body, /test-github-token/);
   assert.doesNotMatch(response.body, /secret-token/);
+});
+
+test("github routes use session GitHub OAuth credentials when available", async (t) => {
+  const authHeaders: string[] = [];
+  const githubConfig = createTestGitHubConfig({
+    token: "instance-token",
+    allowedRepos: ["acme/widget"],
+    allowedRepoSet: new Set(["acme/widget"])
+  });
+  const githubClient = createGitHubClient({
+    config: githubConfig,
+    fetchImpl: async (input, init) => {
+      const url = new URL(String(input));
+      const authorization = new Headers(init?.headers).get("Authorization");
+      authHeaders.push(authorization ?? "");
+
+      if (url.pathname === "/repos/acme/widget") {
+        return makeJsonResponse({
+          full_name: "acme/widget",
+          name: "widget",
+          default_branch: "main",
+          description: "Widget repo",
+          private: false,
+          archived: false,
+          disabled: false,
+          permissions: {
+            push: true
+          },
+          owner: {
+            login: "acme"
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/commits/main") {
+        return makeJsonResponse({
+          sha: "commit-sha",
+          commit: {
+            tree: {
+              sha: "tree-sha"
+            }
+          }
+        });
+      }
+
+      return new Response(null, { status: 404 });
+    }
+  });
+
+  const app = createApp({
+    env: createTestEnv({
+      GITHUB_TOKEN: "instance-token",
+      GITHUB_ALLOWED_REPOS: ["acme/widget"],
+      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
+      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
+      INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID: "test-key",
+      INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_VERSION: "1",
+      INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY: "test-key-material"
+    }),
+    openRouter: createMockOpenRouterClient(),
+    githubConfig,
+    githubClient,
+    integrationFetch: async (input) => {
+      const url = String(input);
+
+      if (url.startsWith("https://github.com/login/oauth/access_token")) {
+        return makeJsonResponse({
+          access_token: "gho_user_token",
+          token_type: "bearer",
+          scope: "read:user,user:email"
+        });
+      }
+
+      if (url === "https://api.github.com/user") {
+        return makeJsonResponse({
+          login: "octocat"
+        });
+      }
+
+      return new Response(null, { status: 404 });
+    },
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const start = await app.inject({
+    method: "GET",
+    url: "/api/auth/github/start"
+  });
+  const sessionCookie = String(start.headers["set-cookie"] ?? "");
+  const state = new URL(String(start.headers.location ?? "")).searchParams.get("state");
+  assert.ok(sessionCookie.length > 0);
+  assert.ok(state);
+
+  const callback = await app.inject({
+    method: "GET",
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=real_code`,
+    headers: {
+      cookie: sessionCookie
+    }
+  });
+  assert.equal(callback.statusCode, 302);
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/github/repos",
+    headers: {
+      cookie: sessionCookie
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  const payload = JSON.parse(response.body) as {
+    credentialSource: string;
+  };
+  assert.equal(payload.credentialSource, "user_connected");
+  assert.equal(authHeaders[0], "Bearer gho_user_token");
+});
+
+test("github routes do not reuse another session user token", async (t) => {
+  const authHeaders: string[] = [];
+  const githubConfig = createTestGitHubConfig({
+    token: "instance-token",
+    allowedRepos: ["acme/widget"],
+    allowedRepoSet: new Set(["acme/widget"])
+  });
+  const githubClient = createGitHubClient({
+    config: githubConfig,
+    fetchImpl: async (input, init) => {
+      const url = new URL(String(input));
+      const authorization = new Headers(init?.headers).get("Authorization");
+      authHeaders.push(authorization ?? "");
+
+      if (url.pathname === "/repos/acme/widget") {
+        return makeJsonResponse({
+          full_name: "acme/widget",
+          name: "widget",
+          default_branch: "main",
+          description: "Widget repo",
+          private: false,
+          archived: false,
+          disabled: false,
+          permissions: {
+            push: true
+          },
+          owner: {
+            login: "acme"
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/commits/main") {
+        return makeJsonResponse({
+          sha: "commit-sha",
+          commit: {
+            tree: {
+              sha: "tree-sha"
+            }
+          }
+        });
+      }
+
+      return new Response(null, { status: 404 });
+    }
+  });
+
+  const app = createApp({
+    env: createTestEnv({
+      GITHUB_TOKEN: "instance-token",
+      GITHUB_ALLOWED_REPOS: ["acme/widget"],
+      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
+      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
+      INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID: "test-key",
+      INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_VERSION: "1",
+      INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY: "test-key-material"
+    }),
+    openRouter: createMockOpenRouterClient(),
+    githubConfig,
+    githubClient,
+    integrationFetch: async (input) => {
+      const url = String(input);
+
+      if (url.startsWith("https://github.com/login/oauth/access_token")) {
+        return makeJsonResponse({
+          access_token: "gho_user_token",
+          token_type: "bearer",
+          scope: "read:user,user:email"
+        });
+      }
+
+      if (url === "https://api.github.com/user") {
+        return makeJsonResponse({
+          login: "octocat"
+        });
+      }
+
+      return new Response(null, { status: 404 });
+    },
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const start = await app.inject({
+    method: "GET",
+    url: "/api/auth/github/start"
+  });
+  const sessionCookieA = String(start.headers["set-cookie"] ?? "");
+  const state = new URL(String(start.headers.location ?? "")).searchParams.get("state");
+  assert.ok(state);
+
+  await app.inject({
+    method: "GET",
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=real_code`,
+    headers: {
+      cookie: sessionCookieA
+    }
+  });
+
+  const startOther = await app.inject({
+    method: "GET",
+    url: "/api/auth/github/start"
+  });
+  const sessionCookieB = String(startOther.headers["set-cookie"] ?? "");
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/github/repos",
+    headers: {
+      cookie: sessionCookieB
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  const payload = JSON.parse(response.body) as {
+    credentialSource: string;
+  };
+  assert.equal(payload.credentialSource, "instance_config");
+  assert.equal(authHeaders[0], "Bearer instance-token");
 });

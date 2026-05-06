@@ -39,6 +39,10 @@ function readErrorMessage(payload: unknown) {
     return error;
   }
 
+  if (typeof payload.code === "string" && payload.code.trim().length > 0) {
+    return payload.code;
+  }
+
   return "Request failed";
 }
 
@@ -54,7 +58,8 @@ async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> 
   try {
     response = await fetch(resolveGitHubApiUrl(path), {
       ...init,
-      headers
+      headers,
+      credentials: "include"
     });
   } catch (error) {
     throw new Error(error instanceof Error && error.message.trim().length > 0 ? error.message : "GitHub request failed");
@@ -188,6 +193,22 @@ export type GitHubChangePlan = {
   }>;
   generatedAt: string;
   expiresAt: string;
+  routingMetadata?: {
+    workflowRole: "github_code_agent";
+    selectedModel: string;
+    candidateModels: string[];
+    fallbackUsed: boolean;
+    selectionSource: "env" | "legacy_openrouter_model" | "fallback_env" | "recommended_model";
+    routingMode: "policy";
+    allowFallback: boolean;
+    failClosed: boolean;
+    structuredOutputRequired: boolean;
+    approvalRequired: boolean;
+    mayExecuteExternalTools: boolean;
+    mayWriteExternalState: boolean;
+    policySectionKey: string | null;
+    recordedAt: string;
+  };
   execution?: GitHubExecuteResult;
   verification?: GitHubVerifyResult;
 };
@@ -222,6 +243,9 @@ export type GitHubChangeProposalRequest = {
   selectedPaths?: string[];
   constraints?: string[];
   baseBranch?: string;
+  targetBranch?: string;
+  mode?: "smoke";
+  intent?: string;
 };
 
 export type GitHubExecuteRequest = {

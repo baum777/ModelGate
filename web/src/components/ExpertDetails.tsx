@@ -1,36 +1,47 @@
 import type { ReactNode } from "react";
+import { useLocalization } from "../lib/localization.js";
 
-export type ExpertDetailRow = {
+export type DiagnosticsDetailRow = {
   label: string;
   value: ReactNode;
 };
 
-type ExpertDetailsProps = {
+type DiagnosticsDrawerProps = {
   expertMode: boolean;
   title?: string;
-  rows?: ExpertDetailRow[];
+  rows?: DiagnosticsDetailRow[];
   children?: ReactNode;
   className?: string;
+  open?: boolean;
+  onToggle?: (open: boolean) => void;
 };
 
 function joinClassNames(...classNames: Array<string | false | null | undefined>) {
   return classNames.filter(Boolean).join(" ");
 }
 
-export function ExpertDetails({
+export function DiagnosticsDrawer({
   expertMode,
-  title = "Technische Details",
+  title,
   rows = [],
   children,
   className,
-}: ExpertDetailsProps) {
+  open = true,
+  onToggle,
+}: DiagnosticsDrawerProps) {
+  const { copy: ui } = useLocalization();
+
   if (!expertMode) {
     return null;
   }
 
   return (
-    <details className={joinClassNames("expert-details", className)} open>
-      <summary>{title}</summary>
+    <details
+      className={joinClassNames("expert-details expert-details-secondary diagnostics-drawer", className)}
+      open={open}
+      onToggle={(event) => onToggle?.(event.currentTarget.open)}
+    >
+      <summary>{title ?? ui.shell.diagnosticsLabel}</summary>
       {rows.length > 0 ? (
         <div className="expert-details-grid">
           {rows.map((row) => (
@@ -44,4 +55,8 @@ export function ExpertDetails({
       {children}
     </details>
   );
+}
+
+export function ExpertDetails(props: DiagnosticsDrawerProps) {
+  return <DiagnosticsDrawer {...props} />;
 }

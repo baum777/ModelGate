@@ -1,4 +1,4 @@
-# ModelGate Console Implementation Plan
+# MosaicStack Console Implementation Plan
 
 ## Objective
 
@@ -27,7 +27,7 @@ Locally verified:
 
 Partially wired / external-backend:
 
-- Matrix hierarchy preview in the browser still depends on a mock route in this repo
+- Matrix hierarchy preview in the browser is advisory/mock-only and does not represent backend-verified authority
 - live Matrix E2E verification against a real Matrix origin
 
 Deferred:

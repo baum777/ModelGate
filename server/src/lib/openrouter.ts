@@ -1,6 +1,7 @@
 import type { AppEnv } from "./env.js";
 import type { ChatRequest } from "./chat-contract.js";
 import type { ResolvedModelSelection } from "./model-policy.js";
+import { normalizeConfiguredModelId } from "./model-id.js";
 import type { NormalizedChatResponse } from "./types.js";
 
 type OpenRouterMessage = {
@@ -58,11 +59,63 @@ function buildRequestBody(env: AppEnv, request: ChatRequest, stream: boolean, pr
   };
 }
 
+const SPECIALIZED_OPENROUTER_KEY_FAMILIES = [
+  {
+    envKey: "OPENROUTER_API_KEY_QWEN3_CODER" as const,
+    label: "qwen/qwen3-coder"
+  },
+  {
+    envKey: "OPENROUTER_API_KEY_GPT_OSS_120B_PLANNER" as const,
+    label: "openai/gpt-oss-120b"
+  },
+  {
+    envKey: "OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B" as const,
+    label: "nvidia/nemotron-3-super-120b"
+  }
+] as const;
+
+function modelFamilyKey(modelId: string) {
+  const normalized = normalizeConfiguredModelId(modelId)?.toLowerCase() ?? modelId.trim().toLowerCase();
+
+  if (normalized.includes("qwen3-coder")) {
+    return SPECIALIZED_OPENROUTER_KEY_FAMILIES[0];
+  }
+
+  if (normalized.includes("gpt-oss-120b")) {
+    return SPECIALIZED_OPENROUTER_KEY_FAMILIES[1];
+  }
+
+  if (normalized.includes("nemotron-3-super-120b")) {
+    return SPECIALIZED_OPENROUTER_KEY_FAMILIES[2];
+  }
+
+  return null;
+}
+
 function requireOpenRouterApiKey(env: AppEnv) {
-  const apiKey = env.OPENROUTER_API_KEY.trim();
+  const apiKey = String(env.OPENROUTER_API_KEY ?? "").trim();
 
   if (!apiKey) {
     throw createOpenRouterError("OpenRouter API key is not configured", 503);
+  }
+
+  return apiKey;
+}
+
+export function resolveOpenRouterApiKey(env: AppEnv, modelId: string) {
+  const specializedFamily = modelFamilyKey(modelId);
+
+  if (!specializedFamily) {
+    return requireOpenRouterApiKey(env);
+  }
+
+  const apiKey = String(env[specializedFamily.envKey] ?? "").trim();
+
+  if (!apiKey) {
+    throw createOpenRouterError(
+      `OpenRouter API key ${specializedFamily.envKey} is not configured for ${specializedFamily.label}`,
+      503
+    );
   }
 
   return apiKey;
@@ -242,9 +295,7 @@ function extractSseEventData(block: string): string | null {
   return dataLines.join("\n");
 }
 
-function getUpstreamHeaders(env: AppEnv) {
-  const apiKey = requireOpenRouterApiKey(env);
-
+function getUpstreamHeaders(env: AppEnv, apiKey: string) {
   return {
     Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json",
@@ -336,11 +387,12 @@ export function createOpenRouterClient(options: OpenRouterClientOptions): OpenRo
     for (const providerModel of selection.providerTargets) {
       const merged = createMergedAbortController(requestTimeoutMs, signal);
       let response: Response;
+      const apiKey = resolveOpenRouterApiKey(options.env, providerModel);
 
       try {
         response = await fetchImpl(chatUrl, {
           method: "POST",
-          headers: getUpstreamHeaders(options.env),
+          headers: getUpstreamHeaders(options.env, apiKey),
           body: JSON.stringify(buildRequestBody(options.env, request, stream, providerModel)),
           signal: merged.signal
         });

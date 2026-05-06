@@ -912,7 +912,8 @@ async function requestJson<T>(operation: string, path: string, init: RequestInit
   try {
     response = await fetch(resolveMatrixApiUrl(path), {
       ...init,
-      headers
+      headers,
+      credentials: "include"
     });
   } catch (error) {
     throw new MatrixRequestError({
@@ -990,13 +991,6 @@ export async function fetchProvenance(roomId: string) {
   return requestJson<MatrixProvenance>("Matrix provenance", `/api/matrix/rooms/${encodeURIComponent(roomId)}/provenance`, {}, validateProvenanceResponse);
 }
 
-export async function analyzeScope(body: { scopeId: string; prompt: string; model?: string }) {
-  return requestJson<MatrixAnalysisResponse>("Matrix analysis", "/api/matrix/chat", {
-    method: "POST",
-    body: JSON.stringify(body)
-  }, validateAnalysisResponse);
-}
-
 export async function analyzeRoomTopicUpdate(body: { roomId: string; proposedValue: string; scopeId?: string | null }) {
   const payload = await requestJson<{ ok: true; plan: MatrixRoomTopicAgentPlan }>("Matrix room topic analyze", "/api/matrix/analyze", {
     method: "POST",
@@ -1019,24 +1013,6 @@ export async function analyzeRoomTopicUpdate(body: { roomId: string; proposedVal
   return payload.plan;
 }
 
-export async function promoteCandidate(body: { candidateId: string; scopeId: string; snapshotId: string }) {
-  const payload = await requestJson<{ ok: true; plan: MatrixPlan }>("Matrix promote", "/api/matrix/actions/promote", {
-    method: "POST",
-    body: JSON.stringify(body)
-  }, (payload, operation, path) => {
-    const response = requireRecord(payload, operation, path, "promote response");
-    requireBooleanField(response, "ok", operation, path, true);
-    const planPayload = requireRecord(requireField(response, "plan", operation, path), operation, path, "plan");
-
-    return {
-      ok: true as const,
-      plan: validatePlanResponse(planPayload, operation, `${path}#plan`)
-    };
-  });
-
-  return payload.plan;
-}
-
 export async function fetchPlan(planId: string) {
   const payload = await requestJson<{ ok: true; plan: MatrixPlan }>("Matrix plan fetch", `/api/matrix/actions/${encodeURIComponent(planId)}`, {}, (payload, operation, path) => {
     const response = requireRecord(payload, operation, path, "plan fetch response");
@@ -1048,31 +1024,6 @@ export async function fetchPlan(planId: string) {
       plan: validatePlanResponse(planPayload, operation, `${path}#plan`)
     };
   });
-  return payload.plan;
-}
-
-export async function executePlan(body: { planId: string; approval: true }) {
-  return requestJson<MatrixExecuteResult>("Matrix execute", "/api/matrix/actions/execute", {
-    method: "POST",
-    body: JSON.stringify(body)
-  }, validateExecutionResponse);
-}
-
-export async function prepareRoomTopicUpdate(body: { type: "update_room_topic"; roomId: string; topic: string }) {
-  const payload = await requestJson<{ ok: true; plan: MatrixRoomTopicPlan }>("Matrix room topic promote", "/api/matrix/actions/promote", {
-    method: "POST",
-    body: JSON.stringify(body)
-  }, (response, operation, path) => {
-    const record = requireRecord(response, operation, path, "room topic promote response");
-    requireBooleanField(record, "ok", operation, path, true);
-    const plan = requireRecord(requireField(record, "plan", operation, path), operation, path, "room topic plan");
-
-    return {
-      ok: true as const,
-      plan: validateRoomTopicPlanResponse({ ok: true, plan }, operation, `${path}#plan`)
-    };
-  });
-
   return payload.plan;
 }
 

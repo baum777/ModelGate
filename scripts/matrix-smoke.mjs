@@ -73,7 +73,7 @@ function normalizeBackendBaseUrl(env) {
 function normalizeTopicPrefix(value) {
   const prefix = String(value ?? "").replace(/\s+/g, " ").trim();
 
-  return prefix || "ModelGate smoke";
+  return prefix || "MosaicStack smoke";
 }
 
 function buildSmokeTopic(prefix, now = new Date(), randomSuffix = randomBytes(4).toString("hex")) {
@@ -246,11 +246,11 @@ async function fetchTopicAccess(fetchImpl, backendBaseUrl, roomId) {
   return callBackendJson(fetchImpl, backendBaseUrl, "GET", `/api/matrix/rooms/${encodeURIComponent(roomId)}/topic-access`);
 }
 
-async function promoteTopic(fetchImpl, backendBaseUrl, roomId, topic) {
-  return callBackendJson(fetchImpl, backendBaseUrl, "POST", "/api/matrix/actions/promote", {
+async function analyzeTopic(fetchImpl, backendBaseUrl, roomId, topic) {
+  return callBackendJson(fetchImpl, backendBaseUrl, "POST", "/api/matrix/analyze", {
     type: "update_room_topic",
     roomId,
-    topic
+    proposedValue: topic
   });
 }
 
@@ -283,6 +283,20 @@ function normalizePlanResponse(payload, expectedTopic) {
     return null;
   }
 
+  if (Array.isArray(plan.actions) && plan.actions.length > 0) {
+    const action = plan.actions[0];
+
+    if (!action || typeof action !== "object" || action.type !== "set_room_topic") {
+      return null;
+    }
+
+    if (expectedTopic && action.proposedValue !== expectedTopic) {
+      return null;
+    }
+
+    return plan;
+  }
+
   if (!plan.diff || typeof plan.diff !== "object" || plan.diff.field !== "topic") {
     return null;
   }
@@ -292,6 +306,24 @@ function normalizePlanResponse(payload, expectedTopic) {
   }
 
   return plan;
+}
+
+function readPlanBeforeTopic(plan) {
+  if (plan?.diff && typeof plan.diff === "object" && "before" in plan.diff) {
+    return plan.diff.before ?? null;
+  }
+
+  if ("currentValue" in plan && (typeof plan.currentValue === "string" || plan.currentValue === null)) {
+    return plan.currentValue;
+  }
+
+  const action = Array.isArray(plan.actions) ? plan.actions[0] : null;
+
+  if (action && typeof action === "object" && (typeof action.currentValue === "string" || action.currentValue === null)) {
+    return action.currentValue;
+  }
+
+  return null;
 }
 
 function normalizeVerificationResponse(payload, expectedTopic) {
@@ -310,6 +342,25 @@ function normalizeVerificationResponse(payload, expectedTopic) {
   }
 
   return verification;
+}
+
+function normalizeEvidenceReceipts(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((entry) =>
+      entry
+      && typeof entry === "object"
+      && typeof entry.eventType === "string"
+      && typeof entry.transactionId === "string"
+      && entry.transactionId.trim().length > 0
+    )
+    .map((entry) => ({
+      eventType: entry.eventType,
+      transactionId: entry.transactionId
+    }));
 }
 
 async function runUpdateLifecycle(fetchImpl, backendBaseUrl, roomId, topic, options = {}) {
@@ -372,20 +423,20 @@ async function runUpdateLifecycle(fetchImpl, backendBaseUrl, roomId, topic, opti
     );
   }
 
-  const promoteResult = await promoteTopic(fetchImpl, backendBaseUrl, roomId, topic);
+  const analyzeResult = await analyzeTopic(fetchImpl, backendBaseUrl, roomId, topic);
 
-  if (!promoteResult.ok) {
+  if (!analyzeResult.ok) {
     return {
       ok: false,
-      phase: "promote",
-      error: promoteResult.error
+      phase: "analyze",
+      error: analyzeResult.error
     };
   }
 
-  const plan = normalizePlanResponse(promoteResult.body, topic);
+  const plan = normalizePlanResponse(analyzeResult.body, topic);
 
   if (!plan) {
-    return createSmokeError("smoke_backend_error", "Backend returned an invalid plan", "promote");
+    return createSmokeError("smoke_backend_error", "Backend returned an invalid plan", "analyze");
   }
 
   const fetchedPlanResult = await fetchPlan(fetchImpl, backendBaseUrl, plan.planId);
@@ -446,8 +497,12 @@ async function runUpdateLifecycle(fetchImpl, backendBaseUrl, roomId, topic, opti
   const result = {
     roomId,
     planId: plan.planId,
-    beforeTopic: plan.diff.before,
+    beforeTopic: readPlanBeforeTopic(plan),
     targetTopic: topic,
+    evidence: {
+      execute: normalizeEvidenceReceipts(executed.result.evidence),
+      verify: normalizeEvidenceReceipts(verification.evidence)
+    },
     verification: {
       status: verification.status,
       expected: verification.expected,
@@ -585,3 +640,4 @@ if (isMain) {
     process.exitCode = 1;
   });
 }
+

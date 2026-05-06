@@ -1,0 +1,30 @@
+name: Matrix live smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Matrix live smoke
+        env:
+          MATRIX_ENABLED: ${{ secrets.MATRIX_ENABLED }}
+          MATRIX_BASE_URL: ${{ secrets.MATRIX_BASE_URL }}
+          MATRIX_ACCESS_TOKEN: ${{ secrets.MATRIX_ACCESS_TOKEN }}
+          MATRIX_SMOKE_ROOM_ID: ${{ secrets.MATRIX_SMOKE_ROOM_ID }}
+          MATRIX_SMOKE_TOPIC_PREFIX: ${{ secrets.MATRIX_SMOKE_TOPIC_PREFIX }}
+        run: npm run test:matrix-live

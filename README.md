@@ -1,201 +1,151 @@
-# ModelGate
+# MosaicStack
 
-ModelGate is a backend-first console overlay for OpenRouter chat, GitHub workspace review, and Matrix workspace operations.
+MosaicStack is a community-first, model-agnostic interface for working with your own repository, your own setup, and a shared Matrix-based knowledge space.
 
-The browser is a thin PWA shell. It renders backend-owned results, keeps local UI state, and sends approval intent only. Provider IDs, Matrix credentials, and execution truth stay server-side.
+It is meant to be read first as a GitHub project viewer: what the project is for, what it connects, what is implemented, and what still remains contract-only.
 
-## Architecture
+## What It Is
 
-- PWA / web frontend: `web/` is a Vite + React app with local-only UI state and PWA assets.
-- Backend API: `server/` is the Fastify authority layer for chat, GitHub, Matrix, and Vercel serverless reuse through `api/[...path].ts`.
-- OpenRouter / LLM routing: the backend exposes only the public alias `default` through `GET /models` and maps it to hidden provider targets from `OPENROUTER_MODEL` and `OPENROUTER_MODELS`.
-- GitHub workspace: the backend owns repo reads, proposal generation, execution, and verification. The browser is review-first and approval-gated.
-- Matrix workspace: the backend owns identity, scope, provenance, topic-access, analyze, and approval-gated room topic plan/execute/verify flows.
-- Approval-gated writes: GitHub and Matrix writes are created and executed server-side. The browser can only submit review and approval intent.
+MosaicStack is an individualized multi-layer interface for people who want to use AI models without turning one provider, one UI, or one private workflow into the source of truth.
 
-## Verified Status
+The project connects three layers:
 
-### Core chat and model surfaces
+- your repository as the local working and review surface,
+- model-agnostic chat and planning through backend-owned routing,
+- a Matrix server as an exchange and interaction space for concepts, ideas, setups, skills, decisions, and reusable knowledge.
 
-| Endpoint | Status | Notes |
-| --- | --- | --- |
-| `GET /health` | implemented | Returns backend status, service name, mode, upstream, default public model alias, and public model count. |
-| `GET /models` | implemented | Returns the public alias list only. Provider IDs do not appear here. |
-| `POST /chat` | implemented | Supports non-stream responses and SSE streaming. Stream order is `start -> token* -> done|error`. |
+The long-term direction is a community-first workspace where individuals can preserve their own operating context while making useful patterns understandable for other users.
 
-### GitHub workspace surfaces
+## Why It Exists
 
-| Endpoint | Status | Notes |
-| --- | --- | --- |
-| `GET /api/github/repos` | implemented when configured | Lists only repos allowed by `GITHUB_ALLOWED_REPOS`. |
-| `POST /api/github/context` | implemented when configured | Builds backend-owned read context for an allowed repo. |
-| `POST /api/github/actions/propose` | implemented when configured | Creates a backend-owned proposal plan with a reviewable diff. |
-| `GET /api/github/actions/:planId` | implemented when configured | Returns the stored plan while it is still active. |
-| `POST /api/github/actions/:planId/execute` | implemented when configured | Executes only with explicit approval intent and stays fail-closed on stale plans. |
-| `GET /api/github/actions/:planId/verify` | implemented when configured | Re-reads GitHub state and reports verified, mismatch, pending, or failed. |
-| `GET /api/github/repos/:owner/:repo/tree` | implemented when configured | Read-only tree helper for allowed repos. |
-| `GET /api/github/repos/:owner/:repo/file` | implemented when configured | Read-only file helper for allowed repos. |
+Most AI tooling is either provider-first, chat-first, or too developer-centered. MosaicStack starts from a different assumption:
 
-### Matrix workspace surfaces
+- users should be able to connect their own repo and inspect work in GitHub terms,
+- model choice should stay behind a stable public interface instead of becoming UI truth,
+- shared knowledge should have a durable home outside one browser session,
+- community documentation should grow from real workflows, not from detached examples.
 
-| Endpoint | Status | Notes |
-| --- | --- | --- |
-| `GET /api/matrix/whoami` | implemented when configured | Returns normalized Matrix identity and fails closed when disabled. |
-| `GET /api/matrix/joined-rooms` | implemented when configured | Returns normalized joined-room metadata. |
-| `POST /api/matrix/scope/resolve` | implemented when configured | Stores an opaque scope snapshot for later summary reads. |
-| `GET /api/matrix/scope/:scopeId/summary` | implemented when configured | Returns a bounded read-only summary for the stored scope snapshot. |
-| `GET /api/matrix/rooms/:roomId/provenance` | implemented when configured | Returns normalized read-only room provenance from joined rooms. |
-| `GET /api/matrix/rooms/:roomId/topic-access` | implemented when configured | Returns room topic power-level access details. |
-| `POST /api/matrix/analyze` | implemented when configured | Creates a backend-owned room topic analysis plan. |
-| `POST /api/matrix/actions/promote` | implemented when configured | Creates a backend-owned room topic update plan with before/after diff. |
-| `GET /api/matrix/actions/:planId` | implemented when configured | Returns the stored Matrix plan while active. |
-| `POST /api/matrix/actions/:planId/execute` | implemented when configured | Executes only with explicit approval intent and re-checks freshness before write. |
-| `GET /api/matrix/actions/:planId/verify` | implemented when configured | Re-reads Matrix state and reports verified, mismatch, pending, or failed. |
+## Current Product Shape
 
-## Current Caveats
+MosaicStack is currently a backend-first console overlay with a browser UI.
 
-- Matrix hierarchy preview is still unwired in the server route layer. The browser UI has a preview affordance, but the backend path is not implemented here.
-- Matrix and GitHub routes fail closed until their backend env is present and valid. They do not auto-enable.
+The browser renders results, keeps local UI state, and sends approval intent. The backend owns provider calls, model routing, GitHub reads/writes, Matrix credentials, SSE framing, and execution truth.
+
+### GitHub Viewer And Review Surface
+
+The GitHub layer is the main viewer-facing path:
+
+- browse allowed repositories,
+- read selected repo context,
+- ask for review or proposal plans,
+- inspect generated diffs before execution,
+- execute only through backend approval gates,
+- verify the result against GitHub state.
+
+This keeps the browser review-first and prevents direct browser writes from becoming the authority path.
+
+### Matrix Knowledge Space
+
+The Matrix layer is the planned exchange and interaction space for documenting:
+
+- concepts and project ideas,
+- setup notes and operating patterns,
+- reusable skills and workflows,
+- room/topic context,
+- provenance and review discussions.
+
+Read-only Matrix routes and several planning surfaces exist in this repo. Matrix write, approval, provenance, hierarchy, and live end-to-end verification remain bounded by the status notes below.
+
+## Status
+
+### Locally Verified
+
+- `GET /health`
+- `GET /models`
+- `POST /chat`
+- SSE lifecycle: `start -> token* -> done|error`
+- Matrix malformed-200 fail-closed behavior
+- Matrix read-only `/api/matrix/*` routes
+
+### Implemented When Configured
+
+| Area | Surface |
+| --- | --- |
+| Chat | Health, public model aliases, non-stream chat, SSE chat |
+| GitHub | Allowed repo listing, context reads, proposal plans, approval-gated execute, verification, tree/file reads |
+| Matrix | Identity, joined rooms, scope summaries, room provenance, topic access, analyze/action plan routes |
+
+### Contract-Only Or Deferred
+
+- Matrix Analyze, Review, Execute, Verify, and Matrix write flows remain external-backend or contract-bound until verified against a real Matrix origin.
+- Matrix hierarchy preview is browser-side advisory/mock-only in this repo.
+- Undo, cross-device sync, bulk review queue, and advanced observability are deferred.
 - `GITHUB_APP_*` fields are reserved placeholders and are not wired into the current runtime path.
-- `npm run smoke:matrix` is manual-only and depends on a dedicated Matrix room.
-- Restored browser state is UI-local only. It is not backend truth.
 
-## Local Development
+## Trust Boundaries
 
-1. Install dependencies:
+- Provider IDs are not UI truth.
+- Matrix credentials never belong in the browser.
+- Restored browser state is local UI state, not backend-fresh truth.
+- Malformed SSE or Matrix responses fail closed instead of being silently repaired.
+- Browser writes cannot bypass backend approval gating.
+
+## Repository Map
+
+- `web/` - Vite + React browser interface.
+- `server/` - Fastify authority layer for chat, GitHub, Matrix, and shared serverless reuse.
+- `api/[...path].ts` - Vercel serverless entrypoint.
+- `config/model-capabilities.yml` - runtime-loaded workflow routing contract.
+- `docs/model-routing.md` - model routing behavior and policy notes.
+- `docs/integration-auth-rotation-live-smoke.md` - opt-in live smoke setup.
+
+## Running Locally
+
+Install dependencies:
 
 ```bash
 npm install
 ```
 
-2. Create the backend env file from the repo-root example:
+Create local env files:
 
 ```bash
 cp .env.example .env
-```
-
-3. Create the optional browser env file if you want to override local API origins:
-
-```bash
 cp web/.env.example web/.env
 ```
 
-4. Set `OPENROUTER_API_KEY` in `.env`.
-5. Add `GITHUB_TOKEN` and `GITHUB_ALLOWED_REPOS` only if you want GitHub workspace routes enabled.
-   Add `GITHUB_AGENT_API_KEY` if you want approval-gated execute enabled; send it only as `X-ModelGate-Admin-Key` from trusted server-side callers.
-6. Add `MATRIX_ENABLED=true`, `MATRIX_BASE_URL`, and `MATRIX_ACCESS_TOKEN` only if you want Matrix routes enabled.
+Set `OPENROUTER_API_KEY` in `.env`.
 
-Run the backend:
+Optional integrations:
+
+- GitHub routes require `GITHUB_TOKEN` and `GITHUB_ALLOWED_REPOS`.
+- Approval-gated GitHub execute also requires `GITHUB_AGENT_API_KEY`, sent only as `X-MosaicStack-Admin-Key` from trusted server-side callers.
+- Matrix routes require `MATRIX_ENABLED=true`, `MATRIX_BASE_URL`, and `MATRIX_ACCESS_TOKEN`.
+
+Run backend and browser:
 
 ```bash
 npm run dev:server
-```
-
-Run the web client in a second terminal:
-
-```bash
 npm run dev:web
 ```
 
-The backend reads the repo-root `.env` file. The web client reads `web/.env` only for browser-side origin overrides.
+The backend reads the repo-root `.env`. The browser reads `web/.env` only for browser-side origin overrides.
 
-## Vercel Deployment
+## Deployment
 
-ModelGate is deployed as a Vite frontend plus a single Node serverless entrypoint.
+MosaicStack is deployed as a Vite frontend plus a single Node serverless entrypoint.
 
-1. Use the repository root as the Vercel project root.
-2. Set the build command to `npm run build`.
-3. Set the output directory to `web/dist`.
-4. Keep secrets server-side in Vercel project env settings.
-5. Use `vercel dev` for the closest local preview of the production topology.
-
-The deployment path uses:
-
-- frontend build output: `web/dist`
+- Vercel project root: repository root
+- Build command: `npm run build`
+- Output directory: `web/dist`
 - API entrypoint: `api/[...path].ts`
-- shared backend implementation: `server/src/app.ts`
+- Shared backend implementation: `server/src/app.ts`
 
-## Environment Variables
-
-Secrets stay backend-only. Do not put tokens in Vite public env vars.
-
-### Required backend vars
-
-| Variable | Where | Purpose |
-| --- | --- | --- |
-| `OPENROUTER_API_KEY` | backend only | Required for OpenRouter chat calls. |
-
-### Optional backend vars
-
-| Variable | Where | Purpose |
-| --- | --- | --- |
-| `OPENROUTER_BASE_URL` | backend only | Overrides the OpenRouter API base URL. |
-| `OPENROUTER_MODEL` | backend only | Hidden provider target for the public default alias. |
-| `OPENROUTER_MODELS` | backend only | Hidden fallback provider targets. |
-| `OPENROUTER_REQUEST_TIMEOUT_MS` | backend only | OpenRouter request timeout in milliseconds. |
-| `APP_NAME` | backend only | Upstream application name. |
-| `DEFAULT_SYSTEM_PROMPT` | backend only | Server-side system prompt injected before chat forwarding. |
-| `CORS_ORIGINS` | backend only | Allowlist of browser origins. |
-| `LLM_ROUTER_ENABLED` | backend only | Enables the deterministic rules-first router. |
-| `LLM_ROUTER_MODE` | backend only | Router mode, currently `rules_first`. |
-| `LLM_REQUIRE_FREE_MODELS` | backend only | Keeps the router on free model targets. |
-| `LLM_MAX_FALLBACKS` | backend only | Caps router fallback attempts. |
-| `LLM_ROUTER_FAIL_CLOSED` | backend only | Keeps the router fail-closed. |
-| `LLM_ROUTER_LOG_ENABLED` | backend only | Enables private append-only router evidence logging. |
-| `LLM_ROUTER_POLICY_PATH` | backend only | Path to the router policy file. |
-| `LLM_PROMPT_CLASSIFIER_PATH` | backend only | Optional classifier override. |
-| `LLM_MODEL_MAP_PATH` | backend only | Optional task-to-model map override. |
-| `LLM_FALLBACK_POLICY_PATH` | backend only | Optional fallback policy override. |
-| `LLM_DEFAULT_MODEL` | backend only | Router default model target. |
-| `LLM_FALLBACK_MODEL` | backend only | Router fallback model target. |
-| `LLM_MODEL_CODING` | backend only | Coding task model target. |
-| `LLM_MODEL_REPO_REVIEW` | backend only | Repo review task model target. |
-| `LLM_MODEL_ARCHITECTURE` | backend only | Architecture task model target. |
-| `LLM_MODEL_DEEP_REASONING` | backend only | Deep reasoning task model target. |
-| `LLM_MODEL_LONG_CONTEXT` | backend only | Long-context task model target. |
-| `LLM_MODEL_UI_REVIEW` | backend only | UI review task model target. |
-| `LLM_MODEL_DAILY` | backend only | Daily/general task model target. |
-| `GITHUB_TOKEN` | backend only | Required for GitHub workspace routes. |
-| `GITHUB_ALLOWED_REPOS` | backend only | Required allowlist for GitHub workspace routes. |
-| `GITHUB_AGENT_API_KEY` | backend only | Admin key required for approval-gated execute requests. |
-| `GITHUB_API_BASE_URL` | backend only | GitHub API base URL. |
-| `GITHUB_DEFAULT_OWNER` | backend only | Optional default owner. |
-| `GITHUB_BRANCH_PREFIX` | backend only | Backend-created branch prefix. |
-| `GITHUB_REQUEST_TIMEOUT_MS` | backend only | GitHub request timeout. |
-| `GITHUB_PLAN_TTL_MS` | backend only | GitHub plan TTL. |
-| `GITHUB_MAX_CONTEXT_FILES` | backend only | Context file limit. |
-| `GITHUB_MAX_CONTEXT_BYTES` | backend only | Context byte limit. |
-| `GITHUB_SMOKE_REPO` | backend only | Manual GitHub smoke repo. |
-| `GITHUB_SMOKE_BASE_BRANCH` | backend only | Manual GitHub smoke base branch. |
-| `GITHUB_SMOKE_TARGET_BRANCH` | backend only | Manual GitHub smoke target branch. |
-| `GITHUB_SMOKE_ENABLED` | backend only | Enables the manual GitHub smoke path. |
-| `GITHUB_APP_ID` | backend only | Reserved placeholder, not wired. |
-| `GITHUB_APP_PRIVATE_KEY` | backend only | Reserved placeholder, not wired. |
-| `GITHUB_APP_INSTALLATION_ID` | backend only | Reserved placeholder, not wired. |
-| `MATRIX_ENABLED` | backend only | Enables Matrix routes. |
-| `MATRIX_REQUIRED` | backend only | Fails startup closed if Matrix is required but invalid. |
-| `MATRIX_BASE_URL` | backend only | Matrix homeserver origin. |
-| `MATRIX_HOMESERVER_URL` | backend only | Alias for `MATRIX_BASE_URL`. |
-| `MATRIX_ACCESS_TOKEN` | backend only | Matrix access token. |
-| `MATRIX_REFRESH_TOKEN` | backend only | Optional Matrix refresh token. |
-| `MATRIX_CLIENT_ID` | backend only | Required when refresh token is used. |
-| `MATRIX_TOKEN_EXPIRES_AT` | backend only | Optional access token expiry timestamp. |
-| `MATRIX_EXPECTED_USER_ID` | backend only | Optional identity guard. |
-| `MATRIX_REQUEST_TIMEOUT_MS` | backend only | Matrix request timeout. |
-| `MATRIX_SMOKE_ROOM_ID` | backend only | Dedicated room for manual Matrix smoke. |
-| `MATRIX_SMOKE_TOPIC_PREFIX` | backend only | Manual Matrix smoke topic prefix. |
-
-### Optional browser overrides
-
-| Variable | Where | Purpose |
-| --- | --- | --- |
-| `VITE_API_BASE_URL` | browser build only | Overrides the browser API origin. Leave unset for relative paths in production. |
-| `VITE_GITHUB_API_BASE_URL` | browser build only | Overrides the browser GitHub API origin. |
-| `VITE_MATRIX_API_BASE_URL` | browser build only | Overrides the browser Matrix API origin. |
+Keep secrets server-side in Vercel project env settings.
 
 ## Verification
 
-Suggested checks:
+Suggested local checks:
 
 ```bash
 npm run typecheck
@@ -203,16 +153,22 @@ npm test
 npm run build
 ```
 
-For backend-only checks:
+More focused checks:
 
 ```bash
 npm run typecheck:server
 npm run test:server
-```
-
-For browser and UI checks:
-
-```bash
 npm run typecheck:web
 npm run test:web
+npm run test:browser
+```
+
+Opt-in live checks:
+
+```bash
+npm run test:matrix-live
+npm run test:matrix-evidence-live
+npm run test:integration-auth-rotation-live
+npm run test:integration-auth-rotation-live:matrix
+npm run test:integration-auth-rotation-live:both
 ```

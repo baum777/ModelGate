@@ -193,6 +193,31 @@ test("matrix analyze rejects missing room ids", async (t) => {
   });
 });
 
+test("matrix promote route is no longer available", async (t) => {
+  const app = createApp({
+    env: createTestEnv(),
+    openRouter: createMockOpenRouterClient(),
+    matrixConfig: createTestMatrixConfig(),
+    matrixClient: createMockMatrixClient(),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/matrix/actions/promote",
+    payload: {
+      roomId: "!room:matrix.example",
+      topic: "New topic"
+    }
+  });
+
+  assert.equal(response.statusCode, 404);
+});
+
 test("matrix topic access reports joined room power details", async (t) => {
   const app = createApp({
     env: createTestEnv(),
@@ -393,8 +418,8 @@ test("matrix room provenance returns normalized read-only room metadata", async 
         return [
           {
             roomId: "!room:matrix.example",
-            name: "ModelGate Test",
-            canonicalAlias: "#modelgate-test:matrix.example",
+            name: "MosaicStack Test",
+            canonicalAlias: "#mosaicstack-test:matrix.example",
             roomType: "room"
           }
         ];
@@ -455,13 +480,13 @@ test("matrix room provenance returns normalized read-only room metadata", async 
   assert.equal(parsed.originServer, "https://matrix.example");
   assert.equal(parsed.authChainIndex, 0);
   assert.equal(parsed.signatures[0]?.signer, "@user:matrix.example");
-  assert.equal(parsed.signatures[0]?.status, "verified");
+  assert.equal(parsed.signatures[0]?.status, "derived");
   assert.equal(parsed.integrityNotice, "Read-only room metadata derived from joined rooms.");
   assert.equal(parsed.provenance.source, "matrix");
   assert.equal(parsed.provenance.kind, "room_metadata");
   assert.equal(parsed.provenance.items[0]?.id, "!room:matrix.example");
-  assert.equal(parsed.provenance.items[0]?.label, "ModelGate Test");
-  assert.equal(parsed.provenance.items[0]?.alias, "#modelgate-test:matrix.example");
+  assert.equal(parsed.provenance.items[0]?.label, "MosaicStack Test");
+  assert.equal(parsed.provenance.items[0]?.alias, "#mosaicstack-test:matrix.example");
   assert.match(parsed.provenance.generatedAt, /^\d{4}-\d{2}-\d{2}T/);
   assert.equal(whoamiCalls, 1);
   assert.equal(joinedRoomsCalls, 1);

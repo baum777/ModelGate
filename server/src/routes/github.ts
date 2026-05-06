@@ -1,5 +1,6 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { AppEnv } from "../lib/env.js";
 import {
   GitHubChangeProposalRequestSchema,
   buildGitHubErrorResponse,
@@ -19,27 +20,50 @@ import {
   type GitHubVerifyResult
 } from "../lib/github-contract.js";
 import { GitHubClientError, type GitHubClient } from "../lib/github-client.js";
+import type { GitHubPullRequestSummary, GitHubRepositoryReference } from "../lib/github-client.js";
 import { createGitHubContextBuilder } from "../lib/github-context-builder.js";
-import { createGitHubActionStore, type GitHubActionStore } from "../lib/github-action-store.js";
+import { createGitHubActionStore, type GitHubActionStore, type GitHubActionStoreEntry } from "../lib/github-action-store.js";
 import { createGitHubProposalPlanner } from "../lib/github-plan-builder.js";
 import { createGitHubActionExecutionService } from "../lib/github-execution.js";
 import type { GitHubConfig } from "../lib/github-env.js";
 import { isGitHubRepoAllowed, normalizeGitHubRepoFullName } from "../lib/github-env.js";
+import type { IntegrationAuthStore } from "../lib/integration-auth-store.js";
 import { normalizeGitHubRelativePath } from "../lib/github-paths.js";
 import { OpenRouterError, type OpenRouterClient } from "../lib/openrouter.js";
+import type { AuthConfig } from "../lib/auth.js";
 import type { ModelRegistry } from "../lib/model-policy.js";
+import type { AppRateLimiter } from "../lib/rate-limit.js";
+import type { RuntimeJournal } from "../lib/runtime-journal.js";
+import type { ModelCapabilitiesConfig } from "../lib/workflow-model-router.js";
 
 type GitHubRouteDependencies = {
+  env: AppEnv;
   config: GitHubConfig;
+  authConfig: AuthConfig;
   client: GitHubClient;
   openRouter: OpenRouterClient;
   modelRegistry: ModelRegistry;
+  modelCapabilitiesConfig: ModelCapabilitiesConfig;
+  authStore: IntegrationAuthStore;
   actionStore?: GitHubActionStore;
+  rateLimiter: AppRateLimiter;
+  runtimeJournal: RuntimeJournal;
 };
 
-const GITHUB_ADMIN_KEY_HEADER = "x-modelgate-admin-key";
+const GITHUB_ADMIN_KEY_HEADER = "x-mosaicstack-admin-key";
+const INTEGRATION_SESSION_COOKIE = "mosaicstack_integration_session";
+const DEFAULT_SMOKE_BRANCH_PREFIX = "mosaicstack/github-smoke";
+type GitHubCredentialSource = "user_connected" | "instance_config";
+type GitHubResolvedClient = {
+  client: GitHubClient;
+  credentialSource: GitHubCredentialSource;
+};
 
 function sendGitHubError(reply: FastifyReply, code: GitHubErrorCode, message?: string, retryAfterSeconds?: number | null) {
+  if (typeof retryAfterSeconds === "number" && retryAfterSeconds > 0) {
+    reply.header("Retry-After", String(Math.ceil(retryAfterSeconds)));
+  }
+
   return reply.status(githubErrorStatus(code)).send(
     buildGitHubErrorResponse(code, message, retryAfterSeconds === null ? undefined : retryAfterSeconds)
   );
@@ -74,10 +98,6 @@ function handleGitHubError(reply: FastifyReply, error: unknown) {
 
     if (error.status === 429) {
       return sendGitHubError(reply, "github_rate_limited");
-    }
-
-    if (error.status === 504) {
-      return sendGitHubError(reply, "github_timeout");
     }
 
     return sendGitHubError(reply, "github_internal_error");
@@ -157,6 +177,355 @@ async function listAllowedRepos(config: GitHubConfig, client: GitHubClient): Pro
   return summaries;
 }
 
+function buildVerificationBranchPrefixes(config: GitHubConfig) {
+  const smokePrefix = config.smokeTargetBranch?.trim() || DEFAULT_SMOKE_BRANCH_PREFIX;
+  const standardPrefix = config.branchPrefix.trim();
+
+  return [smokePrefix, standardPrefix]
+    .filter((value): value is string => value.length > 0)
+    .filter((value, index, values) => values.indexOf(value) === index);
+}
+
+function buildRecoveredPlanEntry(options: {
+  planId: string;
+  repo: GitHubRepoSummary;
+  branchName: string;
+  targetBranch: string;
+  branchSha: string;
+  prNumber: number;
+  prUrl: string;
+  createdAt: string;
+  planTtlMs: number;
+  smokeMode: boolean;
+}): Omit<GitHubActionStoreEntry, "createdAtMs" | "expiresAtMs"> {
+  const generatedAt = options.createdAt;
+
+  return {
+    planId: options.planId,
+    repo: options.repo,
+    baseRef: options.repo.defaultBranch,
+    baseSha: options.repo.defaultBranchSha ?? options.branchSha,
+    branchName: options.branchName,
+    targetBranch: options.targetBranch,
+    status: "executed",
+    stale: false,
+    requiresApproval: true,
+    summary: `Recovered GitHub plan ${options.planId}`,
+    rationale: "Recovered from GitHub state after the in-memory plan store was not available.",
+    riskLevel: "low_surface",
+    citations: [],
+    diff: [],
+    generatedAt,
+    expiresAt: new Date(Date.parse(generatedAt) + options.planTtlMs).toISOString(),
+    request: {
+      repo: {
+        owner: options.repo.owner,
+        repo: options.repo.repo
+      },
+      objective: `Recovered GitHub plan ${options.planId}`,
+      baseBranch: options.repo.defaultBranch,
+      targetBranch: options.smokeMode ? (options.branchName.slice(0, options.branchName.lastIndexOf("/")) || DEFAULT_SMOKE_BRANCH_PREFIX) : undefined,
+      mode: options.smokeMode ? "smoke" : undefined
+    },
+    context: {
+      repo: options.repo,
+      ref: options.repo.defaultBranch,
+      baseSha: options.repo.defaultBranchSha ?? options.branchSha,
+      question: "Recovered GitHub verification plan",
+      files: [],
+      citations: [],
+      tokenBudget: {
+        maxTokens: 0,
+        usedTokens: 0,
+        truncated: false
+      },
+      warnings: ["Recovered verification state from GitHub because the in-memory plan store was unavailable."],
+      generatedAt
+    },
+    execution: {
+      planId: options.planId,
+      status: "executed",
+      branchName: options.branchName,
+      baseSha: options.repo.defaultBranchSha ?? options.branchSha,
+      headSha: options.branchSha,
+      commitSha: options.branchSha,
+      prNumber: options.prNumber,
+      prUrl: options.prUrl,
+      targetBranch: options.targetBranch,
+      executedAt: generatedAt
+    }
+  };
+}
+
+function buildRouteVerificationFreshnessReason(summary: GitHubRepoSummary, plan: GitHubActionStoreEntry) {
+  if (summary.status !== "ready") {
+    return `Repository status is ${summary.status}`;
+  }
+
+  if (summary.defaultBranch !== plan.targetBranch) {
+    return `Target branch changed from ${plan.targetBranch} to ${summary.defaultBranch}`;
+  }
+
+  if (summary.defaultBranchSha !== plan.baseSha) {
+    return "Base branch changed after approval";
+  }
+
+  return null;
+}
+
+async function readRouteVerificationBranchReference(
+  client: GitHubClient,
+  plan: GitHubActionStoreEntry
+): Promise<GitHubRepositoryReference | null> {
+  try {
+    return await client.readRepositoryReference(plan.repo.owner, plan.repo.repo, `heads/${plan.branchName}`);
+  } catch (error) {
+    if (isGitHubClientError(error) && error.code === "github_repo_not_found") {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+async function findRouteVerificationPullRequest(
+  client: GitHubClient,
+  plan: GitHubActionStoreEntry
+): Promise<GitHubPullRequestSummary | null> {
+  const pulls = await client.listPullRequests(plan.repo.owner, plan.repo.repo, {
+    state: "all",
+    head: `${plan.repo.owner}:${plan.branchName}`,
+    base: plan.targetBranch,
+    perPage: 10,
+    page: 1
+  });
+
+  if (pulls.length === 0) {
+    return null;
+  }
+
+  const exactMatch = pulls.find((pull) => pull.headRef === plan.branchName && pull.baseRef === plan.targetBranch);
+
+  return exactMatch ?? pulls[0] ?? null;
+}
+
+async function verifyRecoveredRoutePlan(plan: GitHubActionStoreEntry, client: GitHubClient) {
+  const summary = await client.readRepositorySummary(plan.repo.owner, plan.repo.repo);
+  const freshnessReason = buildRouteVerificationFreshnessReason(summary, plan);
+  const branchReference = await readRouteVerificationBranchReference(client, plan);
+  const actualCommitSha = branchReference?.sha ?? null;
+  const pullRequest = await findRouteVerificationPullRequest(client, plan);
+
+  if (!plan.execution) {
+    return {
+      planId: plan.planId,
+      status: "pending" as const,
+      checkedAt: new Date().toISOString(),
+      branchName: plan.branchName,
+      targetBranch: plan.targetBranch,
+      expectedBaseSha: plan.baseSha,
+      actualBaseSha: summary.defaultBranchSha,
+      expectedCommitSha: null,
+      actualCommitSha,
+      prNumber: pullRequest?.number ?? null,
+      prUrl: pullRequest?.htmlUrl ?? null,
+      mismatchReasons: ["The plan has not been executed yet"]
+    };
+  }
+
+  if (freshnessReason) {
+    return {
+      planId: plan.planId,
+      status: "mismatch" as const,
+      checkedAt: new Date().toISOString(),
+      branchName: plan.branchName,
+      targetBranch: plan.targetBranch,
+      expectedBaseSha: plan.baseSha,
+      actualBaseSha: summary.defaultBranchSha,
+      expectedCommitSha: plan.execution.commitSha,
+      actualCommitSha,
+      prNumber: pullRequest?.number ?? null,
+      prUrl: pullRequest?.htmlUrl ?? null,
+      mismatchReasons: [freshnessReason]
+    };
+  }
+
+  if (!branchReference) {
+    if (pullRequest && pullRequest.headSha === plan.execution.commitSha) {
+      return {
+        planId: plan.planId,
+        status: "verified" as const,
+        checkedAt: new Date().toISOString(),
+        branchName: plan.branchName,
+        targetBranch: plan.targetBranch,
+        expectedBaseSha: plan.baseSha,
+        actualBaseSha: summary.defaultBranchSha,
+        expectedCommitSha: plan.execution.commitSha,
+        actualCommitSha: pullRequest.headSha,
+        prNumber: pullRequest.number,
+        prUrl: pullRequest.htmlUrl,
+        mismatchReasons: []
+      };
+    }
+
+    return {
+      planId: plan.planId,
+      status: "pending" as const,
+      checkedAt: new Date().toISOString(),
+      branchName: plan.branchName,
+      targetBranch: plan.targetBranch,
+      expectedBaseSha: plan.baseSha,
+      actualBaseSha: summary.defaultBranchSha,
+      expectedCommitSha: plan.execution.commitSha,
+      actualCommitSha,
+      prNumber: pullRequest?.number ?? null,
+      prUrl: pullRequest?.htmlUrl ?? null,
+      mismatchReasons: ["The branch or pull request is not visible yet"]
+    };
+  }
+
+  if (branchReference.sha !== plan.execution.commitSha) {
+    return {
+      planId: plan.planId,
+      status: "mismatch" as const,
+      checkedAt: new Date().toISOString(),
+      branchName: plan.branchName,
+      targetBranch: plan.targetBranch,
+      expectedBaseSha: plan.baseSha,
+      actualBaseSha: summary.defaultBranchSha,
+      expectedCommitSha: plan.execution.commitSha,
+      actualCommitSha: branchReference.sha,
+      prNumber: pullRequest?.number ?? null,
+      prUrl: pullRequest?.htmlUrl ?? null,
+      mismatchReasons: [
+        `Branch head does not match the approved commit for heads/${plan.branchName}`
+      ]
+    };
+  }
+
+  if (!pullRequest) {
+    return {
+      planId: plan.planId,
+      status: "verified" as const,
+      checkedAt: new Date().toISOString(),
+      branchName: plan.branchName,
+      targetBranch: plan.targetBranch,
+      expectedBaseSha: plan.baseSha,
+      actualBaseSha: summary.defaultBranchSha,
+      expectedCommitSha: plan.execution.commitSha,
+      actualCommitSha: branchReference.sha,
+      prNumber: null,
+      prUrl: null,
+      mismatchReasons: []
+    };
+  }
+
+  if (pullRequest.headSha !== plan.execution.commitSha || pullRequest.baseRef !== plan.targetBranch) {
+    return {
+      planId: plan.planId,
+      status: "mismatch" as const,
+      checkedAt: new Date().toISOString(),
+      branchName: plan.branchName,
+      targetBranch: plan.targetBranch,
+      expectedBaseSha: plan.baseSha,
+      actualBaseSha: summary.defaultBranchSha,
+      expectedCommitSha: plan.execution.commitSha,
+      actualCommitSha: branchReference.sha,
+      prNumber: pullRequest.number,
+      prUrl: pullRequest.htmlUrl,
+      mismatchReasons: ["Pull request does not point to the approved branch and target branch"]
+    };
+  }
+
+  return {
+    planId: plan.planId,
+    status: "verified" as const,
+    checkedAt: new Date().toISOString(),
+    branchName: plan.branchName,
+    targetBranch: plan.targetBranch,
+    expectedBaseSha: plan.baseSha,
+    actualBaseSha: summary.defaultBranchSha,
+    expectedCommitSha: plan.execution.commitSha,
+    actualCommitSha: branchReference.sha,
+    prNumber: pullRequest.number,
+    prUrl: pullRequest.htmlUrl,
+    mismatchReasons: []
+  };
+}
+
+async function recoverPlanForVerification(
+  planId: string,
+  config: GitHubConfig,
+  client: GitHubClient,
+  actionStore: GitHubActionStore
+) {
+  const repos = await listAllowedRepos(config, client);
+  const branchPrefixes = buildVerificationBranchPrefixes(config);
+
+  for (const repo of repos) {
+    for (const branchPrefix of branchPrefixes) {
+      const branchName = `${branchPrefix}/${planId}`;
+
+      try {
+        let branchSha: string | null = null;
+        let pullRequestNumber = 0;
+        let pullRequestUrl = "";
+
+        try {
+          const branchReference = await client.readRepositoryReference(repo.owner, repo.repo, `heads/${branchName}`);
+
+          branchSha = branchReference.sha;
+        } catch (error) {
+          if (!(isGitHubClientError(error) && error.code === "github_repo_not_found")) {
+            throw error;
+          }
+        }
+
+        const pullRequests = await client.listPullRequests(repo.owner, repo.repo, {
+          state: "all",
+          head: `${repo.owner}:${branchName}`,
+          base: repo.defaultBranch,
+          perPage: 10
+        });
+        const pullRequest = pullRequests.find((entry) => entry.headRef === branchName) ?? pullRequests[0] ?? null;
+
+        if (pullRequest) {
+          branchSha = pullRequest.headSha;
+          pullRequestNumber = pullRequest.number;
+          pullRequestUrl = pullRequest.htmlUrl;
+        }
+
+        if (!branchSha) {
+          continue;
+        }
+
+        return actionStore.createPlan(
+          buildRecoveredPlanEntry({
+            planId,
+            repo,
+            branchName,
+            targetBranch: repo.defaultBranch,
+            branchSha,
+            prNumber: pullRequestNumber,
+            prUrl: pullRequestUrl,
+            createdAt: new Date().toISOString(),
+            planTtlMs: config.planTtlMs,
+            smokeMode: branchPrefix !== config.branchPrefix
+          })
+        );
+      } catch (error) {
+        if (isGitHubClientError(error) && error.code === "github_repo_not_found") {
+          continue;
+        }
+
+        throw error;
+      }
+    }
+  }
+
+  return null;
+}
+
 function isFreshGitHubPlan(summary: GitHubRepoSummary, plan: GitHubChangePlan) {
   return summary.status === "ready"
     && summary.defaultBranch === plan.targetBranch
@@ -171,6 +540,58 @@ function readGitHubAdminKeyHeader(request: FastifyRequest) {
   }
 
   return typeof rawValue === "string" ? rawValue : null;
+}
+
+function readIntegrationSessionCookie(request: FastifyRequest) {
+  const cookieHeader = Array.isArray(request.headers.cookie)
+    ? request.headers.cookie[0]
+    : request.headers.cookie;
+
+  if (!cookieHeader) {
+    return null;
+  }
+
+  for (const segment of cookieHeader.split(";")) {
+    const trimmed = segment.trim();
+
+    if (!trimmed.startsWith(`${INTEGRATION_SESSION_COOKIE}=`)) {
+      continue;
+    }
+
+    try {
+      return decodeURIComponent(trimmed.slice(INTEGRATION_SESSION_COOKIE.length + 1));
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function resolveRequestGitHubClient(request: FastifyRequest, deps: GitHubRouteDependencies): GitHubResolvedClient | null {
+  const sessionId = readIntegrationSessionCookie(request);
+
+  if (sessionId) {
+    const credential = deps.authStore.readCredential(sessionId, "github");
+    const accessToken = typeof credential?.accessToken === "string" ? credential.accessToken.trim() : "";
+    const kind = typeof credential?.kind === "string" ? credential.kind.trim() : "";
+
+    if (kind === "github_oauth" && accessToken.length > 0) {
+      return {
+        client: deps.client.withAccessToken(accessToken),
+        credentialSource: "user_connected"
+      };
+    }
+  }
+
+  if (deps.config.ready && deps.config.token) {
+    return {
+      client: deps.client,
+      credentialSource: "instance_config"
+    };
+  }
+
+  return null;
 }
 
 function sendGitHubAdminKeyError(reply: FastifyReply, code: "github_unauthorized" | "github_forbidden") {
@@ -223,36 +644,24 @@ function requireGitHubAdminKey(request: FastifyRequest, reply: FastifyReply, con
 }
 
 export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies) {
-  const contextBuilder = createGitHubContextBuilder({
-    config: deps.config,
-    client: deps.client
-  });
-  const proposalPlanner = createGitHubProposalPlanner({
-    config: deps.config,
-    client: deps.client,
-    openRouter: deps.openRouter,
-    modelRegistry: deps.modelRegistry
-  });
   const actionStore = deps.actionStore ?? createGitHubActionStore(deps.config.planTtlMs);
-  const actionExecutor = createGitHubActionExecutionService({
-    config: deps.config,
-    client: deps.client,
-    actionStore
-  });
 
   app.get("/api/github/repos", async (_request, reply) => {
-    if (!deps.config.ready) {
+    const resolvedClient = resolveRequestGitHubClient(_request, deps);
+
+    if (!resolvedClient) {
       return sendGitHubError(reply, "github_not_configured");
     }
 
     try {
       const checkedAt = new Date().toISOString();
-      const repos = await listAllowedRepos(deps.config, deps.client);
+      const repos = await listAllowedRepos(deps.config, resolvedClient.client);
 
       return reply.status(200).send({
         ok: true,
         checkedAt,
-        repos
+        repos,
+        credentialSource: resolvedClient.credentialSource
       });
     } catch (error) {
       return handleGitHubError(reply, error);
@@ -260,7 +669,9 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   });
 
   app.post("/api/github/context", async (request, reply) => {
-    if (!deps.config.ready) {
+    const resolvedClient = resolveRequestGitHubClient(request, deps);
+
+    if (!resolvedClient) {
       return sendGitHubError(reply, "github_not_configured");
     }
 
@@ -281,6 +692,10 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
 
     try {
+      const contextBuilder = createGitHubContextBuilder({
+        config: deps.config,
+        client: resolvedClient.client
+      });
       const contextRequest = {
         repo: {
           owner: parsedBody.data.repo.owner,
@@ -297,7 +712,8 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
 
       return reply.status(200).send({
         ok: true,
-        context
+        context,
+        credentialSource: resolvedClient.credentialSource
       });
     } catch (error) {
       return handleGitHubError(reply, error);
@@ -305,7 +721,9 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   });
 
   app.post("/api/github/actions/propose", async (request, reply) => {
-    if (!deps.config.ready) {
+    const resolvedClient = resolveRequestGitHubClient(request, deps);
+
+    if (!resolvedClient) {
       return sendGitHubError(reply, "github_not_configured");
     }
 
@@ -325,7 +743,25 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
       return sendGitHubError(reply, "github_repo_not_allowed");
     }
 
+    const limit = deps.rateLimiter.check("github_propose", request, deps.authConfig);
+
+    if (!limit.allowed) {
+      return sendGitHubError(reply, "github_rate_limited", undefined, limit.retryAfterSeconds);
+    }
+
     try {
+      const proposalPlanner = createGitHubProposalPlanner({
+        env: deps.env,
+        config: deps.config,
+        client: resolvedClient.client,
+        openRouter: deps.openRouter,
+        modelRegistry: deps.modelRegistry,
+        modelCapabilities: deps.modelCapabilitiesConfig
+      });
+      const contextBuilder = createGitHubContextBuilder({
+        config: deps.config,
+        client: resolvedClient.client
+      });
       const plan = await runWithTimeout((async () => {
         const proposalRequest = {
           repo: {
@@ -337,17 +773,78 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
           ref: parsedBody.data.ref,
           selectedPaths: parsedBody.data.selectedPaths,
           constraints: parsedBody.data.constraints,
-          baseBranch: parsedBody.data.baseBranch
+          baseBranch: parsedBody.data.baseBranch,
+          targetBranch: parsedBody.data.targetBranch,
+          mode: parsedBody.data.mode,
+          intent: parsedBody.data.intent
         };
         const planId = `plan_${randomUUID()}`;
-        const context = await contextBuilder.buildContext({
-          repo: proposalRequest.repo,
-          question: proposalRequest.question ?? proposalRequest.objective,
-          ref: proposalRequest.baseBranch ?? proposalRequest.ref,
-          selectedPaths: proposalRequest.selectedPaths,
-          maxFiles: Math.min(deps.config.maxContextFiles, 4),
-          maxBytes: Math.min(deps.config.maxContextBytes, 16_384)
-        });
+        const smokeMode = proposalRequest.mode === "smoke";
+        const context = await (smokeMode
+          ? (() => {
+                const repoFullName = `${proposalRequest.repo.owner}/${proposalRequest.repo.repo}`.toLowerCase();
+                const baseRef = proposalRequest.baseBranch ?? proposalRequest.ref ?? "main";
+              return Promise.all([
+                resolvedClient.client.readRepositorySummary(proposalRequest.repo.owner, proposalRequest.repo.repo),
+                resolvedClient.client.readRepositoryCommit(proposalRequest.repo.owner, proposalRequest.repo.repo, baseRef)
+              ]).then(async ([repoSummary, baseCommit]) => {
+                const smokePath = "docs/mosaicstack-smoke.md";
+                const files: Array<{
+                  path: string;
+                  sha: string;
+                  excerpt: string;
+                  citations: never[];
+                  truncated: boolean;
+                }> = [];
+
+                try {
+                  const file = await resolvedClient.client.readRepositoryFile(proposalRequest.repo.owner, proposalRequest.repo.repo, {
+                    ref: baseRef,
+                    path: smokePath
+                  });
+
+                  if (!file.binary && !file.truncated) {
+                    files.push({
+                      path: file.path,
+                      sha: file.sha,
+                      excerpt: file.content.slice(0, 512),
+                      citations: [],
+                      truncated: file.truncated
+                    });
+                  }
+                } catch (error) {
+                  if (!(error instanceof GitHubClientError && error.code === "github_file_not_found")) {
+                    throw error;
+                  }
+                }
+
+                return {
+                  repo: repoSummary,
+                  ref: baseRef,
+                  baseSha: baseCommit.sha,
+                  question: proposalRequest.question ?? proposalRequest.objective,
+                  files,
+                  citations: [],
+                  tokenBudget: {
+                    maxTokens: 0,
+                    usedTokens: 0,
+                    truncated: false
+                  },
+                  warnings: [
+                    `Smoke proposal context for ${repoFullName} is intentionally minimal`
+                  ],
+                  generatedAt: new Date().toISOString()
+                };
+              });
+            })()
+          : contextBuilder.buildContext({
+              repo: proposalRequest.repo,
+              question: proposalRequest.question ?? proposalRequest.objective,
+              ref: proposalRequest.baseBranch ?? proposalRequest.ref,
+              selectedPaths: proposalRequest.selectedPaths,
+              maxFiles: Math.min(deps.config.maxContextFiles, 4),
+              maxBytes: Math.min(deps.config.maxContextBytes, 16_384)
+            }));
         const createdAt = new Date().toISOString();
         const builtPlan = await proposalPlanner.buildPlan({
           planId,
@@ -355,7 +852,7 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
           context,
           createdAt
         });
-        const currentSummary = await deps.client.readRepositorySummary(builtPlan.repo.owner, builtPlan.repo.repo);
+        const currentSummary = await resolvedClient.client.readRepositorySummary(builtPlan.repo.owner, builtPlan.repo.repo);
 
         if (!isFreshGitHubPlan(currentSummary, builtPlan)) {
           throw new GitHubClientError({
@@ -373,13 +870,35 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
           request: proposalRequest,
           context
         });
+        deps.runtimeJournal.append({
+          source: "github",
+          eventType: "github_proposal_created",
+          authorityDomain: "github",
+          severity: "info",
+          outcome: "accepted",
+          summary: "GitHub proposal created",
+          planId: builtPlan.planId,
+          modelRouteSummary: builtPlan.routingMetadata
+            ? {
+                selectedAlias: builtPlan.routingMetadata.selectedModel,
+                workflowRole: builtPlan.routingMetadata.workflowRole,
+                fallbackUsed: builtPlan.routingMetadata.fallbackUsed
+              }
+            : null,
+          safeMetadata: {
+            repo: builtPlan.repo.fullName,
+            targetBranch: builtPlan.targetBranch,
+            mode: proposalRequest.mode ?? "standard"
+          }
+        });
 
         return builtPlan;
       })(), deps.config.requestTimeoutMs);
 
       return reply.status(200).send({
         ok: true,
-        plan
+        plan,
+        credentialSource: resolvedClient.credentialSource
       });
     } catch (error) {
       return handleGitHubError(reply, error);
@@ -387,7 +906,9 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   });
 
   app.get("/api/github/actions/:planId", async (request, reply) => {
-    if (!deps.config.ready) {
+    const resolvedClient = resolveRequestGitHubClient(request, deps);
+
+    if (!resolvedClient) {
       return sendGitHubError(reply, "github_not_configured");
     }
 
@@ -412,7 +933,7 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
 
     try {
-      const currentSummary = await deps.client.readRepositorySummary(lookup.plan.repo.owner, lookup.plan.repo.repo);
+      const currentSummary = await resolvedClient.client.readRepositorySummary(lookup.plan.repo.owner, lookup.plan.repo.repo);
 
       if (!isFreshGitHubPlan(currentSummary, lookup.plan)) {
         return sendGitHubError(reply, "github_stale_plan");
@@ -423,7 +944,8 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
         plan: {
           ...lookup.plan,
           stale: false
-        }
+        },
+        credentialSource: resolvedClient.credentialSource
       });
     } catch (error) {
       return handleGitHubError(reply, error);
@@ -431,7 +953,9 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   });
 
   app.post("/api/github/actions/:planId/execute", async (request, reply) => {
-    if (!deps.config.ready) {
+    const resolvedClient = resolveRequestGitHubClient(request, deps);
+
+    if (!resolvedClient) {
       return sendGitHubError(reply, "github_not_configured");
     }
 
@@ -457,6 +981,12 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
       return sendGitHubError(reply, "invalid_request");
     }
 
+    const limit = deps.rateLimiter.check("github_execute", request, deps.authConfig);
+
+    if (!limit.allowed) {
+      return sendGitHubError(reply, "github_rate_limited", undefined, limit.retryAfterSeconds);
+    }
+
     const lookup = actionStore.readPlan(parsedPlanId.data);
 
     if (lookup.state === "missing") {
@@ -468,19 +998,64 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
 
     try {
+      const actionExecutor = createGitHubActionExecutionService({
+        config: deps.config,
+        client: resolvedClient.client,
+        actionStore
+      });
+      deps.runtimeJournal.append({
+        source: "github",
+        eventType: "github_execute_attempted",
+        authorityDomain: "github",
+        severity: "info",
+        outcome: "observed",
+        planId: lookup.plan.planId,
+        summary: "GitHub execute attempted",
+        safeMetadata: {
+          repo: lookup.plan.repo.fullName,
+          targetBranch: lookup.plan.targetBranch
+        }
+      });
       const execution: GitHubExecuteResult = await actionExecutor.executePlan(lookup.plan);
+      deps.runtimeJournal.append({
+        source: "github",
+        eventType: "github_execute_completed",
+        authorityDomain: "github",
+        severity: "info",
+        outcome: "executed",
+        planId: execution.planId,
+        executionId: execution.commitSha,
+        summary: "GitHub execute completed",
+        safeMetadata: {
+          branchName: execution.branchName,
+          targetBranch: execution.targetBranch,
+          prNumber: execution.prNumber
+        }
+      });
 
       return reply.status(200).send({
         ok: true,
-        result: execution
+        result: execution,
+        credentialSource: resolvedClient.credentialSource
       });
     } catch (error) {
+      deps.runtimeJournal.append({
+        source: "github",
+        eventType: "github_execute_failed",
+        authorityDomain: "github",
+        severity: "error",
+        outcome: "failed",
+        planId: lookup.plan.planId,
+        summary: "GitHub execute failed"
+      });
       return handleGitHubError(reply, error);
     }
   });
 
   app.get("/api/github/actions/:planId/verify", async (request, reply) => {
-    if (!deps.config.ready) {
+    const resolvedClient = resolveRequestGitHubClient(request, deps);
+
+    if (!resolvedClient) {
       return sendGitHubError(reply, "github_not_configured");
     }
 
@@ -494,7 +1069,17 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
       return sendGitHubError(reply, "invalid_request");
     }
 
-    const lookup = actionStore.readPlan(parsedPlanId.data);
+    let lookup = actionStore.readPlan(parsedPlanId.data);
+    let recoveredFromGitHub = false;
+
+    if (lookup.state === "missing") {
+      const recoveredPlan = await recoverPlanForVerification(parsedPlanId.data, deps.config, resolvedClient.client, actionStore);
+
+      if (recoveredPlan) {
+        recoveredFromGitHub = true;
+        lookup = actionStore.readPlan(parsedPlanId.data);
+      }
+    }
 
     if (lookup.state === "missing") {
       return sendGitHubError(reply, "github_plan_not_found");
@@ -504,12 +1089,60 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
       return sendGitHubError(reply, "github_plan_expired");
     }
 
+    if (recoveredFromGitHub) {
+      try {
+        const verification = await verifyRecoveredRoutePlan(lookup.plan, resolvedClient.client);
+        deps.runtimeJournal.append({
+          source: "github",
+          eventType: "github_verify_result",
+          authorityDomain: "github",
+          severity: verification.status === "mismatch" ? "warning" : "info",
+          outcome: verification.status === "verified" ? "verified" : verification.status === "mismatch" ? "unverifiable" : "observed",
+          planId: verification.planId,
+          verificationId: verification.checkedAt,
+          summary: `GitHub verify ${verification.status}`,
+          safeMetadata: {
+            branchName: verification.branchName,
+            targetBranch: verification.targetBranch
+          }
+        });
+
+        return reply.status(200).send({
+          ok: true,
+          verification,
+          credentialSource: resolvedClient.credentialSource
+        });
+      } catch (error) {
+        return handleGitHubError(reply, error);
+      }
+    }
+
     try {
+      const actionExecutor = createGitHubActionExecutionService({
+        config: deps.config,
+        client: resolvedClient.client,
+        actionStore
+      });
       const verification: GitHubVerifyResult = await actionExecutor.verifyPlan(lookup.plan);
+      deps.runtimeJournal.append({
+        source: "github",
+        eventType: "github_verify_result",
+        authorityDomain: "github",
+        severity: verification.status === "mismatch" ? "warning" : "info",
+        outcome: verification.status === "verified" ? "verified" : verification.status === "mismatch" ? "unverifiable" : "observed",
+        planId: verification.planId,
+        verificationId: verification.checkedAt,
+        summary: `GitHub verify ${verification.status}`,
+        safeMetadata: {
+          branchName: verification.branchName,
+          targetBranch: verification.targetBranch
+        }
+      });
 
       return reply.status(200).send({
         ok: true,
-        verification
+        verification,
+        credentialSource: resolvedClient.credentialSource
       });
     } catch (error) {
       return handleGitHubError(reply, error);
@@ -517,7 +1150,9 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   });
 
   app.get("/api/github/repos/:owner/:repo/tree", async (request, reply) => {
-    if (!deps.config.ready) {
+    const resolvedClient = resolveRequestGitHubClient(request, deps);
+
+    if (!resolvedClient) {
       return sendGitHubError(reply, "github_not_configured");
     }
 
@@ -544,14 +1179,15 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
 
     try {
-      const tree: GitHubFileTree = await deps.client.readRepositoryTree(repoParams.owner, repoParams.repo, {
+      const tree: GitHubFileTree = await resolvedClient.client.readRepositoryTree(repoParams.owner, repoParams.repo, {
         ...parsedQuery.data,
         path: normalizedPath ?? undefined
       });
 
       return reply.status(200).send({
         ok: true,
-        tree
+        tree,
+        credentialSource: resolvedClient.credentialSource
       });
     } catch (error) {
       return handleGitHubError(reply, error);
@@ -559,7 +1195,9 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   });
 
   app.get("/api/github/repos/:owner/:repo/file", async (request, reply) => {
-    if (!deps.config.ready) {
+    const resolvedClient = resolveRequestGitHubClient(request, deps);
+
+    if (!resolvedClient) {
       return sendGitHubError(reply, "github_not_configured");
     }
 
@@ -586,14 +1224,15 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
 
     try {
-      const file: GitHubFileContent = await deps.client.readRepositoryFile(repoParams.owner, repoParams.repo, {
+      const file: GitHubFileContent = await resolvedClient.client.readRepositoryFile(repoParams.owner, repoParams.repo, {
         ...parsedQuery.data,
         path: normalizedPath
       });
 
       return reply.status(200).send({
         ok: true,
-        file
+        file,
+        credentialSource: resolvedClient.credentialSource
       });
     } catch (error) {
       return handleGitHubError(reply, error);

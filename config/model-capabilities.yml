@@ -1,0 +1,159 @@
+models:
+  chat_primary:
+    model_env: CHAT_MODEL
+    recommended_model: google/gemma-4-31b-it:free
+    purpose:
+      - chat
+      - summarize
+      - multilingual_assistance
+      - document_understanding
+      - ui_copy
+    strengths:
+      - long_context
+      - multilingual
+      - native_function_calling
+      - general_reasoning
+    best_practices:
+      - keep_tool_execution_backend_owned
+      - require_schema_validation_for_any_tool_output
+      - use_for_non_destructive_assistant_flows
+      - prefer_for_general_chat_and_rag_summaries
+    structured_output_required: false
+    approval_required: false
+    may_execute_external_tools: false
+    may_write_external_state: false
+    fallback_env: DIALOG_FALLBACK_MODEL
+
+  github_code_agent:
+    model_env: CODE_AGENT_MODEL
+    recommended_model: qwen/qwen3-coder:free
+    purpose:
+      - code_plan
+      - repo_analyze
+      - patch_strategy
+      - implementation_planning
+    strengths:
+      - agentic_coding
+      - function_calling
+      - tool_use
+      - repository_reasoning
+      - long_context
+    best_practices:
+      - require_explicit_output_format_for_tool_calls
+      - keep_model_in_propose_only_mode
+      - never_allow_direct_repo_write_from_model
+      - validate_all_json_and_action_objects
+      - separate_plan_generation_from_execution
+    structured_output_required: true
+    approval_required: true
+    may_execute_external_tools: false
+    may_write_external_state: false
+    fallback_env: FAST_FALLBACK_MODEL
+
+  structured_plan:
+    model_env: STRUCTURED_PLAN_MODEL
+    recommended_model: openai/gpt-oss-120b:free
+    purpose:
+      - structured_json
+      - review_objects
+      - risk_assessment
+      - approval_gate_payloads
+      - verification_summaries
+    strengths:
+      - native_tool_use
+      - structured_outputs
+      - configurable_reasoning
+      - strong_agentic_behavior
+    best_practices:
+      - enforce_json_schema_validation
+      - prefer_for_plan_objects_not_freeform_chat
+      - fail_closed_on_missing_required_fields
+      - do_not_allow_silent_execute_fallback
+    structured_output_required: true
+    approval_required: true
+    may_execute_external_tools: false
+    may_write_external_state: false
+    fallback_env: CODE_AGENT_MODEL
+
+  matrix_analyze:
+    model_env: MATRIX_ANALYZE_MODEL
+    recommended_model: nvidia/nemotron-3-super-120b-a12b:free
+    purpose:
+      - matrix_analyze
+      - long_context_review
+      - cross_document_reasoning
+      - risk_review
+      - verification_support
+    strengths:
+      - long_context
+      - planning
+      - tool_calling
+      - multi_step_reasoning
+      - agentic_coherence
+    best_practices:
+      - use_for_analyze_review_only
+      - keep_execute_and_verify_backend_gated
+      - validate_plan_schema_before_promotion
+      - constrain_allowed_action_types
+      - avoid_direct_state_writes_from_model
+    structured_output_required: true
+    approval_required: true
+    may_execute_external_tools: false
+    may_write_external_state: false
+    fallback_env: FAST_FALLBACK_MODEL
+
+  fast_fallback:
+    model_env: FAST_FALLBACK_MODEL
+    recommended_model: qwen/qwen3-next-80b-a3b-instruct:free
+    purpose:
+      - fast_chat
+      - summarize
+      - stable_instruction_following
+      - fallback_structured_output
+    strengths:
+      - efficient_instruct_behavior
+      - long_output_support
+      - works_well_with_standardized_formats
+    best_practices:
+      - use_clear_output_templates
+      - standardize_json_shape_in_prompt
+      - use_as_non_execute_fallback_only
+      - avoid_privileged_action_generation_without_second_validation
+    structured_output_required: false
+    approval_required: false
+    may_execute_external_tools: false
+    may_write_external_state: false
+    fallback_env: DIALOG_FALLBACK_MODEL
+
+  dialog_fallback:
+    model_env: DIALOG_FALLBACK_MODEL
+    recommended_model: meta-llama/llama-3.3-70b-instruct:free
+    purpose:
+      - dialogue
+      - multilingual_help
+      - explanation
+      - beginner_safe_copy
+    strengths:
+      - multilingual_dialogue
+      - good_instruction_following
+      - broad_general_use
+    best_practices:
+      - avoid_primary_tool_calling_role
+      - use_for_explanations_and_safe_fallback_chat
+      - require_manual_schema_checks_if_used_for_json
+      - prefer_rag_for_time_sensitive_or_niche_topics
+    structured_output_required: false
+    approval_required: false
+    may_execute_external_tools: false
+    may_write_external_state: false
+    fallback_env: null
+
+global_policy:
+  frontend_may_request_workflow: true
+  frontend_may_select_provider_model: false
+  require_backend_owned_model_resolution: true
+  require_schema_validation_for_privileged_paths: true
+  require_approval_before_execute: true
+  allow_fallback_on_execute: false
+  fail_closed_on_malformed_output: true
+  fail_closed_on_unknown_action_type: true

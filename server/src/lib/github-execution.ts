@@ -16,9 +16,13 @@ type GitHubActionExecutionOptions = {
 };
 
 const EXECUTION_AUTHOR = {
-  name: "ModelGate",
-  email: "modelgate@users.noreply.github.com"
+  name: "MosaicStack",
+  email: "mosaicstack@users.noreply.github.com"
 };
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
 
 function normalizeLineEndings(value: string) {
   return value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -63,9 +67,12 @@ function isMissingReferenceError(error: unknown) {
   );
 }
 
-function extractReplacementPatchContents(patch: string) {
+function extractReviewablePatchContents(patch: string) {
   const lines = normalizeLineEndings(patch).split("\n");
-  const markerIndex = lines.findIndex((line) => line.trim() === "@@ reviewable replacement @@");
+  const markerIndex = lines.findIndex((line) => {
+    const marker = line.trim();
+    return marker === "@@ reviewable replacement @@" || marker === "@@ reviewable addition @@";
+  });
 
   if (markerIndex === -1) {
     throw new GitHubClientError({
@@ -78,6 +85,7 @@ function extractReplacementPatchContents(patch: string) {
     });
   }
 
+  const marker = lines[markerIndex]?.trim() ?? "";
   const beforeLines: string[] = [];
   const afterLines: string[] = [];
 
@@ -106,6 +114,25 @@ function extractReplacementPatchContents(patch: string) {
     });
   }
 
+  if (marker === "@@ reviewable addition @@" ) {
+    if (beforeLines.length > 0 || afterLines.length === 0) {
+      throw new GitHubClientError({
+        code: "github_patch_invalid",
+        status: 422,
+        operation: "GitHub execution",
+        path: "/api/github/actions/execute",
+        baseUrl: "unavailable",
+        message: "GitHub addition patch was malformed"
+      });
+    }
+
+    return {
+      beforeContent: "",
+      afterContent: afterLines.join("\n"),
+      changeType: "added" as const
+    };
+  }
+
   if (beforeLines.length === 0 || afterLines.length === 0) {
     throw new GitHubClientError({
       code: "github_patch_invalid",
@@ -119,7 +146,8 @@ function extractReplacementPatchContents(patch: string) {
 
   return {
     beforeContent: beforeLines.join("\n"),
-    afterContent: afterLines.join("\n")
+    afterContent: afterLines.join("\n"),
+    changeType: "modified" as const
   };
 }
 
@@ -128,7 +156,19 @@ function getPlannedFileMode(plan: GitHubActionStoreEntry, path: string) {
 }
 
 function getPlannedFileContent(plan: GitHubActionStoreEntry, diffFile: GitHubDiffFile) {
-  const extracted = extractReplacementPatchContents(diffFile.patch);
+  const extracted = extractReviewablePatchContents(diffFile.patch);
+
+  if (diffFile.changeType === "added") {
+    return {
+      beforeContent: "",
+      afterContent: extracted.afterContent,
+      mode: getPlannedFileMode(plan, diffFile.path),
+      path: diffFile.path,
+      beforeSha: null,
+      currentSha: null
+    };
+  }
+
   const currentFile = plan.context.files.find((entry) => entry.path === diffFile.path);
 
   if (!currentFile) {
@@ -160,6 +200,46 @@ async function loadPlannedTreeEntries(
 
   for (const diffFile of plan.diff) {
     const planned = getPlannedFileContent(plan, diffFile);
+    if (diffFile.changeType === "added") {
+      try {
+        const currentFile = await client.readRepositoryFile(plan.repo.owner, plan.repo.repo, {
+          ref: plan.baseSha,
+          path: planned.path
+        });
+
+        if (!currentFile.binary && !currentFile.truncated) {
+          throw new GitHubClientError({
+            code: "github_patch_invalid",
+            status: 422,
+            operation: "GitHub execution",
+            path: "/api/github/actions/execute",
+            baseUrl: "unavailable",
+            message: `GitHub file already exists: ${planned.path}`
+          });
+        }
+
+        throw new GitHubClientError({
+          code: "github_patch_invalid",
+          status: 422,
+          operation: "GitHub execution",
+          path: "/api/github/actions/execute",
+          baseUrl: "unavailable",
+          message: `GitHub file was not fully readable: ${planned.path}`
+        });
+      } catch (error) {
+        if (!(error instanceof GitHubClientError && error.code === "github_file_not_found")) {
+          throw error;
+        }
+      }
+
+      loadedFiles.push({
+        path: planned.path,
+        mode: planned.mode,
+        content: planned.afterContent
+      });
+      continue;
+    }
+
     const currentFile = await client.readRepositoryFile(plan.repo.owner, plan.repo.repo, {
       ref: plan.baseSha,
       path: planned.path
@@ -305,7 +385,7 @@ function buildVerificationVerified(
   plan: GitHubActionStoreEntry,
   summary: GitHubRepoSummary,
   actualCommitSha: string,
-  pr: GitHubPullRequestSummary
+  pr: GitHubPullRequestSummary | null
 ): GitHubVerifyResult {
   return {
     planId: plan.planId,
@@ -317,8 +397,8 @@ function buildVerificationVerified(
     actualBaseSha: summary.defaultBranchSha,
     expectedCommitSha: plan.execution?.commitSha ?? actualCommitSha,
     actualCommitSha,
-    prNumber: pr.number,
-    prUrl: pr.htmlUrl,
+    prNumber: pr?.number ?? null,
+    prUrl: pr?.htmlUrl ?? null,
     mismatchReasons: []
   };
 }
@@ -332,6 +412,57 @@ function buildExecutionFreshnessError(plan: GitHubActionStoreEntry) {
     baseUrl: "unavailable",
     message: `GitHub plan ${plan.planId} is stale and must be refreshed`
   });
+}
+
+function buildExecutionPolicyError(message: string) {
+  return new GitHubClientError({
+    code: "github_execute_policy_blocked",
+    status: 409,
+    operation: "GitHub execution",
+    path: "/api/github/actions/execute",
+    baseUrl: "unavailable",
+    message
+  });
+}
+
+function isDeterministicSmokePlan(plan: GitHubActionStoreEntry) {
+  return plan.request.mode === "smoke";
+}
+
+function assertExecutePolicyForPlan(plan: GitHubActionStoreEntry) {
+  if (isDeterministicSmokePlan(plan)) {
+    return;
+  }
+
+  const metadata = plan.routingMetadata;
+
+  if (!isObject(metadata)) {
+    throw buildExecutionPolicyError("GitHub routing metadata is required before execute");
+  }
+
+  if (metadata.workflowRole !== "github_code_agent") {
+    throw buildExecutionPolicyError("GitHub routing workflow role is invalid for execute");
+  }
+
+  if (metadata.mayWriteExternalState) {
+    throw buildExecutionPolicyError("GitHub routing policy disallows external state writes on execute");
+  }
+
+  if (metadata.mayExecuteExternalTools) {
+    throw buildExecutionPolicyError("GitHub routing policy disallows external tool execution on execute");
+  }
+
+  if (metadata.approvalRequired !== true) {
+    throw buildExecutionPolicyError("GitHub routing policy must require approval before execute");
+  }
+
+  if (metadata.structuredOutputRequired !== true) {
+    throw buildExecutionPolicyError("GitHub routing policy must require structured output for execute");
+  }
+
+  if (metadata.fallbackUsed) {
+    throw buildExecutionPolicyError("GitHub execute path does not allow fallback-routed proposals");
+  }
 }
 
 function buildVerificationFreshnessReason(summary: GitHubRepoSummary, plan: GitHubActionStoreEntry) {
@@ -357,6 +488,8 @@ export function createGitHubActionExecutionService(options: GitHubActionExecutio
         return plan.execution;
       }
 
+      assertExecutePolicyForPlan(plan);
+
       const summary = await options.client.readRepositorySummary(plan.repo.owner, plan.repo.repo);
 
       if (!buildFreshnessCheck(summary, plan)) {
@@ -381,7 +514,7 @@ export function createGitHubActionExecutionService(options: GitHubActionExecutio
         entries: treeEntries
       });
       const commit = await options.client.createRepositoryCommit(plan.repo.owner, plan.repo.repo, {
-        message: `ModelGate plan ${plan.planId}`,
+        message: `MosaicStack plan ${plan.planId}`,
         treeSha: tree.sha,
         parentShas: [plan.baseSha],
         author: {
@@ -445,11 +578,11 @@ export function createGitHubActionExecutionService(options: GitHubActionExecutio
         }
       } else {
         pullRequest = await options.client.createPullRequest(plan.repo.owner, plan.repo.repo, {
-          title: `ModelGate plan ${plan.planId}`,
+          title: `MosaicStack plan ${plan.planId}`,
           head: plan.branchName,
           base: plan.targetBranch,
           body: [
-            `ModelGate approval-gated proposal`,
+            `MosaicStack approval-gated proposal`,
             `Plan: ${plan.planId}`,
             `Repo: ${plan.repo.fullName}`,
             `Branch: ${plan.branchName}`
@@ -497,6 +630,15 @@ export function createGitHubActionExecutionService(options: GitHubActionExecutio
       }
 
       if (!branchReference) {
+        if (pullRequest && pullRequest.headSha === plan.execution.commitSha) {
+          const result = buildVerificationVerified(plan, summary, pullRequest.headSha, pullRequest);
+          options.actionStore.updatePlan(plan.planId, (current) => ({
+            ...current,
+            verification: result
+          }));
+          return result;
+        }
+
         const result = buildVerificationPending(plan, summary, actualCommitSha, pullRequest);
         options.actionStore.updatePlan(plan.planId, (current) => ({
           ...current,
@@ -517,7 +659,7 @@ export function createGitHubActionExecutionService(options: GitHubActionExecutio
       }
 
       if (!pullRequest) {
-        const result = buildVerificationPending(plan, summary, branchReference.sha, null);
+        const result = buildVerificationVerified(plan, summary, branchReference.sha, null);
         options.actionStore.updatePlan(plan.planId, (current) => ({
           ...current,
           verification: result

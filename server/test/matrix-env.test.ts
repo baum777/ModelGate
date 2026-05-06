@@ -124,3 +124,25 @@ test("matrix config accepts MATRIX_HOMESERVER_URL as a base url alias", () => {
   assert.equal(config.homeserverUrl, "https://matrix.example");
   assert.equal(config.accessToken, "token");
 });
+
+test("matrix config can route all evidence writes to one dedicated evidence room", () => {
+  const config = createMatrixConfig({
+    MATRIX_ENABLED: "true",
+    MATRIX_REQUIRED: "false",
+    MATRIX_BASE_URL: "https://matrix.example",
+    MATRIX_ACCESS_TOKEN: "token",
+    MATRIX_REQUEST_TIMEOUT_MS: "4000",
+    MATRIX_EVIDENCE_WRITES_ENABLED: "true",
+    MATRIX_EVIDENCE_ROOM_ID: "!evidence:matrix.example"
+  });
+
+  assert.equal(config.ready, true);
+  assert.equal(config.evidenceWritesEnabled, true);
+  assert.equal(config.evidenceWritesRequired, false);
+  assert.deepEqual(config.evidenceRooms, {
+    approvals: "!evidence:matrix.example",
+    provenance: "!evidence:matrix.example",
+    verification: "!evidence:matrix.example",
+    topicChanges: "!evidence:matrix.example"
+  });
+});

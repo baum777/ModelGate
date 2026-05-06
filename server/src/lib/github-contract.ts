@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export type GitHubErrorCode =
+  | "auth_required"
   | "github_not_configured"
   | "github_unauthorized"
   | "github_forbidden"
@@ -20,7 +21,8 @@ export type GitHubErrorCode =
   | "invalid_request"
   | "github_plan_not_found"
   | "github_plan_expired"
-  | "github_plan_already_executed";
+  | "github_plan_already_executed"
+  | "github_execute_policy_blocked";
 
 export type GitHubErrorEnvelope = {
   ok: false;
@@ -36,6 +38,23 @@ export type GitHubPlanStatus = "pending_review" | "executed";
 export type GitHubVerificationStatus = "verified" | "mismatch" | "pending" | "failed";
 export type GitHubDiffChangeType = "added" | "modified" | "deleted" | "renamed";
 export type GitHubFileEncoding = "utf-8" | "base64";
+
+export type GitHubRoutingMetadata = {
+  workflowRole: "github_code_agent";
+  selectedModel: string;
+  candidateModels: string[];
+  fallbackUsed: boolean;
+  selectionSource: "env" | "legacy_openrouter_model" | "fallback_env" | "recommended_model";
+  routingMode: "policy";
+  allowFallback: boolean;
+  failClosed: boolean;
+  structuredOutputRequired: boolean;
+  approvalRequired: boolean;
+  mayExecuteExternalTools: boolean;
+  mayWriteExternalState: boolean;
+  policySectionKey: string | null;
+  recordedAt: string;
+};
 
 export type GitHubRepoSummary = {
   owner: string;
@@ -141,11 +160,14 @@ export type GitHubChangeProposalRequest = {
   selectedPaths?: string[];
   constraints?: string[];
   baseBranch?: string;
+  targetBranch?: string;
+  mode?: "smoke";
+  intent?: string;
 };
 
 export type GitHubProposalFileDraft = {
   path: string;
-  changeType: "modified";
+  changeType: "modified" | "added";
   afterContent: string;
 };
 
@@ -217,6 +239,7 @@ export type GitHubChangePlan = {
   diff: GitHubDiffFile[];
   generatedAt: string;
   expiresAt: string;
+  routingMetadata?: GitHubRoutingMetadata;
   execution?: GitHubExecuteResult;
   verification?: GitHubVerifyResult;
 };
@@ -261,12 +284,15 @@ export const GitHubChangeProposalRequestSchema = z.object({
   ref: z.string().trim().min(1).optional(),
   selectedPaths: z.array(z.string().trim().min(1)).optional(),
   constraints: z.array(z.string().trim().min(1)).optional(),
-  baseBranch: z.string().trim().min(1).optional()
+  baseBranch: z.string().trim().min(1).optional(),
+  targetBranch: z.string().trim().min(1).optional(),
+  mode: z.enum(["smoke"]).optional(),
+  intent: z.string().trim().min(1).optional()
 }).strict();
 
 export const GitHubProposalFileDraftSchema = z.object({
   path: z.string().trim().min(1),
-  changeType: z.literal("modified"),
+  changeType: z.enum(["modified", "added"]),
   afterContent: z.string().min(1)
 }).strict();
 
@@ -284,6 +310,7 @@ export const GitHubExecuteRequestSchema = z.object({
 export const GitHubPlanIdSchema = z.string().trim().min(1);
 
 const GITHUB_ERROR_MESSAGES: Record<GitHubErrorCode, string> = {
+  auth_required: "Authentication required",
   github_not_configured: "GitHub backend is not configured",
   github_unauthorized: "GitHub credentials were rejected",
   github_forbidden: "GitHub backend denied access",
@@ -303,10 +330,12 @@ const GITHUB_ERROR_MESSAGES: Record<GitHubErrorCode, string> = {
   invalid_request: "Invalid GitHub request",
   github_plan_not_found: "GitHub plan was not found",
   github_plan_expired: "GitHub plan expired",
-  github_plan_already_executed: "GitHub plan was already executed"
+  github_plan_already_executed: "GitHub plan was already executed",
+  github_execute_policy_blocked: "GitHub execute policy blocked this plan"
 };
 
 const GITHUB_ERROR_STATUS: Record<GitHubErrorCode, number> = {
+  auth_required: 401,
   github_not_configured: 503,
   github_unauthorized: 401,
   github_forbidden: 403,
@@ -326,7 +355,8 @@ const GITHUB_ERROR_STATUS: Record<GitHubErrorCode, number> = {
   invalid_request: 400,
   github_plan_not_found: 404,
   github_plan_expired: 410,
-  github_plan_already_executed: 409
+  github_plan_already_executed: 409,
+  github_execute_policy_blocked: 409
 };
 
 export function buildGitHubErrorResponse(code: GitHubErrorCode, message?: string, retryAfterSeconds?: number): GitHubErrorEnvelope {

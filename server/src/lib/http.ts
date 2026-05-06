@@ -15,7 +15,8 @@ export function isAllowedOrigin(origin: string | undefined, allowedOrigins: read
 export function buildCorsHeaders(origin: string | undefined, allowedOrigins: readonly string[]) {
   const headers: Record<string, string> = {
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-MosaicStack-Admin-Key",
+    "Access-Control-Allow-Credentials": "true",
     "Access-Control-Max-Age": "600"
   };
 

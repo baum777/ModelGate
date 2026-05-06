@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { createGitHubClient } from "../src/lib/github-client.js";
-import { createTestEnv, createMockOpenRouterClient, createTestGitHubConfig } from "../test-support/helpers.js";
+import { createTestEnv, createMockOpenRouterClient, createTestGitHubConfig, createTestSessionCookie } from "../test-support/helpers.js";
 
 function makeJsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
@@ -17,6 +17,8 @@ function makeJsonResponse(body: unknown, status = 200, headers: Record<string, s
 function encodeText(text: string) {
   return Buffer.from(text, "utf8").toString("base64");
 }
+
+const TEST_SESSION_COOKIE = createTestSessionCookie();
 
 test("github context returns a ranked, citation-backed bundle", async (t) => {
   const githubConfig = createTestGitHubConfig({
@@ -148,6 +150,9 @@ test("github context returns a ranked, citation-backed bundle", async (t) => {
   const response = await app.inject({
     method: "POST",
     url: "/api/github/context",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    },
     payload: {
       repo: {
         owner: "acme",
@@ -232,6 +237,9 @@ test("github context fails closed for invalid paths before any upstream fetch", 
   const response = await app.inject({
     method: "POST",
     url: "/api/github/context",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    },
     payload: {
       repo: {
         owner: "acme",
@@ -332,6 +340,9 @@ test("github context returns file not found when a selected path is missing", as
   const response = await app.inject({
     method: "POST",
     url: "/api/github/context",
+    headers: {
+      cookie: TEST_SESSION_COOKIE
+    },
     payload: {
       repo: {
         owner: "acme",

@@ -1,9 +1,27 @@
+import React from "react";
 import type { ReactNode } from "react";
-import { ExpertDetails, type ExpertDetailRow } from "./ExpertDetails.js";
+import { DiagnosticsDrawer, type DiagnosticsDetailRow } from "./ExpertDetails.js";
+import { SectionLabel, StatusBadge } from "./ShellPrimitives.js";
+import { useLocalization } from "../lib/localization.js";
 
 export type StatusPanelRow = {
   label: string;
   value: string;
+};
+
+export type GlobalStatusTone = "blocker" | "warning" | "info" | "hidden";
+
+type SystemSummaryCardProps = {
+  title: string;
+  headline: string;
+  badge: string;
+  badgeTone?: "ready" | "partial" | "error";
+  rows: StatusPanelRow[];
+  helperText?: string;
+  detailsLabel?: string;
+  onOpenDiagnostics?: () => void;
+  diagnosticsDisabled?: boolean;
+  testId?: string;
 };
 
 type StatusPanelProps = {
@@ -15,9 +33,61 @@ type StatusPanelProps = {
   safetyTitle: string;
   safetyText?: string;
   expertMode: boolean;
-  expertRows?: ExpertDetailRow[];
+  expertRows?: DiagnosticsDetailRow[];
   expertChildren?: ReactNode;
+  testId?: string;
 };
+
+export function SystemSummaryCard({
+  title,
+  headline,
+  badge,
+  badgeTone = "ready",
+  rows,
+  helperText,
+  detailsLabel = "Diagnostics",
+  onOpenDiagnostics,
+  diagnosticsDisabled = false,
+  testId,
+}: SystemSummaryCardProps) {
+  const { copy: ui } = useLocalization();
+
+  return (
+    <section className="status-panel-card system-summary-card" role="region" aria-label={title} data-testid={testId}>
+      <div className="context-summary-header">
+        <div>
+          <SectionLabel>{title}</SectionLabel>
+          <strong>{headline}</strong>
+        </div>
+        <StatusBadge tone={badgeTone} className={`status-pill status-${badgeTone}`}>{badge}</StatusBadge>
+      </div>
+
+      <div className="status-panel-grid">
+        {rows.map((row) => (
+          <div key={row.label}>
+            <span>{row.label}</span>
+            <strong>{row.value}</strong>
+          </div>
+        ))}
+      </div>
+
+      {helperText ? <p className="system-summary-helper">{helperText}</p> : null}
+
+      {onOpenDiagnostics ? (
+        <div className="system-summary-actions">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={onOpenDiagnostics}
+            disabled={diagnosticsDisabled}
+          >
+            {detailsLabel ?? ui.shell.diagnosticsLabel}
+          </button>
+        </div>
+      ) : null}
+    </section>
+  );
+}
 
 export function StatusPanel({
   title,
@@ -30,18 +100,21 @@ export function StatusPanel({
   expertMode,
   expertRows = [],
   expertChildren,
+  testId,
 }: StatusPanelProps) {
+  const { copy: ui } = useLocalization();
+
   return (
-    <section className="status-panel-card">
+    <section className="status-panel-card status-panel-compact" role="region" aria-label={title} data-testid={testId}>
       <div className="context-summary-header">
         <div>
-          <span>{title}</span>
+          <SectionLabel>{title}</SectionLabel>
           <strong>{headline}</strong>
         </div>
-        <span className={`status-pill status-${badgeTone}`}>{badge}</span>
+        <StatusBadge tone={badgeTone} className={`status-pill status-${badgeTone}`}>{badge}</StatusBadge>
       </div>
 
-      <div className="status-panel-grid">
+      <div className="status-panel-grid status-panel-grid-compact">
         {rows.map((row) => (
           <div key={row.label}>
             <span>{row.label}</span>
@@ -51,15 +124,15 @@ export function StatusPanel({
       </div>
 
       {safetyText && safetyText.trim().length > 0 ? (
-        <div className="safety-tip-card">
-          <p className="info-label">{safetyTitle}</p>
-          <p>{safetyText}</p>
-        </div>
+        <p className="status-panel-note">
+          <span className="info-label">{safetyTitle}</span>
+          <span>{safetyText}</span>
+        </p>
       ) : null}
 
-      <ExpertDetails expertMode={expertMode} rows={expertRows} className="status-panel-expert">
+      <DiagnosticsDrawer expertMode={expertMode} rows={expertRows} className="status-panel-expert" title={ui.shell.diagnosticsLabel}>
         {expertChildren}
-      </ExpertDetails>
+      </DiagnosticsDrawer>
     </section>
   );
 }

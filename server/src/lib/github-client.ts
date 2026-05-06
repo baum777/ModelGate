@@ -46,6 +46,7 @@ export class GitHubClientError extends Error {
 }
 
 export type GitHubClient = {
+  withAccessToken(token: string): GitHubClient;
   readRepositorySummary(owner: string, repo: string): Promise<GitHubRepoSummary>;
   readRepositoryCommit(owner: string, repo: string, ref: string): Promise<{
     sha: string;
@@ -145,6 +146,7 @@ export type GitHubClient = {
 
 type GitHubClientOptions = {
   config: GitHubConfig;
+  tokenOverride?: string | null;
   fetchImpl?: typeof fetch;
 };
 
@@ -356,6 +358,7 @@ function normalizeStatusForCode(code: GitHubErrorCode) {
 
 async function requestJson<T>(
   config: GitHubConfig,
+  tokenOverride: string | null | undefined,
   operation: string,
   pathName: string,
   init: RequestInit | undefined,
@@ -368,7 +371,9 @@ async function requestJson<T>(
     unprocessableCode?: GitHubErrorCode;
   } = {}
 ): Promise<T> {
-  if (!config.ready || !config.token) {
+  const effectiveToken = tokenOverride?.trim() || config.token;
+
+  if (!effectiveToken) {
     throw createGitHubClientError({
       code: "github_not_configured",
       status: 503,
@@ -380,7 +385,7 @@ async function requestJson<T>(
   }
 
   const headers = new Headers(init?.headers ?? {});
-  headers.set("Authorization", `Bearer ${config.token}`);
+  headers.set("Authorization", `Bearer ${effectiveToken}`);
   headers.set("Accept", "application/vnd.github+json");
   headers.set("X-GitHub-Api-Version", "2022-11-28");
 
@@ -736,6 +741,7 @@ function normalizeRepoStatusFromError(error: GitHubClientError) {
 
 async function readRepositoryMetadata(
   config: GitHubConfig,
+  tokenOverride: string | null | undefined,
   owner: string,
   repo: string,
   fetchImpl: typeof fetch
@@ -744,6 +750,7 @@ async function readRepositoryMetadata(
 
   return requestJson(
     config,
+    tokenOverride,
     "GitHub repository metadata",
     pathName,
     undefined,
@@ -792,6 +799,7 @@ async function readRepositoryMetadata(
 
 async function readRepositoryCommit(
   config: GitHubConfig,
+  tokenOverride: string | null | undefined,
   owner: string,
   repo: string,
   ref: string,
@@ -801,6 +809,7 @@ async function readRepositoryCommit(
 
   return requestJson(
     config,
+    tokenOverride,
     "GitHub repository commit",
     pathName,
     undefined,
@@ -835,6 +844,7 @@ async function readRepositoryCommit(
 
 async function resolveRepositoryRef(
   config: GitHubConfig,
+  tokenOverride: string | null | undefined,
   owner: string,
   repo: string,
   ref: string | undefined,
@@ -844,7 +854,7 @@ async function resolveRepositoryRef(
     return ref;
   }
 
-  const repository = await readRepositoryMetadata(config, owner, repo, fetchImpl);
+  const repository = await readRepositoryMetadata(config, tokenOverride, owner, repo, fetchImpl);
   return repository.defaultBranch;
 }
 
@@ -1153,18 +1163,28 @@ function mapPullRequestResponse(
 export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
   const fetchImpl = options.fetchImpl ?? fetch;
   const config = options.config;
+  const tokenOverride = options.tokenOverride ?? null;
 
   return {
+    withAccessToken(token) {
+      return createGitHubClient({
+        config,
+        fetchImpl,
+        tokenOverride: token
+      });
+    },
+
     async readRepositorySummary(owner, repo) {
       const normalized = normalizeRepoInput(owner, repo);
       const checkedAt = new Date().toISOString();
 
       try {
-        const metadata = await readRepositoryMetadata(config, normalized.owner, normalized.repo, fetchImpl);
+        const metadata = await readRepositoryMetadata(config, tokenOverride, normalized.owner, normalized.repo, fetchImpl);
 
         try {
           const commit = await readRepositoryCommit(
             config,
+            tokenOverride,
             normalized.owner,
             normalized.repo,
             metadata.defaultBranch,
@@ -1204,7 +1224,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 
     async readRepositoryCommit(owner, repo, ref) {
       const normalized = normalizeRepoInput(owner, repo);
-      return readRepositoryCommit(config, normalized.owner, normalized.repo, ref, fetchImpl);
+      return readRepositoryCommit(config, tokenOverride, normalized.owner, normalized.repo, ref, fetchImpl);
     },
 
     async readRepositoryTree(owner, repo, options = {}) {
@@ -1212,11 +1232,12 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       const checkedAt = new Date().toISOString();
       const resolvedRef = options.ref
         ? options.ref
-        : (await readRepositoryMetadata(config, normalized.owner, normalized.repo, fetchImpl)).defaultBranch;
-      const commit = await readRepositoryCommit(config, normalized.owner, normalized.repo, resolvedRef, fetchImpl);
+        : (await readRepositoryMetadata(config, tokenOverride, normalized.owner, normalized.repo, fetchImpl)).defaultBranch;
+      const commit = await readRepositoryCommit(config, tokenOverride, normalized.owner, normalized.repo, resolvedRef, fetchImpl);
       const pathName = `/repos/${normalized.owner}/${normalized.repo}/git/trees/${encodeURIComponent(commit.treeSha)}`;
       const treeResponse = await requestJson(
         config,
+        tokenOverride,
         "GitHub repository tree",
         `${pathName}?recursive=1`,
         undefined,
@@ -1282,7 +1303,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       const checkedAt = new Date().toISOString();
       const ref = options.ref
         ? options.ref
-        : (await readRepositoryMetadata(config, normalized.owner, normalized.repo, fetchImpl)).defaultBranch;
+        : (await readRepositoryMetadata(config, tokenOverride, normalized.owner, normalized.repo, fetchImpl)).defaultBranch;
       const normalizedPath = normalizeRelativePath(options.path);
 
       if (!normalizedPath) {
@@ -1299,6 +1320,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       const pathName = `/repos/${normalized.owner}/${normalized.repo}/contents/${normalizedPath}?ref=${encodeURIComponent(ref)}`;
       const payload = await requestJson(
         config,
+        tokenOverride,
         "GitHub repository file",
         pathName,
         undefined,
@@ -1327,6 +1349,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 
       return requestJson(
         config,
+        tokenOverride,
         "GitHub repository reference",
         pathName,
         undefined,
@@ -1344,6 +1367,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 
       return requestJson(
         config,
+        tokenOverride,
         "GitHub repository tree creation",
         pathName,
         {
@@ -1380,6 +1404,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 
       return requestJson(
         config,
+        tokenOverride,
         "GitHub repository commit creation",
         pathName,
         {
@@ -1429,6 +1454,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 
       return requestJson(
         config,
+        tokenOverride,
         "GitHub repository reference creation",
         pathName,
         {
@@ -1454,6 +1480,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 
       return requestJson(
         config,
+        tokenOverride,
         "GitHub repository reference update",
         pathName,
         {
@@ -1497,6 +1524,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 
       return requestJson(
         config,
+        tokenOverride,
         "GitHub pull request list",
         pathName,
         undefined,
@@ -1527,6 +1555,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 
       return requestJson(
         config,
+        tokenOverride,
         "GitHub pull request creation",
         pathName,
         {

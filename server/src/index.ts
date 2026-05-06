@@ -1,29 +1,20 @@
-import { createApp } from "./app.js";
-import { env } from "./lib/env.js";
-import { createGitHubConfig } from "./lib/github-env.js";
-import { createMatrixConfig } from "./lib/matrix-env.js";
-import { loadLlmRouterPolicy } from "./lib/llm-router.js";
-import { createOpenRouterClient } from "./lib/openrouter.js";
+import { createAppFromRuntimeConfig, createRuntimeConfig } from "./runtime/create-runtime-config.js";
 
 async function main() {
-  const app = createApp({
-    env,
-    openRouter: createOpenRouterClient({ env }),
-    githubConfig: createGitHubConfig(env),
-    matrixConfig: createMatrixConfig(process.env),
-    llmRouterPolicy: loadLlmRouterPolicy(process.env),
-    logger: true
+  const runtimeConfig = createRuntimeConfig({
+    loadDotEnv: true
   });
+  const app = createAppFromRuntimeConfig(runtimeConfig, true);
 
   await app.listen({
-    host: env.HOST,
-    port: env.PORT
+    host: runtimeConfig.env.HOST,
+    port: runtimeConfig.env.PORT
   });
 
   app.log.info({
-    service: env.APP_NAME,
-    host: env.HOST,
-    port: env.PORT
+    service: runtimeConfig.env.APP_NAME,
+    host: runtimeConfig.env.HOST,
+    port: runtimeConfig.env.PORT
   }, "server started");
 }
 

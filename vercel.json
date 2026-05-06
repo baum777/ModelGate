@@ -1,11 +1,15 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
+  "buildCommand": "npm run build:web",
   "outputDirectory": "web/dist",
   "functions": {
     "api/[...path].ts": {
       "maxDuration": 60,
-      "includeFiles": "config/llm-router.yml"
+      "includeFiles": "config/*.yml"
+    },
+    "api/matrix/[...path].ts": {
+      "maxDuration": 60,
+      "includeFiles": "config/*.yml"
     }
   },
   "rewrites": [
@@ -22,12 +26,16 @@
       "destination": "/api/chat"
     },
     {
-      "source": "/api/matrix/(.*)",
-      "destination": "/api/matrix/[...path]?...path=$1"
+      "source": "/api/matrix/:path*",
+      "destination": "/api/matrix/[...path]"
     },
     {
-      "source": "/api/github/(.*)",
-      "destination": "/api/[...path]?...path=$1"
+      "source": "/api/:path*",
+      "destination": "/api/[...path]"
+    },
+    {
+      "source": "/:path*",
+      "destination": "/"
     }
   ]
 }

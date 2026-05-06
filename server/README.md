@@ -14,6 +14,10 @@ Fastify-based backend authority for OpenRouter chat, GitHub workspace review, an
 
 Copy the repo-root `.env.example` to `.env` and set `OPENROUTER_API_KEY`.
 
+The workflow-routing contract is documented in [../docs/model-routing.md](../docs/model-routing.md) and backed by `config/model-capabilities.yml` at runtime.
+
+The example env files use `default` as a backend-owned sentinel in some compatibility slots. Actual provider targets remain server-side.
+
 Required environment variables:
 
 - `OPENROUTER_API_KEY`
@@ -22,7 +26,7 @@ GitHub remote flow required when enabled:
 
 - `GITHUB_TOKEN` - required GitHub token for the backend-owned remote flow
 - `GITHUB_ALLOWED_REPOS` - required comma-separated allowlist of `owner/repo` values; the GitHub remote flow stays fail-closed until at least one repository is allowed
-- `GITHUB_AGENT_API_KEY` - required to approve execute requests; send it only from trusted server-side callers via `X-ModelGate-Admin-Key`
+- `GITHUB_AGENT_API_KEY` - required to approve execute requests; send it only from trusted server-side callers via `X-MosaicStack-Admin-Key`
 
 Optional environment variables:
 
@@ -35,6 +39,17 @@ Optional environment variables:
 - `APP_NAME` - defaults to `local-openrouter-chat`
 - `DEFAULT_SYSTEM_PROMPT` - injected server-side before forwarding to OpenRouter
 - `CORS_ORIGINS` - comma-separated list of allowed frontend origins
+- `CHAT_MODEL` - explicit backend-owned chat workflow model
+- `CODE_AGENT_MODEL` - backend-owned GitHub proposal planning model
+- `STRUCTURED_PLAN_MODEL` - backend-owned structured-output model for schema-critical plan objects
+- `MATRIX_ANALYZE_MODEL` - parsed Matrix analyze policy input; deferred, not runtime-authoritative
+- `FAST_FALLBACK_MODEL` - backend-owned non-execute fallback model
+- `DIALOG_FALLBACK_MODEL` - backend-owned dialogue fallback model
+- `MODEL_ROUTING_MODE` - workflow routing mode, currently only `policy`
+- `ALLOW_MODEL_FALLBACK` - allows fallback on non-execute workflow phases
+- `MODEL_ROUTING_FAIL_CLOSED` - keeps workflow routing fail-closed
+- `MODEL_ROUTING_LOG_ENABLED` - enables local workflow routing evidence logging
+- `MODEL_ROUTING_LOG_PATH` - repository-local workflow routing log path
 - `LLM_ROUTER_ENABLED` - defaults to `false`; enables the deterministic rules-first router policy
 - `LLM_ROUTER_MODE` - currently only `rules_first`
 - `LLM_REQUIRE_FREE_MODELS` - defaults to `true`; filters router candidates to free models
@@ -51,6 +66,11 @@ Optional environment variables:
 - `LLM_ROUTER_LOG_PATH` - repository-local router decision log path, defaults to `.local-ai/logs/ROUTER_DECISIONS.log.md`
 - `LLM_MODEL_RUN_LOG_PATH` - repository-local model run log path
 - `LLM_PROMPT_EVIDENCE_LOG_PATH` - repository-local prompt evidence log path
+- `MATRIX_ANALYZE_LLM_ENABLED` - parsed Matrix workflow policy flag; deferred, not runtime-authoritative
+- `MATRIX_EXECUTE_APPROVAL_REQUIRED` - parsed Matrix workflow policy flag; deferred, not runtime-authoritative
+- `MATRIX_VERIFY_AFTER_EXECUTE` - parsed Matrix workflow policy flag; deferred, not runtime-authoritative
+- `MATRIX_ALLOWED_ACTION_TYPES` - parsed Matrix workflow action allowlist; deferred, not runtime-authoritative
+- `MATRIX_FAIL_CLOSED` - parsed Matrix workflow policy flag; deferred, not runtime-authoritative
 - `MATRIX_ENABLED` - defaults to `false`; enables the server-owned Matrix read-only routes when `true`
 - `MATRIX_REQUIRED` - defaults to `false`; fails startup closed if Matrix is enabled but invalid
 - `MATRIX_BASE_URL` - absolute Matrix homeserver origin used by the server when Matrix is enabled
@@ -65,7 +85,7 @@ Optional environment variables:
 - `MATRIX_SMOKE_TOPIC_PREFIX` - optional prefix for the temporary live smoke topic
 - `GITHUB_API_BASE_URL` - GitHub API base URL, defaults to `https://api.github.com`
 - `GITHUB_DEFAULT_OWNER` - optional default owner used by GitHub routing helpers
-- `GITHUB_BRANCH_PREFIX` - branch prefix for backend-created GitHub plans, defaults to `modelgate/github`
+- `GITHUB_BRANCH_PREFIX` - branch prefix for backend-created GitHub plans, defaults to `mosaicstack/github`
 - `GITHUB_REQUEST_TIMEOUT_MS` - GitHub upstream request timeout in milliseconds, defaults to `8000`
 - `GITHUB_PLAN_TTL_MS` - plan TTL in milliseconds, defaults to `720000`
 - `GITHUB_MAX_CONTEXT_FILES` - max files collected for `/api/github/context`, defaults to `6`
@@ -77,6 +97,7 @@ Optional environment variables:
 - `GITHUB_APP_ID` - currently schema-only and not wired into the GitHub runtime path
 - `GITHUB_APP_PRIVATE_KEY` - currently schema-only and not wired into the GitHub runtime path
 - `GITHUB_APP_INSTALLATION_ID` - currently schema-only and not wired into the GitHub runtime path
+- `MOSAIC_STACK_SESSION_TTL_SECONDS` - defaults to `86400`
 
 ## Local Run
 
@@ -191,7 +212,9 @@ data: {"ok":false,"error":{"code":"upstream_error","message":"Chat provider requ
 
 ## GitHub Workspace Contract
 
-These routes are backend-owned and review-first. The browser may read allowed repositories, build read context, prepare a proposal plan, and submit approval intent only. Execution stays server-side and fails closed until `GITHUB_TOKEN`, `GITHUB_ALLOWED_REPOS`, and `GITHUB_AGENT_API_KEY` are configured.
+These routes are backend-owned and review-first. The browser may read allowed repositories, build read context, prepare a proposal plan, and submit approval intent only. GitHub account authority comes from the backend-owned `GITHUB_TOKEN` and `GITHUB_ALLOWED_REPOS` configuration. Execution stays server-side and fails closed until `GITHUB_AGENT_API_KEY` is configured for trusted callers.
+
+GitHub read and proposal routes do not require the legacy global admin session. The browser never sees the GitHub token, provider key, or execute key.
 
 ### `GET /api/github/repos`
 
@@ -211,7 +234,7 @@ Returns the stored GitHub plan while it is still active.
 
 ### `POST /api/github/actions/:planId/execute`
 
-Requires `{ "approval": true }`, re-checks the plan freshness, and creates the backend-owned execution result. The request must also include `X-ModelGate-Admin-Key` matching `GITHUB_AGENT_API_KEY`; otherwise the route fails closed with 401 or 403.
+Requires `{ "approval": true }`, re-checks the plan freshness, and creates the backend-owned execution result. The request must also include `X-MosaicStack-Admin-Key` matching `GITHUB_AGENT_API_KEY`; otherwise the route fails closed with 401 or 403. This execution gate is independent of the legacy session routes.
 
 ### `GET /api/github/actions/:planId/verify`
 
@@ -359,7 +382,7 @@ These routes are backend-owned and approval-gated. The browser may submit only a
 
 Plans are stored in memory with a short TTL and are not persisted across restarts.
 
-### `POST /api/matrix/actions/promote`
+### `POST /api/matrix/analyze`
 
 Request:
 
@@ -493,11 +516,42 @@ Supported write error codes:
 - `matrix_malformed_response`
 - `matrix_internal_error`
 
+## Live GitHub Smoke
+
+Use this only with a repository and target branch that are safe for smoke PRs.
+The smoke script calls the backend-owned `propose -> execute -> verify` lifecycle
+with deterministic `mode: "smoke"` and never sends GitHub credentials to the
+browser.
+
+Required live smoke environment:
+
+- `GITHUB_SMOKE_ENABLED=true`
+- `GITHUB_TOKEN`
+- `GITHUB_ALLOWED_REPOS`
+- `GITHUB_AGENT_API_KEY`
+- `GITHUB_SMOKE_REPO`
+- `GITHUB_SMOKE_BASE_BRANCH`
+- `GITHUB_SMOKE_TARGET_BRANCH`
+
+Run the manual smoke from the repository root:
+
+```bash
+npm run smoke:github
+```
+
+Behavior:
+
+- skips cleanly when the live smoke env is missing
+- uses backend-owned routes only
+- creates a deterministic smoke plan for `docs/mosaicstack-smoke.md`
+- requires backend admin approval via `GITHUB_AGENT_API_KEY`
+- fails closed if verification does not return `verified`
+
 ## Live Matrix Smoke
 
 Use this only with a dedicated Matrix test room that is safe to retarget temporarily.
 The smoke script updates the room topic, verifies the change through the backend-owned
-`promote -> fetch -> execute -> verify` lifecycle, and then tries to restore the
+`analyze -> fetch -> execute -> verify` lifecycle, and then tries to restore the
 previous topic when possible.
 
 Required live smoke environment:
@@ -506,7 +560,7 @@ Required live smoke environment:
 - `MATRIX_BASE_URL`
 - `MATRIX_ACCESS_TOKEN`
 - `MATRIX_SMOKE_ROOM_ID`
-- `MATRIX_SMOKE_TOPIC_PREFIX` is optional and defaults to `ModelGate smoke`
+- `MATRIX_SMOKE_TOPIC_PREFIX` is optional and defaults to `MosaicStack smoke`
 
 The server reads the repo-root `.env` file. Copy `.env.example` to `.env`
 before running the backend or the smoke.
@@ -527,7 +581,9 @@ Behavior:
 - prints the room id and restore target if cleanup cannot be completed
 
 CI remains unaffected because `npm run smoke:matrix` is manual-only and is not wired
-into `test`, `build`, or browser automation.
+into `test`, `build`, or browser automation. The repository also exposes the
+opt-in `npm run test:matrix-live` wrapper, and the separate `Matrix live smoke`
+workflow is dispatch-only.
 
 ## Current Limitations
 

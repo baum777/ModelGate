@@ -61,6 +61,7 @@ export type MatrixClient = {
   readRoomTopic(roomId: string): Promise<string | null>;
   readRoomPowerLevels(roomId: string): Promise<MatrixRoomPowerLevels>;
   updateRoomTopic(roomId: string, topic: string): Promise<{ transactionId: string }>;
+  sendRoomMessage(roomId: string, body: string): Promise<{ transactionId: string }>;
 };
 
 export type MatrixRoomPowerLevels = {
@@ -837,6 +838,38 @@ async function updateMatrixRoomTopic(config: MatrixConfig, fetchImpl: typeof fet
   );
 }
 
+async function sendMatrixRoomMessage(config: MatrixConfig, fetchImpl: typeof fetch, roomId: string, body: string) {
+  const roomPath = encodeURIComponent(roomId);
+  const transactionId = randomUUID();
+  const messagePath = `/_matrix/client/v3/rooms/${roomPath}/send/m.room.message/${transactionId}`;
+
+  return requestJson(
+    config,
+    "Matrix room message send",
+    messagePath,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        msgtype: "m.notice",
+        body
+      })
+    },
+    (payload) => {
+      const record = requireRecord(payload, "Matrix room message send", messagePath, "room message response");
+      const eventId = requireStringField(record, "event_id", "Matrix room message send", messagePath, "room message response");
+
+      return {
+        transactionId: eventId
+      };
+    },
+    fetchImpl,
+    {
+      notFoundCode: "matrix_room_not_found",
+      forbiddenCode: "matrix_write_forbidden"
+    }
+  );
+}
+
 async function fetchRoomDescriptor(
   config: MatrixConfig,
   fetchImpl: typeof fetch,
@@ -1109,6 +1142,10 @@ export function createMatrixClient(options: MatrixClientOptions): MatrixClient {
 
     async updateRoomTopic(roomId, topic) {
       return updateMatrixRoomTopic(options.config, fetchImpl, roomId, topic);
+    },
+
+    async sendRoomMessage(roomId, body) {
+      return sendMatrixRoomMessage(options.config, fetchImpl, roomId, body);
     }
   };
 }
