@@ -51,6 +51,30 @@ export type AddOpenRouterModelResponse = {
   source: string;
 };
 
+export type OpenRouterCredentialModel = {
+  alias: "user_openrouter_default";
+  label: string;
+  source: "user_configured";
+};
+
+export type OpenRouterCredentialStatusResponse = {
+  configured: boolean;
+  models: OpenRouterCredentialModel[];
+};
+
+export type SaveOpenRouterCredentialsResponse = {
+  ok: true;
+  configured: true;
+  model: OpenRouterCredentialModel;
+  status: string;
+};
+
+export type TestOpenRouterCredentialsResponse = {
+  ok: true;
+  configured: false;
+  model: OpenRouterCredentialModel;
+};
+
 export type DiagnosticsResponse = {
   ok: true;
   service: string;
@@ -385,6 +409,58 @@ export async function postOpenRouterModel(modelId: string): Promise<AddOpenRoute
   }
 
   return response.json() as Promise<AddOpenRouterModelResponse>;
+}
+
+export async function fetchOpenRouterCredentialStatus(): Promise<OpenRouterCredentialStatusResponse> {
+  const response = await fetch(resolveApiUrl("/settings/openrouter/status"), {
+    credentials: "include"
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return response.json() as Promise<OpenRouterCredentialStatusResponse>;
+}
+
+export async function saveOpenRouterCredentials(input: {
+  apiKey: string;
+  modelId: string;
+}): Promise<SaveOpenRouterCredentialsResponse> {
+  const response = await fetch(resolveApiUrl("/settings/openrouter/credentials"), {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(input)
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return response.json() as Promise<SaveOpenRouterCredentialsResponse>;
+}
+
+export async function testOpenRouterCredentials(input: {
+  apiKey: string;
+  modelId: string;
+}): Promise<TestOpenRouterCredentialsResponse> {
+  const response = await fetch(resolveApiUrl("/settings/openrouter/test"), {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(input)
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return response.json() as Promise<TestOpenRouterCredentialsResponse>;
 }
 
 export async function fetchDiagnostics(): Promise<DiagnosticsResponse> {

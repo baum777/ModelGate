@@ -3,7 +3,12 @@ import type { AuthConfig } from "../lib/auth.js";
 import { ChatRequestSchema, type ChatErrorResponse } from "../lib/chat-contract.js";
 import type { AppEnv } from "../lib/env.js";
 import { buildCorsHeaders, writeSseEvent } from "../lib/http.js";
+import type { LocalProfileSessionManager } from "../lib/local-profile-session.js";
 import type { ModelRegistry } from "../lib/model-policy.js";
+import {
+  USER_OPENROUTER_ALIAS,
+  type UserOpenRouterCredentialStore
+} from "../lib/openrouter-credential-store.js";
 import { type OpenRouterClient, OpenRouterError } from "../lib/openrouter.js";
 import type { AppRateLimiter } from "../lib/rate-limit.js";
 import type { RuntimeJournal } from "../lib/runtime-journal.js";
@@ -20,6 +25,8 @@ type ChatRouteDependencies = {
   rateLimiter: AppRateLimiter;
   runtimeObservability: RuntimeObservability;
   runtimeJournal: RuntimeJournal;
+  profileSessions: LocalProfileSessionManager;
+  openRouterCredentialStore: UserOpenRouterCredentialStore;
 };
 
 function buildInvalidRequestResponse(): ChatErrorResponse {
@@ -82,6 +89,16 @@ function buildRateLimitedResponse(): ChatErrorResponse {
   };
 }
 
+function buildCredentialsNotConfiguredResponse(): ChatErrorResponse {
+  return {
+    ok: false,
+    error: {
+      code: "credentials_not_configured",
+      message: "OpenRouter credentials not configured"
+    }
+  };
+}
+
 function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
 }
@@ -110,24 +127,56 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
 
     const body = parsed.data;
     let routeDecision: ReturnType<typeof resolveChatRouteDecision>;
+    let userOpenRouterApiKey: string | null = null;
 
-    try {
-      routeDecision = resolveChatRouteDecision({
-        env: deps.env,
-        request: body,
-        modelRegistry: deps.modelRegistry,
-        modelCapabilitiesConfig: deps.modelCapabilitiesConfig
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "unknown";
-      if (message.includes("unsupported_model")) {
-        return reply.status(400).send(buildInvalidRequestResponse());
+    if (body.modelAlias === USER_OPENROUTER_ALIAS || body.model === USER_OPENROUTER_ALIAS) {
+      const profile = deps.profileSessions.resolve(request, reply);
+      const credential = deps.openRouterCredentialStore.read(profile.profileId);
+
+      if (!credential) {
+        return reply.status(403).send(buildCredentialsNotConfiguredResponse());
       }
 
-      request.log.error({
-        error: message
-      }, "chat route resolution failed");
-      return reply.status(500).send(buildInternalErrorResponse());
+      userOpenRouterApiKey = credential.apiKey;
+      routeDecision = {
+        selection: {
+          publicModelId: USER_OPENROUTER_ALIAS,
+          publicModelAlias: USER_OPENROUTER_ALIAS,
+          logicalModelId: "user-openrouter-default",
+          providerTargets: [credential.modelId]
+        },
+        route: {
+          selectedAlias: USER_OPENROUTER_ALIAS,
+          taskClass: body.task ?? "dialog",
+          fallbackUsed: false,
+          degraded: false,
+          streaming: body.stream,
+          policyVersion: "user-openrouter/v1",
+          decisionReason: "source=user_configured",
+          retryCount: 0
+        },
+        providerTargets: [credential.modelId]
+      };
+    } else {
+
+      try {
+        routeDecision = resolveChatRouteDecision({
+          env: deps.env,
+          request: body,
+          modelRegistry: deps.modelRegistry,
+          modelCapabilitiesConfig: deps.modelCapabilitiesConfig
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "unknown";
+        if (message.includes("unsupported_model")) {
+          return reply.status(400).send(buildInvalidRequestResponse());
+        }
+
+        request.log.error({
+          error: message
+        }, "chat route resolution failed");
+        return reply.status(500).send(buildInternalErrorResponse());
+      }
     }
 
     request.log.info({
@@ -208,6 +257,7 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
       try {
         const result = await deps.openRouter.relayChatCompletionStream(body, routeDecision.selection, {
           signal: abortController.signal,
+          apiKey: userOpenRouterApiKey ?? undefined,
           onToken: (delta) => {
             writeSseEvent(reply.raw, "token", { delta });
           }
@@ -278,7 +328,9 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
     }
 
     try {
-      const result = await deps.openRouter.createChatCompletion(body, routeDecision.selection);
+      const result = await deps.openRouter.createChatCompletion(body, routeDecision.selection, {
+        apiKey: userOpenRouterApiKey ?? undefined
+      });
 
       return reply.status(200).send({
         ok: true,
