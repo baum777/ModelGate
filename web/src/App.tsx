@@ -68,6 +68,8 @@ import {
   type MatrixSession
 } from "./lib/workspace-state.js";
 import {
+  deriveMobileApprovalBar,
+  deriveMobileStatusStrip,
   summarizePendingApprovals,
 } from "./lib/shell-view-model.js";
 import {
@@ -1938,6 +1940,56 @@ function ConsoleShell() {
     />
   );
   const statusToneForBadge = currentStatusTone === "error" ? "error" : currentStatusTone === "ready" ? "ready" : "partial";
+  const mobileStatus = useMemo(
+    () => deriveMobileStatusStrip({
+      mode,
+      tone: currentStatusTone,
+      backendLabel: healthState.label,
+      workspaceLabel: workspaceName,
+      activeModelAlias,
+      approvalCount: approvalSummary.pending,
+      staleCount: approvalSummary.stale,
+      labels: {
+        backendPrefix: ui.shell.backendPrefix,
+        backendOwned: "backend-owned",
+        approvalNeeded: ui.review.approvalNeeded,
+        blocked: ui.review.blocked,
+        publicAliasFallback: ui.shell.publicAliasLabel,
+      },
+    }),
+    [
+      activeModelAlias,
+      approvalSummary.pending,
+      approvalSummary.stale,
+      currentStatusTone,
+      healthState.label,
+      mode,
+      ui.review.approvalNeeded,
+      ui.review.blocked,
+      ui.shell.backendPrefix,
+      ui.shell.publicAliasLabel,
+      workspaceName,
+    ],
+  );
+  const mobileApproval = useMemo(
+    () => deriveMobileApprovalBar({
+      pending: approvalSummary.pending,
+      stale: approvalSummary.stale,
+      labels: {
+        title: ui.approval.statusRequired,
+        actionLabel: appText.processGoReview,
+        pendingSummary: ui.shell.pendingApprovalsSummary,
+        staleSummary: ui.shell.pendingApprovalsSummary,
+      },
+    }),
+    [
+      appText.processGoReview,
+      approvalSummary.pending,
+      approvalSummary.stale,
+      ui.approval.statusRequired,
+      ui.shell.pendingApprovalsSummary,
+    ],
+  );
 
   return (
     <main className="app-shell app-shell-console" data-testid="app-shell">
@@ -1987,10 +2039,41 @@ function ConsoleShell() {
       </header>
 
       <section className="console-layout">
+        <header className={`mobile-micro-header mobile-micro-header-${mode}`} data-testid="mobile-micro-header">
+          <span className={`mobile-workspace-mark mobile-workspace-mark-${mobileStatus.tone}`} aria-hidden="true" />
+          <div className="mobile-micro-title">
+            <span>MosaicStack</span>
+            <strong>{workspaceName}</strong>
+          </div>
+          <div className="mobile-micro-actions">
+            <StatusBadge tone={statusToneForBadge} className="mobile-micro-badge">
+              {mobileStatus.badge ?? healthState.label}
+            </StatusBadge>
+            {isSessionWorkspace(mode) ? (
+              <button
+                type="button"
+                className="mobile-icon-button"
+                onClick={() => handleWorkspaceSessionCreate(sessionWorkspace)}
+                aria-label={appText.processCreateSession}
+              >
+                +
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="mobile-icon-button"
+              onClick={toggleTheme}
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {theme === "dark" ? "☀" : "☾"}
+            </button>
+          </div>
+        </header>
+
         <aside className="workspace-sidebar shell-left-rail">
           <ShellCard variant="rail" className="shell-nav-card">
             <SectionLabel>{ui.shell.workspacesLabel}</SectionLabel>
-            <nav className="sidebar-nav" aria-label={ui.shell.workspacesLabel}>
+            <nav className="sidebar-nav" aria-label={ui.shell.workspacesLabel} role="tablist">
               {WORKSPACE_MODES.map((workspaceMode) => (
                 <button
                   key={workspaceMode}
@@ -1999,6 +2082,8 @@ function ConsoleShell() {
                   onClick={() => handleWorkspaceTabSelect(workspaceMode)}
                   aria-label={ui.shell.workspaceTabs[workspaceMode].label}
                   aria-current={mode === workspaceMode ? "page" : undefined}
+                  aria-selected={mode === workspaceMode}
+                  role="tab"
                   data-testid={`tab-${workspaceMode}`}
                   title={ui.shell.workspaceTabs[workspaceMode].label}
                 >
@@ -2191,6 +2276,79 @@ function ConsoleShell() {
             {diagnosticsOpen ? ui.shell.diagnosticsHide : ui.shell.diagnosticsShow}
           </button>
         </section>
+
+        {mobileApproval && mode !== "review" ? (
+          <section
+            className={`mobile-approval-bar mobile-approval-bar-${mobileApproval.tone}`}
+            data-testid="mobile-approval-bar"
+            aria-live="assertive"
+          >
+            <div>
+              <strong>{mobileApproval.title}</strong>
+              <span>{mobileApproval.detail}</span>
+            </div>
+            <button
+              type="button"
+              className="mobile-approval-action"
+              onClick={() => handleWorkspaceTabSelect("review")}
+              data-testid="mobile-approval-bar-action"
+            >
+              {mobileApproval.actionLabel}
+            </button>
+          </section>
+        ) : null}
+
+        <button
+          type="button"
+          className={`mobile-status-strip mobile-status-strip-${mobileStatus.tone}`}
+          data-testid="mobile-status-strip"
+          aria-live="polite"
+          aria-atomic="true"
+          onClick={() => {
+            if (diagnosticsAccessible) {
+              setDiagnosticsOpen((current) => !current);
+            }
+          }}
+        >
+          <span className="mobile-status-dot" aria-hidden="true" />
+          <span className="mobile-status-text">{mobileStatus.text}</span>
+          {mobileStatus.badge ? <span className="mobile-status-badge">{mobileStatus.badge}</span> : null}
+          {diagnosticsAccessible ? <span className="mobile-status-chevron" aria-hidden="true">▲</span> : null}
+        </button>
+
+        {diagnosticsAccessible && diagnosticsOpen ? (
+          <section
+            className="mobile-diagnostics-sheet"
+            data-testid="mobile-diagnostics-sheet"
+            role="dialog"
+            aria-label={diagnosticsTitle}
+          >
+            <span className="mobile-diagnostics-handle" aria-hidden="true" />
+            <header className="mobile-diagnostics-header">
+              <div>
+                <SectionLabel>{ui.shell.diagnosticsLabel}</SectionLabel>
+                <strong>{diagnosticsTitle}</strong>
+              </div>
+              <button
+                type="button"
+                className="mobile-icon-button"
+                onClick={() => setDiagnosticsOpen(false)}
+                aria-label={ui.shell.diagnosticsHide}
+              >
+                ×
+              </button>
+            </header>
+            <div className="expert-details-grid mobile-diagnostics-grid">
+              {currentExpertRows.map((row) => (
+                <div key={row.label}>
+                  <span>{row.label}</span>
+                  <strong>{row.value}</strong>
+                </div>
+              ))}
+            </div>
+            {currentExpertChildren}
+          </section>
+        ) : null}
       </section>
     </main>
   );

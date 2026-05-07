@@ -23,28 +23,32 @@ const env = {
 };
 
 function runNpmSync(args) {
+  const npmArgs = ["--global=false", ...args];
+
   if (npmExecPath) {
-    return spawnSync(nodeCommand, [npmExecPath, ...args], {
+    return spawnSync(nodeCommand, [npmExecPath, ...npmArgs], {
       env,
       stdio: "inherit"
     });
   }
 
-  return spawnSync(npmCommandFromPath, args, {
+  return spawnSync(npmCommandFromPath, npmArgs, {
     env,
     stdio: "inherit"
   });
 }
 
 function spawnNpm(args) {
+  const npmArgs = ["--global=false", ...args];
+
   if (npmExecPath) {
-    return spawn(nodeCommand, [npmExecPath, ...args], {
+    return spawn(nodeCommand, [npmExecPath, ...npmArgs], {
       env,
       stdio: "inherit"
     });
   }
 
-  return spawn(npmCommandFromPath, args, {
+  return spawn(npmCommandFromPath, npmArgs, {
     env,
     stdio: "inherit"
   });

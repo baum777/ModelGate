@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const HEALTH_OK = {
   ok: true,
@@ -573,7 +573,7 @@ async function installAbortableChatFetchMock(page: Page) {
 async function loadConsole(page: Page) {
   await page.goto("/console", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("app-shell")).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText("MosaicStack Console")).toBeVisible();
+  await expect(page.getByTestId("app-shell")).toContainText("MosaicStack");
   await expect(page.getByTestId("tab-chat")).toBeVisible();
   await expect(page.getByTestId("tab-github")).toBeVisible();
   await expect(page.getByTestId("tab-matrix")).toBeVisible();
@@ -633,9 +633,20 @@ async function setLocale(page: Page, locale: "en" | "de") {
   await expect(page.locator("html")).toHaveAttribute("lang", locale);
 }
 
+async function openDetailsPanel(panel: Locator) {
+  await panel.evaluate((node) => {
+    if (node instanceof HTMLDetailsElement && !node.open) {
+      node.open = true;
+    }
+  });
+}
+
 async function waitForMatrixWorkspace(page: Page) {
+  await expect(page.getByTestId("matrix-workspace")).toBeVisible();
   await expect(page.getByTestId("matrix-status")).toHaveText("Ready");
   await expect(page.getByTestId("matrix-topic-update-panel")).toBeVisible();
+  await openDetailsPanel(page.getByTestId("matrix-topic-update-panel"));
+  await openDetailsPanel(page.locator(".matrix-scope-card").first());
   await expect(page.getByTestId("matrix-composer-panel")).toBeVisible();
   await expect(page.getByTestId("matrix-rooms")).toBeVisible();
 }
@@ -680,6 +691,64 @@ test("console shell avoids page-level horizontal overflow in compact desktop lay
 
   expect(overflow.htmlScrollWidth).toBeLessThanOrEqual(overflow.htmlClientWidth);
   expect(overflow.bodyScrollWidth).toBeLessThanOrEqual(overflow.bodyClientWidth);
+});
+
+test("mobile shell exposes micro header status strip and accessible tabs without horizontal overflow", async ({ page }) => {
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 480, height: 900 },
+    { width: 760, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await installBaseMocks(page, { matrixStatus: "ok" });
+    await loadConsole(page);
+
+    await expect(page.getByTestId("mobile-micro-header")).toBeVisible();
+    await expect(page.getByTestId("mobile-status-strip")).toBeVisible();
+    await expect(page.getByTestId("truth-rail-health")).toBeHidden();
+    await expect(page.locator("nav.sidebar-nav")).toHaveAttribute("role", "tablist");
+    await expect(page.getByTestId("tab-chat")).toHaveAttribute("role", "tab");
+    await expect(page.getByTestId("tab-chat")).toHaveAttribute("aria-selected", "true");
+
+    const overflow = await page.evaluate(() => ({
+      htmlClientWidth: document.documentElement.clientWidth,
+      htmlScrollWidth: document.documentElement.scrollWidth,
+      bodyClientWidth: document.body.clientWidth,
+      bodyScrollWidth: document.body.scrollWidth,
+    }));
+
+    expect(overflow.htmlScrollWidth).toBeLessThanOrEqual(overflow.htmlClientWidth);
+    expect(overflow.bodyScrollWidth).toBeLessThanOrEqual(overflow.bodyClientWidth);
+    await expect(page.locator("body")).not.toContainText("sk-test");
+    await expect(page.locator("body")).not.toContainText("openrouter/auto");
+  }
+});
+
+test("mobile expert status strip opens diagnostics sheet", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await loadConsole(page);
+
+  await page.getByTestId("tab-settings").click();
+  await page.getByTestId("settings-workspace").getByRole("button", { name: "Expert" }).click();
+  await page.getByTestId("mobile-status-strip").click();
+
+  await expect(page.getByTestId("mobile-diagnostics-sheet")).toBeVisible();
+  await expect(page.getByTestId("mobile-diagnostics-sheet")).toContainText("Settings Diagnostics");
+});
+
+test("mobile pending approval bar routes to Review workspace", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await loadConsole(page);
+
+  await page.getByTestId("chat-composer").fill("Prepare a governed mobile shell check.");
+  await page.getByTestId("chat-send").click();
+
+  await expect(page.getByTestId("mobile-approval-bar")).toBeVisible();
+  await page.getByTestId("mobile-approval-bar-action").click();
+  await expect(page.getByTestId("review-workspace")).toBeVisible();
+  await expect(page).toHaveURL(/\/console\?mode=review$/);
 });
 
 test("locale toggle switches key copy and persists across reload", async ({ page }) => {
@@ -1057,6 +1126,7 @@ test("Review workspace aggregates pending items from GitHub and Matrix", async (
   await page.getByRole("button", { name: "Start analysis" }).click();
   await page.getByRole("button", { name: "Review proposal" }).click();
 
+  page.once("dialog", (dialog) => dialog.accept());
   await page.getByTestId("tab-matrix").click();
   await waitForMatrixWorkspace(page);
   await page.getByTestId("matrix-topic-room-id").fill("!room:matrix.example");

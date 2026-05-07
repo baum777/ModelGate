@@ -21,7 +21,7 @@ const env = {
   MOSAICSTACK_BROWSER_PORTS: String(endpoint.port),
   VITE_API_BASE_URL: endpoint.url
 };
-const args = ["exec", "playwright", "test", ...process.argv.slice(2)];
+const args = ["--global=false", "exec", "--", "playwright", "test", ...process.argv.slice(2)];
 const child = npmExecPath
   ? spawn(nodeCommand, [npmExecPath, ...args], { env, stdio: "inherit" })
   : spawn(npmCommandFromPath, args, { env, stdio: "inherit" });
