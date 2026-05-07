@@ -15,6 +15,7 @@ type RotationKeyConfig = {
 type LiveRotationConfig = {
   githubClientId: string;
   githubClientSecret: string;
+  githubCallbackUrl: string;
   githubCodeVn: string;
   githubCodeVn1: string;
   keyVn: RotationKeyConfig;
@@ -83,6 +84,7 @@ function readLiveRotationConfig(sourceEnv: NodeJS.ProcessEnv = process.env): Liv
   const liveEnabled = /^(1|true|yes|on)$/i.test(String(env.INTEGRATION_AUTH_ROTATION_LIVE_ENABLED ?? "").trim());
   const githubClientId = String(env.GITHUB_OAUTH_CLIENT_ID ?? "").trim();
   const githubClientSecret = String(env.GITHUB_OAUTH_CLIENT_SECRET ?? "").trim();
+  const githubCallbackUrl = String(env.GITHUB_OAUTH_CALLBACK_URL ?? "").trim();
   const githubCodeVn = String(env.INTEGRATION_AUTH_ROTATION_LIVE_GITHUB_CODE_VN ?? "").trim();
   const githubCodeVn1 = String(env.INTEGRATION_AUTH_ROTATION_LIVE_GITHUB_CODE_VN1 ?? "").trim();
   const keyVnId = String(env.INTEGRATION_AUTH_ROTATION_LIVE_KEY_VN_ID ?? "").trim();
@@ -104,6 +106,10 @@ function readLiveRotationConfig(sourceEnv: NodeJS.ProcessEnv = process.env): Liv
 
   if (githubClientSecret.length === 0) {
     missing.push("GITHUB_OAUTH_CLIENT_SECRET");
+  }
+
+  if (githubCallbackUrl.length === 0) {
+    missing.push("GITHUB_OAUTH_CALLBACK_URL");
   }
 
   if (githubCodeVn.length === 0) {
@@ -143,6 +149,7 @@ function readLiveRotationConfig(sourceEnv: NodeJS.ProcessEnv = process.env): Liv
     config: {
       githubClientId,
       githubClientSecret,
+      githubCallbackUrl,
       githubCodeVn,
       githubCodeVn1,
       keyVn: {
@@ -169,7 +176,8 @@ function createLiveEnv(storePath: string, liveConfig: LiveRotationConfig, stage:
   return createTestEnv({
     GITHUB_OAUTH_CLIENT_ID: liveConfig.githubClientId,
     GITHUB_OAUTH_CLIENT_SECRET: liveConfig.githubClientSecret,
-    MOSAIC_STACK_SESSION_SECRET: "",
+    GITHUB_OAUTH_CALLBACK_URL: liveConfig.githubCallbackUrl,
+    MOSAIC_STACK_SESSION_SECRET: "integration-auth-live-rotation-session-secret",
     INTEGRATION_AUTH_STORE_MODE: "file",
     INTEGRATION_AUTH_STORE_FILE_PATH: storePath,
     INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID: current.keyId,

@@ -22,7 +22,7 @@ function createIntegrationsStatusFixture(): IntegrationsStatusResponse {
     generatedAt: "2026-04-27T12:00:00.000Z",
     github: {
       status: "connected",
-      credentialSource: "user_connected_stub",
+      credentialSource: "user_connected",
       capabilities: {
         read: "available",
         propose: "available",
@@ -31,7 +31,7 @@ function createIntegrationsStatusFixture(): IntegrationsStatusResponse {
       },
       executionMode: "approval_required",
       labels: {
-        identity: "stub-github-operator",
+        identity: "octocat",
         scope: "2 allowed repos",
         allowedReposStatus: "configured",
       },
@@ -217,12 +217,13 @@ test("Settings workspace renders integration cards and keeps secrets out of the 
   assert.match(markup, /GitHub system status: connected/);
   assert.match(markup, /aria-label="GitHub Reverify"/);
   assert.match(markup, /data-testid="settings-adapter-matrix-action-connect"/);
+  assert.match(markup, />Connect Matrix</);
   assert.match(markup, /data-system-node-kind="matrix"/);
   assert.match(markup, /aria-label="Matrix integration node, status disconnected"/);
   assert.match(markup, /Matrix system status: disconnected/);
   assert.match(markup, /data-flow-state="connected"/);
   assert.match(markup, /href="\/api\/auth\/matrix\/start\?returnTo=%2Fconsole%3Fmode%3Dsettings"/);
-  assert.match(markup, /stub-github-operator/);
+  assert.match(markup, /Connected as octocat/);
   assert.match(markup, /Credential source/);
   assert.match(markup, /Connect available/);
   assert.match(markup, /OpenRouter (Modelle|models)/);
@@ -294,11 +295,106 @@ test("Settings login adapters map connected and reconnect states for governed CT
   assert.equal(github?.status, "connected");
   assert.equal(github?.primaryAction, "reverify");
   assert.equal(github?.secondaryAction, "disconnect");
-  assert.equal(github?.credentialSource, "user_connected_stub");
+  assert.equal(github?.credentialSource, "user_connected");
 
   assert.equal(matrix?.status, "connect_available");
   assert.equal(matrix?.primaryAction, "connect");
   assert.equal(matrix?.secondaryAction, null);
+});
+
+test("Settings workspace shows GitHub connect CTA when GitHub is not connected", () => {
+  const fixture = createIntegrationsStatusFixture();
+  const adapters = deriveSettingsLoginAdapters({
+    copy: {
+      checking: "Checking",
+      unavailable: "Unavailable",
+      none: "None",
+    },
+    integrations: {
+      ...fixture,
+      github: {
+        ...fixture.github,
+        status: "connect_available",
+        authState: "not_connected",
+        credentialSource: "not_connected",
+        labels: {
+          ...fixture.github.labels,
+          identity: null,
+        },
+        lastVerifiedAt: null,
+      }
+    }
+  });
+
+  const markup = renderToStaticMarkup(
+    React.createElement(SettingsWorkspace, {
+      workMode: "expert",
+      onWorkModeChange: () => undefined,
+      diagnostics: [],
+      onClearDiagnostics: () => undefined,
+      truthSnapshot: {
+        backend: { label: "Ready", detail: "Backend truth." },
+        github: {
+          sessionLabel: "n/a",
+          connectionLabel: "n/a",
+          repositoryLabel: "n/a",
+          accessLabel: "n/a",
+        },
+        matrix: {
+          identityLabel: "n/a",
+          connectionLabel: "n/a",
+          homeserverLabel: "n/a",
+          scopeLabel: "n/a",
+        },
+        models: {
+          activeAlias: "default",
+          availableCount: 1,
+          registrySourceLabel: "backend-policy",
+        },
+        diagnostics: {
+          runtimeMode: "local",
+          defaultPublicAlias: "default",
+          publicAliases: "default",
+          routingMode: "policy",
+          fallbackEnabled: "Active",
+          failClosed: "Active",
+          rateLimitEnabled: "Active",
+          actionStoreMode: "memory",
+          githubConfigured: "Configured",
+          matrixConfigured: "Configured",
+          generatedAt: "2026-04-27T12:00:00.000Z",
+          uptimeMs: "0",
+          chatRequests: "0",
+          chatStreamStarted: "0",
+          chatStreamCompleted: "0",
+          chatStreamError: "0",
+          chatStreamAborted: "0",
+          upstreamError: "0",
+          rateLimitBlocked: "none",
+        },
+        journal: {
+          status: "Configured",
+          mode: "memory",
+          retention: "0/500",
+          recentCount: "0",
+          entries: [],
+        },
+      },
+      loginAdapters: adapters,
+      onIntegrationAction: () => undefined,
+      openRouterModels: [],
+      openRouterModelInput: "",
+      onOpenRouterModelInputChange: () => undefined,
+      onAddOpenRouterModel: () => undefined,
+      isAddingOpenRouterModel: false,
+      buildIntegrationStartUrl: () => "/api/auth/github/start?returnTo=%2Fconsole%3Fmode%3Dsettings",
+      verificationResults: createVerificationFixture(),
+      onVerifyConnection: () => undefined,
+    }),
+  );
+
+  assert.match(markup, /data-testid="settings-adapter-github-action-connect"/);
+  assert.match(markup, />Connect GitHub</);
 });
 
 test("Settings login adapters do not treat instance credentials as a user login", () => {
@@ -346,6 +442,7 @@ test("Settings login adapters expose missing-server-config requirements", () => 
         ...createIntegrationsStatusFixture().github,
         status: "missing_server_config",
         credentialSource: "not_connected",
+        requirements: ["GITHUB_OAUTH_CLIENT_ID", "GITHUB_OAUTH_CLIENT_SECRET"],
       }
     }
   });
@@ -354,5 +451,5 @@ test("Settings login adapters expose missing-server-config requirements", () => 
 
   assert.equal(github?.status, "missing_server_config");
   assert.equal(github?.primaryAction, "reconnect");
-  assert.deepEqual(github?.requirements, ["GITHUB_TOKEN", "GITHUB_ALLOWED_REPOS"]);
+  assert.deepEqual(github?.requirements, ["GITHUB_OAUTH_CLIENT_ID", "GITHUB_OAUTH_CLIENT_SECRET"]);
 });

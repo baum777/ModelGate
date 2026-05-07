@@ -6,9 +6,9 @@ This document maps the browser-safe access adapters in Settings for the open-sou
 
 - Browser-owned: rendering, local UI state, stream consumption, and approval intent.
 - Backend-owned: authentication checks, session cookies, provider calls, Matrix credentials, GitHub authority, writes, and execution truth.
-- Implemented today: Settings exposes backend-owned GitHub and Matrix connect CTAs with server-owned callback handling, durable encrypted credential storage (when configured), session-bound receipts, and sanitized status via `/api/integrations/status`.
+- Implemented today: Settings exposes backend-owned GitHub and Matrix connect CTAs with server-owned live callback handling, durable encrypted credential storage, session-bound receipts, and sanitized status via `/api/integrations/status`.
 - UI status today: GitHub and Matrix are rendered as integration cards with `Connect/Reconnect/Disconnect/Reverify`, credential source, and capability summaries.
-- Fallback behavior: when provider OAuth/SSO server config is missing, connect routes fail closed for unsafe callbacks and otherwise use session-bound stub receipts.
+- Fallback behavior: when provider OAuth/SSO server config is missing or partial, connect and callback routes fail closed instead of creating local stub receipts.
 - Legacy auth routes may remain server-side for compatibility, but the browser UI no longer uses a global admin login gate.
 
 ## Adapter Model
@@ -20,10 +20,10 @@ All Settings login adapters should expose the same browser-safe shape:
 | `id` | Stable adapter key: `github` or `matrix` | No secret or provider target |
 | `label` | Human-facing adapter name | Public UI copy only |
 | `status` | integration status from `/api/integrations/status` (`connect_available`, `connected`, `missing_server_config`, etc.) | Derived from backend status |
-| `authState` | backend auth posture (`user_connected`, `user_connected_stub`, `auth_expired`, `not_configured`, `error`, `not_connected`) | Backend truth only; no secret material |
+| `authState` | backend auth posture (`user_connected`, legacy `user_connected_stub`, `auth_expired`, `not_configured`, `error`, `not_connected`) | Backend truth only; no secret material |
 | `primaryAction` | `connect`, `reconnect`, `disconnect`, `reverify` | UI intent only |
 | `secondaryAction` | optional second CTA (`disconnect` for connected states) | UI intent only |
-| `credentialSource` | `instance_configured`, `user_connected`, `user_connected_stub`, `not_connected` | Source transparency only; no secret material |
+| `credentialSource` | `instance_configured`, `user_connected`, legacy `user_connected_stub`, `not_connected` | Source transparency only; no secret material |
 | `safeIdentityLabel` | Display name, public username, or generic connected state | Never token, provider ID, or credential |
 | `scopeSummary` | Repo scope, Matrix identity, or backend policy summary | Beginner-safe summary first |
 | `expertDetails` | request id, route state, configured flags, diagnostics | Expert-only |
@@ -53,8 +53,8 @@ type SettingsLoginAdapter = {
 
 | Adapter | Settings CTA | Backend authority | Beginner display | Expert display | Current slice note |
 | --- | --- | --- | --- | --- | --- |
-| GitHub | `Connect` / `Reconnect` / `Disconnect` / `Reverify` | `/api/auth/github/*`, `/api/github/*`, `/api/integrations/status` | safe identity + scope summary | credential source, capability vector, last verified, last error | Real OAuth callback exchange is used when configured; otherwise guarded stub fallback. |
-| Matrix | `Connect` / `Reconnect` / `Disconnect` / `Reverify` | `/api/auth/matrix/*`, `/api/matrix/*`, `/api/integrations/status` | safe identity + scope summary | homeserver, room access posture, capability vector, last verified | Real login-token exchange is used when configured; otherwise guarded stub fallback. |
+| GitHub | `Connect` / `Reconnect` / `Disconnect` / `Reverify` | `/api/auth/github/*`, `/api/github/*`, `/api/integrations/status` | safe identity + scope summary | credential source, capability vector, last verified, last error | Live OAuth callback exchange is required; missing or partial server config fails closed. |
+| Matrix | `Connect` / `Reconnect` / `Disconnect` / `Reverify` | `/api/auth/matrix/*`, `/api/matrix/*`, `/api/integrations/status` | safe identity + scope summary | homeserver, room access posture, capability vector, last verified | Live SSO login-token exchange is required; missing or partial server config fails closed. |
 
 ## Settings IA
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from "react";
+import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from "react";
 import { streamChatCompletion, type ChatRouteMetadata } from "../lib/api.js";
 import {
   buildGovernedChatProposal,
@@ -39,6 +39,7 @@ import {
   isExpertMode,
   type WorkMode,
 } from "../lib/work-mode.js";
+import { buildPinnedChatContextPrompt, type PinnedChatContext } from "../lib/pinned-chat-context.js";
 
 type PublicModelEntry = {
   alias: string;
@@ -65,6 +66,8 @@ type ChatWorkspaceProps = {
   onActiveModelAliasChange: (alias: string) => void;
   onTelemetry: (kind: "info" | "warning" | "error", label: string, detail?: string) => void;
   onSessionChange: (session: ChatSession) => void;
+  pinnedContext: PinnedChatContext | null;
+  onClearPinnedContext: () => void;
 };
 
 type RoutingStatusTone = "ready" | "partial" | "error" | "muted";
@@ -84,6 +87,8 @@ type ChatRoutingStatusCopy = {
   routePending: string;
   unavailable: string;
 };
+
+const CHAT_SESSION_SYNC_INTERVAL_MS = 220;
 
 export function buildChatRoutingStatusItems(options: {
   selectedModel: string;
@@ -283,6 +288,30 @@ function buildChatGovernanceRows(options: {
   });
 }
 
+type ThreadMessageCardProps = {
+  message: ChatMessage;
+  expertMode: boolean;
+  operatorLabel: string;
+  agentLabel: string;
+};
+
+const ThreadMessageCard = React.memo(function ThreadMessageCard(props: ThreadMessageCardProps) {
+  const roleLabel = props.message.role === "user" ? props.operatorLabel : props.agentLabel;
+
+  return (
+    <ShellCard
+      variant={props.message.role === "user" ? "muted" : "base"}
+      className={`thread-block ${props.message.role === "user" ? "thread-block-operator" : "thread-block-agent"}`}
+    >
+      <header className="thread-block-header">
+        <SectionLabel>{roleLabel}</SectionLabel>
+        {props.expertMode && props.message.modelAlias ? <StatusBadge tone="muted">{props.message.modelAlias}</StatusBadge> : null}
+      </header>
+      <MarkdownMessage content={props.message.content} />
+    </ShellCard>
+  );
+});
+
 export function ChatWorkspace(props: ChatWorkspaceProps) {
   const { locale, copy: ui } = useLocalization();
   const beginnerMode = isBeginnerMode(props.workMode);
@@ -304,17 +333,32 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const scrollFrameRef = useRef<number | null>(null);
   const tokenBatcherRef = useRef<ReturnType<typeof createTokenBatcher> | null>(null);
-  const modelOptions = props.modelRegistry.length > 0
-    ? props.modelRegistry
-    : props.availableModels.map((alias) => ({
-        alias,
-        label: alias,
-        description: "",
-        capabilities: [],
-        tier: "core" as const,
-        streaming: true,
-        recommendedFor: [],
-      }));
+  const sessionSyncHandleRef = useRef<number | null>(null);
+  const latestSessionRef = useRef<ChatSession | null>(null);
+  const flushSessionSync = useCallback(() => {
+    if (sessionSyncHandleRef.current !== null) {
+      globalThis.clearTimeout(sessionSyncHandleRef.current);
+      sessionSyncHandleRef.current = null;
+    }
+
+    if (latestSessionRef.current) {
+      props.onSessionChange(latestSessionRef.current);
+    }
+  }, [props.onSessionChange]);
+  const modelOptions = useMemo(
+    () => (props.modelRegistry.length > 0
+      ? props.modelRegistry
+      : props.availableModels.map((alias) => ({
+          alias,
+          label: alias,
+          description: "",
+          capabilities: [],
+          tier: "core" as const,
+          streaming: true,
+          recommendedFor: [],
+        }))),
+    [props.availableModels, props.modelRegistry],
+  );
 
   useEffect(() => {
     if (props.activeModelAlias && props.activeModelAlias !== selectedModel) {
@@ -361,8 +405,29 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       },
     };
 
-    props.onSessionChange(nextSession);
-  }, [chatState, executionMode, props.onSessionChange, props.session.id, selectedModel]);
+    latestSessionRef.current = nextSession;
+    const terminalState = chatState.connectionState === "completed" || chatState.connectionState === "error";
+
+    if (terminalState) {
+      flushSessionSync();
+      return;
+    }
+
+    if (sessionSyncHandleRef.current !== null) {
+      return;
+    }
+
+    sessionSyncHandleRef.current = globalThis.setTimeout(() => {
+      sessionSyncHandleRef.current = null;
+      if (latestSessionRef.current) {
+        props.onSessionChange(latestSessionRef.current);
+      }
+    }, CHAT_SESSION_SYNC_INTERVAL_MS);
+  }, [chatState, executionMode, flushSessionSync, props.onSessionChange, props.session.id, selectedModel]);
+
+  useEffect(() => () => {
+    flushSessionSync();
+  }, [flushSessionSync]);
 
   useEffect(() => {
     const schedule = (callback: () => void) => {
@@ -440,17 +505,17 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     abortRef.current?.abort();
   }
 
-  function createProposal() {
-    const trimmed = chatState.input.trim();
+  function createProposal(prompt: string) {
+    const trimmedPrompt = prompt.trim();
 
-    if (!trimmed) {
+    if (!trimmedPrompt) {
       return;
     }
 
     dispatch({
       type: "create_proposal",
       proposal: buildGovernedChatProposal({
-        prompt: trimmed,
+        prompt: trimmedPrompt,
         modelAlias: selectedModel || null,
         consequence: buildProposalConsequence(locale, selectedModel || null),
         createdAt: new Date().toISOString(),
@@ -691,12 +756,14 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       return;
     }
 
+    const prompt = buildPinnedChatContextPrompt(trimmed, props.pinnedContext, locale);
+
     if (executionMode === "governed") {
-      createProposal();
+      createProposal(prompt);
       return;
     }
 
-    await executeDirectPrompt(trimmed);
+    await executeDirectPrompt(prompt);
   }
 
   const pendingProposal = chatState.pendingProposal;
@@ -899,17 +966,13 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           ) : null}
 
           {chatState.messages.map((message) => (
-            <ShellCard
+            <ThreadMessageCard
               key={message.id}
-              variant={message.role === "user" ? "muted" : "base"}
-              className={`thread-block ${message.role === "user" ? "thread-block-operator" : "thread-block-agent"}`}
-            >
-              <header className="thread-block-header">
-                <SectionLabel>{message.role === "user" ? ui.chat.operatorInput : ui.chat.agentResponse}</SectionLabel>
-                {expertMode && message.modelAlias ? <StatusBadge tone="muted">{message.modelAlias}</StatusBadge> : null}
-              </header>
-              <MarkdownMessage content={message.content} />
-            </ShellCard>
+              message={message}
+              expertMode={expertMode}
+              operatorLabel={ui.chat.operatorInput}
+              agentLabel={ui.chat.agentResponse}
+            />
           ))}
 
           {draft?.started ? (
@@ -970,6 +1033,30 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             </div>
           ))}
         </section>
+
+        {props.pinnedContext ? (
+          <ShellCard variant="muted" className="chat-pinned-context" data-testid="chat-pinned-context">
+            <header className="chat-pinned-context-header">
+              <SectionLabel>{ui.chat.pinnedContext.title}</SectionLabel>
+              <StatusBadge tone="partial">{ui.shell.workspaceTabs.github.label}</StatusBadge>
+            </header>
+            <p className="chat-pinned-context-summary">{props.pinnedContext.summary}</p>
+            <p className="chat-pinned-context-meta">
+              {`${props.pinnedContext.repoFullName} · ${props.pinnedContext.ref}${props.pinnedContext.path ? ` · ${props.pinnedContext.path}` : ""}`}
+            </p>
+            <div className="action-row">
+              <span className="muted-copy">{ui.chat.pinnedContext.localState}</span>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={props.onClearPinnedContext}
+                data-testid="chat-pinned-context-clear"
+              >
+                {ui.chat.pinnedContext.clear}
+              </button>
+            </div>
+          </ShellCard>
+        ) : null}
 
         <form className="composer governed-composer" onSubmit={handleSubmit}>
           <textarea

@@ -5331,6 +5331,39 @@ textarea:focus {
   justify-content: flex-end;
 }
 
+.chat-pinned-context {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.chat-pinned-context-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.chat-pinned-context-summary,
+.chat-pinned-context-meta {
+  margin: 0;
+}
+
+.chat-pinned-context-meta {
+  color: var(--text-secondary);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.github-pin-context-row {
+  align-items: center;
+}
+
+.github-pin-context-row .muted-copy {
+  margin: 0;
+}
+
 .github-hero > div {
   display: grid;
   justify-items: stretch;

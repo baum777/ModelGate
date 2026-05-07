@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type GitHubWorkspaceStatus,
 } from "./components/GitHubWorkspace.js";
@@ -77,6 +77,7 @@ import {
   resolvePersistedWorkMode,
   type WorkMode,
 } from "./lib/work-mode.js";
+import type { PinnedChatContext } from "./lib/pinned-chat-context.js";
 
 const loadChatWorkspace = () => import("./components/ChatWorkspace.js");
 const loadGitHubWorkspace = () => import("./components/GitHubWorkspace.js");
@@ -144,6 +145,7 @@ type PersistedShellState = {
 
 const SHELL_STORAGE_KEY = "mosaicstack.console.shell.v2";
 const THEME_STORAGE_KEY = "mg-theme";
+const WORKSPACE_STATE_SAVE_INTERVAL_MS = 250;
 
 type ThemeMode = "dark" | "light";
 
@@ -153,6 +155,16 @@ function isWorkspaceMode(value: string | null): value is WorkspaceMode {
     || value === "matrix"
     || value === "review"
     || value === "settings";
+}
+
+export function shouldConfirmGitHubReviewNavigation(options: {
+  currentMode: WorkspaceMode;
+  nextMode: WorkspaceMode;
+  githubReviewDirty: boolean;
+}) {
+  return options.currentMode === "github"
+    && options.nextMode !== "github"
+    && options.githubReviewDirty;
 }
 
 function readUrlWorkspaceMode() {
@@ -547,7 +559,19 @@ function ConsoleShell() {
   const [githubContext, setGitHubContext] = useState<GitHubWorkspaceStatus>(() => createDefaultGitHubContext());
   const [matrixContext, setMatrixContext] = useState<MatrixWorkspaceStatus>(() => createDefaultMatrixContext());
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
+  const [pinnedChatContext, setPinnedChatContext] = useState<PinnedChatContext | null>(null);
+  const [githubReviewDirty, setGitHubReviewDirty] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const workspaceSaveHandleRef = useRef<number | null>(null);
+  const latestWorkspaceStateRef = useRef(workspaceState);
+  const flushWorkspaceState = useCallback(() => {
+    if (workspaceSaveHandleRef.current !== null) {
+      globalThis.clearTimeout(workspaceSaveHandleRef.current);
+      workspaceSaveHandleRef.current = null;
+    }
+
+    saveWorkspaceState(latestWorkspaceStateRef.current);
+  }, []);
 
   useEffect(() => {
     replaceConsoleUrl(mode);
@@ -687,8 +711,43 @@ function ConsoleShell() {
   }, [expertMode, mode, workMode]);
 
   useEffect(() => {
-    saveWorkspaceState(workspaceState);
-  }, [workspaceState]);
+    latestWorkspaceStateRef.current = workspaceState;
+
+    if (workspaceSaveHandleRef.current !== null) {
+      return;
+    }
+
+    workspaceSaveHandleRef.current = globalThis.setTimeout(() => {
+      flushWorkspaceState();
+    }, WORKSPACE_STATE_SAVE_INTERVAL_MS);
+  }, [flushWorkspaceState, workspaceState]);
+
+  useEffect(() => () => {
+    flushWorkspaceState();
+  }, [flushWorkspaceState]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return;
+    }
+
+    const handlePageHide = () => {
+      flushWorkspaceState();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        flushWorkspaceState();
+      }
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [flushWorkspaceState]);
 
   useEffect(() => {
     if (!workModeVisibility.showDiagnosticsByDefault) {
@@ -737,8 +796,21 @@ function ConsoleShell() {
   }, []);
 
   const handleWorkspaceTabSelect = useCallback((nextMode: WorkspaceMode) => {
+    if (shouldConfirmGitHubReviewNavigation({
+      currentMode: mode,
+      nextMode,
+      githubReviewDirty,
+    })) {
+      const allowLeave = typeof window === "undefined"
+        ? true
+        : window.confirm(ui.github.reviewDirtyConfirmNavigation);
+
+      if (!allowLeave) {
+        return;
+      }
+    }
+
     setMode(nextMode);
-    replaceConsoleUrl(nextMode);
 
     if (isSessionWorkspace(nextMode)) {
       setWorkspaceState((current) => {
@@ -746,13 +818,25 @@ function ConsoleShell() {
         return selectSession(current, nextMode, activeSessionId);
       });
     }
+  }, [githubReviewDirty, mode, ui.github.reviewDirtyConfirmNavigation]);
+
+  const handlePinChatContext = useCallback((context: PinnedChatContext) => {
+    setPinnedChatContext(context);
+    setMode("chat");
+    setWorkspaceState((current) => {
+      const activeSessionId = current.activeSessionIdByWorkspace.chat;
+      return selectSession(current, "chat", activeSessionId);
+    });
+  }, []);
+
+  const handleClearPinnedChatContext = useCallback(() => {
+    setPinnedChatContext(null);
   }, []);
 
   const handleWorkspaceSessionCreate = useCallback((workspace: WorkspaceKind) => {
     const now = nowIso();
 
     setMode(workspace);
-    replaceConsoleUrl(workspace);
     setWorkspaceState((current) => {
       switch (workspace) {
         case "github":
@@ -799,7 +883,6 @@ function ConsoleShell() {
 
   const handleWorkspaceSessionSelect = useCallback((workspace: WorkspaceKind, sessionId: string) => {
     setMode(workspace);
-    replaceConsoleUrl(workspace);
     setWorkspaceState((current) => selectSession(current, workspace, sessionId));
   }, []);
 
@@ -1798,6 +1881,8 @@ function ConsoleShell() {
       onActiveModelAliasChange={setActiveModelAlias}
       onTelemetry={recordTelemetry}
       onSessionChange={handleChatSessionChange}
+      pinnedContext={pinnedChatContext}
+      onClearPinnedContext={handleClearPinnedChatContext}
     />
   ) : mode === "github" ? (
     <GitHubWorkspace
@@ -1808,6 +1893,8 @@ function ConsoleShell() {
       onTelemetry={recordTelemetry}
       onContextChange={setGitHubContext}
       onReviewItemsChange={updateGitHubReviewItems}
+      onReviewDirtyChange={setGitHubReviewDirty}
+      onPinChatContext={handlePinChatContext}
       onSessionChange={handleGitHubSessionChange}
       githubIntegration={integrationsStatus?.github ?? null}
       onIntegrationAction={handleIntegrationAction}

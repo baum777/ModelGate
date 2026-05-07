@@ -1106,7 +1106,7 @@ test("Settings GitHub CTA starts backend-owned auth flow and returns to Settings
     await route.fulfill({
       status: 200,
       contentType: "text/html; charset=utf-8",
-      body: "<!doctype html><html><body><script>window.location.replace('/api/auth/github/callback?state=stub-state&code=stub-code');</script></body></html>",
+      body: "<!doctype html><html><body><script>window.location.replace('/api/auth/github/callback?state=oauth-state&code=oauth-code');</script></body></html>",
     });
   });
 
@@ -1147,7 +1147,7 @@ test("Settings Matrix CTA starts backend-owned auth flow and returns to Settings
     await route.fulfill({
       status: 200,
       contentType: "text/html; charset=utf-8",
-      body: "<!doctype html><html><body><script>window.location.replace('/api/auth/matrix/callback?state=stub-state&loginToken=stub-login-token');</script></body></html>",
+      body: "<!doctype html><html><body><script>window.location.replace('/api/auth/matrix/callback?state=sso-state&loginToken=live-login-token');</script></body></html>",
     });
   });
 
@@ -1182,7 +1182,7 @@ test("Settings connected auth CTAs call backend-owned control routes", async ({ 
     github: {
       ...INTEGRATIONS_STATUS_OK.github,
       status: "connected",
-      credentialSource: "user_connected_stub",
+      credentialSource: "user_connected",
       capabilities: {
         read: "available",
         propose: "available",
@@ -1191,7 +1191,7 @@ test("Settings connected auth CTAs call backend-owned control routes", async ({ 
       },
       executionMode: "approval_required",
       labels: {
-        identity: "stub-github-operator",
+        identity: "octocat",
         scope: "2 allowed repos",
         allowedReposStatus: "configured",
       },

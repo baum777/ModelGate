@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApprovalTransitionCard,
   DecisionZone,
@@ -19,6 +19,7 @@ import {
   type GitHubVerifyResult,
 } from "../lib/github-api.js";
 import type { IntegrationStatus } from "../lib/api.js";
+import { createPinnedChatContext, type PinnedChatContext } from "../lib/pinned-chat-context.js";
 import type { ReviewItem } from "./ReviewWorkspace.js";
 import {
   deriveSessionStatus,
@@ -65,6 +66,8 @@ type GitHubWorkspaceProps = {
   ) => void;
   onContextChange: (status: GitHubWorkspaceStatus) => void;
   onReviewItemsChange?: (items: ReviewItem[]) => void;
+  onReviewDirtyChange?: (isDirty: boolean) => void;
+  onPinChatContext?: (context: PinnedChatContext) => void;
   onSessionChange: (session: GitHubSession) => void;
   githubIntegration: IntegrationStatus | null;
   onIntegrationAction: (
@@ -77,6 +80,7 @@ const ANALYSIS_QUESTION =
   "Beschreibe die Projektstruktur und nenne die sichere nächste Aktion.";
 const PROPOSAL_OBJECTIVE =
   "Erstelle einen sicheren Änderungsvorschlag für das gewählte Repo.";
+const GITHUB_SESSION_SYNC_INTERVAL_MS = 220;
 
 type GitHubLocaleText = {
   repoLoadFailed: string;
@@ -274,6 +278,43 @@ function buildRawDiffPreview(plan: GitHubChangePlan | null) {
     .slice(0, 1600);
 }
 
+export function buildGitHubPinnedChatContext(options: {
+  selectedRepo: GitHubRepoSummary | null;
+  analysisBundle: GitHubContextBundle | null;
+  proposalPlan: GitHubChangePlan | null;
+}): PinnedChatContext | null {
+  if (!options.selectedRepo || !options.analysisBundle) {
+    return null;
+  }
+
+  const summary = options.proposalPlan?.summary ?? options.analysisBundle.question;
+  const firstAnalysisFile = options.analysisBundle.files[0] ?? null;
+  const firstDiffFile = options.proposalPlan?.diff[0] ?? null;
+  const excerpt = firstAnalysisFile?.excerpt ?? firstDiffFile?.patch ?? "";
+
+  return createPinnedChatContext({
+    repoFullName: options.selectedRepo.fullName,
+    ref: options.proposalPlan?.baseRef ?? options.analysisBundle.ref ?? options.selectedRepo.defaultBranch,
+    path: firstAnalysisFile?.path ?? firstDiffFile?.path ?? null,
+    summary,
+    excerpt,
+    diffPreview: buildRawDiffPreview(options.proposalPlan),
+  });
+}
+
+export function isGitHubReviewDirty(options: {
+  proposalPlan: GitHubChangePlan | null;
+  executionResult: GitHubExecuteResult | null;
+  approvalChecked: boolean;
+  executionError: string | null;
+}) {
+  return Boolean(
+    (options.proposalPlan && !options.executionResult)
+    || options.approvalChecked
+    || (options.proposalPlan && options.executionError),
+  );
+}
+
 function verificationStatusCopy(result: GitHubVerifyResult | null, locale: Locale) {
   switch (result?.status) {
     case "verified":
@@ -453,6 +494,18 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     props.session.metadata.verificationError,
   );
   const repoSelectRef = useRef<HTMLSelectElement | null>(null);
+  const sessionSyncHandleRef = useRef<number | null>(null);
+  const latestSessionRef = useRef<GitHubSession | null>(null);
+  const flushSessionSync = useCallback(() => {
+    if (sessionSyncHandleRef.current !== null) {
+      globalThis.clearTimeout(sessionSyncHandleRef.current);
+      sessionSyncHandleRef.current = null;
+    }
+
+    if (latestSessionRef.current) {
+      props.onSessionChange(latestSessionRef.current);
+    }
+  }, [props.onSessionChange]);
   const githubIdentityLabel = props.githubIntegration?.labels.identity ?? (locale === "de" ? "Nicht verbunden" : "Not connected");
   const githubConnected = props.githubIntegration?.credentialSource === "user_connected";
   const githubConnectAction = props.githubIntegration?.status && props.githubIntegration.status !== "connect_available" && props.githubIntegration.status !== "not_connected"
@@ -490,7 +543,18 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       metadata: snapshotMetadata,
     };
 
-    props.onSessionChange(nextSession);
+    latestSessionRef.current = nextSession;
+
+    if (sessionSyncHandleRef.current !== null) {
+      return;
+    }
+
+    sessionSyncHandleRef.current = globalThis.setTimeout(() => {
+      sessionSyncHandleRef.current = null;
+      if (latestSessionRef.current) {
+        props.onSessionChange(latestSessionRef.current);
+      }
+    }, GITHUB_SESSION_SYNC_INTERVAL_MS);
   }, [
     analysisBundle,
     approvalChecked,
@@ -505,6 +569,10 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     verificationError,
     verificationResult,
   ]);
+
+  useEffect(() => () => {
+    flushSessionSync();
+  }, [flushSessionSync]);
 
   useEffect(() => {
     let cancelled = false;
@@ -616,6 +684,12 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     || executionConsumed
     || proposalLoading;
   const verifyDisabled = !executionResult || executing || verifying;
+  const reviewDirty = isGitHubReviewDirty({
+    proposalPlan,
+    executionResult,
+    approvalChecked,
+    executionError,
+  });
 
   useEffect(() => {
     props.onContextChange({
@@ -659,6 +733,10 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       props.onReviewItemsChange(buildGitHubReviewItems(proposalPlan, executionResult, verificationResult, locale));
     }
   }, [executionResult, locale, proposalPlan, props.onReviewItemsChange, verificationResult]);
+
+  useEffect(() => {
+    props.onReviewDirtyChange?.(reviewDirty);
+  }, [props.onReviewDirtyChange, reviewDirty]);
 
   useEffect(() => {
     if (!proposalPlan || proposalPlan.stale) {
@@ -896,6 +974,14 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     : analysisBundle
       ? ui.github.readOnly
       : ui.github.nextStepAnalysis;
+  const pinnableChatContext = useMemo(
+    () => buildGitHubPinnedChatContext({
+      selectedRepo,
+      analysisBundle,
+      proposalPlan,
+    }),
+    [analysisBundle, proposalPlan, selectedRepo],
+  );
   const heroSteps = [
     {
       title: ui.github.nextStepChooseRepo,
@@ -1121,6 +1207,12 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             </article>
           </div>
 
+          {reviewDirty ? (
+            <p className="warning-banner" role="status" data-testid="github-review-dirty-warning">
+              {ui.github.reviewDirtyWarning}
+            </p>
+          ) : null}
+
           <article className="workspace-card github-review-card">
             <header className="card-header">
               <div>
@@ -1136,13 +1228,32 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
 
             {analysisBundle ? (
               <div className="github-review-body">
-                <div className="github-review-summary">
-                  <p className="info-label">{ui.github.analysisTitle}</p>
-                  <strong>{analysisBundle.question}</strong>
-                  <p className="muted-copy">
-                    {analysisBundle.files.length} · {analysisBundle.tokenBudget.truncated ? ui.shell.statusPartial : ui.shell.statusReady}
-                  </p>
-                </div>
+              <div className="github-review-summary">
+                <p className="info-label">{ui.github.analysisTitle}</p>
+                <strong>{analysisBundle.question}</strong>
+                <p className="muted-copy">
+                  {analysisBundle.files.length} · {analysisBundle.tokenBudget.truncated ? ui.shell.statusPartial : ui.shell.statusReady}
+                </p>
+                {props.onPinChatContext ? (
+                  <div className="action-row github-pin-context-row">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => {
+                        if (!pinnableChatContext) {
+                          return;
+                        }
+
+                        props.onPinChatContext?.(pinnableChatContext);
+                      }}
+                      disabled={!pinnableChatContext}
+                    >
+                      {ui.github.pinToChatContext}
+                    </button>
+                    <span className="muted-copy">{ui.github.pinToChatContextHint}</span>
+                  </div>
+                ) : null}
+              </div>
 
                 <div className="github-file-chip-row">
                   {analysisFiles.map((file) => (

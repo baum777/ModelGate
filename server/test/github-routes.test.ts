@@ -410,7 +410,7 @@ test("github routes use session GitHub OAuth credentials when available", async 
         return makeJsonResponse({
           access_token: "gho_user_token",
           token_type: "bearer",
-          scope: "repo,read:user"
+          scope: "read:user,user:email"
         });
       }
 
@@ -530,7 +530,7 @@ test("github routes do not reuse another session user token", async (t) => {
         return makeJsonResponse({
           access_token: "gho_user_token",
           token_type: "bearer",
-          scope: "repo,read:user"
+          scope: "read:user,user:email"
         });
       }
 

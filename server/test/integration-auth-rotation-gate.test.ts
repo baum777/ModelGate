@@ -46,7 +46,7 @@ test("next gate: integration auth key rotation supports restart reverify and key
     GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
     INTEGRATION_AUTH_STORE_MODE: "file" as const,
     INTEGRATION_AUTH_STORE_FILE_PATH: storePath,
-    MOSAIC_STACK_SESSION_SECRET: ""
+    MOSAIC_STACK_SESSION_SECRET: "rotation-test-session-secret"
   };
 
   let activeAccessToken = "gho_rotation_v1";
@@ -57,7 +57,7 @@ test("next gate: integration auth key rotation supports restart reverify and key
       return new Response(JSON.stringify({
         access_token: activeAccessToken,
         token_type: "bearer",
-        scope: "repo,read:user"
+        scope: "read:user,user:email"
       }), {
         status: 200,
         headers: { "Content-Type": "application/json" }
@@ -208,7 +208,7 @@ test("next gate: missing previous key config fails closed after rotation", async
     GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
     INTEGRATION_AUTH_STORE_MODE: "file" as const,
     INTEGRATION_AUTH_STORE_FILE_PATH: storePath,
-    MOSAIC_STACK_SESSION_SECRET: ""
+    MOSAIC_STACK_SESSION_SECRET: "rotation-test-session-secret"
   };
 
   const fetchImpl: typeof fetch = async (input) => {
@@ -218,7 +218,7 @@ test("next gate: missing previous key config fails closed after rotation", async
       return new Response(JSON.stringify({
         access_token: "gho_rotation_v1",
         token_type: "bearer",
-        scope: "repo,read:user"
+        scope: "read:user,user:email"
       }), {
         status: 200,
         headers: { "Content-Type": "application/json" }

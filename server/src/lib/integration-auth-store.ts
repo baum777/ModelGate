@@ -85,7 +85,7 @@ export type IntegrationAuthStore = {
     sessionId: string;
     provider: IntegrationProvider;
     safeIdentityLabel: string;
-    source?: "user_connected_stub" | "user_connected";
+    source: "user_connected_stub" | "user_connected";
   }) => IntegrationConnectionRecord;
   disconnect: (sessionId: string, provider: IntegrationProvider) => IntegrationConnectionRecord;
   reverify: (sessionId: string, provider: IntegrationProvider) => IntegrationConnectionRecord | null;
@@ -605,7 +605,7 @@ export function createIntegrationAuthStore(options: IntegrationAuthStoreOptions 
         lastVerifiedAt: nowIso,
         safeIdentityLabel: input.safeIdentityLabel,
         lastErrorCode: null,
-        source: input.source ?? "user_connected_stub"
+        source: input.source
       };
       persist();
       return ensured.session[input.provider];

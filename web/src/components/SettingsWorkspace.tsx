@@ -214,7 +214,7 @@ export function SettingsWorkspace({
         source: {
           instance_configured: "Instance configured",
           user_connected: "User connected",
-          user_connected_stub: "User connected (stub)",
+          user_connected_stub: "Legacy stub connection",
           not_connected: "Not connected",
         },
         action: {
@@ -248,7 +248,7 @@ export function SettingsWorkspace({
         source: {
           instance_configured: "Instance configured",
           user_connected: "User connected",
-          user_connected_stub: "User connected (stub)",
+          user_connected_stub: "Legacy stub connection",
           not_connected: "Not connected",
         },
         action: {
@@ -261,7 +261,11 @@ export function SettingsWorkspace({
 
   function getActionLabel(adapter: SettingsLoginAdapter, action: "connect" | "reconnect" | "disconnect" | "reverify") {
     if (adapter.id === "github" && (action === "connect" || action === "reconnect")) {
-      return locale === "de" ? "GitHub verbinden" : "Connect your GitHub";
+      return locale === "de" ? "GitHub verbinden" : "Connect GitHub";
+    }
+
+    if (adapter.id === "matrix" && (action === "connect" || action === "reconnect")) {
+      return locale === "de" ? "Matrix verbinden" : "Connect Matrix";
     }
 
     return adapterCopy.action[action];

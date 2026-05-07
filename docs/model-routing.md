@@ -93,6 +93,11 @@ SSE events:
 - The local preview profile cookie is local-only/dev-only until a full user-auth system becomes authoritative.
 - `OPENROUTER_API_KEY` is legacy/dev-only compatibility and must not silently satisfy user-owned OpenRouter chat.
 
+## Vercel Matrix Adapter Posture
+
+- Keep the dedicated Matrix adapter split in `vercel.json` (`api/matrix/[...path].ts` + `/api/matrix/:path*` rewrite) as the current tested deployment posture.
+- Do not merge Matrix routing into only `api/[...path].ts` until route normalization and rewrite equivalence for all Matrix endpoints is proven with explicit tests.
+
 ## Boundary Guarantees
 
 - Browser remains non-authoritative.

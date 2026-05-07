@@ -495,7 +495,7 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
           source: matrixEvidenceSource("POST /api/matrix/analyze")
         }));
 
-        if (!provenanceEvidence.ok) {
+        if (provenanceEvidence.ok === false) {
           warnings.push(provenanceEvidence.warning);
         }
       }
@@ -753,7 +753,7 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
         source: matrixEvidenceSource("POST /api/matrix/actions/:planId/execute")
       }));
 
-      if (!approvalEvidence.ok) {
+      if (approvalEvidence.ok === false) {
         warnings.push(approvalEvidence.warning);
 
         if (approvalEvidence.required) {
@@ -824,7 +824,7 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
           source: matrixEvidenceSource("POST /api/matrix/actions/:planId/execute")
         }));
 
-        if (!topicEvidence.ok) {
+        if (topicEvidence.ok === false) {
           warnings.push(topicEvidence.warning);
         } else if (topicEvidence.transactionId) {
           receipts.push({
@@ -896,7 +896,7 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
         source: matrixEvidenceSource("POST /api/matrix/actions/:planId/execute")
       }));
 
-      if (!topicEvidence.ok) {
+      if (topicEvidence.ok === false) {
         warnings.push(topicEvidence.warning);
       } else if (topicEvidence.transactionId) {
         receipts.push({
@@ -1025,7 +1025,7 @@ export function matrixRoutes(app: FastifyInstance, deps: MatrixRouteDependencies
         source: matrixEvidenceSource("GET /api/matrix/actions/:planId/verify")
       }));
 
-      if (!verificationEvidence.ok) {
+      if (verificationEvidence.ok === false) {
         warnings.push(verificationEvidence.warning);
       } else if (verificationEvidence.transactionId) {
         receipts.push({

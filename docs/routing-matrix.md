@@ -53,8 +53,8 @@ Security copy:
 - Backend creates short-lived `state` and keeps it server-side.
 - Callback (`/api/auth/{provider}/callback`) validates `state`, performs provider exchange server-side when config is present, stores credentials in a durable encrypted backend store, and redirects to `/console?mode=settings`.
 - Stored provider credentials are session-bound and encrypted with key metadata (`keyId`, `keyVersion`) so active writes use the current key while reads can accept configured previous keys during rotation.
-- Real credential mode fails closed when encryption config is missing or invalid; stub fallback is allowed only when provider config is absent.
-- Stub fallback remains available only when provider OAuth/SSO config is not present.
+- Live credential mode fails closed when provider OAuth/SSO config, session config, or encryption config is missing or invalid.
+- Local stub fallback is not an active auth path; missing provider config returns a sanitized `missing_server_config` error.
 - Browser reads only sanitized status from `/api/integrations/status`.
 
 Browser must not receive or store GitHub/Matrix tokens. Backend owns auth state, callback validation, credential handling, and execution boundaries.

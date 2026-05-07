@@ -169,6 +169,7 @@ export function createApp(deps: AppDependencies) {
     fetchImpl: deps.integrationFetch
   });
   integrationRoutes(app, {
+    env: deps.env,
     githubConfig,
     matrixConfig,
     authStore: integrationAuthStore

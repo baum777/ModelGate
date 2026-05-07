@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApprovalTransitionCard,
   DecisionZone,
@@ -50,6 +50,7 @@ type WorkflowStatus = "loading" | "partial" | "ready" | "error";
 type LoadStatus = "idle" | "loading" | "ready" | "error";
 
 const MATRIX_VISIBLE_LIST_LIMIT = 80;
+const MATRIX_SESSION_SYNC_INTERVAL_MS = 220;
 
 export type MatrixWorkspaceStatus = {
   identityLabel: string;
@@ -372,6 +373,18 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   const [composerTarget, setComposerTarget] = useState<MatrixComposerTarget>(persisted.composerTarget);
   const [draftContent, setDraftContent] = useState<string>(persisted.draftContent);
   const [lastActionResult, setLastActionResult] = useState<string | null>(persisted.lastActionResult);
+  const sessionSyncHandleRef = useRef<number | null>(null);
+  const latestSessionRef = useRef<MatrixSession | null>(null);
+  const flushSessionSync = useCallback(() => {
+    if (sessionSyncHandleRef.current !== null) {
+      globalThis.clearTimeout(sessionSyncHandleRef.current);
+      sessionSyncHandleRef.current = null;
+    }
+
+    if (latestSessionRef.current) {
+      props.onSessionChange(latestSessionRef.current);
+    }
+  }, [props.onSessionChange]);
   const summaryLoading = scopeSummaryStatus === "loading";
   const selectedSpaces = useMemo(
     () => selectedSpaceIds.filter((value) => value.trim().length > 0),
@@ -537,7 +550,18 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       metadata: snapshotMetadata,
     };
 
-    props.onSessionChange(nextSession);
+    latestSessionRef.current = nextSession;
+
+    if (sessionSyncHandleRef.current !== null) {
+      return;
+    }
+
+    sessionSyncHandleRef.current = globalThis.setTimeout(() => {
+      sessionSyncHandleRef.current = null;
+      if (latestSessionRef.current) {
+        props.onSessionChange(latestSessionRef.current);
+      }
+    }, MATRIX_SESSION_SYNC_INTERVAL_MS);
   }, [
     composerMode,
     composerTarget,
@@ -580,6 +604,10 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     topicVerifyError,
     topicVerifyLoading,
   ]);
+
+  useEffect(() => () => {
+    flushSessionSync();
+  }, [flushSessionSync]);
 
   useEffect(() => {
     let cancelled = false;

@@ -67,9 +67,10 @@ export const EnvSchema = z.object({
   GITHUB_APP_INSTALLATION_ID: z.string().trim().default(""),
   GITHUB_OAUTH_CLIENT_ID: z.string().trim().default(""),
   GITHUB_OAUTH_CLIENT_SECRET: z.string().trim().default(""),
+  GITHUB_OAUTH_CALLBACK_URL: z.string().trim().default(""),
   GITHUB_OAUTH_AUTHORIZE_URL: z.string().trim().default("https://github.com/login/oauth/authorize"),
   GITHUB_OAUTH_TOKEN_URL: z.string().trim().default("https://github.com/login/oauth/access_token"),
-  GITHUB_OAUTH_SCOPES: z.string().trim().default("repo,read:user"),
+  GITHUB_OAUTH_SCOPES: z.string().trim().default("read:user,user:email"),
   MATRIX_SSO_REDIRECT_PATH: z.string().trim().default("/_matrix/client/v3/login/sso/redirect"),
   MATRIX_LOGIN_TOKEN_TYPE: z.string().trim().default("m.login.token"),
   INTEGRATION_AUTH_STORE_MODE: z.string().trim().default("file"),
@@ -151,6 +152,7 @@ export type AppEnv = {
   GITHUB_APP_INSTALLATION_ID: string;
   GITHUB_OAUTH_CLIENT_ID: string;
   GITHUB_OAUTH_CLIENT_SECRET: string;
+  GITHUB_OAUTH_CALLBACK_URL: string;
   GITHUB_OAUTH_AUTHORIZE_URL: string;
   GITHUB_OAUTH_TOKEN_URL: string;
   GITHUB_OAUTH_SCOPES: string[];
@@ -276,6 +278,7 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     GITHUB_APP_INSTALLATION_ID: parsed.GITHUB_APP_INSTALLATION_ID.trim(),
     GITHUB_OAUTH_CLIENT_ID: parsed.GITHUB_OAUTH_CLIENT_ID.trim(),
     GITHUB_OAUTH_CLIENT_SECRET: parsed.GITHUB_OAUTH_CLIENT_SECRET.trim(),
+    GITHUB_OAUTH_CALLBACK_URL: parsed.GITHUB_OAUTH_CALLBACK_URL.trim(),
     GITHUB_OAUTH_AUTHORIZE_URL: parsed.GITHUB_OAUTH_AUTHORIZE_URL.trim() || "https://github.com/login/oauth/authorize",
     GITHUB_OAUTH_TOKEN_URL: parsed.GITHUB_OAUTH_TOKEN_URL.trim() || "https://github.com/login/oauth/access_token",
     GITHUB_OAUTH_SCOPES: parseCsvList(parsed.GITHUB_OAUTH_SCOPES),

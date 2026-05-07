@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { readSseEvents } from "../src/lib/api.js";
+import { readSseEvents, streamChatCompletion } from "../src/lib/api.js";
 import { getWorkspaceGuide } from "../src/components/GuideOverlay.js";
 import {
   buildChatRoutingStatusItems,
@@ -27,6 +27,33 @@ function encodeChunks(chunks: string[]) {
         controller.enqueue(encoder.encode(chunk));
       }
       controller.close();
+    }
+  });
+}
+
+function createSseResponse(chunks: string[], options?: { keepOpen?: boolean; signal?: AbortSignal }) {
+  const encoder = new TextEncoder();
+  const keepOpen = options?.keepOpen ?? false;
+
+  return new Response(new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+
+      if (keepOpen) {
+        options?.signal?.addEventListener("abort", () => {
+          controller.error(new DOMException("Aborted", "AbortError"));
+        }, { once: true });
+        return;
+      }
+
+      controller.close();
+    }
+  }), {
+    status: 200,
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8"
     }
   });
 }
@@ -186,6 +213,76 @@ test("chat reducer surfaces malformed stream ordering", () => {
   assert.equal(state.currentAssistantDraft, null);
   assert.equal(state.lastStreamWarning, "Received token before stream start.");
   assert.equal(state.messages.length, 1);
+});
+
+test("stream chat marks missing terminal frames as malformed", async () => {
+  const originalFetch = globalThis.fetch;
+  const tokens: string[] = [];
+  const malformed: string[] = [];
+
+  globalThis.fetch = async () => createSseResponse([
+    "event: start\ndata: {\"ok\":true,\"model\":\"default\"}\n\n",
+    "event: token\ndata: {\"delta\":\"Partial\"}\n\n"
+  ]);
+
+  try {
+    await streamChatCompletion(
+      {
+        modelAlias: "default",
+        messages: [{ role: "user", content: "hello" }]
+      },
+      {
+        onToken: (delta) => tokens.push(delta),
+        onMalformed: (message) => malformed.push(message)
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.deepEqual(tokens, ["Partial"]);
+  assert.deepEqual(malformed, ["Stream ended without a terminal frame."]);
+});
+
+test("stream chat times out with explicit malformed feedback", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const malformed: string[] = [];
+  const tokens: string[] = [];
+
+  globalThis.setTimeout = ((handler: Parameters<typeof setTimeout>[0], timeout?: Parameters<typeof setTimeout>[1], ...args: unknown[]) =>
+    originalSetTimeout(handler, Math.min(typeof timeout === "number" ? timeout : 0, 5), ...args)
+  ) as typeof setTimeout;
+
+  globalThis.fetch = async (_input, init) => createSseResponse(
+    [
+      "event: start\ndata: {\"ok\":true,\"model\":\"default\"}\n\n",
+      "event: token\ndata: {\"delta\":\"Hel\"}\n\n"
+    ],
+    {
+      keepOpen: true,
+      signal: init?.signal as AbortSignal | undefined
+    }
+  );
+
+  try {
+    await streamChatCompletion(
+      {
+        modelAlias: "default",
+        messages: [{ role: "user", content: "hello" }]
+      },
+      {
+        onToken: (delta) => tokens.push(delta),
+        onMalformed: (message) => malformed.push(message)
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+  }
+
+  assert.deepEqual(tokens, ["Hel"]);
+  assert.deepEqual(malformed, ["Stream timed out before terminal frame. Partial output was preserved."]);
 });
 
 test("chat reducer records rejected proposal receipts", () => {
