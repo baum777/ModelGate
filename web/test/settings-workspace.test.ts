@@ -64,7 +64,7 @@ function createVerificationFixture(): Record<"backend" | "github" | "matrix", Se
   return {
     backend: {
       status: "passed",
-      detail: "mosaicstack-test (local)",
+      detail: "mosaicstacked-test (local)",
       checkedAt: "2026-04-27T12:00:00.000Z",
     },
     github: {
@@ -222,7 +222,7 @@ test("Settings workspace renders integration cards and keeps secrets out of the 
   assert.match(markup, /data-testid="openrouter-model-add"/);
   assert.match(markup, /data-testid="settings-verification-backend"/);
   assert.match(markup, /data-testid="settings-verification-github-action"/);
-  assert.match(markup, /mosaicstack-test \(local\)/);
+  assert.match(markup, /mosaicstacked-test \(local\)/);
   assert.match(markup, /Matrix credentials were rejected/);
   assert.doesNotMatch(markup, /name=".*token/i);
   assert.doesNotMatch(markup, /type="password"/i);

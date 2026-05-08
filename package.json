@@ -1,5 +1,5 @@
 {
-  "name": "mosaicstack",
+  "name": "mosaicstacked",
   "private": true,
   "type": "module",
   "workspaces": [

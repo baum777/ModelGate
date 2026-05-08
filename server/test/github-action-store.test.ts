@@ -29,7 +29,7 @@ function createPlan(planId: string, withRoutingMetadata = true) {
     },
     baseRef: "main",
     baseSha: "sha-main",
-    branchName: `mosaicstack/github/${planId}`,
+    branchName: `mosaicstacked/github/${planId}`,
     targetBranch: "main",
     status: "pending_review" as const,
     stale: false,
@@ -148,7 +148,7 @@ test("memory GitHub action store does not update missing or expired plans", () =
 });
 
 test("file GitHub action store supports create, read, update, expiry, and restart recovery", () => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstack-github-store-"));
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstacked-github-store-"));
   const filePath = path.join(tempDir, "github-action-store.json");
   let nowMs = 5_000;
   const store = createFileGitHubActionStore({
@@ -196,7 +196,7 @@ test("file GitHub action store supports create, read, update, expiry, and restar
 });
 
 test("file GitHub action store starts empty when persisted state is malformed", () => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstack-github-store-malformed-"));
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstacked-github-store-malformed-"));
   const filePath = path.join(tempDir, "github-action-store.json");
   fs.writeFileSync(filePath, "{not-json", "utf8");
 
@@ -212,7 +212,7 @@ test("file GitHub action store starts empty when persisted state is malformed", 
 });
 
 test("file GitHub action store starts empty when persisted routing metadata is malformed", () => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstack-github-store-routing-malformed-"));
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstacked-github-store-routing-malformed-"));
   const filePath = path.join(tempDir, "github-action-store.json");
   const invalidSnapshot = {
     version: 1,

@@ -1,6 +1,6 @@
 # Vercel Deployment
 
-MosaicStack is deployed as a static frontend plus serverless API handlers.
+MosaicStacked is deployed as a static frontend plus serverless API handlers.
 
 ## Topology
 

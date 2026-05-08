@@ -1,9 +1,9 @@
-# MosaicStack — UI Specification
+# MosaicStacked — UI Specification
 
 **Version:** 1.0.0-alpha  
 **Stack:** Vite + React · Fastify · TypeScript · Vercel  
 **Live:** [modelgate.vercel.app](https://modelgate.vercel.app)  
-**Repo:** [github.com/baum777/mosaicStack](https://github.com/baum777/mosaicStack)
+**Repo:** [github.com/baum777/mosaicStacked](https://github.com/baum777/mosaicStacked)
 
 ---
 
@@ -44,7 +44,7 @@
 
 ## 1. Design Principles
 
-MosaicStack is a **backend-first console overlay**. The browser is a review surface — not an authority. Every UI decision must reinforce this trust model.
+MosaicStacked is a **backend-first console overlay**. The browser is a review surface — not an authority. Every UI decision must reinforce this trust model.
 
 ### 1.1 Core Principles
 
@@ -231,7 +231,7 @@ Maximum readable content width is **720px** for prose sections. Technical surfac
 
 ## 5. Elevation & Borders
 
-MosaicStack does not use drop shadows for elevation. Elevation is communicated through background colour progression (bg → bg2 → bg3 → bg4) and border opacity.
+MosaicStacked does not use drop shadows for elevation. Elevation is communicated through background colour progression (bg → bg2 → bg3 → bg4) and border opacity.
 
 ### 5.1 Border Styles
 
@@ -547,7 +547,7 @@ Default: `color: var(--ms-text2)`. Active: `background: rgba(108,92,231,0.12); c
 Used above the main content area to show location context.
 
 ```
-baum777 › mosaicStack › Chat
+baum777 › mosaicStacked › Chat
 ```
 
 Font-size: 12px. Separator `›`: `color: var(--ms-text3)`. Items: `color: var(--ms-text2)`. Active/last item: `color: var(--ms-text); font-weight: 500`. Gap between items: 6px.
@@ -672,9 +672,9 @@ The application shell is the persistent chrome present on all authenticated view
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│ [M] MosaicStack Design System  [Foundations][Comp]  [☀️ Light] │
+│ [M] MosaicStacked Design System  [Foundations][Comp]  [☀️ Light] │
 ├──────────┬───────────────────────────────────────────┤
-│  Repos   │  baum777 › mosaicStack › Chat             │
+│  Repos   │  baum777 › mosaicStacked › Chat             │
 │  ─────── │  [Chat][Review][Tree][Matrix]             │
 │  [repo]  │                                           │
 │  ─────── │  Repo chat                 [● Streaming]  │
@@ -686,7 +686,7 @@ The application shell is the persistent chrome present on all authenticated view
 │  Know.   │  └────────────────────────────────────┘  │
 │  [Matrix]│                                           │
 │  [Prov.] │  [ Ask a question or request a review… ] │
-│  ─────── │  [claude-3.5-sonnet][mosaicStack][● live]│
+│  ─────── │  [claude-3.5-sonnet][mosaicStacked][● live]│
 │  [⚙]     │                                           │
 └──────────┴───────────────────────────────────────────┘
 ```
@@ -735,7 +735,7 @@ Sits at the bottom of the chat column, not fixed to the viewport (scrolls with c
 ┌──────────────────────────────────────┐ [↑]
 │ Ask about the codebase…              │
 └──────────────────────────────────────┘
-[claude-3.5-sonnet] [mosaicStack] [● live]
+[claude-3.5-sonnet] [mosaicStacked] [● live]
 ```
 
 Input box: `background: var(--ms-bg3); border: 1px solid var(--ms-border2); border-radius: 10px; padding: 10px 14px; font-size: 13px`. Focus: same as base input.
@@ -795,7 +795,7 @@ Each room entry:
 
 ```
 ┌──────────────────────────────────────┐
-│ #mosaicstack:matrix.org    [● joined]│
+│ #mosaicstacked:matrix.org    [● joined]│
 │ 3 topics · last active 4 min ago     │
 └──────────────────────────────────────┘
 ```
@@ -871,7 +871,7 @@ When a proposal is ready for execution, the UI enters the gate state:
 │ ⚠  Approval required                                │
 │                                                     │
 │ This action will push 3 changes to                  │
-│ baum777/mosaicStack on branch main.                 │
+│ baum777/mosaicStacked on branch main.                 │
 │                                                     │
 │ Diff: server/src/routes/matrix.ts (+12 / -4)        │
 │       server/src/types.ts (+2 / -0)                 │
@@ -892,7 +892,7 @@ After execution:
 - Success → Toast success + badge-green on the diff card + "View in GitHub" ghost button
 - Failure → Toast error + badge-red + raw error in collapsed code block + "Retry" option
 
-The approval gate cannot be bypassed from the browser. The `GITHUB_AGENT_API_KEY` is only sent server-side via `X-MosaicStack-Admin-Key`.
+The approval gate cannot be bypassed from the browser. The `GITHUB_AGENT_API_KEY` is only sent server-side via `X-MosaicStacked-Admin-Key`.
 
 ---
 
@@ -903,7 +903,7 @@ The approval gate cannot be bypassed from the browser. The `GITHUB_AGENT_API_KEY
 Full-viewport centred card. Background: `var(--ms-bg)` with a radial gradient vignette at 50% 0% (`var(--ms-accent)` at 10% opacity → transparent).
 
 ```
-        [M] MosaicStack
+        [M] MosaicStacked
 
     Connect your workspace
 
@@ -913,7 +913,7 @@ Full-viewport centred card. Background: `var(--ms-bg)` with a radial gradient vi
 
         [Connect →]
 
-    baum777/mosaicStack · v1.0.0
+    baum777/mosaicStacked · v1.0.0
 ```
 
 Card: `max-width: 400px; background: var(--ms-bg2); border: 1px solid var(--ms-border); border-radius: var(--r3); padding: 40px`.
@@ -1007,7 +1007,7 @@ Individual token values do not need transitions — the root transition handles 
 
 ## 12. Responsive Behaviour
 
-MosaicStack is a desktop-first application. The minimum supported viewport is 1024px wide. Mobile viewports are not currently in scope.
+MosaicStacked is a desktop-first application. The minimum supported viewport is 1024px wide. Mobile viewports are not currently in scope.
 
 ### 12.1 Breakpoints
 
@@ -1029,7 +1029,7 @@ Component grids that use `grid-template-columns: 1fr 1fr` collapse to `1fr` at t
 
 ## 13. Icon System
 
-MosaicStack v1 uses **text glyphs and Unicode symbols** rather than an SVG icon library. This avoids a bundled dependency and keeps the codebase TypeScript-only.
+MosaicStacked v1 uses **text glyphs and Unicode symbols** rather than an SVG icon library. This avoids a bundled dependency and keeps the codebase TypeScript-only.
 
 | Glyph | Meaning |
 |---|---|
@@ -1142,4 +1142,4 @@ Complete list of all custom properties. Define in `:root {}` (dark default) and 
 
 ---
 
-*MosaicStack UI Spec v1.0.0-alpha — maintained by @baum777*
+*MosaicStacked UI Spec v1.0.0-alpha — maintained by @baum777*

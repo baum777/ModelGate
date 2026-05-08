@@ -83,7 +83,7 @@ function createPolicyTestPlan(options: {
     },
     baseRef: "main",
     baseSha: "commit-sha-1",
-    branchName: `mosaicstack/github/${options.planId}`,
+    branchName: `mosaicstacked/github/${options.planId}`,
     targetBranch: "main",
     status: "pending_review" as const,
     stale: false,
@@ -346,7 +346,7 @@ test("github execution routes create a branch, commit, pull request, and verify 
           committer: { name: string; email: string; date: string };
         };
 
-        assert.equal(body.message, `MosaicStack plan ${plannedBranchName.slice(plannedBranchName.lastIndexOf("/") + 1)}`);
+        assert.equal(body.message, `MosaicStacked plan ${plannedBranchName.slice(plannedBranchName.lastIndexOf("/") + 1)}`);
         assert.equal(body.tree, "tree-sha-exec");
         assert.deepEqual(body.parents, ["commit-sha-1"]);
 
@@ -392,7 +392,7 @@ test("github execution routes create a branch, commit, pull request, and verify 
         });
       }
 
-      if (url.pathname.startsWith("/repos/acme/widget/git/ref/heads%2Fmosaicstack%2Fgithub%2F") && (init?.method ?? "GET") === "GET") {
+      if (url.pathname.startsWith("/repos/acme/widget/git/ref/heads%2Fmosaicstacked%2Fgithub%2F") && (init?.method ?? "GET") === "GET") {
         return new Response("not found", {
           status: 404,
           headers: {
@@ -428,8 +428,8 @@ test("github execution routes create a branch, commit, pull request, and verify 
             },
             mergeable: true,
             draft: false,
-            title: `MosaicStack plan ${plannedBranchName.slice(plannedBranchName.lastIndexOf("/") + 1)}`,
-            body: "MosaicStack approval-gated proposal"
+            title: `MosaicStacked plan ${plannedBranchName.slice(plannedBranchName.lastIndexOf("/") + 1)}`,
+            body: "MosaicStacked approval-gated proposal"
           }
         ]);
       }
@@ -512,7 +512,7 @@ test("github execution routes create a branch, commit, pull request, and verify 
       branchName: string;
     };
   };
-  plannedBranchName = `mosaicstack/github/${proposeBody.plan.planId}`;
+  plannedBranchName = `mosaicstacked/github/${proposeBody.plan.planId}`;
 
   const pendingVerifyResponse = await app.inject({
     method: "GET",
@@ -549,7 +549,7 @@ test("github execution routes create a branch, commit, pull request, and verify 
     method: "POST",
     url: `/api/github/actions/${proposeBody.plan.planId}/execute`,
     headers: {
-      "x-mosaicstack-admin-key": TEST_ADMIN_KEY
+      "x-mosaicstacked-admin-key": TEST_ADMIN_KEY
     },
     payload: {
       approval: true
@@ -606,7 +606,7 @@ test("github execution routes create a branch, commit, pull request, and verify 
     method: "POST",
     url: `/api/github/actions/${proposeBody.plan.planId}/execute`,
     headers: {
-      "x-mosaicstack-admin-key": TEST_ADMIN_KEY
+      "x-mosaicstacked-admin-key": TEST_ADMIN_KEY
     },
     payload: {
       approval: true
@@ -733,7 +733,7 @@ test("github execution routes support deterministic smoke plans with added files
         });
       }
 
-      if (url.pathname === "/repos/acme/widget/contents/docs/mosaicstack-smoke.md") {
+      if (url.pathname === "/repos/acme/widget/contents/docs/mosaicstacked-smoke.md") {
         return new Response("not found", {
           status: 404,
           headers: {
@@ -770,10 +770,10 @@ test("github execution routes support deterministic smoke plans with added files
 
         assert.equal(body.base_tree, "tree-sha-smoke");
         assert.deepEqual(body.tree.map((entry) => entry.path), [
-          "docs/mosaicstack-smoke.md"
+          "docs/mosaicstacked-smoke.md"
         ]);
         assert.equal(body.tree[0]?.mode, "100644");
-        assert.match(body.tree[0]?.content ?? "", /# MosaicStack smoke/);
+        assert.match(body.tree[0]?.content ?? "", /# MosaicStacked smoke/);
         assert.match(body.tree[0]?.content ?? "", /Intent: smoke execute against a dedicated target branch/);
 
         return makeJsonResponse({
@@ -788,7 +788,7 @@ test("github execution routes support deterministic smoke plans with added files
           parents: string[];
         };
 
-        assert.match(body.message, /^MosaicStack plan /);
+        assert.match(body.message, /^MosaicStacked plan /);
         assert.equal(body.tree, "tree-sha-exec");
         assert.deepEqual(body.parents, ["commit-sha-smoke"]);
 
@@ -858,8 +858,8 @@ test("github execution routes support deterministic smoke plans with added files
             },
             mergeable: true,
             draft: false,
-            title: `MosaicStack plan ${plannedBranchName.slice(plannedBranchName.lastIndexOf("/") + 1)}`,
-            body: "MosaicStack approval-gated proposal"
+            title: `MosaicStacked plan ${plannedBranchName.slice(plannedBranchName.lastIndexOf("/") + 1)}`,
+            body: "MosaicStacked approval-gated proposal"
           }
         ]);
       }
@@ -930,7 +930,7 @@ test("github execution routes support deterministic smoke plans with added files
       },
       objective: "Smoke the GitHub proposal flow",
       baseBranch: "main",
-      targetBranch: "mosaicstack/github-smoke",
+      targetBranch: "mosaicstacked/github-smoke",
       mode: "smoke",
       intent: "smoke execute against a dedicated target branch"
     }
@@ -946,13 +946,13 @@ test("github execution routes support deterministic smoke plans with added files
       diff: Array<{ path: string; changeType: string; patch: string }>;
     };
   };
-  plannedBranchName = `mosaicstack/github-smoke/${proposeBody.plan.planId}`;
+  plannedBranchName = `mosaicstacked/github-smoke/${proposeBody.plan.planId}`;
 
   const executeResponse = await app.inject({
     method: "POST",
     url: `/api/github/actions/${proposeBody.plan.planId}/execute`,
     headers: {
-      "x-mosaicstack-admin-key": TEST_ADMIN_KEY
+      "x-mosaicstacked-admin-key": TEST_ADMIN_KEY
     },
     payload: {
       approval: true
@@ -1015,7 +1015,7 @@ test("github execution routes support deterministic smoke plans with added files
   assert.equal(verifyBody.verification.prNumber, 12);
 
   assert.deepEqual(proposeBody.plan.diff.map((file) => file.path), [
-    "docs/mosaicstack-smoke.md"
+    "docs/mosaicstacked-smoke.md"
   ]);
   assert.equal(proposeBody.plan.diff[0]?.changeType, "added");
   assert.match(proposeBody.plan.diff[0]?.patch ?? "", /@@ reviewable addition @@/);
@@ -1062,7 +1062,7 @@ test("github execution routes reject missing or invalid admin keys before touchi
     method: "POST",
     url: "/api/github/actions/plan_missing/execute",
     headers: {
-      "x-mosaicstack-admin-key": "wrong-key"
+      "x-mosaicstacked-admin-key": "wrong-key"
     },
     payload: {
       approval: true
@@ -1249,7 +1249,7 @@ test("github execution routes fail closed when the repository becomes stale befo
     method: "POST",
     url: `/api/github/actions/${planId}/execute`,
     headers: {
-      "x-mosaicstack-admin-key": TEST_ADMIN_KEY
+      "x-mosaicstacked-admin-key": TEST_ADMIN_KEY
     },
     payload: {
       approval: true
@@ -1364,10 +1364,10 @@ test("github execution routes fail closed when the approved branch diverges", as
         });
       }
 
-      if (url.pathname.startsWith("/repos/acme/widget/git/ref/heads%2Fmosaicstack%2Fgithub%2Fplan_")) {
+      if (url.pathname.startsWith("/repos/acme/widget/git/ref/heads%2Fmosaicstacked%2Fgithub%2Fplan_")) {
         return makeJsonResponse({
-          ref: "heads/mosaicstack/github/plan_1",
-          url: "https://api.github.com/repos/acme/widget/git/refs/heads/mosaicstack/github/plan_1",
+          ref: "heads/mosaicstacked/github/plan_1",
+          url: "https://api.github.com/repos/acme/widget/git/refs/heads/mosaicstacked/github/plan_1",
           object: {
             sha: "commit-sha-other",
             type: "commit"
@@ -1431,7 +1431,7 @@ test("github execution routes fail closed when the approved branch diverges", as
     method: "POST",
     url: `/api/github/actions/${planId}/execute`,
     headers: {
-      "x-mosaicstack-admin-key": TEST_ADMIN_KEY
+      "x-mosaicstacked-admin-key": TEST_ADMIN_KEY
     },
     payload: {
       approval: true
@@ -1443,7 +1443,7 @@ test("github execution routes fail closed when the approved branch diverges", as
     ok: false,
     error: {
       code: "github_branch_conflict",
-      message: `GitHub branch already exists with a different head: mosaicstack/github/${planId}`
+      message: `GitHub branch already exists with a different head: mosaicstacked/github/${planId}`
     }
   });
 });
@@ -1485,7 +1485,7 @@ test("github execution fails closed when routing metadata is missing for a non-s
     method: "POST",
     url: "/api/github/actions/plan_missing_routing/execute",
     headers: {
-      "x-mosaicstack-admin-key": TEST_ADMIN_KEY
+      "x-mosaicstacked-admin-key": TEST_ADMIN_KEY
     },
     payload: {
       approval: true
@@ -1600,7 +1600,7 @@ test("github execution fails closed for unsafe routing metadata and allows smoke
       method: "POST",
       url: `/api/github/actions/${item.planId}/execute`,
       headers: {
-        "x-mosaicstack-admin-key": TEST_ADMIN_KEY
+        "x-mosaicstacked-admin-key": TEST_ADMIN_KEY
       },
       payload: {
         approval: true
@@ -1621,7 +1621,7 @@ test("github execution fails closed for unsafe routing metadata and allows smoke
     method: "POST",
     url: "/api/github/actions/plan_smoke_without_routing/execute",
     headers: {
-      "x-mosaicstack-admin-key": TEST_ADMIN_KEY
+      "x-mosaicstacked-admin-key": TEST_ADMIN_KEY
     },
     payload: {
       approval: true
@@ -1672,7 +1672,7 @@ test("github execute returns 429 before GitHub writes when rate-limited", async 
     method: "POST",
     url: "/api/github/actions/plan_missing/execute",
     headers: {
-      "x-mosaicstack-admin-key": TEST_ADMIN_KEY
+      "x-mosaicstacked-admin-key": TEST_ADMIN_KEY
     },
     payload: {
       approval: true
@@ -1684,7 +1684,7 @@ test("github execute returns 429 before GitHub writes when rate-limited", async 
     method: "POST",
     url: "/api/github/actions/plan_rate_limit_execute/execute",
     headers: {
-      "x-mosaicstack-admin-key": TEST_ADMIN_KEY
+      "x-mosaicstacked-admin-key": TEST_ADMIN_KEY
     },
     payload: {
       approval: true

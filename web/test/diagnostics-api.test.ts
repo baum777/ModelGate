@@ -16,7 +16,7 @@ test("fetchDiagnostics returns safe diagnostics payload", async () => {
     new Response(
       JSON.stringify({
         ok: true,
-        service: "mosaicstack-test",
+        service: "mosaicstacked-test",
         runtimeMode: "local",
         diagnosticsGeneratedAt: "2026-04-24T10:00:00.000Z",
         processStartedAt: "2026-04-24T09:58:00.000Z",

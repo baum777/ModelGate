@@ -1,4 +1,4 @@
-# MosaicStack Operating Contract
+# MosaicStacked Operating Contract
 
 This repo is a backend-first console overlay.
 

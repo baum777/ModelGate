@@ -56,7 +56,7 @@ function readSetCookie(response: { headers: Record<string, unknown> }) {
 }
 
 function createTempStorePath() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstack-live-integration-auth-matrix-rotation-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstacked-live-integration-auth-matrix-rotation-"));
   return path.join(directory, "integration-auth-store.json");
 }
 

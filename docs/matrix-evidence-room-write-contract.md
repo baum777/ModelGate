@@ -70,13 +70,13 @@ Unknown event categories must be rejected before sending to Matrix.
 
 Evidence messages should be sent as Matrix `m.room.message` events with `msgtype: "m.notice"` by default.
 
-Each message must include a short human-readable `body` and a bounded machine-readable `mosaicstack.evidence` object.
+Each message must include a short human-readable `body` and a bounded machine-readable `mosaicstacked.evidence` object.
 
 ```json
 {
   "msgtype": "m.notice",
-  "body": "MosaicStack evidence: matrix_approval_record plan_123 approved",
-  "mosaicstack.evidence": {
+  "body": "MosaicStacked evidence: matrix_approval_record plan_123 approved",
+  "mosaicstacked.evidence": {
     "schemaVersion": 1,
     "eventType": "matrix_approval_record",
     "planId": "plan_123",
@@ -85,7 +85,7 @@ Each message must include a short human-readable `body` and a bounded machine-re
     "snapshotId": "snapshot_123",
     "actor": {
       "kind": "backend",
-      "id": "@mosaicstack-bot:server"
+      "id": "@mosaicstacked-bot:server"
     },
     "action": "matrix.topic.update",
     "status": "approved",

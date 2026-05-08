@@ -1,6 +1,6 @@
 # Settings Login Adapter Mapping
 
-This document maps the browser-safe access adapters in Settings for the open-source local MosaicStack console.
+This document maps the browser-safe access adapters in Settings for the open-source local MosaicStacked console.
 
 ## Current Repo Truth
 

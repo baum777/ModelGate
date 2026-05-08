@@ -10,7 +10,7 @@ import {
 import { createTestEnv } from "../test-support/helpers.js";
 
 function createTempStorePath() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstack-integration-auth-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstacked-integration-auth-"));
   return path.join(directory, "integration-auth-store.json");
 }
 
@@ -186,7 +186,7 @@ test("integration auth store selection maps relative Vercel file paths to writab
 
     assert.equal(
       selection.filePath,
-      path.join(os.tmpdir(), "mosaicstack", ".local-ai/state/integration-auth-store.json")
+      path.join(os.tmpdir(), "mosaicstacked", ".local-ai/state/integration-auth-store.json")
     );
   } finally {
     if (previousVercel === undefined) {

@@ -1,6 +1,6 @@
 # Model Routing Contract
 
-This document describes the current backend-owned model routing surface in MosaicStack.
+This document describes the current backend-owned model routing surface in MosaicStacked.
 
 ## Objective
 

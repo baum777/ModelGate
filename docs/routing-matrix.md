@@ -1,4 +1,4 @@
-# MosaicStack Routing Matrix
+# MosaicStacked Routing Matrix
 
 Status: source of truth for browser path, Vercel adapter, and server route ownership.
 
@@ -42,7 +42,7 @@ Security copy:
 
 - Route contract tests live in `server/test/vercel-config.test.ts` and `server/test/vercel-handler.test.ts`.
 - Browser upstream boundary tests live in `web/test/browser-upstream-boundary.test.ts`.
-- Browser flow tests for console URL state and route ownership copy live in `tests/browser/mosaicstack.spec.ts`.
+- Browser flow tests for console URL state and route ownership copy live in `tests/browser/mosaicstacked.spec.ts`.
 - Opt-in live rotation smoke for GitHub integration auth credentials lives in `tests/live/integration-auth-rotation-live.test.ts` and is run via `npm run test:integration-auth-rotation-live`.
 - Opt-in live rotation smoke for Matrix integration auth credentials lives in `tests/live/integration-auth-rotation-live-matrix.test.ts` and is run via `npm run test:integration-auth-rotation-live:matrix`.
 

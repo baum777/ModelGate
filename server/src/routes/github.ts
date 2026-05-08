@@ -50,9 +50,9 @@ type GitHubRouteDependencies = {
   runtimeJournal: RuntimeJournal;
 };
 
-const GITHUB_ADMIN_KEY_HEADER = "x-mosaicstack-admin-key";
-const INTEGRATION_SESSION_COOKIE = "mosaicstack_integration_session";
-const DEFAULT_SMOKE_BRANCH_PREFIX = "mosaicstack/github-smoke";
+const GITHUB_ADMIN_KEY_HEADER = "x-mosaicstacked-admin-key";
+const INTEGRATION_SESSION_COOKIE = "mosaicstacked_integration_session";
+const DEFAULT_SMOKE_BRANCH_PREFIX = "mosaicstacked/github-smoke";
 type GitHubCredentialSource = "user_connected" | "instance_config";
 type GitHubResolvedClient = {
   client: GitHubClient;
@@ -788,7 +788,7 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
                 resolvedClient.client.readRepositorySummary(proposalRequest.repo.owner, proposalRequest.repo.repo),
                 resolvedClient.client.readRepositoryCommit(proposalRequest.repo.owner, proposalRequest.repo.repo, baseRef)
               ]).then(async ([repoSummary, baseCommit]) => {
-                const smokePath = "docs/mosaicstack-smoke.md";
+                const smokePath = "docs/mosaicstacked-smoke.md";
                 const files: Array<{
                   path: string;
                   sha: string;

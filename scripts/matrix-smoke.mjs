@@ -73,7 +73,7 @@ function normalizeBackendBaseUrl(env) {
 function normalizeTopicPrefix(value) {
   const prefix = String(value ?? "").replace(/\s+/g, " ").trim();
 
-  return prefix || "MosaicStack smoke";
+  return prefix || "MosaicStacked smoke";
 }
 
 function buildSmokeTopic(prefix, now = new Date(), randomSuffix = randomBytes(4).toString("hex")) {

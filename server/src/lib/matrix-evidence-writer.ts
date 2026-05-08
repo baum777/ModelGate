@@ -42,7 +42,7 @@ export type MatrixEvidenceInput = {
 export type MatrixEvidenceMessage = {
   msgtype: "m.notice";
   body: string;
-  "mosaicstack.evidence": {
+  "mosaicstacked.evidence": {
     schemaVersion: 1;
     eventType: MatrixEvidenceEventType;
     planId: string;
@@ -215,7 +215,7 @@ function targetForEvent(config: MatrixConfig, eventType: MatrixEvidenceEventType
 function compactMessageBody(message: MatrixEvidenceMessage) {
   return [
     message.body,
-    JSON.stringify(message["mosaicstack.evidence"])
+    JSON.stringify(message["mosaicstacked.evidence"])
   ].join("\n");
 }
 
@@ -286,8 +286,8 @@ export function buildMatrixEvidenceMessage(input: MatrixEvidenceInput): MatrixEv
 
   return {
     msgtype: "m.notice",
-    body: `MosaicStack evidence: ${input.eventType} ${evidence.planId} ${safeStatus}`,
-    "mosaicstack.evidence": evidence
+    body: `MosaicStacked evidence: ${input.eventType} ${evidence.planId} ${safeStatus}`,
+    "mosaicstacked.evidence": evidence
   };
 }
 

@@ -427,7 +427,7 @@ const EN_COPY: LocalizationCopy = {
   },
   shell: {
     appKicker: "MOSAICSTACK",
-    appTitle: "MosaicStack Console",
+    appTitle: "MosaicStacked Console",
     appDeck: "Governance-first operator shell.",
     workspaceConsoleKicker: "WORKSPACE CONSOLE",
     workspaceConsoleTitle: "Choose workspace",
@@ -814,7 +814,7 @@ const DE_COPY: LocalizationCopy = {
   },
   shell: {
     appKicker: "MOSAICSTACK",
-    appTitle: "MosaicStack Konsole",
+    appTitle: "MosaicStacked Konsole",
     appDeck: "Governance-first Operator-Shell.",
     workspaceConsoleKicker: "WORKSPACE CONSOLE",
     workspaceConsoleTitle: "Arbeitsbereich wählen",
@@ -1215,7 +1215,7 @@ function writeStoredLocale(locale: Locale) {
   }
 }
 
-export const LOCALE_STORAGE_KEY = "mosaicstack.console.locale.v1";
+export const LOCALE_STORAGE_KEY = "mosaicstacked.console.locale.v1";
 
 export function normalizeLocale(value: string | null | undefined): Locale {
   return value?.toLowerCase().startsWith("de") ? "de" : "en";

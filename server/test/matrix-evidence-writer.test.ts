@@ -56,9 +56,9 @@ test("matrix evidence message redacts sensitive-looking fields and bounds topic 
   assert.doesNotMatch(serialized, /secret-token/);
   assert.doesNotMatch(serialized, /refresh-secret/);
   assert.doesNotMatch(serialized, /MATRIX_ACCESS_TOKEN/);
-  assert.ok(message["mosaicstack.evidence"].before.preview.length <= 180);
-  assert.ok(message["mosaicstack.evidence"].after.preview.length <= 180);
-  assert.deepEqual(message["mosaicstack.evidence"].redactionPolicy.secrets, "excluded");
+  assert.ok(message["mosaicstacked.evidence"].before.preview.length <= 180);
+  assert.ok(message["mosaicstacked.evidence"].after.preview.length <= 180);
+  assert.deepEqual(message["mosaicstacked.evidence"].redactionPolicy.secrets, "excluded");
 });
 
 test("matrix evidence writer records runtime journal gaps when optional evidence write fails", async () => {

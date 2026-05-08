@@ -1,12 +1,12 @@
-# MosaicStack
+# MosaicStacked
 
-MosaicStack is a community-first, model-agnostic interface for working with your own repository, your own setup, and a shared Matrix-based knowledge space.
+MosaicStacked is a community-first, model-agnostic interface for working with your own repository, your own setup, and a shared Matrix-based knowledge space.
 
 It is meant to be read first as a GitHub project viewer: what the project is for, what it connects, what is implemented, and what still remains contract-only.
 
 ## What It Is
 
-MosaicStack is an individualized multi-layer interface for people who want to use AI models without turning one provider, one UI, or one private workflow into the source of truth.
+MosaicStacked is an individualized multi-layer interface for people who want to use AI models without turning one provider, one UI, or one private workflow into the source of truth.
 
 The project connects three layers:
 
@@ -18,7 +18,7 @@ The long-term direction is a community-first workspace where individuals can pre
 
 ## Why It Exists
 
-Most AI tooling is either provider-first, chat-first, or too developer-centered. MosaicStack starts from a different assumption:
+Most AI tooling is either provider-first, chat-first, or too developer-centered. MosaicStacked starts from a different assumption:
 
 - users should be able to connect their own repo and inspect work in GitHub terms,
 - model choice should stay behind a stable public interface instead of becoming UI truth,
@@ -27,7 +27,7 @@ Most AI tooling is either provider-first, chat-first, or too developer-centered.
 
 ## Current Product Shape
 
-MosaicStack is currently a backend-first console overlay with a browser UI.
+MosaicStacked is currently a backend-first console overlay with a browser UI.
 
 The browser renders results, keeps local UI state, and sends approval intent. The backend owns provider calls, model routing, GitHub reads/writes, Matrix credentials, SSE framing, and execution truth.
 
@@ -119,7 +119,7 @@ Set `OPENROUTER_API_KEY` in `.env`.
 Optional integrations:
 
 - GitHub routes require `GITHUB_TOKEN` and `GITHUB_ALLOWED_REPOS`.
-- Approval-gated GitHub execute also requires `GITHUB_AGENT_API_KEY`, sent only as `X-MosaicStack-Admin-Key` from trusted server-side callers.
+- Approval-gated GitHub execute also requires `GITHUB_AGENT_API_KEY`, sent only as `X-MosaicStacked-Admin-Key` from trusted server-side callers.
 - Matrix routes require `MATRIX_ENABLED=true`, `MATRIX_BASE_URL`, and `MATRIX_ACCESS_TOKEN`.
 
 Run backend and browser:
@@ -133,7 +133,7 @@ The backend reads the repo-root `.env`. The browser reads `web/.env` only for br
 
 ## Deployment
 
-MosaicStack is deployed as a Vite frontend plus a single Node serverless entrypoint.
+MosaicStacked is deployed as a Vite frontend plus a single Node serverless entrypoint.
 
 - Vercel project root: repository root
 - Build command: `npm run build`

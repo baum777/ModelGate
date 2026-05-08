@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 const HEALTH_OK = {
   ok: true,
-  service: "mosaicstack-test",
+  service: "mosaicstacked-test",
   mode: "local",
   upstream: "openrouter",
   defaultModel: "default",
@@ -21,7 +21,7 @@ const MODELS_OK = {
 
 const DIAGNOSTICS_OK = {
   ok: true,
-  service: "mosaicstack-test",
+  service: "mosaicstacked-test",
   runtimeMode: "local",
   diagnosticsGeneratedAt: "2026-04-30T12:00:00.000Z",
   processStartedAt: "2026-04-30T11:58:00.000Z",

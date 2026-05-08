@@ -1,4 +1,4 @@
-# MosaicStack Console Implementation Plan
+# MosaicStacked Console Implementation Plan
 
 ## Objective
 

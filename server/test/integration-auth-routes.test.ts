@@ -13,7 +13,7 @@ const TEST_ENCRYPTION_KEY = {
 };
 
 function createTempStorePath() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstack-integration-auth-routes-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstacked-integration-auth-routes-"));
   return path.join(directory, "integration-auth-store.json");
 }
 

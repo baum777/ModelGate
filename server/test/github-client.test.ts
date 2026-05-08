@@ -194,10 +194,10 @@ test("github client normalizes branch, commit, tree, and pull request write prim
       calls.push(`${url.pathname}${url.search}`);
       assert.equal(new Headers(init?.headers).get("Authorization"), "Bearer test-github-token");
 
-      if (url.pathname === "/repos/acme/widget/git/ref/heads%2Fmosaicstack%2Fgithub%2Fplan_1" && (init?.method ?? "GET") === "GET") {
+      if (url.pathname === "/repos/acme/widget/git/ref/heads%2Fmosaicstacked%2Fgithub%2Fplan_1" && (init?.method ?? "GET") === "GET") {
         return makeJsonResponse({
-          ref: "heads/mosaicstack/github/plan_1",
-          url: "https://api.github.com/repos/acme/widget/git/refs/heads/mosaicstack/github/plan_1",
+          ref: "heads/mosaicstacked/github/plan_1",
+          url: "https://api.github.com/repos/acme/widget/git/refs/heads/mosaicstacked/github/plan_1",
           object: {
             sha: "commit-sha-existing",
             type: "commit"
@@ -205,10 +205,10 @@ test("github client normalizes branch, commit, tree, and pull request write prim
         });
       }
 
-      if (url.pathname === "/repos/acme/widget/git/refs/heads%2Fmosaicstack%2Fgithub%2Fplan_1" && (init?.method ?? "GET") === "PATCH") {
+      if (url.pathname === "/repos/acme/widget/git/refs/heads%2Fmosaicstacked%2Fgithub%2Fplan_1" && (init?.method ?? "GET") === "PATCH") {
         return makeJsonResponse({
-          ref: "refs/heads/mosaicstack/github/plan_1",
-          url: "https://api.github.com/repos/acme/widget/git/refs/heads/mosaicstack/github/plan_1",
+          ref: "refs/heads/mosaicstacked/github/plan_1",
+          url: "https://api.github.com/repos/acme/widget/git/refs/heads/mosaicstacked/github/plan_1",
           object: {
             sha: "commit-sha-write",
             type: "commit"
@@ -246,11 +246,11 @@ test("github client normalizes branch, commit, tree, and pull request write prim
           committer: { name: string; email: string; date: string };
         };
 
-        assert.equal(body.message, "MosaicStack plan plan_1");
+        assert.equal(body.message, "MosaicStacked plan plan_1");
         assert.equal(body.tree, "tree-sha-write");
         assert.deepEqual(body.parents, ["commit-sha-base"]);
-        assert.equal(body.author.name, "MosaicStack");
-        assert.equal(body.committer.email, "mosaicstack@users.noreply.github.com");
+        assert.equal(body.author.name, "MosaicStacked");
+        assert.equal(body.committer.email, "mosaicstacked@users.noreply.github.com");
 
         return makeJsonResponse({
           sha: "commit-sha-write",
@@ -263,12 +263,12 @@ test("github client normalizes branch, commit, tree, and pull request write prim
       if (url.pathname === "/repos/acme/widget/git/refs" && (init?.method ?? "GET") === "POST") {
         const body = JSON.parse(String(init?.body ?? "{}")) as { ref: string; sha: string };
 
-        assert.equal(body.ref, "refs/heads/mosaicstack/github/plan_1");
+        assert.equal(body.ref, "refs/heads/mosaicstacked/github/plan_1");
         assert.equal(body.sha, "commit-sha-write");
 
         return makeJsonResponse({
-          ref: "refs/heads/mosaicstack/github/plan_1",
-          url: "https://api.github.com/repos/acme/widget/git/refs/heads/mosaicstack/github/plan_1",
+          ref: "refs/heads/mosaicstacked/github/plan_1",
+          url: "https://api.github.com/repos/acme/widget/git/refs/heads/mosaicstacked/github/plan_1",
           object: {
             sha: "commit-sha-write",
             type: "commit"
@@ -278,7 +278,7 @@ test("github client normalizes branch, commit, tree, and pull request write prim
 
       if (url.pathname === "/repos/acme/widget/pulls" && (init?.method ?? "GET") === "GET") {
         assert.equal(url.searchParams.get("state"), "all");
-        assert.equal(url.searchParams.get("head"), "acme:mosaicstack/github/plan_1");
+        assert.equal(url.searchParams.get("head"), "acme:mosaicstacked/github/plan_1");
         assert.equal(url.searchParams.get("base"), "main");
         assert.equal(url.searchParams.get("per_page"), "10");
         assert.equal(url.searchParams.get("page"), "1");
@@ -296,8 +296,8 @@ test("github client normalizes branch, commit, tree, and pull request write prim
           maintainer_can_modify: boolean;
         };
 
-        assert.equal(body.title, "MosaicStack plan plan_1");
-        assert.equal(body.head, "mosaicstack/github/plan_1");
+        assert.equal(body.title, "MosaicStacked plan plan_1");
+        assert.equal(body.head, "mosaicstacked/github/plan_1");
         assert.equal(body.base, "main");
         assert.equal(body.draft, false);
         assert.equal(body.maintainer_can_modify, true);
@@ -307,7 +307,7 @@ test("github client normalizes branch, commit, tree, and pull request write prim
           html_url: "https://github.com/acme/widget/pull/12",
           state: "open",
           head: {
-            ref: "mosaicstack/github/plan_1",
+            ref: "mosaicstacked/github/plan_1",
             sha: "commit-sha-write"
           },
           base: {
@@ -316,8 +316,8 @@ test("github client normalizes branch, commit, tree, and pull request write prim
           },
           mergeable: true,
           draft: false,
-          title: "MosaicStack plan plan_1",
-          body: "MosaicStack approval-gated proposal"
+          title: "MosaicStacked plan plan_1",
+          body: "MosaicStacked approval-gated proposal"
         });
       }
 
@@ -325,11 +325,11 @@ test("github client normalizes branch, commit, tree, and pull request write prim
     }
   });
 
-  const reference = await client.readRepositoryReference("acme", "widget", "heads/mosaicstack/github/plan_1");
+  const reference = await client.readRepositoryReference("acme", "widget", "heads/mosaicstacked/github/plan_1");
   assert.deepEqual(reference, {
-    ref: "heads/mosaicstack/github/plan_1",
+    ref: "heads/mosaicstacked/github/plan_1",
     sha: "commit-sha-existing",
-    url: "https://api.github.com/repos/acme/widget/git/refs/heads/mosaicstack/github/plan_1",
+    url: "https://api.github.com/repos/acme/widget/git/refs/heads/mosaicstacked/github/plan_1",
     objectType: "commit"
   });
 
@@ -348,17 +348,17 @@ test("github client normalizes branch, commit, tree, and pull request write prim
   });
 
   const commit = await client.createRepositoryCommit("acme", "widget", {
-    message: "MosaicStack plan plan_1",
+    message: "MosaicStacked plan plan_1",
     treeSha: "tree-sha-write",
     parentShas: ["commit-sha-base"],
     author: {
-      name: "MosaicStack",
-      email: "mosaicstack@users.noreply.github.com",
+      name: "MosaicStacked",
+      email: "mosaicstacked@users.noreply.github.com",
       date: "2026-04-16T00:00:00.000Z"
     },
     committer: {
-      name: "MosaicStack",
-      email: "mosaicstack@users.noreply.github.com",
+      name: "MosaicStacked",
+      email: "mosaicstacked@users.noreply.github.com",
       date: "2026-04-16T00:00:00.000Z"
     }
   });
@@ -367,25 +367,25 @@ test("github client normalizes branch, commit, tree, and pull request write prim
     treeSha: "tree-sha-write"
   });
 
-  const createdReference = await client.createRepositoryReference("acme", "widget", "heads/mosaicstack/github/plan_1", "commit-sha-write");
+  const createdReference = await client.createRepositoryReference("acme", "widget", "heads/mosaicstacked/github/plan_1", "commit-sha-write");
   assert.deepEqual(createdReference, {
-    ref: "refs/heads/mosaicstack/github/plan_1",
+    ref: "refs/heads/mosaicstacked/github/plan_1",
     sha: "commit-sha-write",
-    url: "https://api.github.com/repos/acme/widget/git/refs/heads/mosaicstack/github/plan_1",
+    url: "https://api.github.com/repos/acme/widget/git/refs/heads/mosaicstacked/github/plan_1",
     objectType: "commit"
   });
 
-  const updatedReference = await client.updateRepositoryReference("acme", "widget", "heads/mosaicstack/github/plan_1", "commit-sha-write");
+  const updatedReference = await client.updateRepositoryReference("acme", "widget", "heads/mosaicstacked/github/plan_1", "commit-sha-write");
   assert.deepEqual(updatedReference, {
-    ref: "refs/heads/mosaicstack/github/plan_1",
+    ref: "refs/heads/mosaicstacked/github/plan_1",
     sha: "commit-sha-write",
-    url: "https://api.github.com/repos/acme/widget/git/refs/heads/mosaicstack/github/plan_1",
+    url: "https://api.github.com/repos/acme/widget/git/refs/heads/mosaicstacked/github/plan_1",
     objectType: "commit"
   });
 
   const pullRequests = await client.listPullRequests("acme", "widget", {
     state: "all",
-    head: "acme:mosaicstack/github/plan_1",
+    head: "acme:mosaicstacked/github/plan_1",
     base: "main",
     perPage: 10,
     page: 1
@@ -393,10 +393,10 @@ test("github client normalizes branch, commit, tree, and pull request write prim
   assert.deepEqual(pullRequests, []);
 
   const pullRequest = await client.createPullRequest("acme", "widget", {
-    title: "MosaicStack plan plan_1",
-    head: "mosaicstack/github/plan_1",
+    title: "MosaicStacked plan plan_1",
+    head: "mosaicstacked/github/plan_1",
     base: "main",
-    body: "MosaicStack approval-gated proposal",
+    body: "MosaicStacked approval-gated proposal",
     draft: false,
     maintainerCanModify: true
   });
@@ -404,14 +404,14 @@ test("github client normalizes branch, commit, tree, and pull request write prim
     number: 12,
     htmlUrl: "https://github.com/acme/widget/pull/12",
     state: "open",
-    headRef: "mosaicstack/github/plan_1",
+    headRef: "mosaicstacked/github/plan_1",
     headSha: "commit-sha-write",
     baseRef: "main",
     baseSha: "commit-sha-base",
     mergeable: true,
     draft: false,
-    title: "MosaicStack plan plan_1",
-    body: "MosaicStack approval-gated proposal",
+    title: "MosaicStacked plan plan_1",
+    body: "MosaicStacked approval-gated proposal",
     createdAt: null,
     updatedAt: null,
     mergeCommitSha: null,
@@ -419,12 +419,12 @@ test("github client normalizes branch, commit, tree, and pull request write prim
   });
 
   assert.deepEqual(calls, [
-    "/repos/acme/widget/git/ref/heads%2Fmosaicstack%2Fgithub%2Fplan_1",
+    "/repos/acme/widget/git/ref/heads%2Fmosaicstacked%2Fgithub%2Fplan_1",
     "/repos/acme/widget/git/trees",
     "/repos/acme/widget/git/commits",
     "/repos/acme/widget/git/refs",
-    "/repos/acme/widget/git/refs/heads%2Fmosaicstack%2Fgithub%2Fplan_1",
-    "/repos/acme/widget/pulls?state=all&head=acme%3Amosaicstack%2Fgithub%2Fplan_1&base=main&per_page=10&page=1",
+    "/repos/acme/widget/git/refs/heads%2Fmosaicstacked%2Fgithub%2Fplan_1",
+    "/repos/acme/widget/pulls?state=all&head=acme%3Amosaicstacked%2Fgithub%2Fplan_1&base=main&per_page=10&page=1",
     "/repos/acme/widget/pulls"
   ]);
 });

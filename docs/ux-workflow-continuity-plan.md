@@ -2,7 +2,7 @@
 
 ## Scope
 
-This plan covers the next MosaicStack UI workflow slice after Settings connection verification.
+This plan covers the next MosaicStacked UI workflow slice after Settings connection verification.
 
 Goals:
 
@@ -40,7 +40,7 @@ Relevant existing paths:
   - defines `GitHubContextBundle`, `GitHubChangePlan`, and diff/file types
 - `web/src/lib/localization.tsx`
   - central copy surface for EN/DE labels
-- `tests/browser/mosaicstack.spec.ts`
+- `tests/browser/mosaicstacked.spec.ts`
   - browser workflow coverage for Chat, GitHub, Matrix, Review, and Settings
 - `web/test/workspace-state.test.ts`
   - persistence and normalization coverage
@@ -76,7 +76,7 @@ Target files:
   - keep it local-state-labeled, not backend truth
 - `web/src/lib/localization.tsx`
   - add EN/DE labels for pin action, pinned context banner, clear action, and local-state disclaimer
-- `tests/browser/mosaicstack.spec.ts`
+- `tests/browser/mosaicstacked.spec.ts`
   - cover GitHub analysis/proposal -> pin -> Chat banner visible -> chat request includes bounded context
 - `web/test/workspace-state.test.ts`
   - add only if pinned context is persisted
@@ -125,7 +125,7 @@ Target files:
   - use `window.confirm` for the smallest safe MVP, or show an inline confirmation state if avoiding blocking browser dialogs
 - `web/src/lib/localization.tsx`
   - add EN/DE warning and confirm copy
-- `tests/browser/mosaicstack.spec.ts`
+- `tests/browser/mosaicstacked.spec.ts`
   - cover proposal created -> banner visible
   - cover attempted navigation -> warning path
   - cover executed/verified result -> warning cleared
@@ -162,7 +162,7 @@ Target files:
   - add stable strip layout with no text overlap on mobile
 - `web/test/chat-workflow.test.ts`
   - likely no reducer change needed unless a new view-model helper is added
-- `tests/browser/mosaicstack.spec.ts`
+- `tests/browser/mosaicstacked.spec.ts`
   - cover strip renders before prompt
   - cover fallback badge updates after mocked route metadata
   - cover no provider target or secret appears in DOM
@@ -197,7 +197,7 @@ For each implementation slice:
 ```bash
 npm run typecheck:web
 npm test
-npm run test:browser -- tests/browser/mosaicstack.spec.ts
+npm run test:browser -- tests/browser/mosaicstacked.spec.ts
 ```
 
 Additional checks:
