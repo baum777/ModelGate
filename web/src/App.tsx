@@ -223,6 +223,8 @@ function appendTelemetry(current: TelemetryEntry[], entry: TelemetryEntry) {
 }
 
 const WORKSPACE_MODES: WorkspaceMode[] = ["chat", "github", "matrix", "review", "settings"];
+const MOBILE_NAV_MODES: WorkspaceMode[] = ["chat", "github", "matrix"];
+const MOBILE_BREAKPOINT_QUERY = "(max-width: 760px)";
 
 function WorkspaceIcon({ mode }: { mode: WorkspaceMode }) {
   switch (mode) {
@@ -270,6 +272,16 @@ function WorkspaceIcon({ mode }: { mode: WorkspaceMode }) {
         </svg>
       );
   }
+}
+
+function MobileContextIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M4 7.5h16" />
+      <path d="M4 12h16" />
+      <path d="M4 16.5h16" />
+    </svg>
+  );
 }
 
 function BeginnerExpertToggle({
@@ -367,6 +379,36 @@ function useTheme() {
   };
 }
 
+function useIsMobileViewport() {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return false;
+    }
+
+    return window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const media = window.matchMedia(MOBILE_BREAKPOINT_QUERY);
+    const onChange = (event: MediaQueryListEvent) => {
+      setIsMobile(event.matches);
+    };
+
+    setIsMobile(media.matches);
+    media.addEventListener("change", onChange);
+
+    return () => {
+      media.removeEventListener("change", onChange);
+    };
+  }, []);
+
+  return isMobile;
+}
+
 function PublicPreview() {
   return (
     <main className="app-shell public-preview" data-testid="public-preview">
@@ -412,6 +454,7 @@ function ConsoleShell() {
   const persisted = readPersistedShellState();
   const { locale, setLocale, copy: ui } = useLocalization();
   const { theme, toggleTheme } = useTheme();
+  const isMobileViewport = useIsMobileViewport();
   const appText = useMemo(
     () => locale === "de"
       ? {
@@ -562,8 +605,11 @@ function ConsoleShell() {
   const [pinnedChatContext, setPinnedChatContext] = useState<PinnedChatContext | null>(null);
   const [githubReviewDirty, setGitHubReviewDirty] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [mobileContextOpen, setMobileContextOpen] = useState(false);
   const workspaceSaveHandleRef = useRef<number | null>(null);
   const latestWorkspaceStateRef = useRef(workspaceState);
+  const mobileSettingsLongPressRef = useRef<number | null>(null);
+  const mobileSettingsLongPressTriggeredRef = useRef(false);
   const flushWorkspaceState = useCallback(() => {
     if (workspaceSaveHandleRef.current !== null) {
       globalThis.clearTimeout(workspaceSaveHandleRef.current);
@@ -759,6 +805,16 @@ function ConsoleShell() {
     setDiagnosticsOpen(false);
   }, [mode]);
 
+  useEffect(() => {
+    setMobileContextOpen(false);
+  }, [mode]);
+
+  useEffect(() => {
+    if (!isMobileViewport) {
+      setMobileContextOpen(false);
+    }
+  }, [isMobileViewport]);
+
   useEffect(() => scheduleWorkspacePreload(() => {
     void Promise.all([
       loadChatWorkspace(),
@@ -768,6 +824,7 @@ function ConsoleShell() {
       loadSettingsWorkspace(),
     ]);
   }), []);
+
 
   const recordTelemetry = useCallback(
     (kind: TelemetryEntry["kind"], label: string, detail?: string) => {
@@ -820,6 +877,48 @@ function ConsoleShell() {
     }
   }, [githubReviewDirty, mode, ui.github.reviewDirtyConfirmNavigation]);
 
+  const handleMobileNavSelect = useCallback((nextMode: WorkspaceMode) => {
+    setMobileContextOpen(false);
+    handleWorkspaceTabSelect(nextMode);
+  }, [handleWorkspaceTabSelect]);
+
+  const handleMobileContextToggle = useCallback(() => {
+    setMobileContextOpen((current) => !current);
+  }, []);
+
+  const handleMobileBrandPointerDown = useCallback(() => {
+    if (!isMobileViewport) {
+      return;
+    }
+
+    mobileSettingsLongPressTriggeredRef.current = false;
+    mobileSettingsLongPressRef.current = globalThis.setTimeout(() => {
+      mobileSettingsLongPressTriggeredRef.current = true;
+      setMobileContextOpen(false);
+      handleWorkspaceTabSelect("settings");
+    }, 650);
+  }, [handleWorkspaceTabSelect, isMobileViewport]);
+
+  const clearMobileBrandLongPress = useCallback(() => {
+    if (mobileSettingsLongPressRef.current !== null) {
+      globalThis.clearTimeout(mobileSettingsLongPressRef.current);
+      mobileSettingsLongPressRef.current = null;
+    }
+  }, []);
+
+  const handleMobileBrandClick = useCallback(() => {
+    if (mobileSettingsLongPressTriggeredRef.current) {
+      mobileSettingsLongPressTriggeredRef.current = false;
+      return;
+    }
+
+    handleWorkspaceTabSelect("chat");
+  }, [handleWorkspaceTabSelect]);
+
+  useEffect(() => () => {
+    clearMobileBrandLongPress();
+  }, [clearMobileBrandLongPress]);
+
   const handlePinChatContext = useCallback((context: PinnedChatContext) => {
     setPinnedChatContext(context);
     setMode("chat");
@@ -832,6 +931,82 @@ function ConsoleShell() {
   const handleClearPinnedChatContext = useCallback(() => {
     setPinnedChatContext(null);
   }, []);
+
+  const handleQueueMatrixDraftFromChat = useCallback((payload: {
+    sourceMessageId: string;
+    roomId: string;
+    content: string;
+    tags: string[];
+  }) => {
+    const roomId = payload.roomId.trim();
+    const content = payload.content.trim();
+    if (!roomId || !content) {
+      return;
+    }
+
+    const tagsLine = payload.tags.length > 0
+      ? `\n\n${payload.tags.map((tag) => `#${tag}`).join(" ")}`
+      : "";
+    const draftContent = `${content}${tagsLine}`;
+    const now = nowIso();
+
+    setMode("matrix");
+    setWorkspaceState((current) => {
+      const sessionId = current.activeSessionIdByWorkspace.matrix;
+      const withDraft = updateSession<MatrixSession["metadata"]>(
+        current,
+        "matrix",
+        sessionId,
+        (session) => ({
+          ...session,
+          updatedAt: now,
+          lastOpenedAt: now,
+          metadata: {
+            ...session.metadata,
+            roomId,
+            composerMode: "post",
+            composerTarget: {
+              kind: "post",
+              roomId,
+              postId: null,
+              threadRootId: null,
+              previewLabel: `${locale === "de" ? "Beitrag" : "Post"}: ${roomId}`,
+            },
+            selectedEventId: null,
+            selectedThreadRootId: null,
+            draftContent,
+            lastActionResult: locale === "de"
+              ? "Entwurf aus Chat übernommen."
+              : "Draft adopted from chat.",
+          },
+        }),
+      );
+
+      return selectSession(withDraft, "matrix", sessionId);
+    });
+
+    recordTelemetry(
+      "info",
+      locale === "de" ? "Matrix-Entwurf vorbereitet" : "Matrix draft prepared",
+      `${payload.sourceMessageId} -> ${roomId}`,
+    );
+  }, [locale, recordTelemetry]);
+
+  const handleOpenGitHubFromChatAction = useCallback((payload: {
+    sourceMessageId: string;
+    content: string;
+  }) => {
+    setMode("github");
+    setWorkspaceState((current) => {
+      const sessionId = current.activeSessionIdByWorkspace.github;
+      return selectSession(current, "github", sessionId);
+    });
+    recordTelemetry(
+      "info",
+      locale === "de" ? "GitHub-Dispatch geöffnet" : "GitHub dispatch opened",
+      `${payload.sourceMessageId} (${payload.content.length} chars)`,
+    );
+  }, [locale, recordTelemetry]);
 
   const handleWorkspaceSessionCreate = useCallback((workspace: WorkspaceKind) => {
     const now = nowIso();
@@ -1093,6 +1268,32 @@ function ConsoleShell() {
   const chatSession = (workspaceState.sessionsByWorkspace.chat.find((session) => session.id === workspaceState.activeSessionIdByWorkspace.chat) ?? workspaceState.sessionsByWorkspace.chat[0]) as ChatSession;
   const githubSession = (workspaceState.sessionsByWorkspace.github.find((session) => session.id === workspaceState.activeSessionIdByWorkspace.github) ?? workspaceState.sessionsByWorkspace.github[0]) as GitHubSession;
   const matrixSession = (workspaceState.sessionsByWorkspace.matrix.find((session) => session.id === workspaceState.activeSessionIdByWorkspace.matrix) ?? workspaceState.sessionsByWorkspace.matrix[0]) as MatrixSession;
+  const matrixDraftDefaultRoomId = matrixSession?.metadata.roomId?.trim()
+    || matrixSession?.metadata.topicRoomId?.trim()
+    || matrixSession?.metadata.selectedRoomIds[0]?.trim()
+    || null;
+  const matrixDraftRoomOptions = useMemo(() => {
+    const candidates = [
+      matrixSession?.metadata.roomId,
+      matrixSession?.metadata.topicRoomId,
+      matrixSession?.metadata.provenanceRoomId,
+      ...(matrixSession?.metadata.selectedRoomIds ?? []),
+    ];
+    const next: string[] = [];
+    for (const value of candidates) {
+      const trimmed = value?.trim();
+      if (!trimmed || next.includes(trimmed)) {
+        continue;
+      }
+      next.push(trimmed);
+    }
+    return next;
+  }, [
+    matrixSession?.metadata.provenanceRoomId,
+    matrixSession?.metadata.roomId,
+    matrixSession?.metadata.selectedRoomIds,
+    matrixSession?.metadata.topicRoomId,
+  ]);
 
   const chatPendingProposal = chatSession?.metadata.chatState.pendingProposal ?? null;
   const chatLatestReceipt = chatSession?.metadata.chatState.receipts.at(-1) ?? null;
@@ -1883,6 +2084,10 @@ function ConsoleShell() {
       onSessionChange={handleChatSessionChange}
       pinnedContext={pinnedChatContext}
       onClearPinnedContext={handleClearPinnedChatContext}
+      matrixDraftDefaultRoomId={matrixDraftDefaultRoomId}
+      matrixDraftRoomOptions={matrixDraftRoomOptions}
+      onQueueMatrixDraft={handleQueueMatrixDraftFromChat}
+      onOpenGitHubFromChatAction={handleOpenGitHubFromChatAction}
     />
   ) : mode === "github" ? (
     <GitHubWorkspace
@@ -1938,6 +2143,172 @@ function ConsoleShell() {
     />
   );
   const statusToneForBadge = currentStatusTone === "error" ? "error" : currentStatusTone === "ready" ? "ready" : "partial";
+  const activeMobileNav = mode === "chat" || mode === "github" || mode === "matrix" ? mode : "context";
+  const repoChipLabel = githubSession?.metadata.selectedRepoFullName || ui.github.noRepoSelected;
+  const branchChipLabel = githubContext.expertDetails.branchName ?? ui.common.na;
+  const commitChipLabel = githubSession?.metadata.proposalPlan?.baseSha?.slice(0, 6)
+    ?? githubSession?.metadata.analysisBundle?.baseSha?.slice(0, 6)
+    ?? ui.common.na;
+  const streamCounterLabel = runtimeDiagnostics
+    ? String(runtimeDiagnostics.counters.chatStreamStarted)
+    : ui.common.loading;
+  const showRouteOwnershipContext = mode === "github" || mode === "matrix";
+
+  if (isMobileViewport) {
+    return (
+      <main className="app-shell app-shell-console app-shell-mobile" data-testid="app-shell">
+        <header className="mobile-topbar">
+          <button
+            type="button"
+            className="mobile-brand-button"
+            onPointerDown={handleMobileBrandPointerDown}
+            onPointerUp={clearMobileBrandLongPress}
+            onPointerCancel={clearMobileBrandLongPress}
+            onPointerLeave={clearMobileBrandLongPress}
+            onClick={handleMobileBrandClick}
+            aria-label={locale === "de" ? "Zur Chat-Ansicht wechseln. Lange drücken für Einstellungen." : "Switch to chat. Long press for settings."}
+          >
+            <span className="mosaicstacked-mark" aria-hidden="true" />
+            <span>{ui.shell.appTitle}</span>
+          </button>
+
+          <div className="mobile-topbar-actions">
+            <button
+              type="button"
+              className="secondary-button mobile-model-badge"
+              onClick={() => handleWorkspaceTabSelect("settings")}
+              aria-label={locale === "de" ? "Modelleinstellungen öffnen" : "Open model settings"}
+            >
+              {activeModelAlias ?? ui.common.na}
+            </button>
+            <span className={`mobile-live-indicator mobile-live-indicator-${healthState.tone}`} aria-hidden="true" />
+          </div>
+        </header>
+
+        <section className="mobile-context-strip" aria-label={locale === "de" ? "Aktiver Kontext" : "Active context"}>
+          <button
+            type="button"
+            className="mobile-context-chip mobile-context-chip-action"
+            onClick={handleMobileContextToggle}
+          >
+            {repoChipLabel}
+          </button>
+          <span className="mobile-context-chip">{branchChipLabel}</span>
+          <span className="mobile-context-chip">{commitChipLabel}</span>
+          <span className="mobile-context-live">{`● ${streamCounterLabel}`}</span>
+        </section>
+
+        <section className="mobile-workspace-surface">
+          <ShellCard variant="base" className="workspace-frame-card mobile-workspace-frame">
+            <div className="workspace-frame-body">
+              <Suspense fallback={<p className="empty-state" role="status">{ui.shell.healthChecking}</p>}>
+                {workspaceSurface}
+              </Suspense>
+            </div>
+          </ShellCard>
+        </section>
+
+        {mobileContextOpen ? (
+          <>
+            <button
+              type="button"
+              className="mobile-context-backdrop"
+              aria-label={locale === "de" ? "Kontext schließen" : "Close context"}
+              onClick={() => setMobileContextOpen(false)}
+            />
+            <section className="mobile-context-sheet" aria-label={ui.shell.workspaceContextSuffix}>
+              <header className="mobile-context-sheet-header">
+                <SectionLabel>{ui.shell.workspaceContextSuffix}</SectionLabel>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setMobileContextOpen(false)}
+                >
+                  {locale === "de" ? "Schließen" : "Close"}
+                </button>
+              </header>
+
+              <div className="mobile-context-sheet-body">
+                <div className="mobile-context-status-grid">
+                  <div>
+                    <span>{ui.shell.healthTitle}</span>
+                    <strong>{healthState.label}</strong>
+                  </div>
+                  <div>
+                    <span>{ui.review.nextStepLabel}</span>
+                    <strong>{currentStatusBadge}</strong>
+                  </div>
+                  <div>
+                    <span>{ui.shell.pendingApprovalsTitle}</span>
+                    <strong>{String(approvalSummary.pending)}</strong>
+                  </div>
+                  <div>
+                    <span>{ui.shell.modeLabel}</span>
+                    <strong>{workspaceName}</strong>
+                  </div>
+                </div>
+
+                <div className="mobile-context-actions">
+                  <button type="button" className="secondary-button" onClick={() => handleMobileNavSelect("review")}>
+                    {appText.processGoReview}
+                  </button>
+                  <button type="button" className="secondary-button" onClick={() => handleMobileNavSelect("settings")}>
+                    {ui.shell.workspaceTabs.settings.label}
+                  </button>
+                  {isSessionWorkspace(mode) ? (
+                    <button type="button" className="secondary-button" onClick={() => handleWorkspaceSessionCreate(sessionWorkspace)}>
+                      {appText.processCreateSession}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setDiagnosticsOpen((current) => !current)}
+                  >
+                    {diagnosticsOpen ? ui.shell.diagnosticsHide : ui.shell.diagnosticsShow}
+                  </button>
+                </div>
+
+                {showRouteOwnershipContext && routeOwnershipRows.length > 0 ? (
+                  <RouteStatusLadder
+                    title={mode === "github" ? "GitHub status ladder" : "Matrix status ladder"}
+                    rows={routeOwnershipRows}
+                  />
+                ) : null}
+              </div>
+            </section>
+          </>
+        ) : null}
+
+        <nav className="mobile-bottom-nav" aria-label={ui.shell.workspacesLabel}>
+          {MOBILE_NAV_MODES.map((workspaceMode) => (
+            <button
+              key={workspaceMode}
+              type="button"
+              className={activeMobileNav === workspaceMode ? "workspace-tab workspace-tab-active workspace-tab-mobile" : "workspace-tab workspace-tab-mobile"}
+              onClick={() => handleMobileNavSelect(workspaceMode)}
+              aria-label={ui.shell.workspaceTabs[workspaceMode].label}
+              aria-current={activeMobileNav === workspaceMode ? "page" : undefined}
+              data-testid={`tab-${workspaceMode}`}
+            >
+              <WorkspaceIcon mode={workspaceMode} />
+              <span>{ui.shell.workspaceTabs[workspaceMode].label}</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            className={activeMobileNav === "context" || mobileContextOpen ? "workspace-tab workspace-tab-active workspace-tab-mobile" : "workspace-tab workspace-tab-mobile"}
+            onClick={handleMobileContextToggle}
+            aria-label={locale === "de" ? "Kontext" : "Context"}
+            data-testid="tab-context"
+          >
+            <MobileContextIcon />
+            <span>{locale === "de" ? "Kontext" : "Context"}</span>
+          </button>
+        </nav>
+      </main>
+    );
+  }
 
   return (
     <main className="app-shell app-shell-console" data-testid="app-shell">

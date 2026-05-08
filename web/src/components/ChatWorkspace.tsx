@@ -68,6 +68,18 @@ type ChatWorkspaceProps = {
   onSessionChange: (session: ChatSession) => void;
   pinnedContext: PinnedChatContext | null;
   onClearPinnedContext: () => void;
+  matrixDraftDefaultRoomId: string | null;
+  matrixDraftRoomOptions: string[];
+  onQueueMatrixDraft: (payload: {
+    sourceMessageId: string;
+    roomId: string;
+    content: string;
+    tags: string[];
+  }) => void;
+  onOpenGitHubFromChatAction: (payload: {
+    sourceMessageId: string;
+    content: string;
+  }) => void;
 };
 
 type RoutingStatusTone = "ready" | "partial" | "error" | "muted";
@@ -89,6 +101,8 @@ type ChatRoutingStatusCopy = {
 };
 
 const CHAT_SESSION_SYNC_INTERVAL_MS = 220;
+const MESSAGE_ACTION_COPY_RESET_MS = 1600;
+const MATRIX_DRAFT_TAGS = ["release", "incident", "todo"] as const;
 
 export function buildChatRoutingStatusItems(options: {
   selectedModel: string;
@@ -233,6 +247,32 @@ function createId() {
   return crypto.randomUUID();
 }
 
+async function copyTextToClipboard(text: string) {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  if (typeof document === "undefined") {
+    throw new Error("clipboard unavailable");
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textarea);
+
+  if (!copied) {
+    throw new Error("clipboard unavailable");
+  }
+}
+
 function formatTimestamp(locale: "en" | "de", value: string | undefined) {
   if (!value) {
     return "n/a";
@@ -293,10 +333,21 @@ type ThreadMessageCardProps = {
   expertMode: boolean;
   operatorLabel: string;
   agentLabel: string;
+  locale: "en" | "de";
+  copyState: "idle" | "copied" | "failed";
+  onGitHubAction: (message: ChatMessage) => void;
+  onMatrixAction: (message: ChatMessage) => void;
+  onCopyAction: (message: ChatMessage) => void;
 };
 
 const ThreadMessageCard = React.memo(function ThreadMessageCard(props: ThreadMessageCardProps) {
   const roleLabel = props.message.role === "user" ? props.operatorLabel : props.agentLabel;
+  const isAssistant = props.message.role === "assistant";
+  const copyLabel = props.copyState === "copied"
+    ? (props.locale === "de" ? "Kopiert" : "Copied")
+    : props.copyState === "failed"
+      ? (props.locale === "de" ? "Fehlgeschlagen" : "Failed")
+      : (props.locale === "de" ? "Kopieren" : "Copy");
 
   return (
     <ShellCard
@@ -308,6 +359,37 @@ const ThreadMessageCard = React.memo(function ThreadMessageCard(props: ThreadMes
         {props.expertMode && props.message.modelAlias ? <StatusBadge tone="muted">{props.message.modelAlias}</StatusBadge> : null}
       </header>
       <MarkdownMessage content={props.message.content} />
+      {isAssistant ? (
+        <div className="thread-message-actions" role="group" aria-label={props.locale === "de" ? "Nachrichtenaktionen" : "Message actions"}>
+          <button
+            type="button"
+            className="ghost-button thread-message-action-button"
+            onClick={() => props.onGitHubAction(props.message)}
+            aria-label={props.locale === "de" ? "In GitHub dispatchen" : "Dispatch to GitHub"}
+            title={props.locale === "de" ? "In GitHub dispatchen" : "Dispatch to GitHub"}
+          >
+            ↯
+          </button>
+          <button
+            type="button"
+            className="ghost-button thread-message-action-button"
+            onClick={() => props.onMatrixAction(props.message)}
+            aria-label={props.locale === "de" ? "Als Matrix-Post vorbereiten" : "Prepare as Matrix post"}
+            title={props.locale === "de" ? "Als Matrix-Post vorbereiten" : "Prepare as Matrix post"}
+          >
+            ⊛
+          </button>
+          <button
+            type="button"
+            className="ghost-button thread-message-action-button thread-message-action-copy"
+            onClick={() => props.onCopyAction(props.message)}
+            aria-label={props.locale === "de" ? "Nachricht kopieren" : "Copy message"}
+            title={props.locale === "de" ? "Nachricht kopieren" : "Copy message"}
+          >
+            {copyLabel}
+          </button>
+        </div>
+      ) : null}
     </ShellCard>
   );
 });
@@ -359,6 +441,28 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
         }))),
     [props.availableModels, props.modelRegistry],
   );
+  const [messageCopyState, setMessageCopyState] = useState<Record<string, "idle" | "copied" | "failed">>({});
+  const [matrixComposeOpen, setMatrixComposeOpen] = useState(false);
+  const [matrixComposeSourceMessageId, setMatrixComposeSourceMessageId] = useState<string | null>(null);
+  const [matrixComposeContent, setMatrixComposeContent] = useState("");
+  const [matrixComposeRoomId, setMatrixComposeRoomId] = useState(props.matrixDraftDefaultRoomId ?? props.matrixDraftRoomOptions[0] ?? "");
+  const [matrixComposeTags, setMatrixComposeTags] = useState<string[]>([]);
+  const [githubDispatchOpen, setGithubDispatchOpen] = useState(false);
+  const [githubDispatchSourceMessageId, setGithubDispatchSourceMessageId] = useState<string | null>(null);
+  const [githubDispatchContent, setGithubDispatchContent] = useState("");
+
+  const matrixRoomOptions = useMemo(() => {
+    const order = [props.matrixDraftDefaultRoomId, ...props.matrixDraftRoomOptions];
+    const next: string[] = [];
+    for (const value of order) {
+      const trimmed = value?.trim();
+      if (!trimmed || next.includes(trimmed)) {
+        continue;
+      }
+      next.push(trimmed);
+    }
+    return next;
+  }, [props.matrixDraftDefaultRoomId, props.matrixDraftRoomOptions]);
 
   useEffect(() => {
     if (props.activeModelAlias && props.activeModelAlias !== selectedModel) {
@@ -373,6 +477,14 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       props.onActiveModelAliasChange(nextModel);
     }
   }, [props.availableModels, props.onActiveModelAliasChange, selectedModel]);
+
+  useEffect(() => {
+    if (matrixComposeOpen || matrixComposeRoomId.trim().length > 0 || matrixRoomOptions.length === 0) {
+      return;
+    }
+
+    setMatrixComposeRoomId(matrixRoomOptions[0]);
+  }, [matrixComposeOpen, matrixComposeRoomId, matrixRoomOptions]);
 
   useEffect(() => {
     const nextSession: ChatSession = {
@@ -503,6 +615,108 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   function stopExecution() {
     flushBatchedTokens();
     abortRef.current?.abort();
+  }
+
+  function openMatrixComposeFromMessage(message: ChatMessage) {
+    if (message.role !== "assistant") {
+      return;
+    }
+
+    const content = message.content.trim();
+    if (!content) {
+      return;
+    }
+
+    setGithubDispatchOpen(false);
+    setMatrixComposeSourceMessageId(message.id);
+    setMatrixComposeContent(content);
+    setMatrixComposeTags([]);
+    setMatrixComposeRoomId(props.matrixDraftDefaultRoomId ?? matrixRoomOptions[0] ?? "");
+    setMatrixComposeOpen(true);
+  }
+
+  function openGitHubDispatchFromMessage(message: ChatMessage) {
+    if (message.role !== "assistant") {
+      return;
+    }
+
+    const content = message.content.trim();
+    if (!content) {
+      return;
+    }
+
+    setMatrixComposeOpen(false);
+    setGithubDispatchSourceMessageId(message.id);
+    setGithubDispatchContent(content);
+    setGithubDispatchOpen(true);
+  }
+
+  function toggleMatrixTag(tag: string) {
+    setMatrixComposeTags((current) => (
+      current.includes(tag)
+        ? current.filter((item) => item !== tag)
+        : [...current, tag]
+    ));
+  }
+
+  function submitMatrixComposeDraft() {
+    if (!matrixComposeOpen || !matrixComposeSourceMessageId) {
+      return;
+    }
+
+    const roomId = matrixComposeRoomId.trim();
+    const content = matrixComposeContent.trim();
+    if (!roomId || !content) {
+      return;
+    }
+
+    props.onQueueMatrixDraft({
+      sourceMessageId: matrixComposeSourceMessageId,
+      roomId,
+      content,
+      tags: matrixComposeTags,
+    });
+    setMatrixComposeOpen(false);
+    setMatrixComposeSourceMessageId(null);
+    setMatrixComposeContent("");
+    setMatrixComposeTags([]);
+  }
+
+  function dispatchMessageToGitHub() {
+    if (!githubDispatchOpen || !githubDispatchSourceMessageId) {
+      return;
+    }
+
+    const content = githubDispatchContent.trim();
+    if (!content) {
+      return;
+    }
+
+    props.onOpenGitHubFromChatAction({
+      sourceMessageId: githubDispatchSourceMessageId,
+      content,
+    });
+    setGithubDispatchOpen(false);
+    setGithubDispatchSourceMessageId(null);
+    setGithubDispatchContent("");
+  }
+
+  async function copyMessageContent(message: ChatMessage) {
+    const content = message.content.trim();
+    if (!content) {
+      return;
+    }
+
+    try {
+      await copyTextToClipboard(content);
+      setMessageCopyState((current) => ({ ...current, [message.id]: "copied" }));
+    } catch {
+      setMessageCopyState((current) => ({ ...current, [message.id]: "failed" }));
+    } finally {
+      globalThis.setTimeout(() => {
+        setMessageCopyState((current) => ({ ...current, [message.id]: "idle" }));
+      }, MESSAGE_ACTION_COPY_RESET_MS);
+    }
   }
 
   function createProposal(prompt: string) {
@@ -820,6 +1034,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     ],
     [chatState.notices, error, warning],
   );
+  const matrixComposeBlocked = matrixComposeRoomId.trim().length === 0 || matrixComposeContent.trim().length === 0;
 
   return (
     <section
@@ -972,6 +1187,13 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               expertMode={expertMode}
               operatorLabel={ui.chat.operatorInput}
               agentLabel={ui.chat.agentResponse}
+              locale={locale}
+              copyState={messageCopyState[message.id] ?? "idle"}
+              onGitHubAction={openGitHubDispatchFromMessage}
+              onMatrixAction={openMatrixComposeFromMessage}
+              onCopyAction={(nextMessage) => {
+                void copyMessageContent(nextMessage);
+              }}
             />
           ))}
 
@@ -1024,6 +1246,132 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
 
           <div ref={messageEndRef} />
         </div>
+
+        {matrixComposeOpen ? (
+          <>
+            <button
+              type="button"
+              className="chat-action-sheet-backdrop"
+              aria-label={locale === "de" ? "Matrix-Composer schließen" : "Close Matrix composer"}
+              onClick={() => setMatrixComposeOpen(false)}
+            />
+            <section
+              className="chat-action-sheet matrix-compose-sheet"
+              aria-label={locale === "de" ? "Matrix-Compose" : "Matrix compose"}
+            >
+              <header className="chat-action-sheet-header">
+                <SectionLabel>{locale === "de" ? "Matrix-Compose" : "Matrix compose"}</SectionLabel>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setMatrixComposeOpen(false)}
+                >
+                  {locale === "de" ? "Schließen" : "Close"}
+                </button>
+              </header>
+
+              <div className="chat-action-sheet-body">
+                <label htmlFor="matrix-compose-room">{locale === "de" ? "Raum" : "Room"}</label>
+                <input
+                  id="matrix-compose-room"
+                  list="matrix-room-options"
+                  value={matrixComposeRoomId}
+                  onChange={(event) => setMatrixComposeRoomId(event.target.value)}
+                  placeholder={locale === "de" ? "!room:matrix.example" : "!room:matrix.example"}
+                />
+                {matrixRoomOptions.length > 0 ? (
+                  <datalist id="matrix-room-options">
+                    {matrixRoomOptions.map((roomId) => (
+                      <option key={roomId} value={roomId} />
+                    ))}
+                  </datalist>
+                ) : null}
+
+                <label htmlFor="matrix-compose-content">{locale === "de" ? "Inhalt" : "Content"}</label>
+                <textarea
+                  id="matrix-compose-content"
+                  value={matrixComposeContent}
+                  onChange={(event) => setMatrixComposeContent(event.target.value)}
+                  rows={6}
+                />
+
+                <div className="chat-action-sheet-tags" role="group" aria-label={locale === "de" ? "Tags" : "Tags"}>
+                  {MATRIX_DRAFT_TAGS.map((tag) => {
+                    const active = matrixComposeTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        className={active ? "secondary-button chat-action-tag chat-action-tag-active" : "secondary-button chat-action-tag"}
+                        onClick={() => toggleMatrixTag(tag)}
+                        aria-pressed={active}
+                      >
+                        #{tag}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="chat-action-sheet-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={matrixComposeBlocked}
+                    onClick={submitMatrixComposeDraft}
+                  >
+                    {locale === "de" ? "In Matrix übernehmen" : "Queue to Matrix"}
+                  </button>
+                </div>
+              </div>
+            </section>
+          </>
+        ) : null}
+
+        {githubDispatchOpen ? (
+          <>
+            <button
+              type="button"
+              className="chat-action-sheet-backdrop"
+              aria-label={locale === "de" ? "GitHub-Dispatch schließen" : "Close GitHub dispatch"}
+              onClick={() => setGithubDispatchOpen(false)}
+            />
+            <section
+              className="chat-action-sheet github-dispatch-sheet"
+              aria-label={locale === "de" ? "GitHub-Dispatch" : "GitHub dispatch"}
+            >
+              <header className="chat-action-sheet-header">
+                <SectionLabel>{locale === "de" ? "GitHub-Dispatch" : "GitHub dispatch"}</SectionLabel>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setGithubDispatchOpen(false)}
+                >
+                  {locale === "de" ? "Schließen" : "Close"}
+                </button>
+              </header>
+              <div className="chat-action-sheet-body">
+                <p className="muted-copy">
+                  {locale === "de"
+                    ? "Auszug wird in den GitHub-Workspace übergeben und dort als lokaler Kontext geöffnet."
+                    : "Excerpt is handed over to the GitHub workspace and opened there as local context."}
+                </p>
+                <div className="chat-action-sheet-preview">
+                  <MarkdownMessage content={githubDispatchContent} />
+                </div>
+                <div className="chat-action-sheet-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={githubDispatchContent.trim().length === 0}
+                    onClick={dispatchMessageToGitHub}
+                  >
+                    {locale === "de" ? "In GitHub öffnen" : "Open in GitHub"}
+                  </button>
+                </div>
+              </div>
+            </section>
+          </>
+        ) : null}
 
         <section className="chat-routing-status-strip" data-testid="chat-routing-status" aria-label={ui.chat.routingStatus.title}>
           {routingStatusItems.map((item) => (
