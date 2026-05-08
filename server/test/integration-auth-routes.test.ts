@@ -27,6 +27,23 @@ function readSetCookie(response: { headers: Record<string, unknown> }) {
   return typeof header === "string" ? header : null;
 }
 
+function readSetCookies(response: { headers: Record<string, unknown> }) {
+  const header = response.headers["set-cookie"];
+
+  if (Array.isArray(header)) {
+    return header;
+  }
+
+  return typeof header === "string" ? [header] : [];
+}
+
+function joinCookiesForRequest(cookies: string[]) {
+  return cookies
+    .map((cookie) => cookie.split(";", 1)[0]?.trim())
+    .filter((cookie): cookie is string => Boolean(cookie))
+    .join("; ");
+}
+
 function readGitHubStateFromAuthorizeLocation(location: string) {
   return new URL(location).searchParams.get("state");
 }
@@ -616,6 +633,99 @@ test("real GitHub OAuth callback stores a user-connected credential source", asy
     }
   });
 
+  const payload = JSON.parse(status.body) as {
+    github: {
+      credentialSource: string;
+      labels: {
+        identity: string | null;
+      };
+    };
+  };
+
+  assert.equal(payload.github.credentialSource, "user_connected");
+  assert.equal(payload.github.labels.identity, "octocat");
+});
+
+test("real GitHub OAuth callback survives a fresh serverless auth store", async (t) => {
+  const env = createTestEnv({
+    GITHUB_OAUTH_CLIENT_ID: "github-client-id",
+    GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
+    MOSAIC_STACK_SESSION_SECRET: "serverless-oauth-session-secret",
+    ...TEST_ENCRYPTION_KEY
+  });
+  const fetchImpl = async (input: RequestInfo | URL) => {
+    const url = String(input);
+
+    if (url.startsWith("https://github.com/login/oauth/access_token")) {
+      return new Response(JSON.stringify({
+        access_token: "gho_serverless_access_token",
+        token_type: "bearer",
+        scope: "read:user,user:email"
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    if (url === "https://api.github.com/user") {
+      return new Response(JSON.stringify({
+        login: "octocat"
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    return new Response(null, { status: 404 });
+  };
+
+  const startApp = createApp({
+    env,
+    openRouter: createMockOpenRouterClient(),
+    integrationFetch: fetchImpl,
+    logger: false
+  });
+  const callbackApp = createApp({
+    env,
+    openRouter: createMockOpenRouterClient(),
+    integrationFetch: fetchImpl,
+    logger: false
+  });
+
+  t.after(async () => {
+    await startApp.close();
+    await callbackApp.close();
+  });
+
+  const start = await startApp.inject({
+    method: "GET",
+    url: "/api/auth/github/start"
+  });
+
+  assert.equal(start.statusCode, 302);
+  const state = readGitHubStateFromAuthorizeLocation(String(start.headers.location ?? ""));
+  const browserCookie = joinCookiesForRequest(readSetCookies(start));
+  assert.ok(state);
+  assert.ok(browserCookie);
+
+  const callback = await callbackApp.inject({
+    method: "GET",
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=real_code`,
+    headers: {
+      cookie: browserCookie
+    }
+  });
+
+  assert.equal(callback.statusCode, 302);
+  assert.equal(callback.headers.location, "/console?mode=settings");
+
+  const status = await callbackApp.inject({
+    method: "GET",
+    url: "/api/integrations/status",
+    headers: {
+      cookie: browserCookie
+    }
+  });
   const payload = JSON.parse(status.body) as {
     github: {
       credentialSource: string;

@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { AppEnv } from "../lib/env.js";
@@ -10,6 +11,8 @@ import type { MatrixConfig } from "../lib/matrix-env.js";
 
 const INTEGRATION_SESSION_COOKIE = "mosaicstack_integration_session";
 const INTEGRATION_SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
+const INTEGRATION_OAUTH_STATE_COOKIE = "mosaicstack_oauth_state";
+const INTEGRATION_OAUTH_STATE_COOKIE_VERSION = "v1";
 const DEFAULT_RETURN_TO = "/console?mode=settings";
 
 const AuthStartQuerySchema = z.object({
@@ -35,6 +38,14 @@ type IntegrationAuthRouteDependencies = {
   matrixConfig: MatrixConfig;
   authStore: IntegrationAuthStore;
   fetchImpl?: typeof fetch;
+};
+
+type CallbackIntent = {
+  provider: IntegrationProvider;
+  state: string;
+  sessionId: string;
+  returnTo: string;
+  expiresAtMs: number;
 };
 
 type IntegrationAuthErrorCode =
@@ -90,6 +101,44 @@ function buildIntegrationSessionCookie(value: string, maxAgeSeconds: number) {
   return attributes.join("; ");
 }
 
+function buildClearIntegrationOAuthStateCookie() {
+  const attributes = [
+    `${INTEGRATION_OAUTH_STATE_COOKIE}=`,
+    "HttpOnly",
+    "Path=/",
+    "Max-Age=0",
+    "Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+    "SameSite=Lax"
+  ];
+
+  if (isProductionDeployment()) {
+    attributes.push("Secure");
+  }
+
+  return attributes.join("; ");
+}
+
+function appendSetCookie(reply: FastifyReply, cookie: string) {
+  const existing = reply.getHeader("Set-Cookie");
+
+  if (Array.isArray(existing)) {
+    reply.header("Set-Cookie", [...existing, cookie]);
+    return;
+  }
+
+  if (typeof existing === "string") {
+    reply.header("Set-Cookie", [existing, cookie]);
+    return;
+  }
+
+  if (existing !== undefined) {
+    reply.header("Set-Cookie", [String(existing), cookie]);
+    return;
+  }
+
+  reply.header("Set-Cookie", cookie);
+}
+
 function readIntegrationSessionCookie(request: FastifyRequest) {
   const cookieHeader = Array.isArray(request.headers.cookie)
     ? request.headers.cookie[0]
@@ -114,6 +163,162 @@ function readIntegrationSessionCookie(request: FastifyRequest) {
   }
 
   return null;
+}
+
+function readCookieValue(request: FastifyRequest, cookieName: string) {
+  const cookieHeader = Array.isArray(request.headers.cookie)
+    ? request.headers.cookie[0]
+    : request.headers.cookie;
+
+  if (!cookieHeader) {
+    return null;
+  }
+
+  for (const segment of cookieHeader.split(";")) {
+    const trimmed = segment.trim();
+
+    if (!trimmed.startsWith(`${cookieName}=`)) {
+      continue;
+    }
+
+    try {
+      return decodeURIComponent(trimmed.slice(cookieName.length + 1));
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function signOAuthStatePayload(sessionSecret: string, payload: string) {
+  return createHmac("sha256", sessionSecret).update(payload).digest("base64url");
+}
+
+function compareStringsSecurely(expected: string, actual: string) {
+  const expectedBuffer = Buffer.from(expected);
+  const actualBuffer = Buffer.from(actual);
+
+  if (expectedBuffer.length !== actualBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(expectedBuffer, actualBuffer);
+}
+
+function buildSignedOAuthStateCookieValue(env: AppEnv, intent: CallbackIntent) {
+  const sessionSecret = env.MOSAIC_STACK_SESSION_SECRET.trim();
+
+  if (sessionSecret.length === 0) {
+    return null;
+  }
+
+  const payload = Buffer.from(JSON.stringify({
+    provider: intent.provider,
+    state: intent.state,
+    sessionId: intent.sessionId,
+    returnTo: intent.returnTo,
+    expiresAtMs: intent.expiresAtMs
+  }), "utf8").toString("base64url");
+  const signature = signOAuthStatePayload(sessionSecret, payload);
+
+  return `${INTEGRATION_OAUTH_STATE_COOKIE_VERSION}.${payload}.${signature}`;
+}
+
+function buildIntegrationOAuthStateCookie(env: AppEnv, intent: CallbackIntent) {
+  const value = buildSignedOAuthStateCookieValue(env, intent);
+
+  if (!value) {
+    return null;
+  }
+
+  const maxAgeSeconds = Math.max(1, Math.ceil((intent.expiresAtMs - Date.now()) / 1000));
+  const attributes = [
+    `${INTEGRATION_OAUTH_STATE_COOKIE}=${encodeURIComponent(value)}`,
+    "HttpOnly",
+    "Path=/",
+    `Max-Age=${maxAgeSeconds}`,
+    "SameSite=Lax"
+  ];
+
+  if (isProductionDeployment()) {
+    attributes.push("Secure");
+  }
+
+  return attributes.join("; ");
+}
+
+function readSignedOAuthStateIntent(
+  request: FastifyRequest,
+  env: AppEnv,
+  provider: IntegrationProvider,
+  state: string
+): CallbackIntent | null {
+  const sessionSecret = env.MOSAIC_STACK_SESSION_SECRET.trim();
+
+  if (sessionSecret.length === 0) {
+    return null;
+  }
+
+  const rawCookie = readCookieValue(request, INTEGRATION_OAUTH_STATE_COOKIE);
+
+  if (!rawCookie) {
+    return null;
+  }
+
+  const [version, payload, signature] = rawCookie.split(".");
+
+  if (version !== INTEGRATION_OAUTH_STATE_COOKIE_VERSION || !payload || !signature) {
+    return null;
+  }
+
+  const expectedSignature = signOAuthStatePayload(sessionSecret, payload);
+
+  if (!compareStringsSecurely(expectedSignature, signature)) {
+    return null;
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+
+  const intent = z.object({
+    provider: z.enum(["github", "matrix"]),
+    state: z.string().trim().min(1),
+    sessionId: z.string().trim().min(1),
+    returnTo: z.string().trim().min(1),
+    expiresAtMs: z.number().finite()
+  }).safeParse(parsed);
+
+  if (!intent.success) {
+    return null;
+  }
+
+  if (intent.data.provider !== provider || intent.data.state !== state) {
+    return null;
+  }
+
+  if (intent.data.expiresAtMs <= Date.now()) {
+    return null;
+  }
+
+  const returnTo = normalizeAllowedReturnTo(intent.data.returnTo);
+
+  if (!returnTo) {
+    return null;
+  }
+
+  return {
+    provider: intent.data.provider,
+    state: intent.data.state,
+    sessionId: intent.data.sessionId,
+    returnTo,
+    expiresAtMs: intent.data.expiresAtMs
+  };
 }
 
 function resolveRequestOrigin(request: FastifyRequest) {
@@ -539,7 +744,15 @@ function maybeSetSessionCookie(
   created: boolean
 ) {
   if (created || cookieSessionId !== sessionId) {
-    reply.header("Set-Cookie", buildIntegrationSessionCookie(sessionId, INTEGRATION_SESSION_MAX_AGE_SECONDS));
+    appendSetCookie(reply, buildIntegrationSessionCookie(sessionId, INTEGRATION_SESSION_MAX_AGE_SECONDS));
+  }
+}
+
+function maybeSetOAuthStateCookie(reply: FastifyReply, env: AppEnv, intent: CallbackIntent) {
+  const cookie = buildIntegrationOAuthStateCookie(env, intent);
+
+  if (cookie) {
+    appendSetCookie(reply, cookie);
   }
 }
 
@@ -621,6 +834,13 @@ function registerProviderStartRoute(
         returnTo
       });
       maybeSetSessionCookie(reply, cookieSessionId, session.sessionId, session.created);
+      maybeSetOAuthStateCookie(reply, deps.env, {
+        provider,
+        state: intent.state,
+        sessionId: session.sessionId,
+        returnTo,
+        expiresAtMs: new Date(intent.expiresAt).getTime()
+      });
 
       const url = new URL(oauthConfig.authorizeUrl);
       url.searchParams.set("client_id", oauthConfig.clientId);
@@ -654,6 +874,13 @@ function registerProviderStartRoute(
         returnTo
       });
       maybeSetSessionCookie(reply, cookieSessionId, session.sessionId, session.created);
+      maybeSetOAuthStateCookie(reply, deps.env, {
+        provider,
+        state: intent.state,
+        sessionId: session.sessionId,
+        returnTo,
+        expiresAtMs: new Date(intent.expiresAt).getTime()
+      });
 
       const callbackUrl = new URL(`${origin}/api/auth/matrix/callback`);
       callbackUrl.searchParams.set("state", intent.state);
@@ -684,7 +911,8 @@ function registerProviderCallbackRoute(
       return sendIntegrationAuthError(reply, "invalid_request");
     }
 
-    const intent = deps.authStore.consumeIntent(provider, parsedQuery.data.state);
+    const intent = deps.authStore.consumeIntent(provider, parsedQuery.data.state)
+      ?? readSignedOAuthStateIntent(request, deps.env, provider, parsedQuery.data.state);
 
     if (!intent) {
       const cookieSessionId = readIntegrationSessionCookie(request);
@@ -693,11 +921,13 @@ function registerProviderCallbackRoute(
         deps.authStore.setErrorCode(cookieSessionId, provider, "state_mismatch");
       }
 
+      appendSetCookie(reply, buildClearIntegrationOAuthStateCookie());
       return sendIntegrationAuthError(reply, "state_mismatch", statusForErrorCode("state_mismatch"));
     }
 
     const cookieSessionId = readIntegrationSessionCookie(request);
     maybeSetSessionCookie(reply, cookieSessionId, intent.sessionId, false);
+    appendSetCookie(reply, buildClearIntegrationOAuthStateCookie());
     try {
       if (provider === "github") {
         const query = parsedQuery.data as z.infer<typeof GitHubCallbackQuerySchema>;
