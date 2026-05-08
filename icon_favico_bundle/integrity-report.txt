@@ -1,0 +1,5 @@
+favicon/favicon-transparent-16.png: corner alpha values = [0, 0, 0, 0]
+favicon/favicon-transparent-32.png: corner alpha values = [0, 0, 0, 0]
+favicon/favicon-transparent-512.png: corner alpha values = [0, 0, 0, 0]
+icons/light/icon-light-512.png: corner alpha values = [0, 0, 0, 0]
+icons/dark/icon-dark-512.png: corner alpha values = [0, 0, 0, 0]

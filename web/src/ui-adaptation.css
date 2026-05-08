@@ -1,0 +1,1687 @@
+:root {
+  color-scheme: dark;
+
+  --ms-accent: #6c5ce7;
+  --ms-accent2: #a29bfe;
+  --ms-teal: #00cec9;
+  --ms-teal2: #81ecec;
+
+  --ms-green: #55efc4;
+  --ms-amber: #fdcb6e;
+  --ms-red: #ff7675;
+
+  --ms-bg: #0f0f11;
+  --ms-bg2: #171719;
+  --ms-bg3: #1e1e21;
+  --ms-bg4: #252529;
+  --ms-surface: #1a1a1d;
+
+  --ms-text: #f0eff4;
+  --ms-text2: #9b99a8;
+  --ms-text3: #5e5d6b;
+
+  --ms-border: rgba(255, 255, 255, 0.07);
+  --ms-border2: rgba(255, 255, 255, 0.12);
+
+  --ms-sans: "DM Sans", system-ui, sans-serif;
+  --ms-mono: "JetBrains Mono", "Courier New", monospace;
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  --r: 8px;
+  --r2: 14px;
+  --r3: 20px;
+
+  --dur-fast: 100ms;
+  --dur-base: 150ms;
+  --dur-slow: 300ms;
+  --dur-stream: 1200ms;
+  --ease-hover: cubic-bezier(0.2, 0, 0, 1);
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: ease-in;
+
+  --bg: var(--ms-bg);
+  --bg-2: var(--ms-bg2);
+  --bg-3: var(--ms-bg3);
+  --bg-4: var(--ms-bg4);
+  --panel: var(--ms-bg2);
+  --panel-strong: var(--ms-surface);
+  --line: var(--ms-border);
+  --text: var(--ms-text);
+  --muted: var(--ms-text2);
+  --accent: var(--ms-accent);
+  --accent-strong: var(--ms-accent2);
+  --success: var(--ms-green);
+  --warning: var(--ms-amber);
+  --danger: var(--ms-red);
+  --green: var(--ms-green);
+  --amber: var(--ms-amber);
+  --red: var(--ms-red);
+  --purple: var(--ms-accent2);
+  --blue: var(--ms-teal);
+  --tx: var(--ms-text);
+  --tx-2: var(--ms-text2);
+  --tx-3: var(--ms-text3);
+  --bd: var(--ms-border);
+  --bd-2: var(--ms-border2);
+  --border-soft: var(--ms-border);
+  --border-focus: rgba(108, 92, 231, 0.45);
+  --surface: var(--ms-bg2);
+  --surface-soft: var(--ms-bg2);
+  --surface-raised: var(--ms-bg3);
+  --text-primary: var(--ms-text);
+  --text-secondary: var(--ms-text2);
+  --text-muted: var(--ms-text3);
+  --space-1: var(--sp-1);
+  --space-2: var(--sp-2);
+  --space-3: var(--sp-3);
+  --space-4: var(--sp-4);
+  --space-5: var(--sp-5);
+  --space-6: var(--sp-6);
+  --space-7: var(--sp-12);
+  --space-8: var(--sp-16);
+  --radius-sm: var(--r);
+  --radius-md: var(--r2);
+  --radius-lg: var(--r3);
+  --accent-cyan: var(--ms-accent);
+  --accent-green: var(--ms-teal);
+  --accent-violet: var(--ms-accent2);
+  --accent-orange: var(--ms-amber);
+  --glow-cyan: none;
+  --glow-green: none;
+  --shadow-card: none;
+  --shell-border-soft: var(--ms-border);
+}
+
+:root[data-theme="light"],
+body.light-mode {
+  color-scheme: light;
+
+  --ms-bg: #f5f4f8;
+  --ms-bg2: #ffffff;
+  --ms-bg3: #eeecf5;
+  --ms-bg4: #e5e3ef;
+  --ms-surface: #ffffff;
+
+  --ms-border: rgba(0, 0, 0, 0.07);
+  --ms-border2: rgba(0, 0, 0, 0.13);
+
+  --ms-text: #1a1929;
+  --ms-text2: #6b6882;
+  --ms-text3: #b0aec0;
+
+  --ms-accent2: #4834d4;
+  --ms-teal: #00b5b1;
+  --ms-teal2: #007a78;
+  --ms-amber: #d4900a;
+  --ms-red: #d63031;
+  --ms-green: #00b894;
+  --accent-cyan: var(--ms-accent);
+  --accent-green: var(--ms-teal);
+  --accent-violet: var(--ms-accent2);
+  --accent-orange: var(--ms-amber);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--ms-bg);
+  color: var(--ms-text);
+  font-family: var(--ms-sans);
+  line-height: 1.6;
+}
+
+h1,
+h2,
+h3,
+h4,
+.brand-block h1,
+.workspace-hero h1 {
+  margin: 0;
+  color: var(--ms-text);
+  font-family: var(--ms-sans);
+  letter-spacing: -0.02em;
+}
+
+pre,
+code,
+.message-meta,
+.shell-session-id,
+.github-diff-preview,
+.reference-chip,
+.scope-chip,
+.settings-model-list span,
+.diagnostic-signal,
+.route-status-step strong,
+.route-status-step span,
+.chat-pinned-context-meta {
+  font-family: var(--ms-mono);
+}
+
+button,
+textarea,
+select,
+input {
+  font: inherit;
+}
+
+button,
+.primary-link-button {
+  border: 1px solid transparent;
+  border-radius: var(--r);
+  min-height: 36px;
+  padding: 8px 16px;
+  background: var(--ms-accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  box-shadow: none;
+  text-decoration: none;
+  transition:
+    background var(--dur-base) var(--ease-hover),
+    border-color var(--dur-base) var(--ease-hover),
+    transform var(--dur-base) var(--ease-hover),
+    box-shadow var(--dur-base) var(--ease-hover),
+    color var(--dur-base) var(--ease-hover);
+}
+
+button:hover:not(:disabled),
+.primary-link-button:hover:not(.is-disabled) {
+  background: #7d6df0;
+  transform: translateY(-1px);
+}
+
+button:active:not(:disabled),
+.primary-link-button:active:not(.is-disabled) {
+  background: #5a4bd1;
+  transform: translateY(0);
+}
+
+button:disabled,
+.primary-link-button.is-disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.secondary-button,
+button.secondary-button {
+  background: var(--ms-bg3);
+  color: var(--ms-text);
+  border-color: var(--ms-border2);
+}
+
+.secondary-button:hover:not(:disabled),
+button.secondary-button:hover:not(:disabled) {
+  background: var(--ms-bg4);
+}
+
+.ghost-button,
+button.ghost-button {
+  background: transparent;
+  color: var(--ms-text2);
+  border-color: var(--ms-border);
+}
+
+.ghost-button:hover:not(:disabled),
+button.ghost-button:hover:not(:disabled) {
+  background: var(--ms-bg3);
+  color: var(--ms-text);
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.2);
+}
+
+input,
+textarea,
+select,
+.model-card select,
+.composer textarea,
+.matrix-textarea,
+.input-row input {
+  width: 100%;
+  border-radius: var(--r);
+  border: 1px solid var(--ms-border2);
+  background: var(--ms-bg);
+  color: var(--ms-text);
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  transition:
+    border-color var(--dur-base) var(--ease-hover),
+    box-shadow var(--dur-base) var(--ease-hover);
+}
+
+textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--ms-text3);
+}
+
+input:focus,
+textarea:focus,
+select:focus,
+.composer textarea:focus,
+.matrix-textarea:focus,
+.mini-panel select:focus,
+.input-row input:focus {
+  outline: none;
+  border-color: var(--ms-accent);
+  box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.15);
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.app-shell {
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.app-shell-console {
+  min-height: 100vh;
+  background: var(--ms-bg);
+}
+
+.global-header-shell {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  min-height: 57px;
+  padding: var(--sp-2) var(--sp-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  border-bottom: 1px solid var(--ms-border);
+  background: var(--ms-bg2);
+}
+
+.global-header-shell .brand-block {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.mosaicstacked-mark {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, var(--ms-accent), var(--ms-teal));
+  flex: 0 0 auto;
+}
+
+.app-kicker,
+.shell-section-label,
+.info-label,
+.message-role,
+.runtime-label,
+.card-header span,
+.model-card label {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--ms-text3);
+}
+
+.global-header-shell h1 {
+  font-size: clamp(20px, 2.4vw, 28px);
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.global-header-shell .app-deck {
+  margin: 0;
+  color: var(--ms-text2);
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.theme-toggle-button {
+  min-height: 36px;
+  min-width: 36px;
+  padding: 5px 10px;
+  border: 1px solid var(--ms-border2);
+  border-radius: var(--r);
+  background: var(--ms-bg3);
+  color: var(--ms-text);
+}
+
+.shell-language-toggle {
+  display: inline-flex;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--ms-border);
+  border-radius: var(--r);
+  background: var(--ms-bg3);
+}
+
+.shell-language-button {
+  min-height: 28px;
+  min-width: 42px;
+  padding: 5px 10px;
+}
+
+.shell-language-button-active {
+  background: var(--ms-bg4);
+  border-color: var(--ms-border2);
+}
+
+.console-layout {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr) minmax(260px, 320px);
+  gap: 0;
+  align-items: start;
+  min-height: calc(100vh - 57px);
+}
+
+.workspace-sidebar,
+.workspace-context {
+  position: sticky;
+  top: 57px;
+  max-height: calc(100vh - 57px);
+  overflow-y: auto;
+  padding: var(--sp-4);
+  background: var(--ms-bg2);
+}
+
+.workspace-sidebar {
+  border-right: 1px solid var(--ms-border);
+}
+
+.workspace-context {
+  border-left: 1px solid var(--ms-border);
+}
+
+.console-main {
+  min-width: 0;
+  padding: var(--sp-4);
+  overflow: auto;
+}
+
+.shell-card,
+.workspace-frame-card,
+.chat-card,
+.workspace-card,
+.status-panel-card,
+.truth-rail-section,
+.session-list-card,
+.sidebar-card,
+.context-summary-card,
+.empty-state-card,
+.github-review-card,
+.github-action-card,
+.github-repo-card,
+.review-item-card,
+.safety-tip-card,
+.workspace-summary-card,
+.model-card,
+.public-preview-card {
+  border: 1px solid var(--ms-border);
+  border-radius: var(--r2);
+  background: var(--ms-bg2);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.workspace-frame-card {
+  min-height: calc(100vh - 89px);
+}
+
+.workspace-frame-body {
+  min-height: 100%;
+}
+
+.sidebar-nav {
+  display: grid;
+  gap: 4px;
+}
+
+.workspace-tab,
+.workspace-tab-vertical,
+.workspace-tab-mobile {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--ms-text2);
+  border-radius: var(--r);
+  font-size: 13px;
+  font-weight: 400;
+  text-align: left;
+}
+
+.workspace-tab:hover,
+.workspace-tab-vertical:hover,
+.workspace-tab-mobile:hover {
+  background: var(--ms-bg3);
+  color: var(--ms-text);
+  transform: none;
+}
+
+.workspace-tab-active,
+.workspace-tab-vertical.workspace-tab-active,
+.workspace-tab-shell-active,
+.workspace-tab-mobile.workspace-tab-active {
+  background: rgba(108, 92, 231, 0.12);
+  border-color: rgba(108, 92, 231, 0.24);
+  color: var(--ms-accent2);
+  font-weight: 500;
+}
+
+.workspace-tab-vertical {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
+.workspace-tab-vertical svg,
+.workspace-tab-mobile svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+}
+
+.workspace-tab-vertical small {
+  color: var(--ms-text3);
+}
+
+.workspace-panel,
+.review-list,
+.matrix-column,
+.scope-summary,
+.summary-stack,
+.explore-stack,
+.chip-list,
+.chip-row,
+.list-block {
+  display: grid;
+  gap: var(--sp-3);
+}
+
+.workspace-hero,
+.hero,
+.matrix-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+}
+
+.workspace-hero-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.hero-copy,
+.muted-copy,
+.shell-muted-copy,
+.summary-stack,
+.workspace-summary-note,
+.info-note,
+.info-value,
+.room-picker-meta,
+.scope-summary-meta,
+.empty-state,
+.github-review-card p,
+.github-action-card p,
+.github-plan-summary p,
+.review-queue-item p {
+  margin: 0;
+  color: var(--ms-text2);
+}
+
+.status-pill,
+.shell-badge,
+.session-status-badge,
+.reference-chip,
+.scope-chip,
+.workflow-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--ms-border2);
+  background: var(--ms-bg3);
+  color: var(--ms-text2);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+}
+
+.status-ready,
+.shell-badge-ready,
+.session-status-ready,
+.workflow-chip-complete {
+  color: var(--ms-green);
+  border-color: rgba(85, 239, 196, 0.2);
+  background: rgba(85, 239, 196, 0.12);
+}
+
+.status-partial,
+.shell-badge-partial,
+.session-status-partial,
+.workflow-chip-active {
+  color: var(--ms-accent2);
+  border-color: rgba(108, 92, 231, 0.25);
+  background: rgba(108, 92, 231, 0.15);
+}
+
+.status-error,
+.shell-badge-error,
+.session-status-error,
+.workflow-chip-error {
+  color: var(--ms-red);
+  border-color: rgba(255, 118, 117, 0.2);
+  background: rgba(255, 118, 117, 0.12);
+}
+
+.shell-badge-muted,
+.workflow-chip-idle {
+  color: var(--ms-text2);
+}
+
+.route-status-ladder {
+  border: 1px solid var(--ms-border);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+
+.route-status-step {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--sp-2);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ms-border);
+  background: var(--ms-bg2);
+}
+
+.route-status-step:last-child {
+  border-bottom: 0;
+}
+
+.route-status-step span {
+  color: var(--ms-text3);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.route-status-step strong {
+  font-size: 12px;
+  color: var(--ms-text);
+}
+
+.route-status-step-ready strong {
+  color: var(--ms-green);
+}
+
+.route-status-step-partial strong {
+  color: var(--ms-amber);
+}
+
+.route-status-step-error strong {
+  color: var(--ms-red);
+}
+
+.route-status-step-muted strong {
+  color: var(--ms-text2);
+}
+
+.truth-rail {
+  display: grid;
+  gap: var(--sp-3);
+}
+
+.truth-rail-section {
+  padding: var(--sp-4);
+}
+
+.truth-rail-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+
+.truth-rail-section-body {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.truth-rail-pairs {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.truth-rail-pairs div {
+  border: 1px solid var(--ms-border);
+  border-radius: var(--r);
+  padding: 8px 10px;
+  background: var(--ms-bg3);
+}
+
+.truth-rail-pairs span {
+  display: block;
+  font-size: 11px;
+  color: var(--ms-text3);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.truth-rail-pairs strong {
+  color: var(--ms-text);
+  font-size: 13px;
+}
+
+.chat-toolbar {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--ms-border);
+  border-radius: var(--r2);
+  background: var(--ms-bg2);
+}
+
+.chat-toolbar-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: var(--sp-3);
+}
+
+.chat-toolbar-actions,
+.chat-toolbar-primary-actions,
+.runtime-actions,
+.action-row,
+.composer-footer,
+.matrix-composer-banner-meta,
+.matrix-thread-context-actions,
+.session-list-actions,
+.truth-rail-actions,
+.telemetry-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.chat-routing-status-strip,
+.approval-meta-grid,
+.settings-grid,
+.detail-grid,
+.delta-grid,
+.review-queue-list,
+.github-action-grid,
+.github-plan-file-grid,
+.session-list-items,
+.room-picker {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.chat-routing-status-strip {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: var(--sp-2);
+  border: 1px solid var(--ms-border);
+  border-radius: var(--r);
+  background: var(--ms-bg2);
+}
+
+.chat-routing-status-item {
+  border: 1px solid var(--ms-border);
+  border-radius: var(--r);
+  padding: 8px 10px;
+  background: var(--ms-bg3);
+}
+
+.chat-routing-status-item span {
+  display: block;
+  font-size: 11px;
+  color: var(--ms-text3);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+}
+
+.chat-routing-status-item strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--ms-text);
+  font-size: 12px;
+}
+
+.chat-routing-status-item-ready strong {
+  color: var(--ms-green);
+}
+
+.chat-routing-status-item-partial strong {
+  color: var(--ms-amber);
+}
+
+.chat-routing-status-item-error strong {
+  color: var(--ms-red);
+}
+
+.chat-routing-status-item-muted strong {
+  color: var(--ms-text2);
+}
+
+.mode-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--ms-border);
+  background: var(--ms-bg3);
+}
+
+.mode-toggle-button {
+  min-height: 28px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ms-text2);
+}
+
+.mode-toggle-button-active {
+  background: rgba(108, 92, 231, 0.15);
+  border-color: rgba(108, 92, 231, 0.25);
+  color: var(--ms-accent2);
+}
+
+.governed-thread,
+.message-list,
+.review-queue-list,
+.room-picker,
+.telemetry-feed {
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.thread-block,
+.thread-notice,
+.execution-receipt,
+.proposal-card,
+.approval-transition-card,
+.github-plan-file-card,
+.github-repo-card,
+.github-next-step,
+.review-queue-item,
+.matrix-thread-context-card,
+.scope-summary-item,
+.candidate-card,
+.plan-card,
+.provenance-card,
+.settings-verification-row,
+.verification-card,
+.workspace-summary-card,
+.guide-card {
+  border: 1px solid var(--ms-border);
+  border-radius: var(--r);
+  background: var(--ms-bg3);
+  padding: var(--sp-3);
+}
+
+.thread-block {
+  max-width: min(76ch, 88%);
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.thread-block-operator {
+  margin-left: auto;
+  border-color: rgba(108, 92, 231, 0.24);
+  background: rgba(108, 92, 231, 0.1);
+}
+
+.thread-block-agent {
+  margin-right: auto;
+}
+
+.thread-block-agent-draft {
+  border-color: rgba(108, 92, 231, 0.26);
+  background: rgba(108, 92, 231, 0.08);
+}
+
+.thread-block-header,
+.proposal-card-header,
+.execution-receipt-header,
+.approval-transition-header,
+.card-header,
+.session-list-header,
+.review-queue-item-header,
+.github-repo-card-header,
+.github-plan-header,
+.context-summary-header,
+.chat-pinned-context-header,
+.chat-action-sheet-header,
+.mobile-context-sheet-header,
+.guide-overlay-header,
+.guide-carousel-controls {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.thread-message-actions {
+  margin-top: var(--sp-1);
+}
+
+.thread-message-action-button {
+  min-height: 30px;
+  min-width: 30px;
+  padding: 0 10px;
+}
+
+.thread-message-action-copy {
+  margin-left: auto;
+}
+
+.chat-inline-code {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--ms-border);
+  background: var(--ms-bg3);
+  color: var(--ms-accent2);
+  font-family: var(--ms-mono);
+  font-size: 12px;
+}
+
+.chat-code-block-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: 6px 8px;
+  border: 1px solid var(--ms-border);
+  border-bottom: 0;
+  border-radius: var(--r) var(--r) 0 0;
+  background: var(--ms-bg3);
+}
+
+.chat-code-language {
+  color: var(--ms-text3);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.markdown-message pre,
+.github-diff-preview,
+.delta-grid pre {
+  margin: 0;
+  border: 1px solid var(--ms-border);
+  border-radius: var(--r);
+  background: var(--ms-bg3);
+  color: var(--ms-text);
+  padding: 14px 16px;
+  font-size: 12px;
+  line-height: 1.7;
+  overflow: auto;
+}
+
+.proposal-summary,
+.proposal-consequence,
+.proposal-consequence span,
+.proposal-consequence strong,
+.execution-receipt p,
+.review-queue-item-provenance p,
+.workspace-summary-card p,
+.matrix-thread-context-copy p,
+.chat-pinned-context-summary {
+  margin: 0;
+}
+
+.proposal-consequence {
+  display: grid;
+  gap: 4px;
+}
+
+.proposal-consequence span,
+.review-queue-item-provenance span,
+.settings-verification-timestamp,
+.review-queue-item-provenance strong,
+.approval-meta-grid span,
+.approval-meta-grid strong,
+.github-repo-meta,
+.session-list-meta,
+.session-list-subtitle,
+.room-picker-meta,
+.scope-summary-item small,
+.scope-summary-meta,
+.runtime-note,
+.telemetry-item p {
+  font-size: 12px;
+}
+
+.approval-meta-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.approval-meta-grid div,
+.detail-grid div,
+.delta-grid pre,
+.status-panel-grid div,
+.expert-detail-section-grid div,
+.expert-details-grid div,
+.review-queue-item-provenance p,
+.settings-verification-row > div {
+  border: 1px solid var(--ms-border);
+  border-radius: var(--r);
+  background: var(--ms-bg2);
+  padding: 8px 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.approval-meta-grid span,
+.detail-grid span,
+.status-panel-grid span,
+.expert-detail-section-grid span,
+.expert-details-grid span,
+.review-queue-item-provenance span {
+  color: var(--ms-text3);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+}
+
+.chat-action-sheet,
+.mobile-context-sheet {
+  border-top: 1px solid var(--ms-border2);
+  border-radius: var(--r3) var(--r3) 0 0;
+  background: var(--ms-bg2);
+}
+
+.chat-action-sheet-backdrop,
+.mobile-context-backdrop,
+.guide-overlay-backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.guide-overlay,
+.public-preview-card,
+.settings-adapter-row,
+.settings-verification-row,
+.settings-model-list > div,
+.settings-inline-controls input,
+.session-list-note,
+.review-queue-item,
+.empty-state-card-copy,
+.warning-banner,
+.alert-banner,
+.error-banner,
+.verification-state {
+  border: 1px solid var(--ms-border);
+  border-radius: var(--r);
+  background: var(--ms-bg3);
+}
+
+.warning-banner,
+.alert-banner {
+  border-color: rgba(253, 203, 110, 0.2);
+  background: rgba(253, 203, 110, 0.08);
+  color: var(--ms-amber);
+}
+
+.error-banner,
+.thread-notice-error {
+  border-color: rgba(255, 118, 117, 0.28);
+  background: rgba(255, 118, 117, 0.08);
+  color: var(--ms-red);
+}
+
+.matrix-workspace .workspace-card {
+  border-left: 3px solid var(--ms-teal);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.matrix-workspace .matrix-topic-card,
+.matrix-workspace .matrix-composer-focus-card {
+  border-left-color: var(--ms-teal);
+}
+
+.matrix-workspace .reference-chip,
+.matrix-workspace .scope-chip {
+  border-color: rgba(0, 206, 201, 0.2);
+  color: var(--ms-teal);
+  background: rgba(0, 206, 201, 0.1);
+}
+
+.room-picker-item,
+.scope-summary-item,
+.candidate-card,
+.plan-card,
+.provenance-card,
+.review-queue-item,
+.github-plan-file-card,
+.session-list-item,
+.status-panel-primary-row,
+.telemetry-item {
+  border: 1px solid var(--ms-border);
+  border-radius: var(--r);
+  background: var(--ms-bg3);
+  box-shadow: none;
+}
+
+.room-picker-item:hover,
+.candidate-card:hover,
+.session-list-item:hover {
+  border-color: var(--ms-border2);
+  transform: translateY(-1px);
+}
+
+.room-picker-item-active,
+.candidate-card-active,
+.session-list-item-active {
+  border-color: rgba(108, 92, 231, 0.25);
+  background: rgba(108, 92, 231, 0.1);
+}
+
+.github-repo-card {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.github-repo-meta,
+.github-file-chip-row,
+.github-warning-list,
+.plan-badges,
+.settings-adapter-actions,
+.matrix-thread-context-meta,
+.chat-action-sheet-tags,
+.matrix-composer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.github-plan-file-grid,
+.github-action-grid,
+.settings-grid,
+.matrix-grid,
+.detail-grid,
+.input-row,
+.review-queue-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.input-row {
+  align-items: center;
+}
+
+.review-queue-item-provenance {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.composer {
+  display: grid;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+  border: 1px solid var(--ms-border);
+  border-radius: var(--r2);
+  background: var(--ms-bg2);
+  padding: var(--sp-4);
+}
+
+.composer textarea {
+  min-height: 112px;
+  border-radius: 10px;
+  border-color: var(--ms-border2);
+  background: var(--ms-bg3);
+}
+
+.composer-footer {
+  justify-content: flex-end;
+}
+
+.chat-pinned-context {
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+}
+
+.chat-pinned-context-meta {
+  color: var(--ms-text3);
+  font-size: 12px;
+}
+
+.bottom-diagnostics-layer {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: var(--sp-2);
+  border-top: 1px solid var(--ms-border);
+  background: var(--ms-bg2);
+  padding: var(--sp-2) var(--sp-4);
+}
+
+.diagnostic-signal {
+  min-height: 32px;
+  border: 1px solid var(--ms-border);
+  border-radius: var(--r);
+  background: var(--ms-bg3);
+  padding: 6px 10px;
+}
+
+.diagnostic-signal span {
+  color: var(--ms-text3);
+  font-size: 11px;
+}
+
+.diagnostic-signal strong {
+  color: var(--ms-text);
+  font-size: 12px;
+}
+
+.bottom-diagnostics-action {
+  min-height: 32px;
+}
+
+.public-preview {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: var(--sp-6);
+  background: var(--ms-bg);
+}
+
+.public-preview-card {
+  max-width: 560px;
+  width: 100%;
+  padding: var(--sp-6);
+  display: grid;
+  gap: var(--sp-3);
+}
+
+@keyframes ms-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.mobile-live-indicator,
+.mobile-context-live::before {
+  animation: ms-pulse var(--dur-stream) ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 50ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 50ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .mobile-live-indicator,
+  .mobile-context-live::before {
+    animation: none !important;
+  }
+}
+
+@media (max-width: 1279px) {
+  .console-layout {
+    grid-template-columns: 72px minmax(0, 1fr) minmax(240px, 300px);
+  }
+
+  .workspace-sidebar {
+    padding-inline: var(--sp-2);
+  }
+
+  .workspace-tab-vertical {
+    justify-content: center;
+  }
+
+  .workspace-tab-vertical span small,
+  .workspace-tab-vertical span strong,
+  .shell-nav-card .shell-section-label {
+    display: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .global-header-shell {
+    min-height: 52px;
+    padding: var(--sp-2) var(--sp-3);
+  }
+
+  .console-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-sidebar,
+  .workspace-context {
+    position: static;
+    top: auto;
+    max-height: none;
+    border: 0;
+  }
+
+  .console-main {
+    padding: var(--sp-3);
+  }
+
+  .workspace-frame-card {
+    min-height: 0;
+  }
+
+  .bottom-diagnostics-layer,
+  .chat-toolbar-controls,
+  .github-plan-file-grid,
+  .github-action-grid,
+  .settings-grid,
+  .matrix-grid,
+  .detail-grid,
+  .input-row,
+  .review-queue-list,
+  .chat-routing-status-strip,
+  .approval-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.app-shell-mobile {
+  min-height: 100dvh;
+  background: var(--ms-bg);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.app-shell-mobile .mobile-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 80;
+  min-height: 57px;
+  padding: calc(env(safe-area-inset-top) + 8px) var(--sp-3) var(--sp-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  border-bottom: 1px solid var(--ms-border);
+  background: var(--ms-bg2);
+}
+
+.app-shell-mobile .mobile-brand-button {
+  min-height: 36px;
+  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  border: 0;
+  background: transparent;
+  color: var(--ms-text);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.app-shell-mobile .mobile-brand-button .mosaicstacked-mark {
+  position: static;
+  width: 24px;
+  height: 24px;
+  transform: none;
+}
+
+.app-shell-mobile .mobile-topbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.app-shell-mobile .mobile-model-badge {
+  min-height: 28px;
+  max-width: 140px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-shell-mobile .mobile-live-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ms-green);
+}
+
+.app-shell-mobile .mobile-live-indicator-partial {
+  background: var(--ms-amber);
+}
+
+.app-shell-mobile .mobile-live-indicator-error {
+  background: var(--ms-red);
+}
+
+.app-shell-mobile .mobile-context-strip {
+  position: sticky;
+  top: calc(env(safe-area-inset-top) + 57px);
+  z-index: 70;
+  min-height: 32px;
+  padding: 0 var(--sp-3);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  border-bottom: 1px solid var(--ms-border);
+  background: var(--ms-bg2);
+  overflow: hidden;
+}
+
+.app-shell-mobile .mobile-context-chip {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--ms-border2);
+  background: var(--ms-bg3);
+  color: var(--ms-text2);
+  font-family: var(--ms-mono);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-shell-mobile .mobile-context-chip-action {
+  cursor: pointer;
+}
+
+.app-shell-mobile .mobile-context-live {
+  margin-left: auto;
+  color: var(--ms-text2);
+  font-family: var(--ms-mono);
+  font-size: 11px;
+}
+
+.app-shell-mobile .mobile-workspace-surface {
+  min-height: 0;
+  overflow: auto;
+  padding: var(--sp-2) var(--sp-2) calc(72px + env(safe-area-inset-bottom));
+}
+
+.app-shell-mobile .mobile-workspace-frame {
+  min-height: 100%;
+}
+
+.app-shell-mobile .mobile-bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 85;
+  height: calc(52px + env(safe-area-inset-bottom));
+  padding: 4px 8px calc(env(safe-area-inset-bottom) + 4px);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  border-top: 1px solid var(--ms-border2);
+  background: var(--ms-bg2);
+}
+
+.app-shell-mobile .workspace-tab-mobile {
+  min-height: 44px;
+  padding: 4px 6px;
+  border-radius: var(--r);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ms-text2);
+}
+
+.app-shell-mobile .workspace-tab-mobile.workspace-tab-active {
+  color: var(--ms-accent2);
+  border-color: rgba(108, 92, 231, 0.25);
+  background: rgba(108, 92, 231, 0.12);
+}
+
+.app-shell-mobile .mobile-context-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 91;
+  max-height: min(76dvh, 560px);
+  overflow: auto;
+  padding: 12px 12px calc(env(safe-area-inset-bottom) + 14px);
+}
+
+.app-shell-mobile .mobile-context-status-grid,
+.app-shell-mobile .mobile-context-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-2);
+}
+
+.app-shell-mobile .mobile-context-status-grid div {
+  padding: 8px;
+  border: 1px solid var(--ms-border);
+  border-radius: var(--r);
+  background: var(--ms-bg3);
+  min-width: 0;
+}
+
+.app-shell-mobile .mobile-context-status-grid span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--ms-text3);
+  font-size: 11px;
+}
+
+.app-shell-mobile .mobile-context-status-grid strong {
+  display: block;
+  min-width: 0;
+  color: var(--ms-text);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (min-width: 761px) {
+  .app-shell-mobile .mobile-bottom-nav,
+  .app-shell-mobile .mobile-context-backdrop,
+  .app-shell-mobile .mobile-context-sheet {
+    display: none;
+  }
+}
+
+/* Legacy hard overrides: neutralize previous neon/gradient shell styles. */
+.global-header-shell .mosaicstacked-mark {
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+}
+
+.global-header-shell .theme-toggle-button,
+.global-header-shell .shell-language-button {
+  width: auto !important;
+  height: auto !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+  line-height: 1.2 !important;
+}
+
+button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.shell-language-button):not(.workspace-tab):not(.session-list-item):not(.mode-toggle-button):not(.mobile-brand-button):not(.mobile-context-chip-action),
+.primary-link-button {
+  background: var(--ms-accent) !important;
+  border-color: var(--ms-accent) !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+
+button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.shell-language-button):not(.workspace-tab):not(.session-list-item):not(.mode-toggle-button):not(.mobile-brand-button):not(.mobile-context-chip-action):hover:not(:disabled),
+.primary-link-button:hover:not(.is-disabled) {
+  background: #7d6df0 !important;
+  border-color: #7d6df0 !important;
+  box-shadow: none !important;
+}
+
+button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.shell-language-button):not(.workspace-tab):not(.session-list-item):not(.mode-toggle-button):not(.mobile-brand-button):not(.mobile-context-chip-action):active:not(:disabled),
+.primary-link-button:active:not(.is-disabled) {
+  background: #5a4bd1 !important;
+  border-color: #5a4bd1 !important;
+}
+
+.secondary-button,
+.ghost-button,
+.theme-toggle-button,
+.shell-language-button {
+  background: var(--ms-bg3) !important;
+  border-color: var(--ms-border2) !important;
+  color: var(--ms-text) !important;
+  box-shadow: none !important;
+}
+
+.ghost-button {
+  color: var(--ms-text2) !important;
+}
+
+.shell-card,
+.workspace-frame-card,
+.chat-card,
+.workspace-card,
+.status-panel-card,
+.truth-rail-section,
+.session-list-card,
+.sidebar-card,
+.context-summary-card,
+.empty-state-card,
+.github-review-card,
+.github-action-card,
+.github-repo-card,
+.review-item-card,
+.safety-tip-card,
+.workspace-summary-card,
+.model-card,
+.public-preview-card,
+.thread-block,
+.thread-notice,
+.execution-receipt,
+.proposal-card,
+.approval-transition-card,
+.github-plan-file-card,
+.github-next-step,
+.review-queue-item,
+.matrix-thread-context-card,
+.scope-summary-item,
+.candidate-card,
+.plan-card,
+.provenance-card,
+.settings-verification-row,
+.verification-card,
+.guide-card,
+.room-picker-item,
+.status-panel-primary-row,
+.telemetry-item {
+  box-shadow: none !important;
+}
+
+.app-shell-mobile .mobile-brand-button {
+  border: 1px solid var(--ms-border) !important;
+  border-radius: var(--r) !important;
+  background: var(--ms-bg3) !important;
+  color: var(--ms-text) !important;
+}
+
+.app-shell-mobile .mobile-context-chip-action {
+  border-color: var(--ms-border2) !important;
+  background: var(--ms-bg3) !important;
+  color: var(--ms-text2) !important;
+}
+
+.app-shell-mobile .mobile-context-live::before {
+  content: "● ";
+}
+
+.chat-toolbar-controls .mode-toggle-button {
+  border-color: transparent !important;
+  background: transparent !important;
+  color: var(--ms-text2) !important;
+  box-shadow: none !important;
+}
+
+.chat-toolbar-controls .mode-toggle-button-active {
+  border-color: rgba(108, 92, 231, 0.25) !important;
+  background: rgba(108, 92, 231, 0.15) !important;
+  color: var(--ms-accent2) !important;
+}
+
+.app-shell-mobile .workspace-tab-mobile,
+.app-shell-mobile .mobile-context-chip,
+.app-shell-mobile .mobile-model-badge,
+.bottom-diagnostics-layer .diagnostic-signal,
+.bottom-diagnostics-layer .bottom-diagnostics-action {
+  box-shadow: none !important;
+}

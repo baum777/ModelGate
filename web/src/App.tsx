@@ -144,7 +144,8 @@ type PersistedShellState = {
 };
 
 const SHELL_STORAGE_KEY = "mosaicstacked.console.shell.v2";
-const THEME_STORAGE_KEY = "mg-theme";
+const THEME_STORAGE_KEY = "ms-theme";
+const LEGACY_THEME_STORAGE_KEY = "mg-theme";
 const WORKSPACE_STATE_SAVE_INTERVAL_MS = 250;
 
 type ThemeMode = "dark" | "light";
@@ -355,7 +356,8 @@ function useTheme() {
       return "dark";
     }
 
-    const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
+    const saved = window.localStorage.getItem(THEME_STORAGE_KEY)
+      ?? window.localStorage.getItem(LEGACY_THEME_STORAGE_KEY);
 
     if (saved === "dark" || saved === "light") {
       return saved;
@@ -370,7 +372,9 @@ function useTheme() {
     }
 
     document.documentElement.dataset.theme = theme;
+    document.body.classList.toggle("light-mode", theme === "light");
     window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    window.localStorage.setItem(LEGACY_THEME_STORAGE_KEY, theme);
   }, [theme]);
 
   return {
