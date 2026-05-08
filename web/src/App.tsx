@@ -337,17 +337,34 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-export default function App() {
-  return shouldRenderConsole() ? <ConsoleShell /> : <PublicPreview />;
-}
+type AppSurface = "console" | "readme" | "preview";
 
-function shouldRenderConsole() {
-  if (typeof window === "undefined") {
-    return true;
+export function resolveAppSurface(href?: string): AppSurface {
+  if (typeof window === "undefined" && !href) {
+    return "console";
   }
 
-  const url = new URL(window.location.href);
-  return url.pathname === "/console" || url.searchParams.get("console") === "1";
+  const url = new URL(href ?? window.location.href);
+
+  if (url.pathname === "/console" || url.searchParams.get("console") === "1") {
+    return "console";
+  }
+
+  if (url.pathname === "/readme" || url.pathname === "/handbook") {
+    return "readme";
+  }
+
+  return "preview";
+}
+
+export default function App() {
+  const surface = resolveAppSurface();
+
+  if (surface === "console") {
+    return <ConsoleShell />;
+  }
+
+  return surface === "readme" ? <ReadmeLandingPage /> : <PublicPreview />;
 }
 
 function useTheme() {
@@ -423,8 +440,239 @@ function PublicPreview() {
         <p className="hero-copy">
           Public preview shell. Governed workspace access stays separate from this route.
         </p>
-        <a className="secondary-button public-preview-link" href="/console">
-          Open governed console
+        <div className="public-preview-actions">
+          <a className="secondary-button public-preview-link" href="/console">
+            Open governed console
+          </a>
+          <a className="secondary-button public-preview-link" href="/readme">
+            README
+          </a>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+const README_FEATURES: Array<{
+  mode: WorkspaceMode;
+  title: string;
+  text: string;
+  ideal: string;
+  example: string;
+  cta: string;
+  href: string;
+}> = [
+  {
+    mode: "chat",
+    title: "Chat",
+    text: "Starte mit einer Frage, einer Idee oder einem Arbeitsauftrag. Nutze unterschiedliche Modelle und entwickle aus erster Orientierung direkt nächste Schritte.",
+    ideal: "Ideal für Brainstorming, Strukturierung, Review-Vorbereitung und schnelle Hilfestellungen.",
+    example: "Lass dir aus einer Idee direkt einen Umsetzungsplan formulieren.",
+    cta: "Chat starten",
+    href: "/console?mode=chat",
+  },
+  {
+    mode: "github",
+    title: "GitHub",
+    text: "Arbeite direkt an deinen eigenen Repositories. Lies Kontext, prüfe Änderungen und verbinde Modellarbeit mit echten Projektfortschritten.",
+    ideal: "Ideal für Code-Verständnis, Review, Änderungsplanung und Dokumentationshilfe.",
+    example: "Analysiere ein Repo und formuliere daraus eine PR-Zusammenfassung.",
+    cta: "Repo verbinden",
+    href: "/console?mode=github",
+  },
+  {
+    mode: "matrix",
+    title: "Matrix",
+    text: "Teile Wissen, Ideen und Ergebnisse direkt mit anderen. Nutze Matrix als Raum für Austausch, Kontext und kooperative Weiterarbeit.",
+    ideal: "Ideal für Team-Kontext, Fragen, geteilte Ergebnisse und gemeinsames Nachverfolgen.",
+    example: "Schicke einen Entwurf aus dem Chat direkt in einen Raum und hole Feedback ein.",
+    cta: "Ergebnis teilen",
+    href: "/console?mode=matrix",
+  },
+  {
+    mode: "review",
+    title: "Review",
+    text: "Behalte offene Entscheidungen, Vorschläge und Ergebnisse im Blick. Sichtbar bleibt, was vorgeschlagen, geprüft oder bereits umgesetzt ist.",
+    ideal: "Ideal für Freigaben, Transparenz und kontrolliertes Zusammenarbeiten.",
+    example: "Prüfe einen vorgeschlagenen Schritt, bevor du ihn final bestätigst.",
+    cta: "Review öffnen",
+    href: "/console?mode=review",
+  },
+  {
+    mode: "settings",
+    title: "Settings",
+    text: "Passe deinen Arbeitsmodus an und behalte Verbindungen, Modelle und Systemstatus im Blick.",
+    ideal: "Ideal für Setup, Kontrolle und den Wechsel zwischen Beginner- und Power-User-Sicht.",
+    example: "Wechsle zwischen ruhiger Beginner-Sicht und tiefer Power-User-Sicht.",
+    cta: "Status prüfen",
+    href: "/console?mode=settings",
+  },
+];
+
+const README_FLOW = [
+  {
+    title: "Verstehen",
+    text: "Was ist MosaicStacked und wofür nutze ich es?",
+    next: "Erkenne zuerst, wie Chat, GitHub, Matrix und Review zusammenarbeiten.",
+  },
+  {
+    title: "Ausprobieren",
+    text: "Starte eine Frage im Chat oder öffne einen ersten Task.",
+    next: "Formuliere ein Ziel und lasse dir die nächsten Schritte strukturieren.",
+  },
+  {
+    title: "Verbinden",
+    text: "Verknüpfe Projekt, Modelle und Austausch sinnvoll miteinander.",
+    next: "Wechsle vom Gedanken in Repo-Kontext, Dateien und konkrete Arbeit.",
+  },
+  {
+    title: "Teilen",
+    text: "Teile Ergebnisse, Fragen oder Zwischenschritte direkt weiter.",
+    next: "Bring Entwürfe in Matrix-Räume, statt sie in einzelnen Chats zu verlieren.",
+  },
+  {
+    title: "Zusammenarbeiten",
+    text: "Prüfe, verbessere und entwickle mit anderen weiter.",
+    next: "Nutze Review, damit Entscheidungen und Freigaben nachvollziehbar bleiben.",
+  },
+];
+
+const README_USE_CASES = [
+  {
+    title: "Model Agnostic Research",
+    text: "Vergleiche Antworten mehrerer Modelle und nimm die beste Richtung für dein Projekt mit.",
+  },
+  {
+    title: "Projektarbeit",
+    text: "Arbeite an echten Repositories statt nur in isolierten Chatfenstern.",
+  },
+  {
+    title: "Direktes Teilen",
+    text: "Leite Ideen, Entwürfe oder Ergebnisse ohne Umwege an andere weiter.",
+  },
+  {
+    title: "Coop Review",
+    text: "Nutze Review-Flows, um Entscheidungen sichtbar und gemeinsam nachvollziehbar zu machen.",
+  },
+  {
+    title: "Hilfestellungen",
+    text: "Erstelle schnelle Erklärungen, Zusammenfassungen und Orientierungshilfen für andere.",
+  },
+  {
+    title: "Vom Gedanken zur Aktion",
+    text: "Starte im Chat, wechsle zu GitHub, teile in Matrix und lande im Review - alles in einem Flow.",
+  },
+];
+
+function ReadmeLandingPage() {
+  return (
+    <main className="app-shell readme-landing" data-testid="readme-landing">
+      <section className="readme-hero" aria-labelledby="readme-hero-title">
+        <div className="readme-brand-row">
+          <div className="mosaicstacked-mark" aria-hidden="true" />
+          <span>MosaicStacked Handbook</span>
+        </div>
+        <p className="readme-eyebrow">Landingpage + Handbook + Cheatsheet</p>
+        <h1 id="readme-hero-title">Build with your Repo, your Models, your Community</h1>
+        <p className="readme-hero-copy">
+          MosaicStacked ist dein Workspace für modellagnostisches Arbeiten, echte Projektarbeit
+          und direkte Zusammenarbeit. Verbinde Chat, GitHub, Matrix und Review in einem klaren
+          Flow - von der Idee bis zur gemeinsamen Umsetzung.
+        </p>
+        <a className="readme-enter-cta" href="/console" aria-label="ENTER öffnet MosaicStacked">
+          ENTER
+        </a>
+      </section>
+
+      <section className="readme-section readme-intro-grid" aria-labelledby="readme-goal-title">
+        <div>
+          <p className="readme-section-kicker">Verstehen, handeln, aktivieren</p>
+          <h2 id="readme-goal-title">Dein Workspace für Modelle, Projekte und Zusammenarbeit.</h2>
+        </div>
+        <div className="readme-intro-copy">
+          <p>
+            MosaicStacked verbindet Chat, GitHub, Matrix und Review in einer Oberfläche. So kannst
+            du Ideen entwickeln, an eigenen Projekten arbeiten, Ergebnisse teilen und Entscheidungen
+            nachvollziehbar machen.
+          </p>
+          <p>
+            Die Seite ist Einführung, Mini-Handbuch und Cheatsheet in einem: zuerst Nutzen, dann
+            Handlung, danach ein konkretes Beispiel.
+          </p>
+        </div>
+      </section>
+
+      <section className="readme-section" aria-labelledby="readme-features-title">
+        <div className="readme-section-heading">
+          <p className="readme-section-kicker">Workspace Tabs</p>
+          <h2 id="readme-features-title">Was du mit MosaicStacked machen kannst</h2>
+          <p>
+            Nutze verschiedene Modelle, arbeite an eigenen Projekten, teile Zwischenergebnisse und
+            bringe Fragen, Feedback und Review in einen gemeinsamen Ablauf.
+          </p>
+        </div>
+        <div className="readme-feature-grid">
+          {README_FEATURES.map((feature) => (
+            <article className="readme-feature-card" key={feature.title}>
+              <div className="readme-card-icon" aria-hidden="true">
+                <WorkspaceIcon mode={feature.mode} />
+              </div>
+              <h3>{feature.title}</h3>
+              <p>{feature.text}</p>
+              <p className="readme-card-meta">{feature.ideal}</p>
+              <p className="readme-card-example">{feature.example}</p>
+              <a href={feature.href}>{feature.cta}</a>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="readme-section readme-flow-section" aria-labelledby="readme-flow-title">
+        <div className="readme-section-heading">
+          <p className="readme-section-kicker">Handbook Flow</p>
+          <h2 id="readme-flow-title">Lerne deinen Workspace kennen</h2>
+          <p>
+            Beginner sehen einen klaren Ablauf. Power User können dieselben Tabs als zusammenhängende
+            Arbeitskette nutzen.
+          </p>
+        </div>
+        <div className="readme-flow-list">
+          {README_FLOW.map((step, index) => (
+            <article className="readme-flow-step" key={step.title}>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <div>
+                <h3>{step.title}</h3>
+                <p>{step.text}</p>
+                <strong>{step.next}</strong>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="readme-section" aria-labelledby="readme-use-cases-title">
+        <div className="readme-section-heading">
+          <p className="readme-section-kicker">Cheatsheet</p>
+          <h2 id="readme-use-cases-title">Vom Gedanken zur Aktion</h2>
+          <p>
+            MosaicStacked hält den Fokus auf Arbeit, Kontext und Ergebnis - nicht auf einem einzelnen
+            Modell oder einem isolierten Chatfenster.
+          </p>
+        </div>
+        <div className="readme-use-case-grid">
+          {README_USE_CASES.map((useCase) => (
+            <article className="readme-use-case" key={useCase.title}>
+              <h3>{useCase.title}</h3>
+              <p>{useCase.text}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="readme-footer-cta" aria-label="MosaicStacked starten">
+        <p>Starte mit einer Frage. Wechsle in dein Projekt. Teile den nächsten Schritt.</p>
+        <a className="readme-enter-cta" href="/console">
+          ENTER
         </a>
       </section>
     </main>

@@ -2,32 +2,31 @@
   "name": "MosaicStacked",
   "short_name": "MosaicStacked",
   "description": "Model-agnostic workspace for chat, repositories, Matrix context, and review.",
-  "start_url": "/",
-  "scope": "/",
   "display": "standalone",
-  "background_color": "#0f0f11",
-  "theme_color": "#0f0f11",
+  "start_url": "/",
+  "background_color": "#f8fcff",
+  "theme_color": "#0ea5e9",
   "icons": [
     {
-      "src": "/icons/dark/icon-dark-192.png",
+      "src": "/icons/light/icon-light-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/dark/icon-dark-512.png",
+      "src": "/icons/light/icon-light-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/dark/pwa-maskable-dark-192.png",
+      "src": "/icons/light/pwa-maskable-light-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/icons/dark/pwa-maskable-dark-512.png",
+      "src": "/icons/light/pwa-maskable-light-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
