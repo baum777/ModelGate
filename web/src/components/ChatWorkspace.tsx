@@ -28,6 +28,9 @@ import {
 import { MarkdownMessage, hasRichTextContent } from "./MarkdownMessage.js";
 import { GuideOverlay, getWorkspaceGuide } from "./GuideOverlay.js";
 import { SectionLabel, ShellCard, StatusBadge } from "./ShellPrimitives.js";
+import { GuideCTAInline } from "./GuideCTAInline.js";
+import { EmptyStateCTA } from "./EmptyStateCTA.js";
+import { DiscoveryChip } from "./DiscoveryChip.js";
 import {
   BACKEND_TRUTH_UNAVAILABLE,
   buildGovernanceMetadataRows,
@@ -40,6 +43,12 @@ import {
   type WorkMode,
 } from "../lib/work-mode.js";
 import { buildPinnedChatContextPrompt, type PinnedChatContext } from "../lib/pinned-chat-context.js";
+import {
+  hasSeenGuideKey,
+  markGuideKeySeen,
+  readGuideSetupState,
+  writeGuideSetupState,
+} from "../lib/guide-state.js";
 
 type PublicModelEntry = {
   alias: string;
@@ -103,6 +112,23 @@ type ChatRoutingStatusCopy = {
 const CHAT_SESSION_SYNC_INTERVAL_MS = 220;
 const MESSAGE_ACTION_COPY_RESET_MS = 1600;
 const MATRIX_DRAFT_TAGS = ["release", "incident", "todo"] as const;
+const MESSAGE_ACTION_GUIDE_PULSE_MS = 1400;
+const GUIDE_KEY_SETUP_OPENROUTER = "setup-openrouter";
+const GUIDE_KEY_FIRST_MESSAGE_SENT = "first-message-sent";
+const GUIDE_KEY_FIRST_AI_RESPONSE = "first-ai-response";
+const GUIDE_KEY_MATRIX_CTA = "matrix-cta-shown";
+const GUIDE_KEY_GITHUB_CTA = "github-cta-shown";
+const GUIDE_KEY_CONTEXT_CTA = "context-cta-shown";
+const GUIDE_KEY_COPY_CTA = "copy-cta-shown";
+const CONTEXT_FILENAME_PATTERN = /\b[\w./-]+\.(?:ts|tsx|js|jsx|md|yml|yaml|json)\b/i;
+const CHAT_EXAMPLE_PROMPTS = [
+  "Überprüfe server/src/routes/matrix.ts auf Fehler.",
+  "Erstelle einen Plan für die Matrix-Execute-Route.",
+  "Fasse den aktuellen Repo-Zustand als Matrix-Post zusammen.",
+  "Dokumentiere die SSE-Lifecycle-Strategie als Knowledge-Entry.",
+  "Was ist der aktuelle Stand des Projekts?",
+  "Erkläre die Trust Boundaries aus AGENTS.md.",
+] as const;
 
 export function buildChatRoutingStatusItems(options: {
   selectedModel: string;
@@ -290,6 +316,11 @@ function formatConnectionStateLabel(state: ConnectionState) {
   return state.charAt(0).toUpperCase() + state.slice(1);
 }
 
+function extractFilenameCandidate(prompt: string) {
+  const match = prompt.match(CONTEXT_FILENAME_PATTERN);
+  return match?.[0] ?? null;
+}
+
 function resolveConnectionStateTone(state: ConnectionState) {
   if (state === "completed") {
     return "ready";
@@ -335,6 +366,7 @@ type ThreadMessageCardProps = {
   agentLabel: string;
   locale: "en" | "de";
   copyState: "idle" | "copied" | "failed";
+  highlightedAction: "github" | "matrix" | null;
   onGitHubAction: (message: ChatMessage) => void;
   onMatrixAction: (message: ChatMessage) => void;
   onCopyAction: (message: ChatMessage) => void;
@@ -363,7 +395,9 @@ const ThreadMessageCard = React.memo(function ThreadMessageCard(props: ThreadMes
         <div className="thread-message-actions" role="group" aria-label={props.locale === "de" ? "Nachrichtenaktionen" : "Message actions"}>
           <button
             type="button"
-            className="ghost-button thread-message-action-button"
+            className={props.highlightedAction === "github"
+              ? "ghost-button thread-message-action-button thread-message-action-button-highlight"
+              : "ghost-button thread-message-action-button"}
             onClick={() => props.onGitHubAction(props.message)}
             aria-label={props.locale === "de" ? "In GitHub dispatchen" : "Dispatch to GitHub"}
             title={props.locale === "de" ? "In GitHub dispatchen" : "Dispatch to GitHub"}
@@ -372,7 +406,9 @@ const ThreadMessageCard = React.memo(function ThreadMessageCard(props: ThreadMes
           </button>
           <button
             type="button"
-            className="ghost-button thread-message-action-button"
+            className={props.highlightedAction === "matrix"
+              ? "ghost-button thread-message-action-button thread-message-action-button-highlight"
+              : "ghost-button thread-message-action-button"}
             onClick={() => props.onMatrixAction(props.message)}
             aria-label={props.locale === "de" ? "Als Matrix-Post vorbereiten" : "Prepare as Matrix post"}
             title={props.locale === "de" ? "Als Matrix-Post vorbereiten" : "Prepare as Matrix post"}
@@ -399,6 +435,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const beginnerMode = isBeginnerMode(props.workMode);
   const expertMode = isExpertMode(props.workMode);
   const workModeCopy = getWorkModeCopy(locale, props.workMode);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const [chatState, dispatch] = useReducer(
     chatReducer,
     props.session.metadata.chatState,
@@ -450,6 +487,18 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const [githubDispatchOpen, setGithubDispatchOpen] = useState(false);
   const [githubDispatchSourceMessageId, setGithubDispatchSourceMessageId] = useState<string | null>(null);
   const [githubDispatchContent, setGithubDispatchContent] = useState("");
+  const [matrixGuideSeen, setMatrixGuideSeen] = useState(() => hasSeenGuideKey(GUIDE_KEY_MATRIX_CTA));
+  const [githubGuideSeen, setGithubGuideSeen] = useState(() => hasSeenGuideKey(GUIDE_KEY_GITHUB_CTA));
+  const [contextGuideSeen, setContextGuideSeen] = useState(() => hasSeenGuideKey(GUIDE_KEY_CONTEXT_CTA));
+  const [copyGuideSeen, setCopyGuideSeen] = useState(() => hasSeenGuideKey(GUIDE_KEY_COPY_CTA));
+  const [activeInlineGuide, setActiveInlineGuide] = useState<"matrix" | "github" | null>(null);
+  const [contextTipPending, setContextTipPending] = useState<{ prompt: string; fileName: string } | null>(null);
+  const [copyDiscoveryPending, setCopyDiscoveryPending] = useState(false);
+  const [highlightedMessageAction, setHighlightedMessageAction] = useState<{
+    messageId: string;
+    action: "github" | "matrix";
+  } | null>(null);
+  const [openRouterSetupState, setOpenRouterSetupState] = useState(() => readGuideSetupState(GUIDE_KEY_SETUP_OPENROUTER));
 
   const matrixRoomOptions = useMemo(() => {
     const order = [props.matrixDraftDefaultRoomId, ...props.matrixDraftRoomOptions];
@@ -485,6 +534,21 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
 
     setMatrixComposeRoomId(matrixRoomOptions[0]);
   }, [matrixComposeOpen, matrixComposeRoomId, matrixRoomOptions]);
+
+  useEffect(() => {
+    const nextState = selectedModel.trim().length > 0 ? "done" : "pending";
+    if (nextState !== openRouterSetupState) {
+      writeGuideSetupState(GUIDE_KEY_SETUP_OPENROUTER, nextState);
+      setOpenRouterSetupState(nextState);
+    }
+  }, [openRouterSetupState, selectedModel]);
+
+  useEffect(() => {
+    const hasUserMessage = chatState.messages.some((message) => message.role === "user");
+    if (hasUserMessage && !hasSeenGuideKey(GUIDE_KEY_FIRST_MESSAGE_SENT)) {
+      markGuideKeySeen(GUIDE_KEY_FIRST_MESSAGE_SENT);
+    }
+  }, [chatState.messages]);
 
   useEffect(() => {
     const nextSession: ChatSession = {
@@ -710,6 +774,9 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     try {
       await copyTextToClipboard(content);
       setMessageCopyState((current) => ({ ...current, [message.id]: "copied" }));
+      if (!copyGuideSeen) {
+        setCopyDiscoveryPending(true);
+      }
     } catch {
       setMessageCopyState((current) => ({ ...current, [message.id]: "failed" }));
     } finally {
@@ -717,6 +784,41 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
         setMessageCopyState((current) => ({ ...current, [message.id]: "idle" }));
       }, MESSAGE_ACTION_COPY_RESET_MS);
     }
+  }
+
+  function pulseMessageAction(messageId: string, action: "github" | "matrix") {
+    setHighlightedMessageAction({ messageId, action });
+    globalThis.setTimeout(() => {
+      setHighlightedMessageAction((current) => {
+        if (!current) {
+          return current;
+        }
+        if (current.messageId !== messageId || current.action !== action) {
+          return current;
+        }
+        return null;
+      });
+    }, MESSAGE_ACTION_GUIDE_PULSE_MS);
+  }
+
+  function markMatrixGuideSeen() {
+    markGuideKeySeen(GUIDE_KEY_MATRIX_CTA);
+    setMatrixGuideSeen(true);
+  }
+
+  function markGitHubGuideSeen() {
+    markGuideKeySeen(GUIDE_KEY_GITHUB_CTA);
+    setGithubGuideSeen(true);
+  }
+
+  function markContextGuideSeen() {
+    markGuideKeySeen(GUIDE_KEY_CONTEXT_CTA);
+    setContextGuideSeen(true);
+  }
+
+  function markCopyGuideSeen() {
+    markGuideKeySeen(GUIDE_KEY_COPY_CTA);
+    setCopyGuideSeen(true);
   }
 
   function createProposal(prompt: string) {
@@ -955,6 +1057,14 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     }
   }
 
+  async function submitPrompt(prompt: string) {
+    if (executionMode === "governed") {
+      createProposal(prompt);
+      return;
+    }
+    await executeDirectPrompt(prompt);
+  }
+
   function rejectProposal() {
     dispatch({
       type: "reject_proposal"
@@ -971,13 +1081,19 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     }
 
     const prompt = buildPinnedChatContextPrompt(trimmed, props.pinnedContext, locale);
+    const contextFilename = extractFilenameCandidate(trimmed);
+    const shouldOfferContextTip = Boolean(
+      contextFilename
+      && !props.pinnedContext
+      && !contextGuideSeen,
+    );
 
-    if (executionMode === "governed") {
-      createProposal(prompt);
+    if (shouldOfferContextTip && contextFilename) {
+      setContextTipPending({ prompt, fileName: contextFilename });
       return;
     }
 
-    await executeDirectPrompt(prompt);
+    await submitPrompt(prompt);
   }
 
   const pendingProposal = chatState.pendingProposal;
@@ -1034,7 +1150,41 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     ],
     [chatState.notices, error, warning],
   );
+  const assistantMessages = useMemo(
+    () => chatState.messages.filter((message) => message.role === "assistant" && message.content.trim().length > 0),
+    [chatState.messages],
+  );
+  const latestAssistantMessage = assistantMessages[assistantMessages.length - 1] ?? null;
+  const assistantMessageCount = assistantMessages.length;
   const matrixComposeBlocked = matrixComposeRoomId.trim().length === 0 || matrixComposeContent.trim().length === 0;
+  const showSetupBlockingCta = openRouterSetupState !== "done" && selectedModel.trim().length === 0;
+  const showChatEmptyCta = !showSetupBlockingCta
+    && chatState.messages.length === 0
+    && chatState.receipts.length === 0
+    && !pendingProposal;
+  const showInlineGuideCta = !showSetupBlockingCta && !showChatEmptyCta && Boolean(contextTipPending || activeInlineGuide);
+  const showCopyDiscoveryChip = !showSetupBlockingCta && !showChatEmptyCta && !showInlineGuideCta && copyDiscoveryPending;
+
+  useEffect(() => {
+    if (assistantMessageCount > 0 && !hasSeenGuideKey(GUIDE_KEY_FIRST_AI_RESPONSE)) {
+      markGuideKeySeen(GUIDE_KEY_FIRST_AI_RESPONSE);
+    }
+  }, [assistantMessageCount]);
+
+  useEffect(() => {
+    if (contextTipPending || activeInlineGuide) {
+      return;
+    }
+
+    if (assistantMessageCount >= 1 && !matrixGuideSeen) {
+      setActiveInlineGuide("matrix");
+      return;
+    }
+
+    if (assistantMessageCount >= 2 && !githubGuideSeen) {
+      setActiveInlineGuide("github");
+    }
+  }, [activeInlineGuide, assistantMessageCount, contextTipPending, githubGuideSeen, matrixGuideSeen]);
 
   return (
     <section
@@ -1174,10 +1324,119 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
         ) : null}
 
         <div className="governed-thread" aria-live="polite">
-          {chatState.messages.length === 0 && chatState.receipts.length === 0 && !pendingProposal ? (
-            <p className="empty-state" role="status">
-              {executionMode === "direct" ? ui.chat.emptyStateDirect : ui.chat.emptyState}
-            </p>
+          {showSetupBlockingCta ? (
+            <EmptyStateCTA
+              icon="⚠"
+              title="OpenRouter-Key fehlt"
+              description="Ohne Modellalias kann Chat nicht starten. Verbinde zuerst deinen Modellzugang."
+              primaryLabel="Zu Settings"
+              primaryAction={() => {
+                if (typeof window !== "undefined") {
+                  window.location.assign("/console?mode=settings");
+                }
+              }}
+              footnote="Type A Setup: blockierend bis ein Modellzugang verfügbar ist."
+            />
+          ) : null}
+
+          {showChatEmptyCta ? (
+            <EmptyStateCTA
+              icon="M"
+              title="Bereit für deinen ersten Prompt"
+              description="Verbinde ein Repo und frag den Agenten oder starte einfach mit einer Frage."
+              primaryLabel="▶ Beispiel-Prompt einfügen"
+              primaryAction={() => {
+                dispatch({ type: "set_input", input: CHAT_EXAMPLE_PROMPTS[0] });
+                composerRef.current?.focus();
+              }}
+              secondaryLabel="⊟ Repo verbinden"
+              secondaryAction={() => {
+                props.onOpenGitHubFromChatAction({
+                  sourceMessageId: "chat-empty-state",
+                  content: CHAT_EXAMPLE_PROMPTS[0],
+                });
+              }}
+              footnote="oder einfach unten eintippen ↓"
+            />
+          ) : null}
+
+          {showInlineGuideCta && contextTipPending ? (
+            <GuideCTAInline
+              id="context-tip"
+              icon="💡"
+              title="KONTEXT-TIPP"
+              body={`Du fragst nach "${contextTipPending.fileName}" - die Datei ist noch nicht im Kontext.`}
+              primaryLabel="⊡ Datei laden"
+              primaryAction={() => {
+                const pending = contextTipPending;
+                if (!pending) {
+                  return;
+                }
+                markContextGuideSeen();
+                setContextTipPending(null);
+                props.onOpenGitHubFromChatAction({
+                  sourceMessageId: `context-${pending.fileName}`,
+                  content: pending.prompt,
+                });
+              }}
+              secondaryLabel="Trotzdem senden"
+              secondaryAction={() => {
+                const pending = contextTipPending;
+                if (!pending) {
+                  return;
+                }
+                markContextGuideSeen();
+                setContextTipPending(null);
+                void submitPrompt(pending.prompt);
+              }}
+              onDismiss={() => {
+                markContextGuideSeen();
+                setContextTipPending(null);
+              }}
+              variant="warning"
+            />
+          ) : null}
+
+          {showInlineGuideCta && !contextTipPending && activeInlineGuide === "matrix" && latestAssistantMessage ? (
+            <GuideCTAInline
+              id="matrix-dispatch"
+              icon="💡"
+              title="TIPP"
+              body="Tippe [⊛], um diese Antwort direkt als Matrix-Post zu speichern."
+              primaryLabel="⊛ Zeig mir wie"
+              primaryAction={() => {
+                markMatrixGuideSeen();
+                setActiveInlineGuide(null);
+                pulseMessageAction(latestAssistantMessage.id, "matrix");
+                openMatrixComposeFromMessage(latestAssistantMessage);
+              }}
+              onDismiss={() => {
+                markMatrixGuideSeen();
+                setActiveInlineGuide(null);
+              }}
+              variant="matrix"
+            />
+          ) : null}
+
+          {showInlineGuideCta && !contextTipPending && activeInlineGuide === "github" && latestAssistantMessage ? (
+            <GuideCTAInline
+              id="github-dispatch"
+              icon="💡"
+              title="TIPP"
+              body="Tippe [↯], um den Output als Issue oder PR-Kommentar vorzubereiten."
+              primaryLabel="↯ Zeig mir wie"
+              primaryAction={() => {
+                markGitHubGuideSeen();
+                setActiveInlineGuide(null);
+                pulseMessageAction(latestAssistantMessage.id, "github");
+                openGitHubDispatchFromMessage(latestAssistantMessage);
+              }}
+              onDismiss={() => {
+                markGitHubGuideSeen();
+                setActiveInlineGuide(null);
+              }}
+              variant="github"
+            />
           ) : null}
 
           {chatState.messages.map((message) => (
@@ -1189,6 +1448,11 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               agentLabel={ui.chat.agentResponse}
               locale={locale}
               copyState={messageCopyState[message.id] ?? "idle"}
+              highlightedAction={
+                highlightedMessageAction?.messageId === message.id
+                  ? highlightedMessageAction.action
+                  : null
+              }
               onGitHubAction={openGitHubDispatchFromMessage}
               onMatrixAction={openMatrixComposeFromMessage}
               onCopyAction={(nextMessage) => {
@@ -1406,10 +1670,24 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           </ShellCard>
         ) : null}
 
+        {showCopyDiscoveryChip ? (
+          <DiscoveryChip
+            id="copy-guide"
+            position="composer-above"
+            autoDismissMs={5000}
+            text="⎘ Kopiert · Auch als Matrix-Post: ⊛"
+            onDismiss={() => {
+              markCopyGuideSeen();
+              setCopyDiscoveryPending(false);
+            }}
+          />
+        ) : null}
+
         <form className="composer governed-composer" onSubmit={handleSubmit}>
           <textarea
             data-testid="chat-composer"
             aria-label={ui.chat.title}
+            ref={composerRef}
             value={chatState.input}
             onChange={(event) => dispatch({ type: "set_input", input: event.target.value })}
             onKeyDown={(event) => {

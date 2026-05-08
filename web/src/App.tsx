@@ -430,253 +430,508 @@ function useIsMobileViewport() {
   return isMobile;
 }
 
-function PublicPreview() {
+const LANDING_COPY = {
+  de: {
+    kicker: "Model-Agnostic Workflow",
+    heroTitle: "Ein AI-Arbeitsplatz für Chat, Repo-Kontext und Matrix-Wissen.",
+    heroBody: "MosaicStacked verbindet Modellwahl, Projektkontext und Team-Wissen in einem kontrollierten Arbeitsfluss.",
+    heroPrimaryCta: "Console öffnen",
+    heroSecondaryCta: "So funktioniert's",
+    workspaceTabsKicker: "Workspace Tabs",
+    workspaceTabsTitle: "Was du hier machen kannst",
+    openSuffix: "öffnen",
+    modelKicker: "Modell verbinden",
+    modelTitle: "Verbinde dein Modell in drei Schritten",
+    modelBody: "MosaicStacked bleibt model-agnostisch: Du bringst deinen Modellzugang mit, die App macht daraus einen kontrollierten Arbeitsfluss.",
+    modelHintLabel: "Hinweis:",
+    modelHintBody: "Die UI zeigt Modell-Aliase. Provider-Details bleiben Backend-/Config-Sache.",
+    modelSecretNote: "gehört in Settings/Backend, nie in Prompt-Text.",
+    actionsKicker: "Action Buttons",
+    actionsTitle: "Von einer Antwort zur nächsten Aktion",
+    actionsBody: "Jede gute Antwort kann direkt weiterverwendet werden - ohne Copy-Paste-Chaos.",
+    actionsExamplePrefix: "Beispiel:",
+    actionsExampleBody: "Lade eine Datei → frage nach Risiken → speichere die Zusammenfassung mit",
+    actionsExampleTail: "→ bereite ein Issue mit",
+    beginnerKicker: "Beginner Flow",
+    beginnerTitle: "Dein erster Flow",
+    powerKicker: "Power User Recipes",
+    powerTitle: "Workflows für echte Projektarbeit",
+    safetyLabel: "Safety-Hinweis",
+    safetyLines: [
+      "Browser ist Review Surface, Backend hält Autorität.",
+      "Keine direkten Writes ohne Approval Gate.",
+      "Secrets nie in Prompts posten.",
+    ],
+  },
+  en: {
+    kicker: "Model-Agnostic Workflow",
+    heroTitle: "An AI workspace for chat, repo context, and Matrix knowledge.",
+    heroBody: "MosaicStacked combines model choice, project context, and team knowledge in one controlled workflow.",
+    heroPrimaryCta: "Open console",
+    heroSecondaryCta: "How it works",
+    workspaceTabsKicker: "Workspace Tabs",
+    workspaceTabsTitle: "What you can do here",
+    openSuffix: "open",
+    modelKicker: "Connect Models",
+    modelTitle: "Connect your model in three steps",
+    modelBody: "MosaicStacked stays model-agnostic: you bring your model access, the app turns it into a controlled workflow.",
+    modelHintLabel: "Note:",
+    modelHintBody: "The UI shows model aliases. Provider details stay a backend/config concern.",
+    modelSecretNote: "belongs in settings/backend, never in prompt text.",
+    actionsKicker: "Action Buttons",
+    actionsTitle: "From one answer to the next action",
+    actionsBody: "Every good answer can be reused immediately - without copy-paste chaos.",
+    actionsExamplePrefix: "Example:",
+    actionsExampleBody: "Load a file → ask for risks → save the summary with",
+    actionsExampleTail: "→ prepare an issue with",
+    beginnerKicker: "Beginner Flow",
+    beginnerTitle: "Your first flow",
+    powerKicker: "Power User Recipes",
+    powerTitle: "Workflows for real project work",
+    safetyLabel: "Safety Note",
+    safetyLines: [
+      "The browser is a review surface; the backend remains authoritative.",
+      "No direct writes without an approval gate.",
+      "Never post secrets in prompts.",
+    ],
+  },
+} as const;
+
+const LANDING_FEATURES = [
+  {
+    key: "chat",
+    icon: <WorkspaceIcon mode="chat" />,
+    href: "/console?mode=chat",
+    title: {
+      de: "Chat",
+      en: "Chat",
+    },
+    description: {
+      de: "Frage Modelle, plane Tasks und lass dir Code oder Entscheidungen erklären.",
+      en: "Ask models, plan tasks, and get code or decisions explained.",
+    },
+    useCase: {
+      de: "Kurz starten: Idee eintippen und den nächsten Schritt ableiten.",
+      en: "Quick start: type an idea and derive the next step.",
+    },
+  },
+  {
+    key: "github",
+    icon: <WorkspaceIcon mode="github" />,
+    href: "/console?mode=github",
+    title: {
+      de: "GitHub",
+      en: "GitHub",
+    },
+    description: {
+      de: "Lade Repo-Kontext, prüfe Dateien und bereite Issues, Reviews oder PR-Kommentare vor.",
+      en: "Load repo context, inspect files, and prepare issues, reviews, or PR comments.",
+    },
+    useCase: {
+      de: "Datei laden und konkrete Risiken oder Bugs prüfen lassen.",
+      en: "Load a file and ask for concrete risks or bugs.",
+    },
+  },
+  {
+    key: "matrix",
+    icon: <WorkspaceIcon mode="matrix" />,
+    href: "/console?mode=matrix",
+    title: {
+      de: "Matrix",
+      en: "Matrix",
+    },
+    description: {
+      de: "Speichere gute Outputs als Wissen, Posts oder Team-Kontext.",
+      en: "Store strong outputs as knowledge, posts, or team context.",
+    },
+    useCase: {
+      de: "Zusammenfassung direkt als Wissenseintrag übernehmen.",
+      en: "Save a summary directly as a knowledge entry.",
+    },
+  },
+  {
+    key: "context",
+    icon: <span className="landing-glyph">⊡</span>,
+    href: "/console?mode=github",
+    title: {
+      de: "Context",
+      en: "Context",
+    },
+    description: {
+      de: "Behalte aktives Repo, Branch, Datei und Token-Kontext im Blick.",
+      en: "Keep active repo, branch, file, and token context visible.",
+    },
+    useCase: {
+      de: "Vor der Frage prüfen, ob die richtige Datei im Fokus ist.",
+      en: "Check that the right file is in focus before asking.",
+    },
+  },
+  {
+    key: "settings",
+    icon: <WorkspaceIcon mode="settings" />,
+    href: "/console?mode=settings",
+    title: {
+      de: "Settings",
+      en: "Settings",
+    },
+    description: {
+      de: "Verbinde Modellzugang, GitHub und Matrix kontrolliert.",
+      en: "Connect model access, GitHub, and Matrix in a controlled way.",
+    },
+    useCase: {
+      de: "OPENROUTER_API_KEY, GITHUB_TOKEN oder MATRIX_ACCESS_TOKEN sauber verwalten.",
+      en: "Manage OPENROUTER_API_KEY, GITHUB_TOKEN, or MATRIX_ACCESS_TOKEN cleanly.",
+    },
+  },
+] as const;
+
+const LANDING_MODEL_STEPS = [
+  {
+    title: {
+      de: "API-Key holen",
+      en: "Get API key",
+    },
+    text: {
+      de: "Erstelle einen OpenRouter-Key und nutze ihn als Zugang zu mehreren Modellen.",
+      en: "Create an OpenRouter key and use it as access to multiple models.",
+    },
+  },
+  {
+    title: {
+      de: "In Mosaic eintragen",
+      en: "Connect in Mosaic",
+    },
+    text: {
+      de: "Füge den Key im Setup oder in den Settings hinzu. Secrets gehören nie in Chat-Nachrichten.",
+      en: "Add the key in setup or settings. Secrets never belong in chat messages.",
+    },
+  },
+  {
+    title: {
+      de: "Modell wählen",
+      en: "Switch model",
+    },
+    text: {
+      de: "Wechsle je nach Aufgabe: schnell lesen, tief prüfen oder strukturiert planen.",
+      en: "Switch by task: read fast, review deeply, or plan with structure.",
+    },
+  },
+] as const;
+
+const LANDING_ACTION_BUTTONS = [
+  {
+    title: "⊛",
+    headline: {
+      de: "Als Matrix-Wissen speichern",
+      en: "Save as Matrix knowledge",
+    },
+    text: {
+      de: "Sichere Zusammenfassungen, Entscheidungen oder Handoffs direkt im Wissensfluss.",
+      en: "Save summaries, decisions, or handoffs directly in the knowledge flow.",
+    },
+  },
+  {
+    title: "↯",
+    headline: {
+      de: "Für GitHub vorbereiten",
+      en: "Prepare for GitHub",
+    },
+    text: {
+      de: "Mache aus Reviews, Bug-Hinweisen oder Plänen einen Issue- oder PR-Kommentar.",
+      en: "Turn reviews, bug findings, or plans into an issue or PR comment.",
+    },
+  },
+  {
+    title: "⊡",
+    headline: {
+      de: "Kontext laden",
+      en: "Load context",
+    },
+    text: {
+      de: "Ziehe Repo, Datei oder Branch in den Chat, bevor du nach Details fragst.",
+      en: "Pull repo, file, or branch into chat before asking for details.",
+    },
+  },
+  {
+    title: "⎘",
+    headline: {
+      de: "Kopieren",
+      en: "Copy",
+    },
+    text: {
+      de: "Nutze Outputs außerhalb der App oder kombiniere sie mit Matrix und GitHub.",
+      en: "Use outputs outside the app or combine them with Matrix and GitHub.",
+    },
+  },
+] as const;
+
+const LANDING_ACTION_RECIPES = [
+  {
+    title: {
+      de: "Chat → Matrix",
+      en: "Chat → Matrix",
+    },
+    text: {
+      de: "Lass dir eine Zusammenfassung erstellen, tippe ⊛ und speichere sie als Knowledge-Post.",
+      en: "Generate a summary, tap ⊛, and store it as a knowledge post.",
+    },
+  },
+  {
+    title: {
+      de: "Chat → GitHub",
+      en: "Chat → GitHub",
+    },
+    text: {
+      de: "Lass dir Review-Hinweise erstellen, tippe ↯ und bereite daraus Issue oder PR-Kommentar vor.",
+      en: "Generate review hints, tap ↯, and prepare an issue or PR comment.",
+    },
+  },
+  {
+    title: {
+      de: "GitHub → Chat",
+      en: "GitHub → Chat",
+    },
+    text: {
+      de: "Lade eine Datei in den Kontext und frage gezielt nach Risiken, Bugs oder Refactor-Optionen.",
+      en: "Load a file into context and ask directly about risks, bugs, or refactor options.",
+    },
+  },
+  {
+    title: {
+      de: "Matrix → Chat",
+      en: "Matrix → Chat",
+    },
+    text: {
+      de: "Nutze gespeichertes Wissen als Orientierung für neue Prompts und Projektentscheidungen.",
+      en: "Use saved knowledge to guide new prompts and project decisions.",
+    },
+  },
+] as const;
+
+const LANDING_BEGINNER_FLOW = {
+  de: [
+    "Modellzugang verbinden",
+    "Erste Frage stellen",
+    "Repo oder Datei als Kontext laden",
+    "Guten Output weiterverwenden",
+    "Wissen in Matrix sichern",
+  ],
+  en: [
+    "Connect model access",
+    "Ask your first question",
+    "Load repo or file context",
+    "Review the output",
+    "Save or dispatch the result",
+  ],
+} as const;
+
+const LANDING_POWER_RECIPES = [
+  {
+    title: {
+      de: "Review Sprint",
+      en: "Review Sprint",
+    },
+    text: {
+      de: "Datei laden, Risiken prüfen, Kommentar vorbereiten.",
+      en: "Load file, check risks, prepare comment.",
+    },
+  },
+  {
+    title: {
+      de: "Knowledge Capture",
+      en: "Knowledge Capture",
+    },
+    text: {
+      de: "Antwort verdichten, Matrix-Post speichern, später wiederverwenden.",
+      en: "Condense response, save Matrix post, reuse later.",
+    },
+  },
+  {
+    title: {
+      de: "Model Switch",
+      en: "Model Switch",
+    },
+    text: {
+      de: "Schnelles Modell für Reads, starkes Modell für Reviews.",
+      en: "Fast model for reads, stronger model for reviews.",
+    },
+  },
+  {
+    title: {
+      de: "Team Handoff",
+      en: "Team Handoff",
+    },
+    text: {
+      de: "Projektstand zusammenfassen, teilen, nächste Aktion ableiten.",
+      en: "Summarize project status, share it, derive next action.",
+    },
+  },
+] as const;
+
+function LandingPage() {
+  const { locale, setLocale, copy: ui } = useLocalization();
+  const landingCopy = LANDING_COPY[locale];
+
   return (
-    <main className="app-shell public-preview" data-testid="public-preview">
-      <section className="public-preview-card">
-        <div className="mosaicstacked-mark" aria-hidden="true" />
-        <p className="app-kicker">MOSAICSTACK</p>
-        <h1>MosaicStacked</h1>
-        <p className="hero-copy">
-          Public preview shell. Governed workspace access stays separate from this route.
+    <main className="app-shell landing-shell" data-testid="readme-landing">
+      <section className="landing-hero" aria-labelledby="landing-hero-title">
+        <div className="landing-hero-top">
+          <div className="landing-brand-row">
+            <div className="mosaicstacked-mark" aria-hidden="true" />
+            <span>MosaicStacked</span>
+          </div>
+          <div className="shell-language-toggle landing-language-toggle" role="group" aria-label={ui.shell.languageLabel}>
+            <button
+              type="button"
+              className={locale === "en" ? "secondary-button shell-language-button shell-language-button-active" : "secondary-button shell-language-button"}
+              onClick={() => setLocale("en")}
+              aria-pressed={locale === "en"}
+              aria-label={locale === "de" ? "Sprache: Englisch" : "Language: English"}
+              data-testid="landing-locale-en"
+            >
+              {ui.shell.languageOptionEnglish}
+            </button>
+            <button
+              type="button"
+              className={locale === "de" ? "secondary-button shell-language-button shell-language-button-active" : "secondary-button shell-language-button"}
+              onClick={() => setLocale("de")}
+              aria-pressed={locale === "de"}
+              aria-label={locale === "de" ? "Sprache: Deutsch" : "Language: German"}
+              data-testid="landing-locale-de"
+            >
+              {ui.shell.languageOptionGerman}
+            </button>
+          </div>
+        </div>
+        <p className="landing-kicker">{landingCopy.kicker}</p>
+        <h1 id="landing-hero-title">{landingCopy.heroTitle}</h1>
+        <p className="landing-hero-copy">
+          {landingCopy.heroBody}
         </p>
-        <div className="public-preview-actions">
-          <a className="secondary-button public-preview-link" href="/console">
-            Open governed console
+        <div className="landing-hero-actions">
+          <a className="landing-cta-primary" href="/console">
+            {landingCopy.heroPrimaryCta}
           </a>
-          <a className="secondary-button public-preview-link" href="/readme">
-            README
+          <a className="landing-cta-secondary" href="#so-funktionierts">
+            {landingCopy.heroSecondaryCta}
           </a>
         </div>
+      </section>
+
+      <section className="landing-section" id="so-funktionierts" aria-labelledby="landing-features-title">
+        <header className="landing-section-header">
+          <p className="landing-section-kicker">{landingCopy.workspaceTabsKicker}</p>
+          <h2 id="landing-features-title">{landingCopy.workspaceTabsTitle}</h2>
+        </header>
+        <div className="landing-feature-grid">
+          {LANDING_FEATURES.map((feature) => (
+            <article className="landing-card" key={feature.key}>
+              <div className="landing-card-icon" aria-hidden="true">
+                {feature.icon}
+              </div>
+              <h3>{feature.title[locale]}</h3>
+              <p>{feature.description[locale]}</p>
+              <p className="landing-card-note">{feature.useCase[locale]}</p>
+              <a href={feature.href}>{feature.title[locale]} {landingCopy.openSuffix}</a>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="landing-section" aria-labelledby="landing-model-title">
+        <header className="landing-section-header">
+          <p className="landing-section-kicker">{landingCopy.modelKicker}</p>
+          <h2 id="landing-model-title">{landingCopy.modelTitle}</h2>
+          <p>
+            {landingCopy.modelBody}
+          </p>
+        </header>
+        <div className="landing-step-grid">
+          {LANDING_MODEL_STEPS.map((step, index) => (
+            <article className="landing-step-card" key={step.title[locale]}>
+              <span className="landing-step-index">{String(index + 1).padStart(2, "0")}</span>
+              <h3>{step.title[locale]}</h3>
+              <p>{step.text[locale]}</p>
+            </article>
+          ))}
+        </div>
+        <p className="landing-inline-note">
+          <strong>{landingCopy.modelHintLabel}</strong> {landingCopy.modelHintBody}
+        </p>
+        <p className="landing-inline-note">
+          <code>OPENROUTER_API_KEY</code> {landingCopy.modelSecretNote}
+        </p>
+      </section>
+
+      <section className="landing-section" aria-labelledby="landing-actions-title">
+        <header className="landing-section-header">
+          <p className="landing-section-kicker">{landingCopy.actionsKicker}</p>
+          <h2 id="landing-actions-title">{landingCopy.actionsTitle}</h2>
+          <p>{landingCopy.actionsBody}</p>
+        </header>
+        <div className="landing-action-grid">
+          {LANDING_ACTION_BUTTONS.map((action) => (
+            <article className="landing-card landing-card-cheatsheet" key={`${action.title}-${locale}`}>
+              <h3>{action.title} {action.headline[locale]}</h3>
+              <p>{action.text[locale]}</p>
+            </article>
+          ))}
+        </div>
+        <div className="landing-mini-cheatsheet">
+          {LANDING_ACTION_RECIPES.map((recipe) => (
+            <article className="landing-cheat-row" key={recipe.title[locale]}>
+              <strong>{recipe.title[locale]}</strong>
+              <p>{recipe.text[locale]}</p>
+            </article>
+          ))}
+        </div>
+        <p className="landing-inline-note">
+          {landingCopy.actionsExamplePrefix} {landingCopy.actionsExampleBody} <code>⊛</code> {landingCopy.actionsExampleTail} <code>↯</code> {locale === "de" ? "vor." : "."}
+        </p>
+      </section>
+
+      <section className="landing-section" aria-labelledby="landing-beginner-title">
+        <header className="landing-section-header">
+          <p className="landing-section-kicker">{landingCopy.beginnerKicker}</p>
+          <h2 id="landing-beginner-title">{landingCopy.beginnerTitle}</h2>
+        </header>
+        <ol className="landing-stepper">
+          {LANDING_BEGINNER_FLOW[locale].map((step) => (
+            <li key={step}>{step}</li>
+          ))}
+        </ol>
+      </section>
+
+      <section className="landing-section" aria-labelledby="landing-power-title">
+        <header className="landing-section-header">
+          <p className="landing-section-kicker">{landingCopy.powerKicker}</p>
+          <h2 id="landing-power-title">{landingCopy.powerTitle}</h2>
+        </header>
+        <div className="landing-recipe-grid">
+          {LANDING_POWER_RECIPES.map((recipe) => (
+            <article className="landing-card" key={recipe.title[locale]}>
+              <h3>{recipe.title[locale]}</h3>
+              <p>{recipe.text[locale]}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="landing-safety-note" aria-label={landingCopy.safetyLabel}>
+        {landingCopy.safetyLines.map((line) => (
+          <p key={line}>{line}</p>
+        ))}
       </section>
     </main>
   );
 }
 
-const README_FEATURES: Array<{
-  mode: WorkspaceMode;
-  title: string;
-  text: string;
-  ideal: string;
-  example: string;
-  cta: string;
-  href: string;
-}> = [
-  {
-    mode: "chat",
-    title: "Chat",
-    text: "Starte mit einer Frage, einer Idee oder einem Arbeitsauftrag. Nutze unterschiedliche Modelle und entwickle aus erster Orientierung direkt nächste Schritte.",
-    ideal: "Ideal für Brainstorming, Strukturierung, Review-Vorbereitung und schnelle Hilfestellungen.",
-    example: "Lass dir aus einer Idee direkt einen Umsetzungsplan formulieren.",
-    cta: "Chat starten",
-    href: "/console?mode=chat",
-  },
-  {
-    mode: "github",
-    title: "GitHub",
-    text: "Arbeite direkt an deinen eigenen Repositories. Lies Kontext, prüfe Änderungen und verbinde Modellarbeit mit echten Projektfortschritten.",
-    ideal: "Ideal für Code-Verständnis, Review, Änderungsplanung und Dokumentationshilfe.",
-    example: "Analysiere ein Repo und formuliere daraus eine PR-Zusammenfassung.",
-    cta: "Repo verbinden",
-    href: "/console?mode=github",
-  },
-  {
-    mode: "matrix",
-    title: "Matrix",
-    text: "Teile Wissen, Ideen und Ergebnisse direkt mit anderen. Nutze Matrix als Raum für Austausch, Kontext und kooperative Weiterarbeit.",
-    ideal: "Ideal für Team-Kontext, Fragen, geteilte Ergebnisse und gemeinsames Nachverfolgen.",
-    example: "Schicke einen Entwurf aus dem Chat direkt in einen Raum und hole Feedback ein.",
-    cta: "Ergebnis teilen",
-    href: "/console?mode=matrix",
-  },
-  {
-    mode: "review",
-    title: "Review",
-    text: "Behalte offene Entscheidungen, Vorschläge und Ergebnisse im Blick. Sichtbar bleibt, was vorgeschlagen, geprüft oder bereits umgesetzt ist.",
-    ideal: "Ideal für Freigaben, Transparenz und kontrolliertes Zusammenarbeiten.",
-    example: "Prüfe einen vorgeschlagenen Schritt, bevor du ihn final bestätigst.",
-    cta: "Review öffnen",
-    href: "/console?mode=review",
-  },
-  {
-    mode: "settings",
-    title: "Settings",
-    text: "Passe deinen Arbeitsmodus an und behalte Verbindungen, Modelle und Systemstatus im Blick.",
-    ideal: "Ideal für Setup, Kontrolle und den Wechsel zwischen Beginner- und Power-User-Sicht.",
-    example: "Wechsle zwischen ruhiger Beginner-Sicht und tiefer Power-User-Sicht.",
-    cta: "Status prüfen",
-    href: "/console?mode=settings",
-  },
-];
-
-const README_FLOW = [
-  {
-    title: "Verstehen",
-    text: "Was ist MosaicStacked und wofür nutze ich es?",
-    next: "Erkenne zuerst, wie Chat, GitHub, Matrix und Review zusammenarbeiten.",
-  },
-  {
-    title: "Ausprobieren",
-    text: "Starte eine Frage im Chat oder öffne einen ersten Task.",
-    next: "Formuliere ein Ziel und lasse dir die nächsten Schritte strukturieren.",
-  },
-  {
-    title: "Verbinden",
-    text: "Verknüpfe Projekt, Modelle und Austausch sinnvoll miteinander.",
-    next: "Wechsle vom Gedanken in Repo-Kontext, Dateien und konkrete Arbeit.",
-  },
-  {
-    title: "Teilen",
-    text: "Teile Ergebnisse, Fragen oder Zwischenschritte direkt weiter.",
-    next: "Bring Entwürfe in Matrix-Räume, statt sie in einzelnen Chats zu verlieren.",
-  },
-  {
-    title: "Zusammenarbeiten",
-    text: "Prüfe, verbessere und entwickle mit anderen weiter.",
-    next: "Nutze Review, damit Entscheidungen und Freigaben nachvollziehbar bleiben.",
-  },
-];
-
-const README_USE_CASES = [
-  {
-    title: "Model Agnostic Research",
-    text: "Vergleiche Antworten mehrerer Modelle und nimm die beste Richtung für dein Projekt mit.",
-  },
-  {
-    title: "Projektarbeit",
-    text: "Arbeite an echten Repositories statt nur in isolierten Chatfenstern.",
-  },
-  {
-    title: "Direktes Teilen",
-    text: "Leite Ideen, Entwürfe oder Ergebnisse ohne Umwege an andere weiter.",
-  },
-  {
-    title: "Coop Review",
-    text: "Nutze Review-Flows, um Entscheidungen sichtbar und gemeinsam nachvollziehbar zu machen.",
-  },
-  {
-    title: "Hilfestellungen",
-    text: "Erstelle schnelle Erklärungen, Zusammenfassungen und Orientierungshilfen für andere.",
-  },
-  {
-    title: "Vom Gedanken zur Aktion",
-    text: "Starte im Chat, wechsle zu GitHub, teile in Matrix und lande im Review - alles in einem Flow.",
-  },
-];
+function PublicPreview() {
+  return <LandingPage />;
+}
 
 function ReadmeLandingPage() {
-  return (
-    <main className="app-shell readme-landing" data-testid="readme-landing">
-      <section className="readme-hero" aria-labelledby="readme-hero-title">
-        <div className="readme-brand-row">
-          <div className="mosaicstacked-mark" aria-hidden="true" />
-          <span>MosaicStacked Handbook</span>
-        </div>
-        <p className="readme-eyebrow">Landingpage + Handbook + Cheatsheet</p>
-        <h1 id="readme-hero-title">Build with your Repo, your Models, your Community</h1>
-        <p className="readme-hero-copy">
-          MosaicStacked ist dein Workspace für modellagnostisches Arbeiten, echte Projektarbeit
-          und direkte Zusammenarbeit. Verbinde Chat, GitHub, Matrix und Review in einem klaren
-          Flow - von der Idee bis zur gemeinsamen Umsetzung.
-        </p>
-        <a className="readme-enter-cta" href="/console" aria-label="ENTER öffnet MosaicStacked">
-          ENTER
-        </a>
-      </section>
-
-      <section className="readme-section readme-intro-grid" aria-labelledby="readme-goal-title">
-        <div>
-          <p className="readme-section-kicker">Verstehen, handeln, aktivieren</p>
-          <h2 id="readme-goal-title">Dein Workspace für Modelle, Projekte und Zusammenarbeit.</h2>
-        </div>
-        <div className="readme-intro-copy">
-          <p>
-            MosaicStacked verbindet Chat, GitHub, Matrix und Review in einer Oberfläche. So kannst
-            du Ideen entwickeln, an eigenen Projekten arbeiten, Ergebnisse teilen und Entscheidungen
-            nachvollziehbar machen.
-          </p>
-          <p>
-            Die Seite ist Einführung, Mini-Handbuch und Cheatsheet in einem: zuerst Nutzen, dann
-            Handlung, danach ein konkretes Beispiel.
-          </p>
-        </div>
-      </section>
-
-      <section className="readme-section" aria-labelledby="readme-features-title">
-        <div className="readme-section-heading">
-          <p className="readme-section-kicker">Workspace Tabs</p>
-          <h2 id="readme-features-title">Was du mit MosaicStacked machen kannst</h2>
-          <p>
-            Nutze verschiedene Modelle, arbeite an eigenen Projekten, teile Zwischenergebnisse und
-            bringe Fragen, Feedback und Review in einen gemeinsamen Ablauf.
-          </p>
-        </div>
-        <div className="readme-feature-grid">
-          {README_FEATURES.map((feature) => (
-            <article className="readme-feature-card" key={feature.title}>
-              <div className="readme-card-icon" aria-hidden="true">
-                <WorkspaceIcon mode={feature.mode} />
-              </div>
-              <h3>{feature.title}</h3>
-              <p>{feature.text}</p>
-              <p className="readme-card-meta">{feature.ideal}</p>
-              <p className="readme-card-example">{feature.example}</p>
-              <a href={feature.href}>{feature.cta}</a>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="readme-section readme-flow-section" aria-labelledby="readme-flow-title">
-        <div className="readme-section-heading">
-          <p className="readme-section-kicker">Handbook Flow</p>
-          <h2 id="readme-flow-title">Lerne deinen Workspace kennen</h2>
-          <p>
-            Beginner sehen einen klaren Ablauf. Power User können dieselben Tabs als zusammenhängende
-            Arbeitskette nutzen.
-          </p>
-        </div>
-        <div className="readme-flow-list">
-          {README_FLOW.map((step, index) => (
-            <article className="readme-flow-step" key={step.title}>
-              <span>{String(index + 1).padStart(2, "0")}</span>
-              <div>
-                <h3>{step.title}</h3>
-                <p>{step.text}</p>
-                <strong>{step.next}</strong>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="readme-section" aria-labelledby="readme-use-cases-title">
-        <div className="readme-section-heading">
-          <p className="readme-section-kicker">Cheatsheet</p>
-          <h2 id="readme-use-cases-title">Vom Gedanken zur Aktion</h2>
-          <p>
-            MosaicStacked hält den Fokus auf Arbeit, Kontext und Ergebnis - nicht auf einem einzelnen
-            Modell oder einem isolierten Chatfenster.
-          </p>
-        </div>
-        <div className="readme-use-case-grid">
-          {README_USE_CASES.map((useCase) => (
-            <article className="readme-use-case" key={useCase.title}>
-              <h3>{useCase.title}</h3>
-              <p>{useCase.text}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="readme-footer-cta" aria-label="MosaicStacked starten">
-        <p>Starte mit einer Frage. Wechsle in dein Projekt. Teile den nächsten Schritt.</p>
-        <a className="readme-enter-cta" href="/console">
-          ENTER
-        </a>
-      </section>
-    </main>
-  );
+  return <LandingPage />;
 }
 
 function RouteStatusLadder({
@@ -2396,11 +2651,18 @@ function ConsoleShell() {
   );
   const statusToneForBadge = currentStatusTone === "error" ? "error" : currentStatusTone === "ready" ? "ready" : "partial";
   const activeMobileNav = mode === "chat" || mode === "github" || mode === "matrix" ? mode : "context";
-  const repoChipLabel = githubSession?.metadata.selectedRepoFullName || ui.github.noRepoSelected;
-  const branchChipLabel = githubContext.expertDetails.branchName ?? ui.common.na;
-  const commitChipLabel = githubSession?.metadata.proposalPlan?.baseSha?.slice(0, 6)
-    ?? githubSession?.metadata.analysisBundle?.baseSha?.slice(0, 6)
-    ?? ui.common.na;
+  const hasRepoContext = Boolean(githubSession?.metadata.selectedRepoFullName);
+  const repoChipLabel = hasRepoContext
+    ? `⊟ ${githubSession?.metadata.selectedRepoFullName}`
+    : (locale === "de" ? "⊡ Kein Kontext" : "⊡ No context");
+  const branchChipLabel = hasRepoContext
+    ? (githubContext.expertDetails.branchName ?? ui.common.na)
+    : (locale === "de" ? "Tippe ⊡ für Repo" : "Tap ⊡ to load repo");
+  const commitChipLabel = hasRepoContext
+    ? (githubSession?.metadata.proposalPlan?.baseSha?.slice(0, 6)
+      ?? githubSession?.metadata.analysisBundle?.baseSha?.slice(0, 6)
+      ?? ui.common.na)
+    : (locale === "de" ? "Datei wählen" : "Choose a file");
   const streamCounterLabel = runtimeDiagnostics
     ? String(runtimeDiagnostics.counters.chatStreamStarted)
     : ui.common.loading;
@@ -2499,6 +2761,14 @@ function ConsoleShell() {
                     <strong>{workspaceName}</strong>
                   </div>
                 </div>
+
+                {!hasRepoContext ? (
+                  <p className="mobile-context-empty-note">
+                    {locale === "de"
+                      ? "Kein Kontext geladen. Öffne GitHub und wähle ein Repo oder eine Datei."
+                      : "No context loaded yet. Open GitHub and choose a repository or file."}
+                  </p>
+                ) : null}
 
                 <div className="mobile-context-actions">
                   <button type="button" className="secondary-button" onClick={() => handleMobileNavSelect("review")}>

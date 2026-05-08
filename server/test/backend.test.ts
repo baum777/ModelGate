@@ -766,23 +766,10 @@ test("/chat stream over HTTP always ends with exactly one terminal event", async
     await app.close();
   });
 
-  await app.listen({
-    host: "127.0.0.1",
-    port: 0
-  });
-
-  const address = app.server.address();
-
-  if (!address || typeof address === "string") {
-    throw new Error("Test server did not expose an address");
-  }
-
-  const successResponse = await fetch(`http://127.0.0.1:${address.port}/chat`, {
+  const successResponse = await app.inject({
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
+    url: "/chat",
+    payload: {
       stream: true,
       messages: [
         {
@@ -790,18 +777,21 @@ test("/chat stream over HTTP always ends with exactly one terminal event", async
           content: "Stream please"
         }
       ]
-    })
+    }
   });
 
-  assert.equal(successResponse.status, 200);
-  assert.match(successResponse.headers.get("content-type") ?? "", /text\/event-stream/);
-  const successEvents = parseSseEvents(await successResponse.text());
+  assert.equal(successResponse.statusCode, 200);
+  assert.match(successResponse.headers["content-type"] ?? "", /text\/event-stream/);
+  const successEvents = parseSseEvents(successResponse.body);
   assert.deepEqual(successEvents.map((event) => event.event), [
     "start",
     "route",
     "token",
     "done"
   ]);
+  const successTerminalEvents = successEvents.filter((event) => event.event === "done" || event.event === "error");
+  assert.equal(successTerminalEvents.length, 1);
+  assert.equal(successTerminalEvents[0]?.event, "done");
   assert.deepEqual(successEvents.map((event) => JSON.parse(event.data) as { model?: string }).map((event) => event.model), [
     "default",
     undefined,
@@ -823,23 +813,10 @@ test("/chat stream over HTTP always ends with exactly one terminal event", async
     await failingApp.close();
   });
 
-  await failingApp.listen({
-    host: "127.0.0.1",
-    port: 0
-  });
-
-  const failingAddress = failingApp.server.address();
-
-  if (!failingAddress || typeof failingAddress === "string") {
-    throw new Error("Failing test server did not expose an address");
-  }
-
-  const failureResponse = await fetch(`http://127.0.0.1:${failingAddress.port}/chat`, {
+  const failureResponse = await failingApp.inject({
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
+    url: "/chat",
+    payload: {
       stream: true,
       messages: [
         {
@@ -847,17 +824,20 @@ test("/chat stream over HTTP always ends with exactly one terminal event", async
           content: "Stream please"
         }
       ]
-    })
+    }
   });
 
-  assert.equal(failureResponse.status, 200);
-  assert.match(failureResponse.headers.get("content-type") ?? "", /text\/event-stream/);
-  const failureEvents = parseSseEvents(await failureResponse.text());
+  assert.equal(failureResponse.statusCode, 200);
+  assert.match(failureResponse.headers["content-type"] ?? "", /text\/event-stream/);
+  const failureEvents = parseSseEvents(failureResponse.body);
   assert.deepEqual(failureEvents.map((event) => event.event), [
     "start",
     "route",
     "error"
   ]);
+  const failureTerminalEvents = failureEvents.filter((event) => event.event === "done" || event.event === "error");
+  assert.equal(failureTerminalEvents.length, 1);
+  assert.equal(failureTerminalEvents[0]?.event, "error");
   assert.deepEqual(JSON.parse(failureEvents[2].data), {
     ok: false,
     error: {
@@ -865,6 +845,7 @@ test("/chat stream over HTTP always ends with exactly one terminal event", async
       message: "Chat provider request failed"
     }
   });
+  assert.ok(!failureResponse.body.includes("event: done"));
 });
 
 test("/chat returns 429 before upstream calls when rate-limited", async (t) => {

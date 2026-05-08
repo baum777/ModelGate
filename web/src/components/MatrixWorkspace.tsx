@@ -44,6 +44,7 @@ import {
 } from "../lib/governance-metadata.js";
 import { useLocalization, type Locale } from "../lib/localization.js";
 import { GuideOverlay, getWorkspaceGuide } from "./GuideOverlay.js";
+import { EmptyStateCTA } from "./EmptyStateCTA.js";
 import { getWorkModeCopy, type WorkMode } from "../lib/work-mode.js";
 
 type WorkflowStatus = "loading" | "partial" | "ready" | "error";
@@ -1110,6 +1111,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       setTopicExecuteLoading(false);
     }
   }
+  const showMatrixConnectionEmptyState = status === "error" && Boolean(identityError || roomsError);
   return (
     <section
       className="workspace-panel matrix-workspace"
@@ -1205,6 +1207,28 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
           </p>
         </section>
       ) : null}{" "}
+      {showMatrixConnectionEmptyState ? (
+        <section className="empty-state-card">
+          <EmptyStateCTA
+            icon="⊛"
+            iconColor="var(--ms-teal)"
+            title={locale === "de" ? "Matrix noch nicht verbunden" : "Matrix not connected yet"}
+            description={locale === "de"
+              ? "Matrix ist dein persistenter Wissensfluss. Verbinde Matrix, um Outputs direkt als Posts zu sichern."
+              : "Matrix is your persistent knowledge flow. Connect Matrix to store outputs directly as posts."}
+            primaryLabel={locale === "de" ? "⊛ Matrix verbinden" : "⊛ Connect Matrix"}
+            primaryVariant="matrix"
+            primaryAction={() => {
+              if (typeof window !== "undefined") {
+                window.location.assign("/console?mode=settings");
+              }
+            }}
+            secondaryLabel={locale === "de" ? "Später einrichten →" : "Set up later →"}
+            secondaryVariant="text-link"
+            secondaryAction={() => undefined}
+          />
+        </section>
+      ) : null}
       <section className="matrix-grid">
         {" "}
         <details

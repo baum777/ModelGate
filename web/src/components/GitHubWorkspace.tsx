@@ -33,6 +33,7 @@ import {
 } from "../lib/governance-metadata.js";
 import { useLocalization, type Locale } from "../lib/localization.js";
 import { GuideOverlay, getWorkspaceGuide } from "./GuideOverlay.js";
+import { EmptyStateCTA } from "./EmptyStateCTA.js";
 import { isExpertMode, type WorkMode } from "../lib/work-mode.js";
 
 export type GitHubWorkspaceStatus = {
@@ -512,6 +513,13 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     ? "reconnect"
     : "connect";
   const githubConnectLabel = locale === "de" ? "GitHub verbinden" : "Connect your GitHub";
+  const openGuideSheet = useCallback(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    const guideButton = document.querySelector<HTMLButtonElement>("[data-testid='guide-github']");
+    guideButton?.click();
+  }, []);
 
   useEffect(() => {
     const snapshotMetadata = {
@@ -1128,14 +1136,26 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       </section>
 
       {!hasSelection ? (
-        <article className="empty-state-card">
-          <div className="empty-state-card-copy">
-            <p className="info-label">{ui.github.title}</p>
-            <h2>{ui.github.noRepoSelected}</h2>
-            <p>
-              {ui.github.workspaceNoticeSelection}
-            </p>
-          </div>
+        <div className="empty-state-card">
+          <EmptyStateCTA
+            icon="⊟"
+            title={locale === "de" ? "Noch kein Repo verbunden" : "No repository connected yet"}
+            description={locale === "de"
+              ? "Verbinde dein GitHub-Repo, um Reviews, Diffs und Kontext direkt im Chat zu nutzen."
+              : "Connect your GitHub repository to use reviews, diffs, and context directly in chat."}
+            primaryLabel={locale === "de" ? "⊟ GitHub verbinden" : "⊟ Connect GitHub"}
+            primaryVariant="github"
+            primaryAction={() => {
+              if (githubConnected) {
+                repoSelectRef.current?.focus();
+                return;
+              }
+              props.onIntegrationAction("github", githubConnectAction);
+            }}
+            secondaryLabel={locale === "de" ? "↗ Wie funktioniert das?" : "↗ How does this work?"}
+            secondaryAction={openGuideSheet}
+            footnote={reposLoading ? ui.github.loadingRepos : ui.github.noRepos}
+          />
 
           {expertMode ? (
             <ol className="guided-steps">
@@ -1145,18 +1165,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
               <li>{ui.review.approvalNeeded}</li>
             </ol>
           ) : null}
-
-          <div className="action-row">
-            <button
-              type="button"
-              onClick={() => repoSelectRef.current?.focus()}
-              disabled={reposLoading || repos.length === 0}
-            >
-              {ui.github.repoSelectLabel}
-            </button>
-            <span className="muted-copy">{ui.github.noRepos}</span>
-          </div>
-        </article>
+        </div>
       ) : (
         <>
           <div className="github-action-grid">
