@@ -27,6 +27,7 @@ import { createGitHubProposalPlanner } from "../lib/github-plan-builder.js";
 import { createGitHubActionExecutionService } from "../lib/github-execution.js";
 import type { GitHubConfig } from "../lib/github-env.js";
 import { isGitHubRepoAllowed, normalizeGitHubRepoFullName } from "../lib/github-env.js";
+import { createGitHubAppAuthClient, GitHubAppAuthError } from "../lib/github-app-auth.js";
 import type { IntegrationAuthStore } from "../lib/integration-auth-store.js";
 import { normalizeGitHubRelativePath } from "../lib/github-paths.js";
 import { OpenRouterError, type OpenRouterClient } from "../lib/openrouter.js";
@@ -46,6 +47,7 @@ type GitHubRouteDependencies = {
   modelCapabilitiesConfig: ModelCapabilitiesConfig;
   authStore: IntegrationAuthStore;
   actionStore?: GitHubActionStore;
+  appAuthFetch?: typeof fetch;
   rateLimiter: AppRateLimiter;
   runtimeJournal: RuntimeJournal;
 };
@@ -78,7 +80,48 @@ function isGitHubClientError(error: unknown): error is GitHubClientError {
   );
 }
 
+function isGitHubAppAuthError(error: unknown): error is GitHubAppAuthError {
+  return Boolean(
+    error
+    && typeof error === "object"
+    && "name" in error
+    && (error as { name?: unknown }).name === "GitHubAppAuthError"
+  );
+}
+
 function handleGitHubError(reply: FastifyReply, error: unknown) {
+  if (isGitHubAppAuthError(error)) {
+    if (error.code === "not_configured") {
+      return sendGitHubError(reply, "github_not_configured");
+    }
+
+    if (error.code === "invalid_installation_id") {
+      return sendGitHubError(reply, "invalid_request");
+    }
+
+    if (error.code === "github_unauthorized") {
+      return sendGitHubError(reply, "github_unauthorized");
+    }
+
+    if (error.code === "github_forbidden") {
+      return sendGitHubError(reply, "github_forbidden");
+    }
+
+    if (error.code === "github_timeout") {
+      return sendGitHubError(reply, "github_timeout");
+    }
+
+    if (error.code === "github_rate_limited") {
+      return sendGitHubError(reply, "github_rate_limited");
+    }
+
+    if (error.code === "github_malformed_response") {
+      return sendGitHubError(reply, "github_malformed_response");
+    }
+
+    return sendGitHubError(reply, "github_internal_error");
+  }
+
   if (isGitHubClientError(error)) {
     if (error.code === "invalid_request") {
       return sendGitHubError(reply, "invalid_request");
@@ -568,15 +611,40 @@ function readIntegrationSessionCookie(request: FastifyRequest) {
   return null;
 }
 
-function resolveRequestGitHubClient(request: FastifyRequest, deps: GitHubRouteDependencies): GitHubResolvedClient | null {
+function parseInstallationId(raw: unknown) {
+  if (typeof raw === "number" && Number.isInteger(raw) && raw > 0) {
+    return raw;
+  }
+
+  if (typeof raw !== "string") {
+    return null;
+  }
+
+  const parsed = Number.parseInt(raw.trim(), 10);
+
+  if (!Number.isFinite(parsed) || Number.isNaN(parsed) || parsed < 1) {
+    return null;
+  }
+
+  return parsed;
+}
+
+async function resolveRequestGitHubClient(
+  request: FastifyRequest,
+  deps: GitHubRouteDependencies,
+  appAuth: ReturnType<typeof createGitHubAppAuthClient>
+): Promise<GitHubResolvedClient | null> {
   const sessionId = readIntegrationSessionCookie(request);
 
   if (sessionId) {
     const credential = deps.authStore.readCredential(sessionId, "github");
-    const accessToken = typeof credential?.accessToken === "string" ? credential.accessToken.trim() : "";
     const kind = typeof credential?.kind === "string" ? credential.kind.trim() : "";
+    const installationId = parseInstallationId((credential as Record<string, unknown> | null)?.installationId ?? null);
 
-    if (kind === "github_oauth" && accessToken.length > 0) {
+    if (kind === "github_app_installation" && installationId) {
+      const accessToken = deps.config.installationTokenOverride
+        ? deps.config.installationTokenOverride
+        : await appAuth.getInstallationToken(installationId);
       return {
         client: deps.client.withAccessToken(accessToken),
         credentialSource: "user_connected"
@@ -584,9 +652,12 @@ function resolveRequestGitHubClient(request: FastifyRequest, deps: GitHubRouteDe
     }
   }
 
-  if (deps.config.ready && deps.config.token) {
+  if (deps.config.instanceReady && deps.config.installationId) {
+    const accessToken = deps.config.installationTokenOverride
+      ? deps.config.installationTokenOverride
+      : await appAuth.getInstallationToken(deps.config.installationId);
     return {
-      client: deps.client,
+      client: deps.client.withAccessToken(accessToken),
       credentialSource: "instance_config"
     };
   }
@@ -645,15 +716,19 @@ function requireGitHubAdminKey(request: FastifyRequest, reply: FastifyReply, con
 
 export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies) {
   const actionStore = deps.actionStore ?? createGitHubActionStore(deps.config.planTtlMs);
+  const appAuth = createGitHubAppAuthClient({
+    config: deps.config,
+    fetchImpl: deps.appAuthFetch
+  });
 
   app.get("/api/github/repos", async (_request, reply) => {
-    const resolvedClient = resolveRequestGitHubClient(_request, deps);
-
-    if (!resolvedClient) {
-      return sendGitHubError(reply, "github_not_configured");
-    }
-
     try {
+      const resolvedClient = await resolveRequestGitHubClient(_request, deps, appAuth);
+
+      if (!resolvedClient) {
+        return sendGitHubError(reply, "github_not_configured");
+      }
+
       const checkedAt = new Date().toISOString();
       const repos = await listAllowedRepos(deps.config, resolvedClient.client);
 
@@ -669,12 +744,6 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   });
 
   app.post("/api/github/context", async (request, reply) => {
-    const resolvedClient = resolveRequestGitHubClient(request, deps);
-
-    if (!resolvedClient) {
-      return sendGitHubError(reply, "github_not_configured");
-    }
-
     const parsedBody = GitHubContextRequestSchema.safeParse(request.body);
 
     if (!parsedBody.success) {
@@ -692,6 +761,12 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
 
     try {
+      const resolvedClient = await resolveRequestGitHubClient(request, deps, appAuth);
+
+      if (!resolvedClient) {
+        return sendGitHubError(reply, "github_not_configured");
+      }
+
       const contextBuilder = createGitHubContextBuilder({
         config: deps.config,
         client: resolvedClient.client
@@ -721,12 +796,6 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   });
 
   app.post("/api/github/actions/propose", async (request, reply) => {
-    const resolvedClient = resolveRequestGitHubClient(request, deps);
-
-    if (!resolvedClient) {
-      return sendGitHubError(reply, "github_not_configured");
-    }
-
     const parsedBody = GitHubChangeProposalRequestSchema.safeParse(request.body);
 
     if (!parsedBody.success) {
@@ -750,6 +819,12 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
 
     try {
+      const resolvedClient = await resolveRequestGitHubClient(request, deps, appAuth);
+
+      if (!resolvedClient) {
+        return sendGitHubError(reply, "github_not_configured");
+      }
+
       const proposalPlanner = createGitHubProposalPlanner({
         env: deps.env,
         config: deps.config,
@@ -906,12 +981,6 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   });
 
   app.get("/api/github/actions/:planId", async (request, reply) => {
-    const resolvedClient = resolveRequestGitHubClient(request, deps);
-
-    if (!resolvedClient) {
-      return sendGitHubError(reply, "github_not_configured");
-    }
-
     const parsedPlanId = GitHubPlanIdSchema.safeParse(
       typeof request.params === "object" && request.params !== null
         ? (request.params as { planId?: unknown }).planId
@@ -933,6 +1002,12 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     }
 
     try {
+      const resolvedClient = await resolveRequestGitHubClient(request, deps, appAuth);
+
+      if (!resolvedClient) {
+        return sendGitHubError(reply, "github_not_configured");
+      }
+
       const currentSummary = await resolvedClient.client.readRepositorySummary(lookup.plan.repo.owner, lookup.plan.repo.repo);
 
       if (!isFreshGitHubPlan(currentSummary, lookup.plan)) {
@@ -953,7 +1028,12 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   });
 
   app.post("/api/github/actions/:planId/execute", async (request, reply) => {
-    const resolvedClient = resolveRequestGitHubClient(request, deps);
+    let resolvedClient: GitHubResolvedClient | null;
+    try {
+      resolvedClient = await resolveRequestGitHubClient(request, deps, appAuth);
+    } catch (error) {
+      return handleGitHubError(reply, error);
+    }
 
     if (!resolvedClient) {
       return sendGitHubError(reply, "github_not_configured");
@@ -1053,7 +1133,12 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   });
 
   app.get("/api/github/actions/:planId/verify", async (request, reply) => {
-    const resolvedClient = resolveRequestGitHubClient(request, deps);
+    let resolvedClient: GitHubResolvedClient | null;
+    try {
+      resolvedClient = await resolveRequestGitHubClient(request, deps, appAuth);
+    } catch (error) {
+      return handleGitHubError(reply, error);
+    }
 
     if (!resolvedClient) {
       return sendGitHubError(reply, "github_not_configured");
@@ -1150,7 +1235,12 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   });
 
   app.get("/api/github/repos/:owner/:repo/tree", async (request, reply) => {
-    const resolvedClient = resolveRequestGitHubClient(request, deps);
+    let resolvedClient: GitHubResolvedClient | null;
+    try {
+      resolvedClient = await resolveRequestGitHubClient(request, deps, appAuth);
+    } catch (error) {
+      return handleGitHubError(reply, error);
+    }
 
     if (!resolvedClient) {
       return sendGitHubError(reply, "github_not_configured");
@@ -1195,7 +1285,12 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   });
 
   app.get("/api/github/repos/:owner/:repo/file", async (request, reply) => {
-    const resolvedClient = resolveRequestGitHubClient(request, deps);
+    let resolvedClient: GitHubResolvedClient | null;
+    try {
+      resolvedClient = await resolveRequestGitHubClient(request, deps, appAuth);
+    } catch (error) {
+      return handleGitHubError(reply, error);
+    }
 
     if (!resolvedClient) {
       return sendGitHubError(reply, "github_not_configured");

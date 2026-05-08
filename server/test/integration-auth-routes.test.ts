@@ -12,6 +12,107 @@ const TEST_ENCRYPTION_KEY = {
   INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY: "integration-auth-test-secret"
 };
 
+const TEST_GITHUB_APP_PRIVATE_KEY = [
+  "-----BEGIN PRIVATE KEY-----",
+  "MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC8TmaFfZfrb4Cg",
+  "YCUAbybKUfoO4RTRlrhL3rUdTKyUbEaFH3DGOh0KaWUpLAbTusGAL9mrdUNy/bpt",
+  "7bp+68Dui2Cl5Y453sQ6inRJSMHzqwl0Zoh2JFGtgjjKeRe1b2GyJU5r5SLNTUuF",
+  "cXGHOhfc8KUZpW558dEX3ahVdt5nkmlOvqH8o8jhV6DHMdHFJMQ5Wteyjr+30o0e",
+  "NoZM8AmG9KRW4u6gUxXILbbeH1/3G3V62lr5rx/OqpdHlUPQo2ShpEq/OljjFjRZ",
+  "BlpXjhR7GMSIFwACogZMDl6KPUZiiL8yqynx/gc0SjXXpD2YtY/9T+dH7U5LZXew",
+  "wmiPYDFpAgMBAAECggEABwGSQC979Gkrw5vMKKPaET9DUuQmPIWTchQ1UCOjDKsq",
+  "JQgWT7PIEpP5DPL7xostaaXuHvpgEfJVikNE8/W00hNKu2Vq+SV8DtMJsFPWDok7",
+  "svJhK6ceiFp+3y6p9ojQPVr0u+A0vyd78rk1sIK1clWcSPPeJEieX1lSiup/LCKG",
+  "oUfwY9ebJzi3/XBAXmy4vZZWzpwD3N7iGAfrhjwOfm4Qt5m1yRIufhdPP3TYyrQV",
+  "e96fAOZ0PwqoH3nyqs97kVb8hmMbRHSm/hFAvP6JS1SEz0a95Z5qYGwYokjqo0bv",
+  "h4+xR02H2DpT+TJU/yQQ7/Vg6KjIMEkMUtgi+xmg4QKBgQDxwwtPZGG4ngXjhH/U",
+  "LoU+VAOddLn9szZbY8kef7yUAUaDO+bFuaJUQ2IqTB1PQO/P17xXWWlsar3mLzdi",
+  "FgjkEKC282tkyIk4MKEd2f5sBVdDabtkCqsCFbo3dI835tv7QqQE/PlWeCJPnENV",
+  "mLxhWGXKiBhq4cU6YVWZbhywoQKBgQDHZWzU3k/KivX1Jm2cdL3tClPW8QL+r9HV",
+  "bTUPfY8kXi91gu5CxwOIQjAa5/T+lTDqhvuJ+BKpRcbns4FW6GAq/mEmH4x63MK3",
+  "0FZZMR0+ThBV7KddubNTcVJZTsMF3ew5guVXiRj9dDvuUD00A5a/buDO/Rko2uVt",
+  "oQ6t9IOjyQKBgQDKHAhkgsK/GDxMDAThWVLC3HF5PJAQa7XRiQYlnRwFj1tncrhm",
+  "K95tGzgBrEgEbYEN/IjTbUgY/tNqj6Z5NXqRTuVMjQsG4i707pKC5i8wFvbwwH+M",
+  "Du8PeyKGIcdpMHJPB1MfaGz5wMzOSRBxipJRvxi5zDS9hajgOWbaMZeCgQKBgQCP",
+  "YwhYK2YFqNgmanP4Rpstknen4bjdnWGvsNCvSwNci75lKrpbmvGXUsF1F8i+Klr6",
+  "zAamuJXy1BKtHBCuhnxhbnw+BgHneEkuFcuCaCc3XruwjnXsmFW0c5FcV5824Ne2",
+  "o8J4qEYoPSW7wkfA17PYBcv0DV3CW2cQ5vi/b04awQKBgCEEDtIgVTtEgjhTmo2U",
+  "VJvx8whHRnhF2HUjIqovAAO+LuQ9GmRU9sdKos9CpeYs37HjAsA49v53yUW7jzpm",
+  "zxuwOmy/oratSgU6JtmlEzjrWCO0Ro/uYeqOucQnIpZECWFOGZFbPenP/rx5BJSM",
+  "o+DuibDhjcy65hxrVB2D5cTQ",
+  "-----END PRIVATE KEY-----"
+].join("\\n");
+
+const TEST_GITHUB_APP_ID = "123456";
+const TEST_GITHUB_APP_SLUG = "mosaicstacked-test-app";
+const TEST_GITHUB_INSTALLATION_ID = "12345";
+
+const TEST_GITHUB_APP_ENV = {
+  GITHUB_APP_ID: TEST_GITHUB_APP_ID,
+  GITHUB_APP_PRIVATE_KEY: TEST_GITHUB_APP_PRIVATE_KEY,
+  GITHUB_APP_SLUG: TEST_GITHUB_APP_SLUG
+};
+
+function createGitHubAppIntegrationFetch(options: {
+  installationId?: string;
+  accountLogin?: string;
+  repos?: string[];
+  readInstallationStatus?: number;
+  accessTokenStatus?: number;
+  repositoriesStatus?: number;
+  accessTokenPayload?: Record<string, unknown> | null;
+  installationPayload?: Record<string, unknown> | null;
+  repositoriesPayload?: Record<string, unknown> | null;
+} = {}) {
+  const installationId = options.installationId ?? TEST_GITHUB_INSTALLATION_ID;
+  const accountLogin = options.accountLogin ?? "octocat";
+  const repos = options.repos ?? ["octo/demo", "acme/widget"];
+
+  return async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    const method = init?.method ?? "GET";
+
+    if (url.pathname === `/app/installations/${installationId}` && method === "GET") {
+      return new Response(JSON.stringify(options.installationPayload ?? {
+        id: Number.parseInt(installationId, 10),
+        account: {
+          login: accountLogin,
+          type: "Organization",
+          id: 1
+        }
+      }), {
+        status: options.readInstallationStatus ?? 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    if (url.pathname === `/app/installations/${installationId}/access_tokens` && method === "POST") {
+      return new Response(JSON.stringify(options.accessTokenPayload ?? {
+        token: "ghs_test_installation_token",
+        expires_at: "2030-01-01T00:00:00Z"
+      }), {
+        status: options.accessTokenStatus ?? 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    if (url.pathname === "/installation/repositories" && method === "GET") {
+      return new Response(JSON.stringify(options.repositoriesPayload ?? {
+        total_count: repos.length,
+        repositories: repos.map((fullName, index) => ({
+          id: index + 1,
+          full_name: fullName
+        }))
+      }), {
+        status: options.repositoriesStatus ?? 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    return new Response(null, { status: 404 });
+  };
+}
+
 function createTempStorePath() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstacked-integration-auth-routes-"));
   return path.join(directory, "integration-auth-store.json");
@@ -92,7 +193,7 @@ test("integration callback rejects state mismatch and does not establish a conne
 
   const callback = await app.inject({
     method: "GET",
-    url: "/api/auth/github/callback?state=invalid-state&code=stub_code"
+    url: "/api/auth/github/callback?state=invalid-state&installation_id=1"
   });
 
   assert.equal(callback.statusCode, 400);
@@ -118,7 +219,7 @@ test("integration callback rejects state mismatch and does not establish a conne
   assert.equal(payload.github.credentialSource, "not_connected");
 });
 
-test("github start fails closed when OAuth is not configured instead of using a stub callback", async (t) => {
+test("github start fails closed when app config is not configured instead of using a stub callback", async (t) => {
   const app = createApp({
     env: createTestEnv(),
     openRouter: createMockOpenRouterClient(),
@@ -146,7 +247,7 @@ test("github start fails closed when OAuth is not configured instead of using a 
   assert.equal(startPayload.error.code, "missing_server_config");
   assert.equal(
     startPayload.error.details,
-    "Missing GitHub OAuth server config: GITHUB_OAUTH_CLIENT_ID, GITHUB_OAUTH_CLIENT_SECRET"
+    "Missing GitHub App server config: GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, GITHUB_APP_SLUG"
   );
 
   const status = await app.inject({
@@ -169,17 +270,17 @@ test("github start fails closed when OAuth is not configured instead of using a 
   assert.equal(payload.github.authState, "not_configured");
   assert.equal(payload.github.credentialSource, "not_connected");
   assert.deepEqual(payload.github.requirements, [
-    "GITHUB_OAUTH_CLIENT_ID",
-    "GITHUB_OAUTH_CLIENT_SECRET"
+    "GITHUB_APP_ID",
+    "GITHUB_APP_PRIVATE_KEY",
+    "GITHUB_APP_SLUG"
   ]);
   assert.equal(payload.github.lastVerifiedAt, null);
 });
 
-test("integrations status reports workspace requirements when GitHub OAuth is ready but workspace config is missing", async (t) => {
+test("integrations status reports workspace requirements when GitHub App is ready but workspace config is missing", async (t) => {
   const app = createApp({
     env: createTestEnv({
-      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
-      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret"
+      ...TEST_GITHUB_APP_ENV
     }),
     openRouter: createMockOpenRouterClient(),
     logger: false
@@ -201,44 +302,21 @@ test("integrations status reports workspace requirements when GitHub OAuth is re
   };
 
   assert.equal(payload.github.status, "missing_server_config");
-  assert.deepEqual(payload.github.requirements, ["GITHUB_TOKEN", "GITHUB_ALLOWED_REPOS"]);
+  assert.deepEqual(payload.github.requirements, ["GITHUB_APP_INSTALLATION_ID", "GITHUB_ALLOWED_REPOS"]);
 });
 
 test("github auth status endpoint only exposes safe metadata", async (t) => {
   const app = createApp({
     env: createTestEnv({
-      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
-      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
-      GITHUB_OAUTH_CALLBACK_URL: "http://127.0.0.1:8787/api/auth/github/callback",
+      GITHUB_APP_ID: "github-client-id",
+      GITHUB_APP_PRIVATE_KEY: TEST_GITHUB_APP_PRIVATE_KEY,
+      GITHUB_APP_SLUG: TEST_GITHUB_APP_SLUG,
+      GITHUB_ALLOWED_REPOS: ["acme/widget"],
       MOSAIC_STACK_SESSION_SECRET: "status-session-secret",
       ...TEST_ENCRYPTION_KEY
     }),
     openRouter: createMockOpenRouterClient(),
-    integrationFetch: async (input) => {
-      const url = String(input);
-
-      if (url.startsWith("https://github.com/login/oauth/access_token")) {
-        return new Response(JSON.stringify({
-          access_token: "gho_status_redaction_token",
-          token_type: "bearer",
-          scope: "read:user,user:email"
-        }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-
-      if (url === "https://api.github.com/user") {
-        return new Response(JSON.stringify({
-          login: "octocat"
-        }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-
-      return new Response(null, { status: 404 });
-    },
+    integrationFetch: createGitHubAppIntegrationFetch(),
     logger: false
   });
 
@@ -258,7 +336,7 @@ test("github auth status endpoint only exposes safe metadata", async (t) => {
 
   const callback = await app.inject({
     method: "GET",
-    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=status_code`,
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&installation_id=${TEST_GITHUB_INSTALLATION_ID}`,
     headers: {
       cookie: sessionCookie ?? ""
     }
@@ -291,7 +369,7 @@ test("github auth status endpoint only exposes safe metadata", async (t) => {
   assert.equal(payload.status, "connected");
   assert.equal(payload.connected, true);
   assert.equal(payload.oauthReady, true);
-  assert.equal(payload.identity, "octocat");
+  assert.equal(payload.identity, `octocat (installation ${TEST_GITHUB_INSTALLATION_ID})`);
   assert.equal(payload.credentialSource, "user_connected");
   assert.ok(payload.lastVerifiedAt);
   assert.equal(payload.lastErrorCode, null);
@@ -299,43 +377,20 @@ test("github auth status endpoint only exposes safe metadata", async (t) => {
   assert.doesNotMatch(status.body, /github-client-secret/);
 });
 
-test("disconnect removes user OAuth connection but keeps instance-level status when instance config exists", async (t) => {
+test("disconnect removes user app connection but keeps instance-level status when instance config exists", async (t) => {
   const app = createApp({
     env: createTestEnv({
-      GITHUB_TOKEN: "instance-github-token",
+      GITHUB_APP_INSTALLATION_ID: TEST_GITHUB_INSTALLATION_ID,
       GITHUB_ALLOWED_REPOS: ["octo/demo"],
       GITHUB_AGENT_API_KEY: "instance-admin-key",
-      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
-      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
+      GITHUB_APP_ID: "github-client-id",
+      GITHUB_APP_PRIVATE_KEY: TEST_GITHUB_APP_PRIVATE_KEY,
+      GITHUB_APP_SLUG: TEST_GITHUB_APP_SLUG,
       MOSAIC_STACK_SESSION_SECRET: "disconnect-session-secret",
       ...TEST_ENCRYPTION_KEY
     }),
     openRouter: createMockOpenRouterClient(),
-    integrationFetch: async (input) => {
-      const url = String(input);
-
-      if (url.startsWith("https://github.com/login/oauth/access_token")) {
-        return new Response(JSON.stringify({
-          access_token: "gho_disconnect_test_token",
-          token_type: "bearer",
-          scope: "read:user,user:email"
-        }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-
-      if (url === "https://api.github.com/user") {
-        return new Response(JSON.stringify({
-          login: "octocat"
-        }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-
-      return new Response(null, { status: 404 });
-    },
+    integrationFetch: createGitHubAppIntegrationFetch(),
     logger: false
   });
 
@@ -356,7 +411,7 @@ test("disconnect removes user OAuth connection but keeps instance-level status w
 
   await app.inject({
     method: "GET",
-    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=disconnect_code`,
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&installation_id=${TEST_GITHUB_INSTALLATION_ID}`,
     headers: {
       cookie: sessionCookie ?? ""
     }
@@ -409,37 +464,14 @@ test("disconnect removes user OAuth connection but keeps instance-level status w
 test("github logout alias clears connection the same as disconnect", async (t) => {
   const app = createApp({
     env: createTestEnv({
-      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
-      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
+      GITHUB_APP_ID: "github-client-id",
+      GITHUB_APP_PRIVATE_KEY: TEST_GITHUB_APP_PRIVATE_KEY,
+      GITHUB_APP_SLUG: TEST_GITHUB_APP_SLUG,
       MOSAIC_STACK_SESSION_SECRET: "logout-session-secret",
       ...TEST_ENCRYPTION_KEY
     }),
     openRouter: createMockOpenRouterClient(),
-    integrationFetch: async (input) => {
-      const url = String(input);
-
-      if (url.startsWith("https://github.com/login/oauth/access_token")) {
-        return new Response(JSON.stringify({
-          access_token: "gho_logout_test_token",
-          token_type: "bearer",
-          scope: "read:user,user:email"
-        }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-
-      if (url === "https://api.github.com/user") {
-        return new Response(JSON.stringify({
-          login: "octocat"
-        }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-
-      return new Response(null, { status: 404 });
-    },
+    integrationFetch: createGitHubAppIntegrationFetch(),
     logger: false
   });
 
@@ -459,7 +491,7 @@ test("github logout alias clears connection the same as disconnect", async (t) =
 
   await app.inject({
     method: "GET",
-    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=logout_code`,
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&installation_id=${TEST_GITHUB_INSTALLATION_ID}`,
     headers: {
       cookie: sessionCookie ?? ""
     }
@@ -557,10 +589,10 @@ test("integrations status never exposes backend secrets", async (t) => {
   assert.doesNotMatch(serialized, /secret-session-secret/);
 });
 
-test("real GitHub OAuth callback stores a user-connected credential source", async (t) => {
+test("real GitHub App callback stores a user-connected credential source", async (t) => {
   const env = createTestEnv({
-    GITHUB_OAUTH_CLIENT_ID: "github-client-id",
-    GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
+    ...TEST_GITHUB_APP_ENV,
+    GITHUB_ALLOWED_REPOS: ["acme/widget"],
     MOSAIC_STACK_SESSION_SECRET: "real-oauth-session-secret",
     ...TEST_ENCRYPTION_KEY
   });
@@ -568,31 +600,7 @@ test("real GitHub OAuth callback stores a user-connected credential source", asy
   const app = createApp({
     env,
     openRouter: createMockOpenRouterClient(),
-    integrationFetch: async (input) => {
-      const url = String(input);
-
-      if (url.startsWith("https://github.com/login/oauth/access_token")) {
-        return new Response(JSON.stringify({
-          access_token: "gho_test_access_token",
-          token_type: "bearer",
-          scope: "read:user,user:email"
-        }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-
-      if (url === "https://api.github.com/user") {
-        return new Response(JSON.stringify({
-          login: "octocat"
-        }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-
-      return new Response(null, { status: 404 });
-    },
+    integrationFetch: createGitHubAppIntegrationFetch(),
     logger: false
   });
 
@@ -608,7 +616,7 @@ test("real GitHub OAuth callback stores a user-connected credential source", asy
   assert.equal(start.statusCode, 302);
   const location = String(start.headers.location ?? "");
   const sessionCookie = readSetCookie(start);
-  assert.ok(location.startsWith("https://github.com/login/oauth/authorize"));
+  assert.ok(location.startsWith(`https://github.com/apps/${TEST_GITHUB_APP_SLUG}/installations/new`));
   assert.ok(sessionCookie);
   const locationUrl = new URL(location);
   const state = locationUrl.searchParams.get("state");
@@ -616,7 +624,7 @@ test("real GitHub OAuth callback stores a user-connected credential source", asy
 
   const callback = await app.inject({
     method: "GET",
-    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=real_code`,
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&installation_id=${TEST_GITHUB_INSTALLATION_ID}`,
     headers: {
       cookie: sessionCookie ?? ""
     }
@@ -643,41 +651,17 @@ test("real GitHub OAuth callback stores a user-connected credential source", asy
   };
 
   assert.equal(payload.github.credentialSource, "user_connected");
-  assert.equal(payload.github.labels.identity, "octocat");
+  assert.equal(payload.github.labels.identity, `octocat (installation ${TEST_GITHUB_INSTALLATION_ID})`);
 });
 
-test("real GitHub OAuth callback survives a fresh serverless auth store", async (t) => {
+test("real GitHub App callback survives a fresh serverless auth store", async (t) => {
   const env = createTestEnv({
-    GITHUB_OAUTH_CLIENT_ID: "github-client-id",
-    GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
+    ...TEST_GITHUB_APP_ENV,
+    GITHUB_ALLOWED_REPOS: ["acme/widget"],
     MOSAIC_STACK_SESSION_SECRET: "serverless-oauth-session-secret",
     ...TEST_ENCRYPTION_KEY
   });
-  const fetchImpl = async (input: RequestInfo | URL) => {
-    const url = String(input);
-
-    if (url.startsWith("https://github.com/login/oauth/access_token")) {
-      return new Response(JSON.stringify({
-        access_token: "gho_serverless_access_token",
-        token_type: "bearer",
-        scope: "read:user,user:email"
-      }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      });
-    }
-
-    if (url === "https://api.github.com/user") {
-      return new Response(JSON.stringify({
-        login: "octocat"
-      }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      });
-    }
-
-    return new Response(null, { status: 404 });
-  };
+  const fetchImpl = createGitHubAppIntegrationFetch();
 
   const startApp = createApp({
     env,
@@ -710,7 +694,7 @@ test("real GitHub OAuth callback survives a fresh serverless auth store", async 
 
   const callback = await callbackApp.inject({
     method: "GET",
-    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=real_code`,
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&installation_id=${TEST_GITHUB_INSTALLATION_ID}`,
     headers: {
       cookie: browserCookie
     }
@@ -736,7 +720,7 @@ test("real GitHub OAuth callback survives a fresh serverless auth store", async 
   };
 
   assert.equal(payload.github.credentialSource, "user_connected");
-  assert.equal(payload.github.labels.identity, "octocat");
+  assert.equal(payload.github.labels.identity, `octocat (installation ${TEST_GITHUB_INSTALLATION_ID})`);
 });
 
 test("real Matrix login-token callback stores a user-connected credential source", async (t) => {
@@ -934,36 +918,33 @@ test("matrix callback fails closed when homeserver is configured but login token
 
 test("real github reverify maps upstream 401 to auth_expired status", async (t) => {
   const env = createTestEnv({
-    GITHUB_OAUTH_CLIENT_ID: "github-client-id",
-    GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
+    GITHUB_APP_ID: "github-client-id",
+    GITHUB_APP_PRIVATE_KEY: TEST_GITHUB_APP_PRIVATE_KEY,
+    GITHUB_APP_SLUG: TEST_GITHUB_APP_SLUG,
+    GITHUB_ALLOWED_REPOS: ["acme/widget"],
     MOSAIC_STACK_SESSION_SECRET: "github-reverify-session-secret",
     ...TEST_ENCRYPTION_KEY
   });
 
-  let userCalls = 0;
+  let installationReads = 0;
   const app = createApp({
     env,
     openRouter: createMockOpenRouterClient(),
-    integrationFetch: async (input) => {
-      const url = String(input);
+    integrationFetch: async (input, init) => {
+      const url = new URL(String(input));
+      const method = init?.method ?? "GET";
 
-      if (url.startsWith("https://github.com/login/oauth/access_token")) {
-        return new Response(JSON.stringify({
-          access_token: "gho_test_access_token",
-          token_type: "bearer",
-          scope: "read:user,user:email"
-        }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
-        });
-      }
+      if (url.pathname === `/app/installations/${TEST_GITHUB_INSTALLATION_ID}` && method === "GET") {
+        installationReads += 1;
 
-      if (url === "https://api.github.com/user") {
-        userCalls += 1;
-
-        if (userCalls === 1) {
+        if (installationReads === 1) {
           return new Response(JSON.stringify({
-            login: "octocat"
+            id: Number.parseInt(TEST_GITHUB_INSTALLATION_ID, 10),
+            account: {
+              login: "octocat",
+              type: "Organization",
+              id: 1
+            }
           }), {
             status: 200,
             headers: { "Content-Type": "application/json" }
@@ -974,6 +955,26 @@ test("real github reverify maps upstream 401 to auth_expired status", async (t) 
           message: "Requires authentication"
         }), {
           status: 401,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      if (url.pathname === `/app/installations/${TEST_GITHUB_INSTALLATION_ID}/access_tokens` && method === "POST") {
+        return new Response(JSON.stringify({
+          token: "ghs_test_installation_token",
+          expires_at: "2030-01-01T00:00:00Z"
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      if (url.pathname === "/installation/repositories" && method === "GET") {
+        return new Response(JSON.stringify({
+          total_count: 1,
+          repositories: [{ id: 1, full_name: "acme/widget" }]
+        }), {
+          status: 200,
           headers: { "Content-Type": "application/json" }
         });
       }
@@ -1001,7 +1002,7 @@ test("real github reverify maps upstream 401 to auth_expired status", async (t) 
 
   const callback = await app.inject({
     method: "GET",
-    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=real_code`,
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&installation_id=${TEST_GITHUB_INSTALLATION_ID}`,
     headers: {
       cookie: sessionCookie ?? ""
     }
@@ -1048,11 +1049,12 @@ test("real github reverify maps upstream 401 to auth_expired status", async (t) 
   assert.equal(payload.github.lastErrorCode, "auth_expired");
 });
 
-test("github callback fails closed when OAuth is denied by the provider", async (t) => {
+test("github callback fails closed when app install is denied by the provider", async (t) => {
   const app = createApp({
     env: createTestEnv({
-      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
-      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret"
+      GITHUB_APP_ID: "github-client-id",
+      GITHUB_APP_PRIVATE_KEY: TEST_GITHUB_APP_PRIVATE_KEY,
+      GITHUB_APP_SLUG: TEST_GITHUB_APP_SLUG
     }),
     openRouter: createMockOpenRouterClient(),
     logger: false
@@ -1107,11 +1109,11 @@ test("github callback fails closed when OAuth is denied by the provider", async 
   assert.equal(statusPayload.github.credentialSource, "not_connected");
 });
 
-test("github start fails closed when OAuth config is partial instead of falling back to stub", async (t) => {
+test("github start fails closed when app config is partial instead of falling back to stub", async (t) => {
   const app = createApp({
     env: createTestEnv({
-      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
-      GITHUB_OAUTH_CLIENT_SECRET: ""
+      GITHUB_APP_ID: "github-client-id",
+      GITHUB_APP_PRIVATE_KEY: ""
     }),
     openRouter: createMockOpenRouterClient(),
     logger: false
@@ -1135,12 +1137,12 @@ test("github start fails closed when OAuth config is partial instead of falling 
   assert.equal(payload.error.code, "missing_server_config");
 });
 
-test("github start fails closed when OAuth callback URL is missing", async (t) => {
+test("github start fails closed when app slug is missing", async (t) => {
   const app = createApp({
     env: createTestEnv({
-      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
-      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
-      GITHUB_OAUTH_CALLBACK_URL: ""
+      GITHUB_APP_ID: "github-client-id",
+      GITHUB_APP_PRIVATE_KEY: TEST_GITHUB_APP_PRIVATE_KEY,
+      GITHUB_APP_SLUG: ""
     }),
     openRouter: createMockOpenRouterClient(),
     logger: false
@@ -1164,12 +1166,12 @@ test("github start fails closed when OAuth callback URL is missing", async (t) =
   assert.equal(payload.error.code, "missing_server_config");
 });
 
-test("github start fails closed when session secret is missing in OAuth mode", async (t) => {
+test("github start fails closed when session secret is missing in app mode", async (t) => {
   const app = createApp({
     env: createTestEnv({
-      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
-      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
-      GITHUB_OAUTH_CALLBACK_URL: "http://127.0.0.1:8787/api/auth/github/callback",
+      GITHUB_APP_ID: "github-client-id",
+      GITHUB_APP_PRIVATE_KEY: TEST_GITHUB_APP_PRIVATE_KEY,
+      GITHUB_APP_SLUG: TEST_GITHUB_APP_SLUG,
       MOSAIC_STACK_SESSION_SECRET: ""
     }),
     openRouter: createMockOpenRouterClient(),
@@ -1194,11 +1196,12 @@ test("github start fails closed when session secret is missing in OAuth mode", a
   assert.equal(payload.error.code, "missing_server_config");
 });
 
-test("github callback fails closed when OAuth code is missing in real credential mode", async (t) => {
+test("github callback fails closed when installation id is missing in real credential mode", async (t) => {
   const app = createApp({
     env: createTestEnv({
-      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
-      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
+      GITHUB_APP_ID: "github-client-id",
+      GITHUB_APP_PRIVATE_KEY: TEST_GITHUB_APP_PRIVATE_KEY,
+      GITHUB_APP_SLUG: TEST_GITHUB_APP_SLUG,
       ...TEST_ENCRYPTION_KEY
     }),
     openRouter: createMockOpenRouterClient(),
@@ -1236,27 +1239,18 @@ test("github callback fails closed when OAuth code is missing in real credential
   assert.equal(payload.error.code, "invalid_request");
 });
 
-test("github callback fails closed when oauth code exchange is invalid", async (t) => {
+test("github callback fails closed when app installation token exchange is invalid", async (t) => {
   const app = createApp({
     env: createTestEnv({
-      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
-      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret"
+      ...TEST_GITHUB_APP_ENV
     }),
     openRouter: createMockOpenRouterClient(),
-    integrationFetch: async (input) => {
-      const url = String(input);
-
-      if (url.startsWith("https://github.com/login/oauth/access_token")) {
-        return new Response(JSON.stringify({
-          error: "bad_verification_code"
-        }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" }
-        });
+    integrationFetch: createGitHubAppIntegrationFetch({
+      accessTokenStatus: 500,
+      accessTokenPayload: {
+        message: "token exchange failed"
       }
-
-      return new Response(null, { status: 404 });
-    },
+    }),
     logger: false
   });
 
@@ -1276,7 +1270,7 @@ test("github callback fails closed when oauth code exchange is invalid", async (
 
   const callback = await app.inject({
     method: "GET",
-    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=invalid_code`,
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&installation_id=${TEST_GITHUB_INSTALLATION_ID}`,
     headers: {
       cookie: sessionCookie ?? ""
     }
@@ -1291,35 +1285,16 @@ test("github callback fails closed when oauth code exchange is invalid", async (
   assert.equal(payload.error.code, "token_exchange_failed");
 });
 
-test("github callback fails closed when required oauth scopes are missing", async (t) => {
-  let userLookupCalls = 0;
+test("github callback fails closed when installation has no allowed repositories", async (t) => {
   const app = createApp({
     env: createTestEnv({
-      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
-      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
-      GITHUB_OAUTH_SCOPES: ["repo", "read:user"]
+      ...TEST_GITHUB_APP_ENV,
+      GITHUB_ALLOWED_REPOS: ["acme/private-repo-only"]
     }),
     openRouter: createMockOpenRouterClient(),
-    integrationFetch: async (input) => {
-      const url = String(input);
-
-      if (url.startsWith("https://github.com/login/oauth/access_token")) {
-        return new Response(JSON.stringify({
-          access_token: "gho_test_access_token",
-          token_type: "bearer",
-          scope: "read:user"
-        }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-
-      if (url === "https://api.github.com/user") {
-        userLookupCalls += 1;
-      }
-
-      return new Response(null, { status: 404 });
-    },
+    integrationFetch: createGitHubAppIntegrationFetch({
+      repos: ["octo/demo"]
+    }),
     logger: false
   });
 
@@ -1339,7 +1314,7 @@ test("github callback fails closed when required oauth scopes are missing", asyn
 
   const callback = await app.inject({
     method: "GET",
-    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=real_code`,
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&installation_id=${TEST_GITHUB_INSTALLATION_ID}`,
     headers: {
       cookie: sessionCookie ?? ""
     }
@@ -1352,7 +1327,6 @@ test("github callback fails closed when required oauth scopes are missing", asyn
     };
   };
   assert.equal(payload.error.code, "scope_denied");
-  assert.equal(userLookupCalls, 0);
 });
 
 test("matrix start fails closed when SSO login flow is not supported", async (t) => {
@@ -1743,38 +1717,14 @@ test("matrix callback maps expired login token responses to auth_expired", async
 test("configured providers fail closed when credential encryption is unavailable", async (t) => {
   const app = createApp({
     env: createTestEnv({
-      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
-      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
+      ...TEST_GITHUB_APP_ENV,
+      GITHUB_ALLOWED_REPOS: ["acme/widget"],
       MOSAIC_STACK_SESSION_SECRET: "oauth-encryption-test-session-secret",
       INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY: "",
       INTEGRATION_AUTH_ENCRYPTION_PREVIOUS_KEYS: ""
     }),
     openRouter: createMockOpenRouterClient(),
-    integrationFetch: async (input) => {
-      const url = String(input);
-
-      if (url.startsWith("https://github.com/login/oauth/access_token")) {
-        return new Response(JSON.stringify({
-          access_token: "gho_test_access_token",
-          token_type: "bearer",
-          scope: "read:user,user:email"
-        }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-
-      if (url === "https://api.github.com/user") {
-        return new Response(JSON.stringify({
-          login: "octocat"
-        }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-
-      return new Response(null, { status: 404 });
-    },
+    integrationFetch: createGitHubAppIntegrationFetch(),
     logger: false
   });
 
@@ -1794,7 +1744,7 @@ test("configured providers fail closed when credential encryption is unavailable
 
   const callback = await app.inject({
     method: "GET",
-    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=real_code`,
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&installation_id=${TEST_GITHUB_INSTALLATION_ID}`,
     headers: {
       cookie: sessionCookie ?? ""
     }
@@ -1904,38 +1854,14 @@ test("github disconnect clears durable user credential without exposing tokens",
   const storePath = createTempStorePath();
   const app = createApp({
     env: createTestEnv({
-      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
-      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
+      ...TEST_GITHUB_APP_ENV,
+      GITHUB_ALLOWED_REPOS: ["acme/widget"],
       INTEGRATION_AUTH_STORE_MODE: "file",
       INTEGRATION_AUTH_STORE_FILE_PATH: storePath,
       ...TEST_ENCRYPTION_KEY
     }),
     openRouter: createMockOpenRouterClient(),
-    integrationFetch: async (input) => {
-      const url = String(input);
-
-      if (url.startsWith("https://github.com/login/oauth/access_token")) {
-        return new Response(JSON.stringify({
-          access_token: "gho_durable_disconnect_token",
-          token_type: "bearer",
-          scope: "read:user,user:email"
-        }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-
-      if (url === "https://api.github.com/user") {
-        return new Response(JSON.stringify({
-          login: "octocat"
-        }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-
-      return new Response(null, { status: 404 });
-    },
+    integrationFetch: createGitHubAppIntegrationFetch(),
     logger: false
   });
 
@@ -1955,7 +1881,7 @@ test("github disconnect clears durable user credential without exposing tokens",
 
   const callback = await app.inject({
     method: "GET",
-    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=real_code`,
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&installation_id=${TEST_GITHUB_INSTALLATION_ID}`,
     headers: {
       cookie: sessionCookie ?? ""
     }

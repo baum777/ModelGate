@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { GitHubConfig } from "../lib/github-env.js";
 import type { AppEnv } from "../lib/env.js";
-import { getGitHubOAuthRequirements } from "../lib/integration-auth-config.js";
+import { getGitHubAppRequirements } from "../lib/integration-auth-config.js";
 import type { MatrixConfig } from "../lib/matrix-env.js";
 import type { IntegrationAuthStore, IntegrationConnectionRecord, IntegrationProvider } from "../lib/integration-auth-store.js";
 
@@ -228,8 +228,8 @@ function buildGithubScopeLabel(config: GitHubConfig) {
 function getGitHubWorkspaceRequirements(config: GitHubConfig) {
   const requirements: string[] = [];
 
-  if (!config.token) {
-    requirements.push("GITHUB_TOKEN");
+  if (!config.installationId) {
+    requirements.push("GITHUB_APP_INSTALLATION_ID");
   }
 
   if (config.allowedRepos.length === 0) {
@@ -240,10 +240,10 @@ function getGitHubWorkspaceRequirements(config: GitHubConfig) {
 }
 
 function getGitHubStatusRequirements(env: AppEnv, config: GitHubConfig) {
-  const oauthRequirements = getGitHubOAuthRequirements(env);
+  const appRequirements = getGitHubAppRequirements(env);
 
-  return oauthRequirements.length > 0
-    ? oauthRequirements
+  return appRequirements.length > 0
+    ? appRequirements
     : getGitHubWorkspaceRequirements(config);
 }
 
@@ -268,10 +268,10 @@ function providerIdentityFallback(provider: IntegrationProvider, credentialSourc
 }
 
 function buildGithubStatus(env: AppEnv, config: GitHubConfig, connection: IntegrationConnectionRecord | null): IntegrationStatusPayload {
-  const credentialSource = getCredentialSource(config.ready, connection);
+  const credentialSource = getCredentialSource(config.instanceReady, connection);
   const lastErrorCode = connection?.lastErrorCode ?? null;
   const hasUserCredential = connection?.connected === true && connection.source === "user_connected";
-  const githubOperationalReady = hasUserCredential || config.ready;
+  const githubOperationalReady = hasUserCredential || config.instanceReady;
   const authState = getAuthState({
     configReady: githubOperationalReady,
     connection,

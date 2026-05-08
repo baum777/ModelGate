@@ -4,8 +4,10 @@ import { z } from "zod";
 import type { AppEnv } from "../lib/env.js";
 import {
   formatMissingServerConfigDetails,
-  resolveGitHubOAuthConfig
+  resolveGitHubAppConfig
 } from "../lib/integration-auth-config.js";
+import { createGitHubAppAuthClient, GitHubAppAuthError } from "../lib/github-app-auth.js";
+import type { GitHubConfig } from "../lib/github-env.js";
 import type { IntegrationAuthStore, IntegrationProvider } from "../lib/integration-auth-store.js";
 import type { MatrixConfig } from "../lib/matrix-env.js";
 
@@ -21,7 +23,8 @@ const AuthStartQuerySchema = z.object({
 
 const GitHubCallbackQuerySchema = z.object({
   state: z.string().trim().min(1),
-  code: z.string().trim().optional(),
+  installation_id: z.string().trim().optional(),
+  setup_action: z.string().trim().optional(),
   error: z.string().trim().optional(),
   error_description: z.string().trim().optional()
 });
@@ -35,6 +38,7 @@ const MatrixCallbackQuerySchema = z.object({
 
 type IntegrationAuthRouteDependencies = {
   env: AppEnv;
+  githubConfig: GitHubConfig;
   matrixConfig: MatrixConfig;
   authStore: IntegrationAuthStore;
   fetchImpl?: typeof fetch;
@@ -63,19 +67,6 @@ type IntegrationAuthErrorCode =
   | "login_token_invalid"
   | "expected_user_mismatch"
   | "auth_expired";
-
-function parseScopeSet(scopeRaw: string | null): Set<string> {
-  if (!scopeRaw) {
-    return new Set();
-  }
-
-  const scopeEntries = scopeRaw
-    .split(/[,\s]+/)
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
-
-  return new Set(scopeEntries);
-}
 
 function isProductionDeployment() {
   return process.env.NODE_ENV === "production";
@@ -425,109 +416,78 @@ async function requestJson(
   };
 }
 
-async function exchangeGitHubCode(
+function mapGitHubAppAuthErrorToIntegrationCode(error: GitHubAppAuthError): IntegrationAuthErrorCode {
+  if (error.code === "not_configured") {
+    return "missing_server_config";
+  }
+
+  if (error.code === "invalid_installation_id") {
+    return "invalid_request";
+  }
+
+  if (error.code === "github_unauthorized") {
+    return "auth_expired";
+  }
+
+  if (error.code === "github_forbidden") {
+    return "scope_denied";
+  }
+
+  if (error.code === "github_timeout") {
+    return "upstream_unreachable";
+  }
+
+  if (error.code === "github_rate_limited") {
+    return "upstream_unreachable";
+  }
+
+  if (error.code === "github_malformed_response") {
+    return "callback_failed";
+  }
+
+  return "token_exchange_failed";
+}
+
+async function exchangeGitHubInstallation(
   deps: IntegrationAuthRouteDependencies,
-  code: string,
-  state: string,
-  redirectUri: string
+  installationIdRaw: string
 ) {
-  const oauthConfig = resolveGitHubOAuthConfig(deps.env);
+  const appAuth = createGitHubAppAuthClient({
+    config: deps.githubConfig,
+    fetchImpl: deps.fetchImpl
+  });
 
-  const tokenResponse = await requestJson(
-    deps.fetchImpl ?? fetch,
-    oauthConfig.tokenUrl,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json"
-      },
-      body: JSON.stringify({
-        client_id: oauthConfig.clientId,
-        client_secret: oauthConfig.clientSecret,
-        code,
-        state,
-        redirect_uri: redirectUri
-      })
-    },
-    "github_token_exchange"
-  );
+  try {
+    const installation = await appAuth.readInstallation(installationIdRaw);
+    const hasAllowedRepo = await appAuth.installationHasAnyAllowedRepo(installation.installationId, deps.githubConfig.allowedRepos);
 
-  if (!tokenResponse.ok || !tokenResponse.payload || typeof tokenResponse.payload !== "object") {
-    throw new Error("token_exchange_failed");
-  }
-
-  const payload = tokenResponse.payload as Record<string, unknown>;
-  const accessToken = typeof payload.access_token === "string" ? payload.access_token.trim() : "";
-  const tokenType = typeof payload.token_type === "string" ? payload.token_type.trim() : "bearer";
-  const scope = typeof payload.scope === "string" ? payload.scope.trim() : null;
-  const exchangeError = typeof payload.error === "string" ? payload.error.trim() : "";
-
-  if (exchangeError.length > 0) {
-    if (exchangeError === "access_denied" || exchangeError === "incorrect_client_credentials") {
+    if (!hasAllowedRepo) {
       throw new Error("scope_denied");
     }
 
-    throw new Error("token_exchange_failed");
-  }
-
-  if (accessToken.length === 0) {
-    throw new Error("token_exchange_failed");
-  }
-
-  const grantedScopes = parseScopeSet(scope);
-  const missingRequiredScope = oauthConfig.scopes
-    .map((requiredScope) => requiredScope.trim())
-    .filter((requiredScope) => requiredScope.length > 0)
-    .find((requiredScope) => !grantedScopes.has(requiredScope));
-
-  if (missingRequiredScope) {
-    throw new Error("scope_denied");
-  }
-
-  const userResponse = await requestJson(
-    deps.fetchImpl ?? fetch,
-    "https://api.github.com/user",
-    {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"
+    return {
+      safeIdentityLabel: installation.accountLogin
+        ? `${installation.accountLogin} (installation ${installation.installationId})`
+        : `installation ${installation.installationId}`,
+      credential: {
+        kind: "github_app_installation",
+        installationId: String(installation.installationId),
+        accountLogin: installation.accountLogin,
+        accountType: installation.accountType,
+        connectedAt: new Date().toISOString()
       }
-    },
-    "github_identity"
-  );
-
-  if (!userResponse.ok || !userResponse.payload || typeof userResponse.payload !== "object") {
-    if (userResponse.status === 401) {
-      throw new Error("auth_expired");
+    };
+  } catch (error) {
+    if (error instanceof GitHubAppAuthError) {
+      throw new Error(mapGitHubAppAuthErrorToIntegrationCode(error));
     }
 
-    if (userResponse.status === 403) {
-      throw new Error("scope_denied");
+    if (error instanceof Error && error.message === "scope_denied") {
+      throw error;
     }
 
-    throw new Error("upstream_unreachable");
-  }
-
-  const userPayload = userResponse.payload as Record<string, unknown>;
-  const login = typeof userPayload.login === "string" ? userPayload.login.trim() : "";
-
-  if (login.length === 0) {
     throw new Error("callback_failed");
   }
-
-  return {
-    safeIdentityLabel: login,
-    credential: {
-      kind: "github_oauth",
-      accessToken,
-      tokenType,
-      scope,
-      connectedAt: new Date().toISOString()
-    }
-  };
 }
 
 async function fetchMatrixLoginFlows(
@@ -643,46 +603,43 @@ async function reverifyGitHubCredential(
   deps: IntegrationAuthRouteDependencies,
   credential: Record<string, unknown>
 ) {
-  const accessToken = typeof credential.accessToken === "string" ? credential.accessToken.trim() : "";
+  const installationIdRaw = typeof credential.installationId === "string"
+    ? credential.installationId.trim()
+    : typeof credential.installationId === "number"
+      ? String(credential.installationId)
+      : "";
 
-  if (accessToken.length === 0) {
+  if (installationIdRaw.length === 0) {
     throw new Error("auth_expired");
   }
 
-  const userResponse = await requestJson(
-    deps.fetchImpl ?? fetch,
-    "https://api.github.com/user",
-    {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"
-      }
-    },
-    "github_reverify"
-  );
+  const appAuth = createGitHubAppAuthClient({
+    config: deps.githubConfig,
+    fetchImpl: deps.fetchImpl
+  });
 
-  if (!userResponse.ok || !userResponse.payload || typeof userResponse.payload !== "object") {
-    if (userResponse.status === 401) {
-      throw new Error("auth_expired");
-    }
+  try {
+    const installation = await appAuth.readInstallation(installationIdRaw);
+    const hasAllowedRepo = await appAuth.installationHasAnyAllowedRepo(installation.installationId, deps.githubConfig.allowedRepos);
 
-    if (userResponse.status === 403) {
+    if (!hasAllowedRepo) {
       throw new Error("scope_denied");
     }
 
-    throw new Error("upstream_unreachable");
-  }
+    return installation.accountLogin
+      ? `${installation.accountLogin} (installation ${installation.installationId})`
+      : `installation ${installation.installationId}`;
+  } catch (error) {
+    if (error instanceof GitHubAppAuthError) {
+      throw new Error(mapGitHubAppAuthErrorToIntegrationCode(error));
+    }
 
-  const payload = userResponse.payload as Record<string, unknown>;
-  const login = typeof payload.login === "string" ? payload.login.trim() : "";
+    if (error instanceof Error && error.message === "scope_denied") {
+      throw error;
+    }
 
-  if (login.length === 0) {
     throw new Error("callback_failed");
   }
-
-  return login;
 }
 
 async function reverifyMatrixCredential(
@@ -815,14 +772,14 @@ function registerProviderStartRoute(
     reply.header("Cache-Control", "no-store");
 
     if (provider === "github") {
-      const oauthConfig = resolveGitHubOAuthConfig(deps.env);
+      const appConfig = resolveGitHubAppConfig(deps.env);
 
-      if (!oauthConfig.enabled) {
+      if (!appConfig.enabled) {
         return sendIntegrationAuthError(
           reply,
           "missing_server_config",
           statusForErrorCode("missing_server_config"),
-          formatMissingServerConfigDetails("GitHub OAuth", oauthConfig.requirements) ?? undefined
+          formatMissingServerConfigDetails("GitHub App", appConfig.requirements) ?? undefined
         );
       }
 
@@ -842,11 +799,8 @@ function registerProviderStartRoute(
         expiresAtMs: new Date(intent.expiresAt).getTime()
       });
 
-      const url = new URL(oauthConfig.authorizeUrl);
-      url.searchParams.set("client_id", oauthConfig.clientId);
-      url.searchParams.set("redirect_uri", oauthConfig.callbackUrl ?? "");
+      const url = new URL(appConfig.installUrl);
       url.searchParams.set("state", intent.state);
-      url.searchParams.set("scope", oauthConfig.scopes.join(" "));
       return reply.redirect(url.toString(), 302);
     }
 
@@ -931,52 +885,48 @@ function registerProviderCallbackRoute(
     try {
       if (provider === "github") {
         const query = parsedQuery.data as z.infer<typeof GitHubCallbackQuerySchema>;
-        const oauthConfig = resolveGitHubOAuthConfig(deps.env);
+        const appConfig = resolveGitHubAppConfig(deps.env);
 
-        if (!oauthConfig.enabled) {
+        if (!appConfig.enabled) {
           deps.authStore.setErrorCode(intent.sessionId, provider, "missing_server_config");
           return sendIntegrationAuthError(
             reply,
             "missing_server_config",
             statusForErrorCode("missing_server_config"),
-            formatMissingServerConfigDetails("GitHub OAuth", oauthConfig.requirements) ?? undefined
+            formatMissingServerConfigDetails("GitHub App", appConfig.requirements) ?? undefined
           );
         }
 
-        if (oauthConfig.enabled) {
-          if (query.error) {
-            deps.authStore.setErrorCode(intent.sessionId, provider, "scope_denied");
-            return sendIntegrationAuthError(reply, "scope_denied", statusForErrorCode("scope_denied"), query.error_description);
-          }
-
-          if (!query.code) {
-            deps.authStore.setErrorCode(intent.sessionId, provider, "invalid_request");
-            return sendIntegrationAuthError(reply, "invalid_request", statusForErrorCode("invalid_request"));
-          }
-
-          const exchange = await exchangeGitHubCode(
-            deps,
-            query.code,
-            query.state,
-            oauthConfig.callbackUrl ?? ""
-          );
-
-          const stored = deps.authStore.storeCredential(intent.sessionId, provider, exchange.credential);
-
-          if (!stored) {
-            deps.authStore.setErrorCode(intent.sessionId, provider, "missing_server_config");
-            return sendIntegrationAuthError(reply, "missing_server_config", statusForErrorCode("missing_server_config"));
-          }
-
-          deps.authStore.markConnected({
-            provider,
-            sessionId: intent.sessionId,
-            safeIdentityLabel: exchange.safeIdentityLabel,
-            source: "user_connected"
-          });
-          reply.header("Cache-Control", "no-store");
-          return reply.redirect(intent.returnTo, 302);
+        if (query.error) {
+          deps.authStore.setErrorCode(intent.sessionId, provider, "scope_denied");
+          return sendIntegrationAuthError(reply, "scope_denied", statusForErrorCode("scope_denied"), query.error_description);
         }
+
+        if (!query.installation_id || query.installation_id.trim().length === 0) {
+          deps.authStore.setErrorCode(intent.sessionId, provider, "invalid_request");
+          return sendIntegrationAuthError(reply, "invalid_request", statusForErrorCode("invalid_request"));
+        }
+
+        const exchange = await exchangeGitHubInstallation(
+          deps,
+          query.installation_id
+        );
+
+        const stored = deps.authStore.storeCredential(intent.sessionId, provider, exchange.credential);
+
+        if (!stored) {
+          deps.authStore.setErrorCode(intent.sessionId, provider, "missing_server_config");
+          return sendIntegrationAuthError(reply, "missing_server_config", statusForErrorCode("missing_server_config"));
+        }
+
+        deps.authStore.markConnected({
+          provider,
+          sessionId: intent.sessionId,
+          safeIdentityLabel: exchange.safeIdentityLabel,
+          source: "user_connected"
+        });
+        reply.header("Cache-Control", "no-store");
+        return reply.redirect(intent.returnTo, 302);
       }
 
       if (provider === "matrix") {
@@ -1154,11 +1104,11 @@ function registerGitHubStatusRoute(
   app.get("/api/auth/github/status", async (request, reply) => {
     const sessionId = readIntegrationSessionCookie(request);
     const connection = deps.authStore.readConnection(sessionId, "github");
-    const oauthConfig = resolveGitHubOAuthConfig(deps.env);
+    const appConfig = resolveGitHubAppConfig(deps.env);
     const connected = connection?.connected === true;
     const status = connected
       ? "connected"
-      : oauthConfig.configured && !oauthConfig.enabled
+      : appConfig.configured && !appConfig.enabled
         ? "missing_server_config"
         : "not_connected";
 
@@ -1168,8 +1118,9 @@ function registerGitHubStatusRoute(
       provider: "github",
       status,
       connected,
-      oauthReady: oauthConfig.enabled,
-      requirements: connected || oauthConfig.enabled ? [] : oauthConfig.requirements,
+      appReady: appConfig.enabled,
+      oauthReady: appConfig.enabled,
+      requirements: connected || appConfig.enabled ? [] : appConfig.requirements,
       identity: connected ? (connection?.safeIdentityLabel ?? null) : null,
       credentialSource: connected ? connection?.source ?? "not_connected" : "not_connected",
       lastVerifiedAt: connected ? connection?.lastVerifiedAt ?? null : null,

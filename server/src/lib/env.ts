@@ -64,6 +64,7 @@ export const EnvSchema = z.object({
   GITHUB_SMOKE_ENABLED: z.string().trim().default("false"),
   GITHUB_APP_ID: z.string().trim().default(""),
   GITHUB_APP_PRIVATE_KEY: z.string().trim().default(""),
+  GITHUB_APP_SLUG: z.string().trim().default(""),
   GITHUB_APP_INSTALLATION_ID: z.string().trim().default(""),
   GITHUB_OAUTH_CLIENT_ID: z.string().trim().default(""),
   GITHUB_OAUTH_CLIENT_SECRET: z.string().trim().default(""),
@@ -149,6 +150,7 @@ export type AppEnv = {
   GITHUB_SMOKE_ENABLED: boolean;
   GITHUB_APP_ID: string;
   GITHUB_APP_PRIVATE_KEY: string;
+  GITHUB_APP_SLUG: string;
   GITHUB_APP_INSTALLATION_ID: string;
   GITHUB_OAUTH_CLIENT_ID: string;
   GITHUB_OAUTH_CLIENT_SECRET: string;
@@ -275,6 +277,7 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     GITHUB_SMOKE_ENABLED: parseBoolean(parsed.GITHUB_SMOKE_ENABLED.trim()),
     GITHUB_APP_ID: parsed.GITHUB_APP_ID.trim(),
     GITHUB_APP_PRIVATE_KEY: parsed.GITHUB_APP_PRIVATE_KEY.trim(),
+    GITHUB_APP_SLUG: parsed.GITHUB_APP_SLUG.trim(),
     GITHUB_APP_INSTALLATION_ID: parsed.GITHUB_APP_INSTALLATION_ID.trim(),
     GITHUB_OAUTH_CLIENT_ID: parsed.GITHUB_OAUTH_CLIENT_ID.trim(),
     GITHUB_OAUTH_CLIENT_SECRET: parsed.GITHUB_OAUTH_CLIENT_SECRET.trim(),

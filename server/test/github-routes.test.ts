@@ -4,6 +4,88 @@ import { createApp } from "../src/app.js";
 import { createGitHubClient } from "../src/lib/github-client.js";
 import { createTestEnv, createMockOpenRouterClient, createTestGitHubConfig, createTestSessionCookie } from "../test-support/helpers.js";
 
+const TEST_GITHUB_APP_PRIVATE_KEY = [
+  "-----BEGIN PRIVATE KEY-----",
+  "MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC8TmaFfZfrb4Cg",
+  "YCUAbybKUfoO4RTRlrhL3rUdTKyUbEaFH3DGOh0KaWUpLAbTusGAL9mrdUNy/bpt",
+  "7bp+68Dui2Cl5Y453sQ6inRJSMHzqwl0Zoh2JFGtgjjKeRe1b2GyJU5r5SLNTUuF",
+  "cXGHOhfc8KUZpW558dEX3ahVdt5nkmlOvqH8o8jhV6DHMdHFJMQ5Wteyjr+30o0e",
+  "NoZM8AmG9KRW4u6gUxXILbbeH1/3G3V62lr5rx/OqpdHlUPQo2ShpEq/OljjFjRZ",
+  "BlpXjhR7GMSIFwACogZMDl6KPUZiiL8yqynx/gc0SjXXpD2YtY/9T+dH7U5LZXew",
+  "wmiPYDFpAgMBAAECggEABwGSQC979Gkrw5vMKKPaET9DUuQmPIWTchQ1UCOjDKsq",
+  "JQgWT7PIEpP5DPL7xostaaXuHvpgEfJVikNE8/W00hNKu2Vq+SV8DtMJsFPWDok7",
+  "svJhK6ceiFp+3y6p9ojQPVr0u+A0vyd78rk1sIK1clWcSPPeJEieX1lSiup/LCKG",
+  "oUfwY9ebJzi3/XBAXmy4vZZWzpwD3N7iGAfrhjwOfm4Qt5m1yRIufhdPP3TYyrQV",
+  "e96fAOZ0PwqoH3nyqs97kVb8hmMbRHSm/hFAvP6JS1SEz0a95Z5qYGwYokjqo0bv",
+  "h4+xR02H2DpT+TJU/yQQ7/Vg6KjIMEkMUtgi+xmg4QKBgQDxwwtPZGG4ngXjhH/U",
+  "LoU+VAOddLn9szZbY8kef7yUAUaDO+bFuaJUQ2IqTB1PQO/P17xXWWlsar3mLzdi",
+  "FgjkEKC282tkyIk4MKEd2f5sBVdDabtkCqsCFbo3dI835tv7QqQE/PlWeCJPnENV",
+  "mLxhWGXKiBhq4cU6YVWZbhywoQKBgQDHZWzU3k/KivX1Jm2cdL3tClPW8QL+r9HV",
+  "bTUPfY8kXi91gu5CxwOIQjAa5/T+lTDqhvuJ+BKpRcbns4FW6GAq/mEmH4x63MK3",
+  "0FZZMR0+ThBV7KddubNTcVJZTsMF3ew5guVXiRj9dDvuUD00A5a/buDO/Rko2uVt",
+  "oQ6t9IOjyQKBgQDKHAhkgsK/GDxMDAThWVLC3HF5PJAQa7XRiQYlnRwFj1tncrhm",
+  "K95tGzgBrEgEbYEN/IjTbUgY/tNqj6Z5NXqRTuVMjQsG4i707pKC5i8wFvbwwH+M",
+  "Du8PeyKGIcdpMHJPB1MfaGz5wMzOSRBxipJRvxi5zDS9hajgOWbaMZeCgQKBgQCP",
+  "YwhYK2YFqNgmanP4Rpstknen4bjdnWGvsNCvSwNci75lKrpbmvGXUsF1F8i+Klr6",
+  "zAamuJXy1BKtHBCuhnxhbnw+BgHneEkuFcuCaCc3XruwjnXsmFW0c5FcV5824Ne2",
+  "o8J4qEYoPSW7wkfA17PYBcv0DV3CW2cQ5vi/b04awQKBgCEEDtIgVTtEgjhTmo2U",
+  "VJvx8whHRnhF2HUjIqovAAO+LuQ9GmRU9sdKos9CpeYs37HjAsA49v53yUW7jzpm",
+  "zxuwOmy/oratSgU6JtmlEzjrWCO0Ro/uYeqOucQnIpZECWFOGZFbPenP/rx5BJSM",
+  "o+DuibDhjcy65hxrVB2D5cTQ",
+  "-----END PRIVATE KEY-----"
+].join("\\n");
+
+const TEST_GITHUB_APP_SLUG = "mosaicstacked-test-app";
+const TEST_USER_INSTALLATION_ID = 12345;
+const TEST_INSTANCE_INSTALLATION_ID = 67890;
+
+function createGitHubAppIntegrationFetch(options: {
+  userToken?: string;
+  instanceToken?: string;
+} = {}) {
+  const userToken = options.userToken ?? "ghs_user_installation_token";
+  const instanceToken = options.instanceToken ?? "ghs_instance_installation_token";
+
+  return async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    const method = init?.method ?? "GET";
+
+    if (url.pathname === `/app/installations/${TEST_USER_INSTALLATION_ID}` && method === "GET") {
+      return makeJsonResponse({
+        id: TEST_USER_INSTALLATION_ID,
+        account: {
+          login: "octocat",
+          type: "Organization",
+          id: 1
+        }
+      });
+    }
+
+    if (url.pathname === `/app/installations/${TEST_USER_INSTALLATION_ID}/access_tokens` && method === "POST") {
+      return makeJsonResponse({
+        token: userToken,
+        expires_at: "2030-01-01T00:00:00Z"
+      });
+    }
+
+    if (url.pathname === `/app/installations/${TEST_INSTANCE_INSTALLATION_ID}/access_tokens` && method === "POST") {
+      return makeJsonResponse({
+        token: instanceToken,
+        expires_at: "2030-01-01T00:00:00Z"
+      });
+    }
+
+    if (url.pathname === "/installation/repositories" && method === "GET") {
+      return makeJsonResponse({
+        total_count: 1,
+        repositories: [{ id: 1, full_name: "acme/widget" }]
+      });
+    }
+
+    return new Response(null, { status: 404 });
+  };
+}
+
 function makeJsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
     status,
@@ -343,10 +425,14 @@ test("github routes sanitize upstream authorization failures", async (t) => {
   assert.doesNotMatch(response.body, /secret-token/);
 });
 
-test("github routes use session GitHub OAuth credentials when available", async (t) => {
+test("github routes use session GitHub App installation credentials when available", async (t) => {
   const authHeaders: string[] = [];
   const githubConfig = createTestGitHubConfig({
-    token: "instance-token",
+    appId: "github-app-id",
+    appPrivateKey: TEST_GITHUB_APP_PRIVATE_KEY,
+    appSlug: TEST_GITHUB_APP_SLUG,
+    installationId: TEST_INSTANCE_INSTALLATION_ID,
+    installationTokenOverride: null,
     allowedRepos: ["acme/widget"],
     allowedRepoSet: new Set(["acme/widget"])
   });
@@ -392,10 +478,11 @@ test("github routes use session GitHub OAuth credentials when available", async 
 
   const app = createApp({
     env: createTestEnv({
-      GITHUB_TOKEN: "instance-token",
+      GITHUB_APP_ID: "github-app-id",
+      GITHUB_APP_PRIVATE_KEY: TEST_GITHUB_APP_PRIVATE_KEY,
+      GITHUB_APP_SLUG: TEST_GITHUB_APP_SLUG,
+      GITHUB_APP_INSTALLATION_ID: String(TEST_INSTANCE_INSTALLATION_ID),
       GITHUB_ALLOWED_REPOS: ["acme/widget"],
-      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
-      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
       INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID: "test-key",
       INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_VERSION: "1",
       INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY: "test-key-material"
@@ -403,25 +490,10 @@ test("github routes use session GitHub OAuth credentials when available", async 
     openRouter: createMockOpenRouterClient(),
     githubConfig,
     githubClient,
-    integrationFetch: async (input) => {
-      const url = String(input);
-
-      if (url.startsWith("https://github.com/login/oauth/access_token")) {
-        return makeJsonResponse({
-          access_token: "gho_user_token",
-          token_type: "bearer",
-          scope: "read:user,user:email"
-        });
-      }
-
-      if (url === "https://api.github.com/user") {
-        return makeJsonResponse({
-          login: "octocat"
-        });
-      }
-
-      return new Response(null, { status: 404 });
-    },
+    integrationFetch: createGitHubAppIntegrationFetch({
+      userToken: "ghs_user_token",
+      instanceToken: "ghs_instance_token"
+    }),
     logger: false
   });
 
@@ -440,7 +512,7 @@ test("github routes use session GitHub OAuth credentials when available", async 
 
   const callback = await app.inject({
     method: "GET",
-    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=real_code`,
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&installation_id=${TEST_USER_INSTALLATION_ID}`,
     headers: {
       cookie: sessionCookie
     }
@@ -460,13 +532,17 @@ test("github routes use session GitHub OAuth credentials when available", async 
     credentialSource: string;
   };
   assert.equal(payload.credentialSource, "user_connected");
-  assert.equal(authHeaders[0], "Bearer gho_user_token");
+  assert.equal(authHeaders[0], "Bearer ghs_user_token");
 });
 
 test("github routes do not reuse another session user token", async (t) => {
   const authHeaders: string[] = [];
   const githubConfig = createTestGitHubConfig({
-    token: "instance-token",
+    appId: "github-app-id",
+    appPrivateKey: TEST_GITHUB_APP_PRIVATE_KEY,
+    appSlug: TEST_GITHUB_APP_SLUG,
+    installationId: TEST_INSTANCE_INSTALLATION_ID,
+    installationTokenOverride: null,
     allowedRepos: ["acme/widget"],
     allowedRepoSet: new Set(["acme/widget"])
   });
@@ -512,10 +588,11 @@ test("github routes do not reuse another session user token", async (t) => {
 
   const app = createApp({
     env: createTestEnv({
-      GITHUB_TOKEN: "instance-token",
+      GITHUB_APP_ID: "github-app-id",
+      GITHUB_APP_PRIVATE_KEY: TEST_GITHUB_APP_PRIVATE_KEY,
+      GITHUB_APP_SLUG: TEST_GITHUB_APP_SLUG,
+      GITHUB_APP_INSTALLATION_ID: String(TEST_INSTANCE_INSTALLATION_ID),
       GITHUB_ALLOWED_REPOS: ["acme/widget"],
-      GITHUB_OAUTH_CLIENT_ID: "github-client-id",
-      GITHUB_OAUTH_CLIENT_SECRET: "github-client-secret",
       INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_ID: "test-key",
       INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY_VERSION: "1",
       INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY: "test-key-material"
@@ -523,25 +600,10 @@ test("github routes do not reuse another session user token", async (t) => {
     openRouter: createMockOpenRouterClient(),
     githubConfig,
     githubClient,
-    integrationFetch: async (input) => {
-      const url = String(input);
-
-      if (url.startsWith("https://github.com/login/oauth/access_token")) {
-        return makeJsonResponse({
-          access_token: "gho_user_token",
-          token_type: "bearer",
-          scope: "read:user,user:email"
-        });
-      }
-
-      if (url === "https://api.github.com/user") {
-        return makeJsonResponse({
-          login: "octocat"
-        });
-      }
-
-      return new Response(null, { status: 404 });
-    },
+    integrationFetch: createGitHubAppIntegrationFetch({
+      userToken: "ghs_user_token",
+      instanceToken: "ghs_instance_token"
+    }),
     logger: false
   });
 
@@ -559,7 +621,7 @@ test("github routes do not reuse another session user token", async (t) => {
 
   await app.inject({
     method: "GET",
-    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=real_code`,
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&installation_id=${TEST_USER_INSTALLATION_ID}`,
     headers: {
       cookie: sessionCookieA
     }
@@ -584,5 +646,5 @@ test("github routes do not reuse another session user token", async (t) => {
     credentialSource: string;
   };
   assert.equal(payload.credentialSource, "instance_config");
-  assert.equal(authHeaders[0], "Bearer instance-token");
+  assert.equal(authHeaders[0], "Bearer ghs_instance_token");
 });

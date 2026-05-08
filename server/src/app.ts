@@ -164,6 +164,7 @@ export function createApp(deps: AppDependencies) {
   });
   integrationAuthRoutes(app, {
     env: deps.env,
+    githubConfig,
     matrixConfig,
     authStore: integrationAuthStore,
     fetchImpl: deps.integrationFetch
@@ -192,6 +193,7 @@ export function createApp(deps: AppDependencies) {
     modelCapabilitiesConfig,
     env: deps.env,
     actionStore: githubActionStore,
+    appAuthFetch: deps.integrationFetch,
     rateLimiter,
     runtimeJournal
   });

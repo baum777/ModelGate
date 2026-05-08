@@ -1048,7 +1048,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
           <article className="github-repo-card" data-testid="github-integration-card">
             <div className="github-repo-card-header">
               <div>
-                <span>GitHub OAuth</span>
+                <span>GitHub App</span>
                 {githubConnected ? <strong>{githubIdentityLabel}</strong> : null}
               </div>
               {githubConnected ? (

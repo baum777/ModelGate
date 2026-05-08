@@ -3,8 +3,15 @@ import type { AppEnv } from "./env.js";
 export type GitHubConfig = {
   enabled: boolean;
   ready: boolean;
+  appAuthReady: boolean;
+  instanceReady: boolean;
   baseUrl: string;
   token: string | null;
+  appId: string | null;
+  appPrivateKey: string | null;
+  appSlug: string | null;
+  installationId: number | null;
+  installationTokenOverride: string | null;
   allowedRepos: string[];
   allowedRepoSet: Set<string>;
   agentApiKey: string | null;
@@ -100,7 +107,14 @@ function parsePositiveInt(input: string, fallback: number, min: number, max: num
 }
 
 export function createGitHubConfig(env: AppEnv): GitHubConfig {
-  const token = env.GITHUB_TOKEN.trim() || null;
+  const appId = env.GITHUB_APP_ID.trim() || null;
+  const appPrivateKey = env.GITHUB_APP_PRIVATE_KEY.trim() || null;
+  const appSlug = env.GITHUB_APP_SLUG.trim() || null;
+  const rawInstallationId = env.GITHUB_APP_INSTALLATION_ID.trim();
+  const parsedInstallationId = Number.parseInt(rawInstallationId, 10);
+  const installationId = Number.isFinite(parsedInstallationId) && !Number.isNaN(parsedInstallationId) && parsedInstallationId > 0
+    ? parsedInstallationId
+    : null;
   const agentApiKey = env.GITHUB_AGENT_API_KEY.trim() || null;
   const baseUrl = normalizeBaseUrl(env.GITHUB_API_BASE_URL);
   const allowedRepos = [...new Set(
@@ -128,8 +142,16 @@ export function createGitHubConfig(env: AppEnv): GitHubConfig {
   const smokeEnabled = Boolean(env.GITHUB_SMOKE_ENABLED);
   const issues: string[] = [];
 
-  if (!token) {
-    issues.push("GITHUB_TOKEN is required");
+  if (!appId) {
+    issues.push("GITHUB_APP_ID is required");
+  }
+
+  if (!appPrivateKey) {
+    issues.push("GITHUB_APP_PRIVATE_KEY is required");
+  }
+
+  if (!appSlug) {
+    issues.push("GITHUB_APP_SLUG is required");
   }
 
   if (env.GITHUB_ALLOWED_REPOS.length === 0) {
@@ -158,14 +180,34 @@ export function createGitHubConfig(env: AppEnv): GitHubConfig {
     issues.push("GITHUB_MAX_CONTEXT_BYTES must be between 256 and 200000");
   }
 
-  const enabled = Boolean(token || env.GITHUB_ALLOWED_REPOS.length > 0 || issues.length > 0);
-  const ready = Boolean(token && allowedRepos.length > 0 && issues.length === 0);
+  if (rawInstallationId.length > 0 && !installationId) {
+    issues.push("GITHUB_APP_INSTALLATION_ID must be a positive integer when provided");
+  }
+
+  const appAuthReady = Boolean(appId && appPrivateKey && appSlug && issues.findIndex((issue) => issue.startsWith("GITHUB_APP_")) === -1);
+  const instanceReady = Boolean(appAuthReady && installationId && allowedRepos.length > 0);
+  const enabled = Boolean(
+    appId
+    || appPrivateKey
+    || appSlug
+    || installationId
+    || env.GITHUB_ALLOWED_REPOS.length > 0
+    || issues.length > 0
+  );
+  const ready = Boolean(appAuthReady && allowedRepos.length > 0);
 
   return {
     enabled,
     ready,
+    appAuthReady,
+    instanceReady,
     baseUrl,
-    token,
+    token: null,
+    appId,
+    appPrivateKey,
+    appSlug,
+    installationId,
+    installationTokenOverride: null,
     allowedRepos,
     allowedRepoSet: new Set(allowedRepos),
     agentApiKey,
@@ -187,8 +229,15 @@ export function createDisabledGitHubConfig(): GitHubConfig {
   return {
     enabled: false,
     ready: false,
+    appAuthReady: false,
+    instanceReady: false,
     baseUrl: "https://api.github.com",
     token: null,
+    appId: null,
+    appPrivateKey: null,
+    appSlug: null,
+    installationId: null,
+    installationTokenOverride: null,
     allowedRepos: [],
     allowedRepoSet: new Set<string>(),
     agentApiKey: null,

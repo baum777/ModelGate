@@ -5,7 +5,9 @@ import { createMockOpenRouterClient, createTestEnv } from "../test-support/helpe
 
 test("github routes rely on GitHub backend configuration, not a global admin session", async (t) => {
   const app = createApp({
-    env: createTestEnv(),
+    env: createTestEnv({
+      GITHUB_ALLOWED_REPOS: ["acme/widget"]
+    }),
     openRouter: createMockOpenRouterClient(),
     logger: false
   });
