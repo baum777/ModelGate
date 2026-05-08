@@ -1,17 +1,15 @@
-const CACHE_NAME = "mosaicstacked-shell-v2";
+const CACHE_NAME = "mosaicstacked-shell-v3";
 const SHELL_ASSETS = [
   "/",
   "/index.html",
   "/manifest.webmanifest",
-  "/icons/favicon.ico",
-  "/icons/favicon-16x16.png",
-  "/icons/favicon-32x32.png",
-  "/icons/favicon-48x48.png",
-  "/icons/apple-touch-icon.png",
-  "/icons/icon-64x64.png",
-  "/icons/icon-96x96.png",
-  "/icons/android-chrome-192x192.png",
-  "/icons/android-chrome-512x512.png"
+  "/icons/favicon.svg",
+  "/icons/icon-16.svg",
+  "/icons/icon-32.svg",
+  "/icons/icon-48.svg",
+  "/icons/icon-apple-touch.svg",
+  "/icons/icon-192.svg",
+  "/icons/icon-512.svg"
 ];
 
 self.addEventListener("install", (event) => {

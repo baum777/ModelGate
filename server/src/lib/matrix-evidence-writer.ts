@@ -3,15 +3,22 @@ import type { MatrixClient } from "./matrix-client.js";
 import type { MatrixConfig } from "./matrix-env.js";
 import type { RuntimeJournal } from "./runtime-journal.js";
 
-export const MATRIX_EVIDENCE_EVENT_TYPES = [
+export const MATRIX_EVIDENCE_RECORD_EVENT_TYPES = [
   "matrix_approval_record",
   "matrix_provenance_record",
   "matrix_verification_result",
-  "matrix_topic_change_record",
-  "matrix_evidence_write_failed"
+  "matrix_topic_change_record"
 ] as const;
 
-export type MatrixEvidenceEventType = typeof MATRIX_EVIDENCE_EVENT_TYPES[number];
+export const MATRIX_EVIDENCE_WRITE_FAILED_EVENT = "matrix_evidence_write_failed" as const;
+
+export const MATRIX_EVIDENCE_EVENT_TYPES = [
+  ...MATRIX_EVIDENCE_RECORD_EVENT_TYPES,
+  MATRIX_EVIDENCE_WRITE_FAILED_EVENT
+] as const;
+
+export type MatrixEvidenceRecordEventType = typeof MATRIX_EVIDENCE_RECORD_EVENT_TYPES[number];
+export type MatrixEvidenceEventType = MatrixEvidenceRecordEventType | typeof MATRIX_EVIDENCE_WRITE_FAILED_EVENT;
 
 type JsonPrimitive = string | number | boolean | null;
 type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
@@ -20,7 +27,7 @@ type JsonObject = { [key: string]: JsonValue };
 type MatrixEvidenceEndpoint = "approvals" | "provenance" | "verification" | "topicChanges";
 
 export type MatrixEvidenceInput = {
-  eventType: MatrixEvidenceEventType;
+  eventType: MatrixEvidenceRecordEventType;
   planId: string;
   roomId: string;
   scopeId: string | null;
@@ -44,7 +51,7 @@ export type MatrixEvidenceMessage = {
   body: string;
   "mosaicstacked.evidence": {
     schemaVersion: 1;
-    eventType: MatrixEvidenceEventType;
+    eventType: MatrixEvidenceRecordEventType;
     planId: string;
     roomId: string;
     scopeId: string | null;
@@ -76,8 +83,8 @@ export type MatrixEvidenceMessage = {
 };
 
 export type MatrixEvidenceWriteWarning = {
-  eventType: "matrix_evidence_write_failed";
-  phase: MatrixEvidenceEventType;
+  eventType: typeof MATRIX_EVIDENCE_WRITE_FAILED_EVENT;
+  phase: MatrixEvidenceRecordEventType;
   code: string;
   message: string;
 };
@@ -99,8 +106,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function isKnownEventType(value: string): value is MatrixEvidenceEventType {
-  return MATRIX_EVIDENCE_EVENT_TYPES.includes(value as MatrixEvidenceEventType);
+function isKnownRecordEventType(value: string): value is MatrixEvidenceRecordEventType {
+  return MATRIX_EVIDENCE_RECORD_EVENT_TYPES.includes(value as MatrixEvidenceRecordEventType);
 }
 
 function boundString(value: string, maxLength = MAX_FIELD_LENGTH) {
@@ -189,7 +196,7 @@ function buildBoundedTextRecord(value: unknown) {
   };
 }
 
-function targetForEvent(config: MatrixConfig, eventType: MatrixEvidenceEventType): {
+function targetForEvent(config: MatrixConfig, eventType: MatrixEvidenceRecordEventType): {
   endpoint: MatrixEvidenceEndpoint | null;
   roomId: string | null;
 } {
@@ -209,7 +216,8 @@ function targetForEvent(config: MatrixConfig, eventType: MatrixEvidenceEventType
     return { endpoint: "topicChanges", roomId: config.evidenceRooms.topicChanges };
   }
 
-  return { endpoint: null, roomId: null };
+  const exhaustive: never = eventType;
+  return exhaustive;
 }
 
 function compactMessageBody(message: MatrixEvidenceMessage) {
@@ -253,7 +261,7 @@ function recordEvidenceGap(
 }
 
 export function buildMatrixEvidenceMessage(input: MatrixEvidenceInput): MatrixEvidenceMessage {
-  if (!isKnownEventType(input.eventType)) {
+  if (!isKnownRecordEventType(input.eventType)) {
     throw new Error("Unknown Matrix evidence event type");
   }
 
@@ -308,7 +316,7 @@ export function createMatrixEvidenceWriter(options: MatrixEvidenceWriterOptions)
 
       if (!target.roomId) {
         const warning: MatrixEvidenceWriteWarning = {
-          eventType: "matrix_evidence_write_failed",
+          eventType: MATRIX_EVIDENCE_WRITE_FAILED_EVENT,
           phase: input.eventType,
           code: "matrix_evidence_room_missing",
           message: "Matrix evidence room is not configured"
@@ -332,7 +340,7 @@ export function createMatrixEvidenceWriter(options: MatrixEvidenceWriterOptions)
         };
       } catch (error) {
         const warning: MatrixEvidenceWriteWarning = {
-          eventType: "matrix_evidence_write_failed",
+          eventType: MATRIX_EVIDENCE_WRITE_FAILED_EVENT,
           phase: input.eventType,
           code: errorCode(error),
           message: "Matrix evidence write failed"

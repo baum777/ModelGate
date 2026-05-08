@@ -3,7 +3,8 @@ import test from "node:test";
 import { MatrixClientError } from "../src/lib/matrix-client.js";
 import {
   buildMatrixEvidenceMessage,
-  createMatrixEvidenceWriter
+  createMatrixEvidenceWriter,
+  type MatrixEvidenceInput
 } from "../src/lib/matrix-evidence-writer.js";
 import { createRuntimeJournal } from "../src/lib/runtime-journal.js";
 import { createMockMatrixClient, createTestMatrixConfig } from "../test-support/helpers.js";
@@ -26,6 +27,37 @@ const baseEvent = {
   transactionId: null,
   authorityDomain: "backend" as const
 };
+
+// @ts-expect-error Evidence write failures are warning events, not writable evidence records.
+const invalidEvidenceInput: MatrixEvidenceInput = {
+  ...baseEvent,
+  eventType: "matrix_evidence_write_failed",
+  before: { text: "old topic" },
+  after: { text: "new topic" },
+  result: { ok: false },
+  source: {
+    surface: "modelgate",
+    route: "POST /api/matrix/actions/:planId/execute"
+  }
+};
+void invalidEvidenceInput;
+
+test("matrix evidence writer rejects warning events as writable evidence records", () => {
+  assert.throws(
+    () => buildMatrixEvidenceMessage({
+      ...baseEvent,
+      eventType: "matrix_evidence_write_failed",
+      before: { text: "old topic" },
+      after: { text: "new topic" },
+      result: { ok: false },
+      source: {
+        surface: "modelgate",
+        route: "POST /api/matrix/actions/:planId/execute"
+      }
+    } as unknown as MatrixEvidenceInput),
+    /Unknown Matrix evidence event type/
+  );
+});
 
 test("matrix evidence message redacts sensitive-looking fields and bounds topic previews", () => {
   const message = buildMatrixEvidenceMessage({

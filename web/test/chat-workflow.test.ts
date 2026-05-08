@@ -409,7 +409,7 @@ test("direct mode streams through /chat path without creating a proposal", async
     stream: async (body, handlers) => {
       streamCalls += 1;
       assert.equal(body.modelAlias, "default");
-      assert.equal(body.model, "default");
+      assert.equal("model" in body, false);
       assert.deepEqual(body.messages, [
         {
           role: "user",

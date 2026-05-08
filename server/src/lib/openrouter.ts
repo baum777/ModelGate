@@ -23,7 +23,10 @@ export type OpenRouterClient = {
   createChatCompletion(
     request: ChatRequest,
     selection: ResolvedModelSelection,
-    signal?: AbortSignal
+    options?: AbortSignal | {
+      signal?: AbortSignal;
+      apiKey?: string;
+    }
   ): Promise<NormalizedChatResponse>;
   relayChatCompletionStream(
     request: ChatRequest,
@@ -31,6 +34,7 @@ export type OpenRouterClient = {
     options: {
       signal?: AbortSignal;
       onToken: (delta: string) => void;
+      apiKey?: string;
     }
   ): Promise<NormalizedChatResponse>;
 };
@@ -100,6 +104,23 @@ function requireOpenRouterApiKey(env: AppEnv) {
   }
 
   return apiKey;
+}
+
+function normalizeClientOptions(options?: AbortSignal | { signal?: AbortSignal; apiKey?: string }): {
+  signal?: AbortSignal;
+  apiKey?: string;
+} {
+  if (!options) {
+    return {};
+  }
+
+  if (typeof (options as AbortSignal).aborted === "boolean") {
+    return {
+      signal: options as AbortSignal
+    };
+  }
+
+  return options as { signal?: AbortSignal; apiKey?: string };
 }
 
 export function resolveOpenRouterApiKey(env: AppEnv, modelId: string) {
@@ -380,6 +401,7 @@ export function createOpenRouterClient(options: OpenRouterClientOptions): OpenRo
     selection: ResolvedModelSelection,
     stream: boolean,
     signal?: AbortSignal,
+    apiKeyOverride?: string,
     onToken?: (delta: string) => void
   ) {
     let lastError: OpenRouterError | undefined;
@@ -387,7 +409,7 @@ export function createOpenRouterClient(options: OpenRouterClientOptions): OpenRo
     for (const providerModel of selection.providerTargets) {
       const merged = createMergedAbortController(requestTimeoutMs, signal);
       let response: Response;
-      const apiKey = resolveOpenRouterApiKey(options.env, providerModel);
+      const apiKey = apiKeyOverride?.trim() || resolveOpenRouterApiKey(options.env, providerModel);
 
       try {
         response = await fetchImpl(chatUrl, {
@@ -472,12 +494,13 @@ export function createOpenRouterClient(options: OpenRouterClientOptions): OpenRo
   }
 
   return {
-    async createChatCompletion(request, selection, signal) {
-      return executeRequest(request, selection, false, signal);
+    async createChatCompletion(request, selection, callOptions) {
+      const normalizedOptions = normalizeClientOptions(callOptions);
+      return executeRequest(request, selection, false, normalizedOptions.signal, normalizedOptions.apiKey);
     },
 
     async relayChatCompletionStream(request, selection, streamOptions) {
-      return executeRequest(request, selection, true, streamOptions.signal, streamOptions.onToken);
+      return executeRequest(request, selection, true, streamOptions.signal, streamOptions.apiKey, streamOptions.onToken);
     }
   };
 }

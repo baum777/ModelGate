@@ -637,7 +637,15 @@ async function waitForMatrixWorkspace(page: Page) {
   await expect(page.getByTestId("matrix-status")).toHaveText("Ready");
   await expect(page.getByTestId("matrix-topic-update-panel")).toBeVisible();
   await expect(page.getByTestId("matrix-composer-panel")).toBeVisible();
-  await expect(page.getByTestId("matrix-rooms")).toBeVisible();
+  await expect(page.getByTestId("matrix-rooms")).toHaveCount(1);
+}
+
+async function openMatrixTopicUpdatePanel(page: Page) {
+  const panel = page.getByTestId("matrix-topic-update-panel");
+  if ((await panel.getAttribute("open")) === null) {
+    await panel.locator("summary").click();
+  }
+  await expect(page.getByTestId("matrix-topic-room-id")).toBeVisible();
 }
 
 test("shell renders core governed surfaces and keeps secrets out of the DOM", async ({ page }) => {
@@ -982,6 +990,7 @@ test("Matrix topic update flows from plan to execute+verify receipt", async ({ p
   await loadConsole(page);
   await page.getByTestId("tab-matrix").click();
   await waitForMatrixWorkspace(page);
+  await openMatrixTopicUpdatePanel(page);
 
   await page.getByTestId("matrix-topic-room-id").fill("!room:matrix.example");
   await page.getByTestId("matrix-topic-text").fill("New topic");
@@ -1062,6 +1071,7 @@ test("Review workspace aggregates pending items from GitHub and Matrix", async (
   });
   await page.getByTestId("tab-matrix").click();
   await waitForMatrixWorkspace(page);
+  await openMatrixTopicUpdatePanel(page);
   await page.getByTestId("matrix-topic-room-id").fill("!room:matrix.example");
   await page.getByTestId("matrix-topic-text").fill("New topic");
   await page.getByTestId("matrix-topic-update-panel").getByRole("button", { name: "Topic update" }).first().click();

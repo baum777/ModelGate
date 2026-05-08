@@ -12,15 +12,19 @@ Fastify-based backend authority for OpenRouter chat, GitHub workspace review, an
 
 ## Environment
 
-Copy the repo-root `.env.example` to `.env` and set `OPENROUTER_API_KEY`.
+Copy the repo-root `.env.example` to `.env`. Normal MosaicStacked chat is user-key based: enter the OpenRouter API key and model ID in Settings, not in browser env and not by editing `.env` from the UI.
 
 The workflow-routing contract is documented in [../docs/model-routing.md](../docs/model-routing.md) and backed by `config/model-capabilities.yml` at runtime.
 
 The example env files use `default` as a backend-owned sentinel in some compatibility slots. Actual provider targets remain server-side.
 
-Required environment variables:
+Required environment variables for production user chat:
 
-- `OPENROUTER_API_KEY`
+- `USER_CREDENTIALS_ENCRYPTION_KEY` - encrypts per-profile OpenRouter credentials; production fails closed when missing
+
+Legacy/dev-only OpenRouter env slots:
+
+- `OPENROUTER_API_KEY` - compatibility path for older backend-owned chat tests/dev setups only; it must not silently satisfy normal user-configured chat
 
 GitHub remote flow required when enabled:
 
@@ -36,6 +40,9 @@ Optional environment variables:
 - `OPENROUTER_MODEL` - provider execution target for the public default alias
 - `OPENROUTER_MODELS` - comma-separated hidden provider fallback pool
 - `OPENROUTER_REQUEST_TIMEOUT_MS` - OpenRouter request timeout in milliseconds, defaults to `15000`
+- `USER_CREDENTIALS_PROFILE_SECRET` - optional signing secret for the local preview profile cookie; falls back to existing backend session/credential secret material in local preview
+- `USER_CREDENTIALS_STORE_MODE` - `file` or `memory`; use `file` for durable local profiles, reserve `memory` for dev-only tests
+- `USER_CREDENTIALS_STORE_PATH` - base directory for encrypted per-profile OpenRouter credential files, defaults to `.local-ai/state/users`
 - `APP_NAME` - defaults to `local-openrouter-chat`
 - `DEFAULT_SYSTEM_PROMPT` - injected server-side before forwarding to OpenRouter
 - `CORS_ORIGINS` - comma-separated list of allowed frontend origins
@@ -132,6 +139,18 @@ Returns the backend-owned consumer-selectable model list.
 The current branch exposes a single stable alias (`default`) rather than a provider catalog.
 The hidden provider fallback pool stays behind the backend contract and is not exposed here.
 
+### `GET /settings/openrouter/status`
+
+Returns the local preview profile's safe OpenRouter credential status. The response includes only `configured` and safe model alias metadata. It never returns the API key.
+
+### `POST /settings/openrouter/credentials`
+
+Stores `{ "apiKey": "...", "modelId": "provider/model[:variant]" }` for the backend-created signed/httpOnly local preview profile cookie. The route rejects body-supplied profile/user/tenant authority, encrypts stored credentials, and returns only masked configured status.
+
+### `POST /settings/openrouter/test`
+
+Tests a provided `{ "apiKey": "...", "modelId": "provider/model[:variant]" }` pair without saving it. Responses are sanitized and do not include request headers, API keys, or raw provider payloads.
+
 ### `POST /chat`
 
 Request body:
@@ -139,7 +158,8 @@ Request body:
 - `messages` required array of message objects
 - each message must have `role` of `user` or `assistant`
 - each message must have non-empty `content`
-- `model` optional stable public alias override of the backend default model
+- `modelAlias` optional stable public alias override of the backend default model
+- `model` legacy alias compatibility only; browser chat sends `modelAlias`
 - `temperature` optional number between `0` and `2`
 - `stream` optional boolean, defaults to `false`
 
@@ -147,6 +167,7 @@ The backend injects its own system prompt and rejects unknown top-level fields.
 `messages` with `role: "system"` are rejected, so there is no merge behavior to infer.
 The server-owned `DEFAULT_SYSTEM_PROMPT` is the sole system instruction used for a request.
 The backend maps the public alias to an internal logical model and provider target set before calling OpenRouter.
+For `user_openrouter_default`, the backend resolves signed profile cookie -> encrypted credential store -> API key + model ID. Missing credentials, unknown aliases, raw provider IDs, or decrypt/config failures fail closed before upstream calls.
 
 Non-stream response:
 

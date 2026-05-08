@@ -184,7 +184,6 @@ export async function runDirectChatStream(options: {
   await options.stream(
     {
       modelAlias: options.modelAlias ?? undefined,
-      model: options.modelAlias ?? undefined,
       messages: outboundMessages
     },
     options.handlers,
