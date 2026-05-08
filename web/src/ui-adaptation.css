@@ -342,6 +342,15 @@ select:disabled {
   border-radius: 7px;
   background: linear-gradient(135deg, var(--ms-accent), var(--ms-teal));
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ms-text);
+}
+
+.mosaicstacked-mark svg {
+  width: 16px;
+  height: 16px;
 }
 
 .app-kicker,
@@ -417,7 +426,7 @@ select:disabled {
   display: grid;
   grid-template-columns: 180px minmax(0, 1fr) minmax(260px, 320px);
   gap: 0;
-  align-items: start;
+  align-items: stretch;
   min-height: calc(100vh - 57px);
 }
 
@@ -425,6 +434,8 @@ select:disabled {
 .workspace-context {
   position: sticky;
   top: 57px;
+  min-height: calc(100vh - 57px);
+  height: calc(100vh - 57px);
   max-height: calc(100vh - 57px);
   overflow-y: auto;
   padding: var(--sp-4);
@@ -1991,6 +2002,21 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
   color: var(--ms-text2);
 }
 
+.landing-enter-section {
+  width: min(1120px, calc(100% - 32px));
+  margin: clamp(28px, 5vw, 48px) auto 0;
+  display: flex;
+  justify-content: center;
+}
+
+.landing-enter-cta {
+  min-width: 160px;
+  justify-content: center;
+  display: inline-flex;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 /* Guide CTA primitives */
 .guide-cta-inline {
   border: 1px solid var(--guide-default-border, color-mix(in srgb, var(--ms-accent) 45%, transparent));
@@ -2179,7 +2205,8 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
 @media (max-width: 680px) {
   .landing-hero,
   .landing-section,
-  .landing-safety-note {
+  .landing-safety-note,
+  .landing-enter-section {
     width: min(1120px, calc(100% - 20px));
   }
 

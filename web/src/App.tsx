@@ -17,7 +17,6 @@ import { SessionList } from "./components/SessionList.js";
 import {
   type StatusPanelRow,
 } from "./components/StatusPanel.js";
-import { DiagnosticsDrawer } from "./components/ExpertDetails.js";
 import {
   MutedSystemCopy,
   SectionLabel,
@@ -72,7 +71,6 @@ import {
 } from "./lib/shell-view-model.js";
 import {
   getWorkModeCopy,
-  getWorkModeVisibility,
   isExpertMode,
   resolvePersistedWorkMode,
   type WorkMode,
@@ -285,6 +283,15 @@ function MobileContextIcon() {
   );
 }
 
+function MosaicStackedIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3.2 19.2 7.4v9.2L12 20.8 4.8 16.6V7.4Z" />
+      <path d="m12 7 3.8 2.2v4.6L12 16l-3.8-2.2V9.2Z" />
+    </svg>
+  );
+}
+
 function BeginnerExpertToggle({
   workMode,
   setWorkMode,
@@ -462,6 +469,8 @@ const LANDING_COPY = {
       "Keine direkten Writes ohne Approval Gate.",
       "Secrets nie in Prompts posten.",
     ],
+    enterLabel: "ENTER",
+    enterHint: "Zur App wechseln",
   },
   en: {
     kicker: "Model-Agnostic Workflow",
@@ -494,6 +503,8 @@ const LANDING_COPY = {
       "No direct writes without an approval gate.",
       "Never post secrets in prompts.",
     ],
+    enterLabel: "ENTER",
+    enterHint: "Open the app",
   },
 } as const;
 
@@ -777,7 +788,9 @@ function LandingPage() {
       <section className="landing-hero" aria-labelledby="landing-hero-title">
         <div className="landing-hero-top">
           <div className="landing-brand-row">
-            <div className="mosaicstacked-mark" aria-hidden="true" />
+            <span className="mosaicstacked-mark" aria-hidden="true">
+              <MosaicStackedIcon />
+            </span>
             <span>MosaicStacked</span>
           </div>
           <div className="shell-language-toggle landing-language-toggle" role="group" aria-label={ui.shell.languageLabel}>
@@ -921,6 +934,12 @@ function LandingPage() {
         {landingCopy.safetyLines.map((line) => (
           <p key={line}>{line}</p>
         ))}
+      </section>
+
+      <section className="landing-enter-section" aria-label={landingCopy.enterHint}>
+        <a className="landing-cta-primary landing-enter-cta" href="/console">
+          {landingCopy.enterLabel}
+        </a>
       </section>
     </main>
   );
@@ -1071,7 +1090,6 @@ function ConsoleShell() {
   const [mode, setMode] = useState<WorkspaceMode>(() => readUrlWorkspaceMode() ?? persisted?.activeTab ?? "chat");
   const [workMode, setWorkMode] = useState<WorkMode>(() => resolvePersistedWorkMode(persisted));
   const expertMode = isExpertMode(workMode);
-  const workModeVisibility = getWorkModeVisibility(workMode);
   const workModeCopy = getWorkModeCopy(locale, workMode);
   const [workspaceState, setWorkspaceState] = useState(() => loadWorkspaceState());
   const [backendHealthy, setBackendHealthy] = useState<boolean | null>(null);
@@ -1111,7 +1129,6 @@ function ConsoleShell() {
   const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
   const [pinnedChatContext, setPinnedChatContext] = useState<PinnedChatContext | null>(null);
   const [githubReviewDirty, setGitHubReviewDirty] = useState(false);
-  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [mobileContextOpen, setMobileContextOpen] = useState(false);
   const workspaceSaveHandleRef = useRef<number | null>(null);
   const latestWorkspaceStateRef = useRef(workspaceState);
@@ -1301,16 +1318,6 @@ function ConsoleShell() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [flushWorkspaceState]);
-
-  useEffect(() => {
-    if (!workModeVisibility.showDiagnosticsByDefault) {
-      setDiagnosticsOpen(false);
-    }
-  }, [workModeVisibility.showDiagnosticsByDefault]);
-
-  useEffect(() => {
-    setDiagnosticsOpen(false);
-  }, [mode]);
 
   useEffect(() => {
     setMobileContextOpen(false);
@@ -2172,9 +2179,6 @@ function ConsoleShell() {
   }, [chatPendingProposal?.status, reviewItems]);
   const workspaceName = ui.shell.workspaceTabs[mode].label;
   const nextStepTitle = ui.review.nextStepLabel;
-  const diagnosticsTitle = `${ui.shell.workspaceTabs[mode].label} ${ui.shell.diagnosticsLabel}`;
-  const showBeginnerDiagnostics = !expertMode && healthState.tone === "error";
-  const diagnosticsAccessible = expertMode || showBeginnerDiagnostics;
 
   const currentStatusTone = useMemo(() => {
     switch (mode) {
@@ -2346,234 +2350,6 @@ function ConsoleShell() {
     reviewItems,
   ]);
 
-  const currentExpertRows = useMemo(() => {
-    switch (mode) {
-      case "github":
-        return [
-          { label: ui.settings.githubConnection, value: githubContext.expertDetails.apiStatus },
-          { label: ui.github.repoSelectLabel, value: githubContext.expertDetails.selectedRepoSlug ?? ui.common.na },
-          { label: ui.review.nextStepLabel, value: githubContext.approvalLabel },
-          { label: ui.github.repositoryStatus, value: githubContext.expertDetails.sseEvents.length > 0 ? `${githubContext.expertDetails.sseEvents.length} ${ui.review.openReviews}` : ui.common.na },
-        ];
-      case "matrix":
-        return [
-          { label: ui.matrix.scopeTitle, value: matrixContext.scopeLabel },
-          { label: ui.matrix.scopeSummaryTitle, value: matrixContext.summaryLabel },
-          { label: ui.matrix.topicStatusApproval, value: matrixContext.approvalLabel },
-          { label: ui.matrix.composerTitle, value: matrixContext.expertDetails.composerTargetLabel },
-        ];
-      case "review":
-        return [
-          { label: ui.review.rowOpen, value: String(reviewItems.length) },
-          {
-            label: ui.review.rowClassification,
-            value: reviewItems.length === 0
-              ? ui.review.emptyTitle
-              : reviewHasStale
-                ? ui.review.blocked
-                : reviewHasPending
-                  ? ui.review.approvalNeeded
-                  : reviewHasExecuting
-                    ? ui.review.executing
-                    : reviewHasTerminal
-                      ? ui.review.terminalDeviation
-                      : ui.review.ready,
-          },
-        ];
-      case "settings":
-        return [
-          { label: ui.settings.backend, value: settingsTruthSnapshot.backend.label },
-          { label: ui.settings.githubIdentity, value: settingsTruthSnapshot.github.sessionLabel },
-          { label: ui.settings.matrixIdentity, value: settingsTruthSnapshot.matrix.identityLabel },
-          { label: ui.settings.modelCardTitle, value: settingsTruthSnapshot.models.activeAlias },
-        ];
-      default:
-        return [
-          { label: ui.chat.proposalTitle, value: chatPendingProposal?.status ?? ui.common.none },
-          { label: ui.approval.receiptSection, value: String(chatSession?.metadata.chatState.receipts.length ?? 0) },
-          { label: ui.chat.routePending, value: chatSession?.metadata.chatState.activeRoute?.selectedAlias ?? ui.common.na }
-        ];
-    }
-  }, [
-    chatPendingProposal?.status,
-    chatSession?.metadata.chatState.activeRoute?.selectedAlias,
-    chatSession?.metadata.chatState.receipts.length,
-    expertMode,
-    githubContext.approvalLabel,
-    githubContext.expertDetails,
-    matrixContext.approvalLabel,
-    matrixContext.connectionLabel,
-    matrixContext.expertDetails,
-    matrixContext.scopeLabel,
-    matrixContext.summaryLabel,
-    mode,
-    reviewItems,
-    settingsTruthSnapshot.backend.label,
-    settingsTruthSnapshot.github.sessionLabel,
-    settingsTruthSnapshot.matrix.identityLabel,
-    settingsTruthSnapshot.models.activeAlias,
-  ]);
-
-  const currentExpertChildren = useMemo(() => {
-    if (mode === "github") {
-      return (
-        <div className="expert-detail-sections">
-          <section className="expert-detail-section">
-            <p className="info-label">{ui.settings.githubConnection}</p>
-            <div className="expert-detail-section-grid">
-              <div>
-                <span>{ui.settings.backend}</span>
-                <strong>{githubContext.expertDetails.apiStatus}</strong>
-              </div>
-              <div>
-                <span>{ui.github.repoSelectLabel}</span>
-                <strong>{githubContext.expertDetails.selectedRepoSlug ?? ui.common.na}</strong>
-              </div>
-            </div>
-          </section>
-
-          <section className="expert-detail-section">
-            <p className="info-label">{ui.review.nextStepLabel}</p>
-            <div className="expert-detail-section-grid">
-              <div>
-                <span>{ui.shell.sessionIdPrefix}</span>
-                <strong>{githubContext.expertDetails.requestId ?? ui.common.na}</strong>
-              </div>
-              <div>
-                <span>{ui.github.reviewTitle}</span>
-                <strong>{githubContext.expertDetails.planId ?? ui.common.na}</strong>
-              </div>
-              <div>
-                <span>{ui.github.defaultBranch}</span>
-                <strong>{githubContext.expertDetails.branchName ?? ui.common.na}</strong>
-              </div>
-            </div>
-          </section>
-
-          <section className="expert-detail-section">
-            <p className="info-label">{ui.shell.healthTitle}</p>
-            <div className="expert-detail-section-grid">
-              <div>
-                <span>{ui.github.repositoryStatus}</span>
-                <strong>{githubContext.expertDetails.sseEvents.length > 0 ? githubContext.expertDetails.sseEvents.join(" · ") : ui.common.na}</strong>
-              </div>
-            </div>
-          </section>
-
-          <section className="expert-detail-section">
-            <p className="info-label">{ui.github.verifyResult}</p>
-            {githubContext.expertDetails.rawDiffPreview ? (
-              <pre className="github-diff-preview">{githubContext.expertDetails.rawDiffPreview}</pre>
-            ) : (
-              <p className="muted-copy">{ui.github.diffAppearsLater}</p>
-            )}
-          </section>
-        </div>
-      );
-    }
-
-    if (mode === "matrix") {
-      return (
-        <div className="expert-detail-sections">
-          <section className="expert-detail-section">
-            <p className="info-label">{ui.matrix.scopeTitle}</p>
-            <div className="expert-detail-section-grid">
-              <div>
-                <span>{ui.matrix.scopeSelectedLabel}</span>
-                <strong>{matrixContext.scopeLabel}</strong>
-              </div>
-              <div>
-                <span>{ui.matrix.scopeSummaryTitle}</span>
-                <strong>{matrixContext.summaryLabel}</strong>
-              </div>
-              <div>
-                <span>{ui.matrix.topicStatusApproval}</span>
-                <strong>{matrixContext.approvalLabel}</strong>
-              </div>
-            </div>
-          </section>
-
-          <section className="expert-detail-section">
-            <p className="info-label">{ui.matrix.topicTitle}</p>
-            <div className="expert-detail-section-grid">
-              <div>
-                <span>{ui.github.reviewTitle}</span>
-                <strong>{matrixContext.expertDetails.planId ?? ui.common.na}</strong>
-              </div>
-              <div>
-                <span>{ui.matrix.composerTitle}</span>
-                <strong>{matrixContext.expertDetails.composerTargetLabel}</strong>
-              </div>
-              <div>
-                <span>{ui.matrix.composerModeLabel}</span>
-                <strong>{matrixContext.expertDetails.composerMode}</strong>
-              </div>
-              <div>
-                <span>{ui.matrix.roomId}</span>
-                <strong>{matrixContext.expertDetails.composerRoomId ?? ui.common.na}</strong>
-              </div>
-              <div>
-                <span>{ui.matrix.threadRootId}</span>
-                <strong>{matrixContext.expertDetails.composerThreadRootId ?? ui.common.na}</strong>
-              </div>
-            </div>
-          </section>
-
-          <section className="expert-detail-section">
-            <p className="info-label">{ui.shell.healthTitle}</p>
-            <div className="expert-detail-section-grid">
-              <div>
-                <span>{ui.github.repositoryStatus}</span>
-                <strong>{matrixContext.expertDetails.backendRouteStatus}</strong>
-              </div>
-              <div>
-                <span>{ui.shell.healthTitle}</span>
-                <strong>{matrixContext.expertDetails.httpStatus ?? ui.common.na}</strong>
-              </div>
-              <div>
-                <span>{ui.shell.healthCheckingDetail}</span>
-                <strong>{matrixContext.expertDetails.latency ?? ui.common.na}</strong>
-              </div>
-              <div>
-                <span>{ui.shell.diagnosticsLabel}</span>
-                <strong>{matrixContext.expertDetails.sseLifecycle}</strong>
-              </div>
-            </div>
-            <div className="expert-detail-section-grid">
-              <div>
-                <span>{ui.shell.diagnosticsLabel}</span>
-                <strong>{matrixContext.expertDetails.runtimeEventTrail.join(" · ") || ui.common.na}</strong>
-              </div>
-            </div>
-          </section>
-
-          <section className="expert-detail-section">
-            <p className="info-label">{ui.shell.diagnosticsLabel}</p>
-            {matrixContext.expertDetails.rawPayload ? (
-              <pre className="github-diff-preview">{matrixContext.expertDetails.rawPayload}</pre>
-            ) : (
-              <p className="muted-copy">{ui.matrix.topicStatusOpen}</p>
-            )}
-          </section>
-        </div>
-      );
-    }
-
-    return null;
-  }, [
-    githubContext.expertDetails,
-    matrixContext.expertDetails,
-    matrixContext.approvalLabel,
-    matrixContext.scopeLabel,
-    matrixContext.summaryLabel,
-    settingsTruthSnapshot.backend.label,
-    settingsTruthSnapshot.github.sessionLabel,
-    settingsTruthSnapshot.matrix.identityLabel,
-    settingsTruthSnapshot.models.activeAlias,
-    ui,
-    mode,
-  ]);
-
   const workspaceSurface = mode === "chat" ? (
     <ChatWorkspace
       key={chatSession?.id ?? "chat-session"}
@@ -2682,7 +2458,9 @@ function ConsoleShell() {
             onClick={handleMobileBrandClick}
             aria-label={locale === "de" ? "Zur Chat-Ansicht wechseln. Lange drücken für Einstellungen." : "Switch to chat. Long press for settings."}
           >
-            <span className="mosaicstacked-mark" aria-hidden="true" />
+            <span className="mosaicstacked-mark" aria-hidden="true">
+              <MosaicStackedIcon />
+            </span>
             <span>{ui.shell.appTitle}</span>
           </button>
 
@@ -2709,7 +2487,7 @@ function ConsoleShell() {
           </button>
           <span className="mobile-context-chip">{branchChipLabel}</span>
           <span className="mobile-context-chip">{commitChipLabel}</span>
-          <span className="mobile-context-live">{`● ${streamCounterLabel}`}</span>
+          <span className="mobile-context-live">{`↯ ${streamCounterLabel}`}</span>
         </section>
 
         <section className="mobile-workspace-surface">
@@ -2782,13 +2560,6 @@ function ConsoleShell() {
                       {appText.processCreateSession}
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => setDiagnosticsOpen((current) => !current)}
-                  >
-                    {diagnosticsOpen ? ui.shell.diagnosticsHide : ui.shell.diagnosticsShow}
-                  </button>
                 </div>
 
                 {showRouteOwnershipContext && routeOwnershipRows.length > 0 ? (
@@ -2836,7 +2607,9 @@ function ConsoleShell() {
     <main className="app-shell app-shell-console" data-testid="app-shell">
       <header className="global-header global-header-shell">
         <div className="brand-block">
-          <div className="mosaicstacked-mark" aria-hidden="true" />
+          <span className="mosaicstacked-mark" aria-hidden="true">
+            <MosaicStackedIcon />
+          </span>
           <p className="app-kicker">{ui.shell.appKicker}</p>
           <h1>{ui.shell.appTitle}</h1>
           <p className="app-deck">{ui.shell.appDeck}</p>
@@ -3030,60 +2803,7 @@ function ConsoleShell() {
             </div>
           </TruthRailSection>
 
-          {diagnosticsAccessible || expertMode ? (
-          <TruthRailSection title={ui.shell.diagnosticsLabel} testId="truth-rail-diagnostics">
-            <MutedSystemCopy>
-              {diagnosticsAccessible ? ui.shell.diagnosticsAvailable : ui.shell.diagnosticsHidden}
-            </MutedSystemCopy>
-            {!diagnosticsAccessible ? (
-              <button type="button" className="secondary-button" onClick={() => setWorkMode("expert")}>
-                {ui.shell.activateExpert}
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => setDiagnosticsOpen((current) => !current)}
-              >
-                {diagnosticsOpen ? ui.shell.diagnosticsHide : ui.shell.diagnosticsShow}
-              </button>
-            )}
-
-            <DiagnosticsDrawer
-              expertMode={diagnosticsAccessible}
-              title={diagnosticsTitle}
-              rows={currentExpertRows}
-              className="shell-diagnostics-drawer"
-              open={diagnosticsOpen}
-              onToggle={setDiagnosticsOpen}
-            >
-              {currentExpertChildren}
-            </DiagnosticsDrawer>
-          </TruthRailSection>
-          ) : null}
         </aside>
-
-        <section className="bottom-diagnostics-layer" aria-label={ui.shell.diagnosticsLabel}>
-          <div className="diagnostic-signal diagnostic-signal-primary">
-            <span>{ui.shell.healthTitle}:</span>
-            <strong>{healthState.label}</strong>
-          </div>
-          <div className="diagnostic-signal">
-            <span>{ui.shell.modeLabel}:</span>
-            <strong>{workspaceName}</strong>
-          </div>
-          <div className="diagnostic-signal">
-            <span>{ui.shell.diagnosticsLabel}:</span>
-            <strong>{telemetry.length > 0 ? telemetry[telemetry.length - 1].label : ui.common.na}</strong>
-          </div>
-          <button
-            type="button"
-            className="secondary-button bottom-diagnostics-action"
-            onClick={() => setDiagnosticsOpen((current) => !current)}
-          >
-            {diagnosticsOpen ? ui.shell.diagnosticsHide : ui.shell.diagnosticsShow}
-          </button>
-        </section>
       </section>
     </main>
   );
