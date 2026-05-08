@@ -2,7 +2,7 @@ import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypt
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { AppEnv } from "./env.js";
 
-const PROFILE_COOKIE_NAME = "mosaicstack_local_profile";
+const PROFILE_COOKIE_NAME = "mosaicstacked_local_profile";
 const PROFILE_COOKIE_VERSION = "v1";
 const PROFILE_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 
@@ -126,7 +126,7 @@ function resolveProfileSecret(env: AppEnv) {
   }
 
   if (!isProductionDeployment()) {
-    return "mosaicstack-local-preview-profile-secret";
+    return "mosaicstacked-local-preview-profile-secret";
   }
 
   return null;

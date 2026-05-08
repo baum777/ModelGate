@@ -74,7 +74,7 @@ function readGitHubStateFromAuthorizeLocation(location: string) {
 }
 
 function createTempStorePath() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstack-live-integration-auth-rotation-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstacked-live-integration-auth-rotation-"));
   return path.join(directory, "integration-auth-store.json");
 }
 
@@ -276,7 +276,7 @@ test("integration auth live smoke: github credential key rotation across restart
   assert.equal(statusPayloadVn.github.authState, "user_connected");
   assert.equal(statusPayloadVn.github.credentialSource, "user_connected");
 
-  const sessionId = readCookieValue(sessionCookie ?? "", "mosaicstack_integration_session");
+  const sessionId = readCookieValue(sessionCookie ?? "", "mosaicstacked_integration_session");
   assert.ok(sessionId);
   assertSnapshotKeyVersion(storePath, sessionId ?? "", {
     keyId: liveConfig.keyVn.keyId,

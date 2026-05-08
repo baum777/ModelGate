@@ -143,7 +143,7 @@ type PersistedShellState = {
   expertMode?: boolean;
 };
 
-const SHELL_STORAGE_KEY = "mosaicstack.console.shell.v2";
+const SHELL_STORAGE_KEY = "mosaicstacked.console.shell.v2";
 const THEME_STORAGE_KEY = "mg-theme";
 const WORKSPACE_STATE_SAVE_INTERVAL_MS = 250;
 
@@ -371,9 +371,9 @@ function PublicPreview() {
   return (
     <main className="app-shell public-preview" data-testid="public-preview">
       <section className="public-preview-card">
-        <div className="mosaicstack-mark" aria-hidden="true" />
+        <div className="mosaicstacked-mark" aria-hidden="true" />
         <p className="app-kicker">MOSAICSTACK</p>
-        <h1>MosaicStack</h1>
+        <h1>MosaicStacked</h1>
         <p className="hero-copy">
           Public preview shell. Governed workspace access stays separate from this route.
         </p>
@@ -553,7 +553,7 @@ function ConsoleShell() {
       return false;
     }
 
-    return window.localStorage.getItem("mosaicstack.console.workspaces.v1") !== null;
+    return window.localStorage.getItem("mosaicstacked.console.workspaces.v1") !== null;
   });
   const [telemetry, setTelemetry] = useState<TelemetryEntry[]>([]);
   const [githubContext, setGitHubContext] = useState<GitHubWorkspaceStatus>(() => createDefaultGitHubContext());
@@ -1943,7 +1943,7 @@ function ConsoleShell() {
     <main className="app-shell app-shell-console" data-testid="app-shell">
       <header className="global-header global-header-shell">
         <div className="brand-block">
-          <div className="mosaicstack-mark" aria-hidden="true" />
+          <div className="mosaicstacked-mark" aria-hidden="true" />
           <p className="app-kicker">{ui.shell.appKicker}</p>
           <h1>{ui.shell.appTitle}</h1>
           <p className="app-deck">{ui.shell.appDeck}</p>

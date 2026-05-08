@@ -16,8 +16,8 @@ type GitHubActionExecutionOptions = {
 };
 
 const EXECUTION_AUTHOR = {
-  name: "MosaicStack",
-  email: "mosaicstack@users.noreply.github.com"
+  name: "MosaicStacked",
+  email: "mosaicstacked@users.noreply.github.com"
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -514,7 +514,7 @@ export function createGitHubActionExecutionService(options: GitHubActionExecutio
         entries: treeEntries
       });
       const commit = await options.client.createRepositoryCommit(plan.repo.owner, plan.repo.repo, {
-        message: `MosaicStack plan ${plan.planId}`,
+        message: `MosaicStacked plan ${plan.planId}`,
         treeSha: tree.sha,
         parentShas: [plan.baseSha],
         author: {
@@ -578,11 +578,11 @@ export function createGitHubActionExecutionService(options: GitHubActionExecutio
         }
       } else {
         pullRequest = await options.client.createPullRequest(plan.repo.owner, plan.repo.repo, {
-          title: `MosaicStack plan ${plan.planId}`,
+          title: `MosaicStacked plan ${plan.planId}`,
           head: plan.branchName,
           base: plan.targetBranch,
           body: [
-            `MosaicStack approval-gated proposal`,
+            `MosaicStacked approval-gated proposal`,
             `Plan: ${plan.planId}`,
             `Repo: ${plan.repo.fullName}`,
             `Branch: ${plan.branchName}`

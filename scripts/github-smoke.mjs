@@ -133,7 +133,7 @@ function readGitHubSmokeConfig(sourceEnv = process.env, options = {}) {
       baseBranch,
       targetBranch,
       agentApiKey,
-      intent: "create or update docs/mosaicstack-smoke.md with a harmless timestamp"
+      intent: "create or update docs/mosaicstacked-smoke.md with a harmless timestamp"
     }
   };
 }
@@ -253,7 +253,7 @@ export async function runGitHubSmoke(options = {}) {
   const execute = await requestJson(fetchImpl, backendBaseUrl, `/api/github/actions/${encodeURIComponent(planId)}/execute`, {
     method: "POST",
     headers: {
-      "X-MosaicStack-Admin-Key": agentApiKey
+      "X-MosaicStacked-Admin-Key": agentApiKey
     },
     body: JSON.stringify({
       approval: true

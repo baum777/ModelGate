@@ -7,7 +7,7 @@ import { createApp } from "../src/app.js";
 import { createMockOpenRouterClient, createTestEnv } from "../test-support/helpers.js";
 
 function createTempStorePath() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstack-integration-auth-rotation-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstacked-integration-auth-rotation-"));
   return path.join(directory, "integration-auth-store.json");
 }
 
@@ -179,7 +179,7 @@ test("next gate: integration auth key rotation supports restart reverify and key
 
   assert.equal(callbackV2.statusCode, 302);
 
-  const sessionId = readCookieValue(sessionCookie ?? "", "mosaicstack_integration_session");
+  const sessionId = readCookieValue(sessionCookie ?? "", "mosaicstacked_integration_session");
   assert.ok(sessionId);
 
   const snapshot = JSON.parse(fs.readFileSync(storePath, "utf8")) as {

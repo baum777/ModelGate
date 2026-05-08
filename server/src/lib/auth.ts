@@ -2,7 +2,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import type { AppEnv } from "./env.js";
 
-const AUTH_COOKIE_NAME = "mosaicstack_admin_session";
+const AUTH_COOKIE_NAME = "mosaicstacked_admin_session";
 const AUTH_COOKIE_VERSION = "v1";
 const AUTH_COOKIE_SAME_SITE = "Lax";
 const DEFAULT_SESSION_TTL_SECONDS = 86_400;

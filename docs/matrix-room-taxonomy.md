@@ -1,6 +1,6 @@
 # Matrix Room Taxonomy
 
-Status: target architecture for a ModelGate/MosaicStack Matrix knowledge space.
+Status: target architecture for a ModelGate/MosaicStacked Matrix knowledge space.
 
 This document describes the intended Matrix space and room structure for ModelGate. It is not evidence that a live Matrix homeserver has already been provisioned with these spaces or rooms.
 
@@ -15,7 +15,7 @@ This document describes the intended Matrix space and room structure for ModelGa
 ## Top-Level Space
 
 ```text
-MosaicStack / ModelGate Knowledge Hub
+MosaicStacked / ModelGate Knowledge Hub
 ├─ 00-start-here
 ├─ 10-ai-research
 ├─ 20-agent-workflows
@@ -36,7 +36,7 @@ The first visible layer should be written for new Matrix users. Users should be 
 |---|---|---|---|---|
 | `00-start-here` | `#start-here` | First landing room for new users. | Start here: what this Matrix space is for, where to post, and how ModelGate uses room topics. | Topic changes require approval and verification. |
 | `00-start-here` | `#where-to-post` | Simple posting guide. | Quick guide for choosing the right room before posting a question, link, workflow, or idea. | Topic changes require approval and verification. |
-| `00-start-here` | `#updates` | Operator-visible project and community announcements. | Official updates for the MosaicStack / ModelGate Matrix knowledge hub. | Topic changes require approval and verification. |
+| `00-start-here` | `#updates` | Operator-visible project and community announcements. | Official updates for the MosaicStacked / ModelGate Matrix knowledge hub. | Topic changes require approval and verification. |
 | `00-start-here` | `#rules` | Behavioral and operating rules. | Rules for safe, governed participation in the Matrix knowledge space. | Topic changes require approval and verification. |
 | `10-ai-research` | `#papers` | Foundational and current AI papers. | Curated paper threads, notes, and references for AI and LLM research. | Topic changes require approval. |
 | `10-ai-research` | `#llm-insights` | Model behavior observations and comparisons. | Observations about LLM behavior, limitations, evaluation, and practical use. | Topic changes require approval. |
@@ -53,7 +53,7 @@ The first visible layer should be written for new Matrix users. Users should be 
 | `30-knowledge-base` | `#ai-trends` | Trend tracking. | Current AI trends and practical implications for ModelGate users. | Topic changes require approval. |
 | `30-knowledge-base` | `#interesting-links` | Link intake and triage. | Useful links for later classification into research, workflows, or glossary entries. | Topic changes require approval. |
 | `30-knowledge-base` | `#schooling-stuff` | Learning paths and courses. | Courses, learning tracks, and study notes for AI and agent work. | Topic changes require approval. |
-| `40-community` | `#general-chat` | General discussion. | General discussion for the MosaicStack / ModelGate community. | Topic changes require approval. |
+| `40-community` | `#general-chat` | General discussion. | General discussion for the MosaicStacked / ModelGate community. | Topic changes require approval. |
 | `40-community` | `#shares-and-finds` | Lightweight sharing. | Quick shares, finds, and references before they are promoted into durable rooms. | Topic changes require approval. |
 | `40-community` | `#off-topic` | Non-core discussion. | Off-topic conversation that should not become source-of-truth material. | Topic changes require approval. |
 | `90-system-audit` | `#change-proposals` | Proposed topic and structure changes. | Proposed Matrix room, topic, and structure changes awaiting review. | Topic changes require approval and verification. |

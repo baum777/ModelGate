@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This folder is the durable knowledge and rule layer for `MosaicStack`.
+This folder is the durable knowledge and rule layer for `MosaicStacked`.
 It complements existing docs and code; it does not replace runtime or product authority.
 
 ## Canonical References

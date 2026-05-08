@@ -1,6 +1,6 @@
 # Model Routing Contract
 
-This document describes the current backend-owned model routing surface in MosaicStack.
+This document describes the current backend-owned model routing surface in MosaicStacked.
 
 ## Objective
 
@@ -66,7 +66,7 @@ Request accepts:
 - bounded intent fields: `task`, `mode`, `preference`, `modelAlias`
 - legacy compatibility field: `model` (interpreted as alias, not provider target)
 
-MosaicStack browser chat sends only `modelAlias`. Raw provider IDs, unknown aliases, missing profile credentials, credential decryption failure, and missing production credential encryption all fail closed before upstream calls.
+MosaicStacked browser chat sends only `modelAlias`. Raw provider IDs, unknown aliases, missing profile credentials, credential decryption failure, and missing production credential encryption all fail closed before upstream calls.
 
 Response includes:
 

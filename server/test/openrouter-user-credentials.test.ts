@@ -41,7 +41,7 @@ test("OpenRouter settings save creates a backend profile cookie and never return
   });
 
   assert.equal(saveResponse.statusCode, 200);
-  assert.match(String(saveResponse.headers["set-cookie"]), /mosaicstack_local_profile=/);
+  assert.match(String(saveResponse.headers["set-cookie"]), /mosaicstacked_local_profile=/);
   assert.match(String(saveResponse.headers["set-cookie"]), /HttpOnly/);
   assert.match(String(saveResponse.headers["set-cookie"]), /SameSite=Lax/);
   assert.doesNotMatch(saveResponse.body, /sk-or-v1-secret-user-openrouter-key/);

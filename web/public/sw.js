@@ -1,4 +1,4 @@
-const CACHE_NAME = "mosaicstack-shell-v3";
+const CACHE_NAME = "mosaicstacked-shell-v3";
 const SHELL_ASSETS = [
   "/",
   "/index.html",

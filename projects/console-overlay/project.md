@@ -2,7 +2,7 @@
 
 ## Objective
 
-Maintain `MosaicStack` as a backend-first console overlay with explicit authority separation between backend execution truth and browser rendering.
+Maintain `MosaicStacked` as a backend-first console overlay with explicit authority separation between backend execution truth and browser rendering.
 
 ## Scope
 

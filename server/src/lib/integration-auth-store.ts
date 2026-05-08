@@ -118,7 +118,7 @@ type IntegrationAuthStoreOptions = {
 
 const DEFAULT_STATE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_STORE_FILE_PATH = ".local-ai/state/integration-auth-store.json";
-const VERCEL_TMP_STORE_ROOT = "mosaicstack";
+const VERCEL_TMP_STORE_ROOT = "mosaicstacked";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);

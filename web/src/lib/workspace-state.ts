@@ -164,8 +164,8 @@ export type WorkspaceState = {
   sessionsByWorkspace: WorkspaceSessionMap;
 };
 
-const STORAGE_KEY = "mosaicstack.console.workspaces.v1";
-const LEGACY_MATRIX_STORAGE_KEY = "mosaicstack.console.matrix.v1";
+const STORAGE_KEY = "mosaicstacked.console.workspaces.v1";
+const LEGACY_MATRIX_STORAGE_KEY = "mosaicstacked.console.matrix.v1";
 const WORKSPACE_VALUES: WorkspaceKind[] = ["chat", "github", "matrix"];
 const SESSION_STATUS_VALUES: SessionStatus[] = ["draft", "in_progress", "review_required", "done", "failed"];
 

@@ -916,7 +916,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
         {beginnerMode ? (
           <ShellCard variant="muted" className="work-mode-guidance-card">
             <SectionLabel>{workModeCopy.label}</SectionLabel>
-            <p>{locale === "de" ? "Schreibe dein Ziel. MosaicStack erstellt im geführten Modus zuerst einen Vorschlag, danach entscheidest du." : "Write the goal. In guided mode MosaicStack prepares a proposal first, then you decide."}</p>
+            <p>{locale === "de" ? "Schreibe dein Ziel. MosaicStacked erstellt im geführten Modus zuerst einen Vorschlag, danach entscheidest du." : "Write the goal. In guided mode MosaicStacked prepares a proposal first, then you decide."}</p>
           </ShellCard>
         ) : null}
         {expertMode && chatState.activeRoute ? (

@@ -86,7 +86,7 @@ test("runtime journal sanitizes forbidden metadata keys", () => {
 });
 
 test("runtime journal file mode recovers persisted entries and fails closed on malformed files", () => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstack-journal-"));
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "mosaicstacked-journal-"));
   const filePath = path.join(tempDir, "runtime-journal.json");
 
   const first = createRuntimeJournal({

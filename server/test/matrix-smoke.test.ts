@@ -56,7 +56,7 @@ test("matrix smoke calls the backend routes in order and redacts token values", 
       MATRIX_BASE_URL: "https://matrix.example",
       MATRIX_ACCESS_TOKEN: secretToken,
       MATRIX_SMOKE_ROOM_ID: expectedRoomId,
-      MATRIX_SMOKE_TOPIC_PREFIX: "MosaicStack smoke",
+      MATRIX_SMOKE_TOPIC_PREFIX: "MosaicStacked smoke",
       HOST: "127.0.0.1",
       PORT: "8787"
     },
@@ -254,7 +254,7 @@ test("matrix smoke calls the backend routes in order and redacts token values", 
   assert.equal(result.ok, true);
   assert.equal(result.status, "passed");
   assert.equal(result.roomId, expectedRoomId);
-  assert.equal(result.temporaryTopic, "MosaicStack smoke 2026-04-15T10-11-12-000Z abc123");
+  assert.equal(result.temporaryTopic, "MosaicStacked smoke 2026-04-15T10-11-12-000Z abc123");
   assert.equal(result.restorationTopic, expectedPreviousTopic);
   assert.equal(result.forward.verification.status, "verified");
   assert.equal(result.cleanup.verification.status, "verified");

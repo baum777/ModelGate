@@ -4007,7 +4007,7 @@ button:hover:not(:disabled) { transform: translateY(-1px); }
   grid-column: 2;
 }
 
-.mosaicstack-mark {
+.mosaicstacked-mark {
   width: 24px;
   height: 24px;
   grid-row: 1 / span 3;
@@ -4617,7 +4617,7 @@ button:hover:not(:disabled) {
   background: color-mix(in srgb, var(--bg-primary) 88%, transparent);
 }
 
-.mosaicstack-mark {
+.mosaicstacked-mark {
   background: linear-gradient(135deg, var(--accent-cyan), var(--accent-green));
   box-shadow: var(--glow-cyan);
 }
@@ -5192,7 +5192,7 @@ textarea:focus {
   flex-wrap: nowrap;
 }
 
-.global-header-shell .mosaicstack-mark {
+.global-header-shell .mosaicstacked-mark {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -5752,7 +5752,7 @@ body,
   min-height: 32px;
 }
 
-.global-header-shell .mosaicstack-mark {
+.global-header-shell .mosaicstacked-mark {
   position: absolute;
   top: 50%;
   left: 50%;

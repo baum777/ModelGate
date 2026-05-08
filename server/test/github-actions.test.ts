@@ -266,7 +266,7 @@ test("github proposal routes create a review-only plan scaffold and keep it read
   assert.equal(proposeBody.plan.repo.fullName, "acme/widget");
   assert.equal(proposeBody.plan.baseRef, "main");
   assert.equal(proposeBody.plan.baseSha, "commit-sha-1");
-  assert.equal(proposeBody.plan.branchName, `mosaicstack/github/${proposeBody.plan.planId}`);
+  assert.equal(proposeBody.plan.branchName, `mosaicstacked/github/${proposeBody.plan.planId}`);
   assert.equal(proposeBody.plan.targetBranch, "main");
   assert.equal(proposeBody.plan.status, "pending_review");
   assert.equal(proposeBody.plan.stale, false);
@@ -412,7 +412,7 @@ test("github proposal routes create a deterministic smoke plan without the LLM",
         });
       }
 
-      if (url.pathname === "/repos/acme/widget/contents/docs/mosaicstack-smoke.md") {
+      if (url.pathname === "/repos/acme/widget/contents/docs/mosaicstacked-smoke.md") {
         return new Response("not found", {
           status: 404,
           headers: {
@@ -457,9 +457,9 @@ test("github proposal routes create a deterministic smoke plan without the LLM",
       },
       objective: "Smoke the GitHub proposal flow",
       baseBranch: "main",
-      targetBranch: "mosaicstack/github-smoke",
+      targetBranch: "mosaicstacked/github-smoke",
       mode: "smoke",
-      intent: "create or update docs/mosaicstack-smoke.md with a harmless timestamp"
+      intent: "create or update docs/mosaicstacked-smoke.md with a harmless timestamp"
     }
   });
 
@@ -484,20 +484,20 @@ test("github proposal routes create a deterministic smoke plan without the LLM",
   };
 
   assert.match(body.plan.planId, /^plan_[0-9a-f-]{36}$/);
-  assert.equal(body.plan.branchName, `mosaicstack/github-smoke/${body.plan.planId}`);
+  assert.equal(body.plan.branchName, `mosaicstacked/github-smoke/${body.plan.planId}`);
   assert.equal(body.plan.targetBranch, "main");
   assert.equal(body.plan.summary, "Smoke proposal for acme/widget");
   assert.match(body.plan.rationale, /Deterministic smoke proposal for acme\/widget/i);
   assert.equal(body.plan.routingMetadata, undefined);
   assert.deepEqual(body.plan.diff.map((file) => file.path), [
-    "docs/mosaicstack-smoke.md"
+    "docs/mosaicstacked-smoke.md"
   ]);
   assert.equal(body.plan.diff[0]?.changeType, "added");
   assert.match(body.plan.diff[0]?.patch ?? "", /@@ reviewable addition @@/);
   assert.match(body.plan.diff[0]?.patch ?? "", /\+Generated at:/);
   assert.match(
     body.plan.diff[0]?.patch ?? "",
-    /\+Intent: create or update docs\/mosaicstack-smoke\.md with a harmless timestamp/
+    /\+Intent: create or update docs\/mosaicstacked-smoke\.md with a harmless timestamp/
   );
 });
 
@@ -569,7 +569,7 @@ test("github proposal smoke requests reject unsafe branch or file selection", as
         });
       }
 
-      if (url.pathname === "/repos/acme/widget/contents/docs/mosaicstack-smoke.md") {
+      if (url.pathname === "/repos/acme/widget/contents/docs/mosaicstacked-smoke.md") {
         return new Response("not found", {
           status: 404,
           headers: {
@@ -609,7 +609,7 @@ test("github proposal smoke requests reject unsafe branch or file selection", as
       baseBranch: "main",
       targetBranch: "main",
       mode: "smoke",
-      intent: "create or update docs/mosaicstack-smoke.md with a harmless timestamp"
+      intent: "create or update docs/mosaicstacked-smoke.md with a harmless timestamp"
     }
   });
 
@@ -635,10 +635,10 @@ test("github proposal smoke requests reject unsafe branch or file selection", as
       },
       objective: "Smoke the GitHub proposal flow",
       baseBranch: "main",
-      targetBranch: "mosaicstack/github-smoke",
+      targetBranch: "mosaicstacked/github-smoke",
       mode: "smoke",
       selectedPaths: ["package.json"],
-      intent: "create or update docs/mosaicstack-smoke.md with a harmless timestamp"
+      intent: "create or update docs/mosaicstacked-smoke.md with a harmless timestamp"
     }
   });
 

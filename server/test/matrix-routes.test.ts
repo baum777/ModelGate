@@ -418,8 +418,8 @@ test("matrix room provenance returns normalized read-only room metadata", async 
         return [
           {
             roomId: "!room:matrix.example",
-            name: "MosaicStack Test",
-            canonicalAlias: "#mosaicstack-test:matrix.example",
+            name: "MosaicStacked Test",
+            canonicalAlias: "#mosaicstacked-test:matrix.example",
             roomType: "room"
           }
         ];
@@ -485,8 +485,8 @@ test("matrix room provenance returns normalized read-only room metadata", async 
   assert.equal(parsed.provenance.source, "matrix");
   assert.equal(parsed.provenance.kind, "room_metadata");
   assert.equal(parsed.provenance.items[0]?.id, "!room:matrix.example");
-  assert.equal(parsed.provenance.items[0]?.label, "MosaicStack Test");
-  assert.equal(parsed.provenance.items[0]?.alias, "#mosaicstack-test:matrix.example");
+  assert.equal(parsed.provenance.items[0]?.label, "MosaicStacked Test");
+  assert.equal(parsed.provenance.items[0]?.alias, "#mosaicstacked-test:matrix.example");
   assert.match(parsed.provenance.generatedAt, /^\d{4}-\d{2}-\d{2}T/);
   assert.equal(whoamiCalls, 1);
   assert.equal(joinedRoomsCalls, 1);
