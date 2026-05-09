@@ -2,6 +2,8 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 const DEFERRED_PRELOAD_CHUNK_PREFIXES = [
+  "GitHubPage",
+  "chunk-github",
   "vendor-syntax",
   "vendor-ui",
 ];
@@ -20,22 +22,24 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes("node_modules/react-dom")
-            || id.includes("node_modules/react/")
-            || id.includes("node_modules/react-is")
-            || id.includes("node_modules/scheduler")) {
+          const normalizedId = id.replaceAll("\\", "/");
+
+          if (normalizedId.includes("/node_modules/react/")
+            || normalizedId.includes("/node_modules/react-dom/")
+            || normalizedId.includes("/node_modules/react-is/")
+            || normalizedId.includes("/node_modules/scheduler/")) {
             return "vendor-react";
           }
 
-          if (id.includes("node_modules/react-router")) {
+          if (normalizedId.includes("/node_modules/react-router/")) {
             return "vendor-router";
           }
 
-          if (id.includes("node_modules/highlight.js") || id.includes("node_modules/shiki")) {
+          if (normalizedId.includes("/node_modules/highlight.js/") || normalizedId.includes("/node_modules/shiki/")) {
             return "vendor-syntax";
           }
 
-          if (id.includes("node_modules/framer-motion") || id.includes("node_modules/@radix-ui")) {
+          if (normalizedId.includes("/node_modules/framer-motion/") || normalizedId.includes("/node_modules/@radix-ui/")) {
             return "vendor-ui";
           }
 

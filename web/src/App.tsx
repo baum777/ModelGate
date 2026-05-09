@@ -84,12 +84,53 @@ const loadGitHubWorkspace = () => import("./components/GitHubWorkspace.js");
 const loadMatrixWorkspace = () => import("./components/MatrixWorkspace.js");
 const loadReviewWorkspace = () => import("./components/ReviewWorkspace.js");
 const loadSettingsWorkspace = () => import("./components/SettingsWorkspace.js");
+const GITHUB_MOBILE_STYLESHEET_ID = "mosaicstacked-mobile-github-css";
+
+function loadMobileGitHubStylesheet() {
+  if (typeof document === "undefined") {
+    return Promise.resolve();
+  }
+
+  const existingLink = document.getElementById(GITHUB_MOBILE_STYLESHEET_ID) as HTMLLinkElement | null;
+  if (existingLink?.dataset.loaded === "true") {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve) => {
+    const link = existingLink ?? document.createElement("link");
+    const handleLoad = () => {
+      link.dataset.loaded = "true";
+      resolve();
+    };
+    const handleError = () => resolve();
+
+    link.addEventListener("load", handleLoad, { once: true });
+    link.addEventListener("error", handleError, { once: true });
+
+    if (!existingLink) {
+      link.id = GITHUB_MOBILE_STYLESHEET_ID;
+      link.rel = "stylesheet";
+      link.href = "/github-mobile.css";
+      document.head.appendChild(link);
+    }
+  });
+}
+
+const loadMobileGitHubPage = async () => {
+  const [pageModule] = await Promise.all([
+    import("./pages/GitHubPage.js"),
+    loadMobileGitHubStylesheet(),
+  ]);
+
+  return pageModule;
+};
 
 const ChatWorkspace = lazy(() => loadChatWorkspace().then((module) => ({ default: module.ChatWorkspace })));
 const GitHubWorkspace = lazy(() => loadGitHubWorkspace().then((module) => ({ default: module.GitHubWorkspace })));
 const MatrixWorkspace = lazy(() => loadMatrixWorkspace().then((module) => ({ default: module.MatrixWorkspace })));
 const ReviewWorkspace = lazy(() => loadReviewWorkspace().then((module) => ({ default: module.ReviewWorkspace })));
 const SettingsWorkspace = lazy(() => loadSettingsWorkspace().then((module) => ({ default: module.SettingsWorkspace })));
+const MobileGitHubPage = lazy(() => loadMobileGitHubPage().then((module) => ({ default: module.GitHubPage })));
 
 const SETTINGS_VERIFICATION_INITIAL: Record<SettingsVerificationTarget, SettingsVerificationState> = {
   backend: {
@@ -2352,6 +2393,8 @@ function ConsoleShell() {
 
   const workspaceSurface = isMobileViewport && mode === "chat" ? (
     <MobileChatPage locale={locale} />
+  ) : isMobileViewport && mode === "github" ? (
+    <MobileGitHubPage locale={locale} />
   ) : mode === "chat" ? (
     <ChatWorkspace
       key={chatSession?.id ?? "chat-session"}

@@ -1,0 +1,330 @@
+.github-mobile-page {
+  min-height: min(68dvh, 740px);
+}
+
+.github-mobile-surface,
+.github-mobile-skeleton {
+  min-height: min(68dvh, 740px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  border: 1px solid var(--ms-border);
+  border-radius: var(--r2);
+  background: var(--ms-bg);
+  overflow: hidden;
+}
+
+.github-mobile-header {
+  min-height: 54px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--ms-border);
+  background: var(--ms-bg2);
+}
+
+.github-mobile-header p,
+.github-mobile-diff-header p {
+  margin: 0 0 2px;
+  color: var(--ms-text2);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.github-mobile-header h2,
+.github-mobile-diff-header h3,
+.github-mobile-section-header h3 {
+  margin: 0;
+  color: var(--ms-text);
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.github-mobile-ask-button {
+  min-height: 44px;
+  max-width: 152px;
+  padding: 0 12px;
+  border-color: var(--ms-border2);
+  border-radius: 10px;
+  background: var(--ms-bg3);
+  color: var(--ms-text);
+  font-size: 12px;
+}
+
+.github-mobile-layout {
+  min-height: 0;
+  padding: 0 10px 10px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.github-mobile-file-tree,
+.github-mobile-diff {
+  min-width: 0;
+  border: 1px solid var(--ms-border);
+  border-radius: var(--r);
+  background: var(--ms-bg2);
+  overflow: hidden;
+}
+
+.github-mobile-section-header {
+  min-height: 36px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--ms-border);
+}
+
+.github-mobile-section-header span {
+  min-width: 24px;
+  height: 22px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  background: var(--ms-bg3);
+  color: var(--ms-text2);
+  font-size: 11px;
+}
+
+.github-mobile-file-list {
+  display: grid;
+  gap: 1px;
+}
+
+.github-mobile-file {
+  min-height: 48px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  background: transparent;
+  color: var(--ms-text);
+  text-align: left;
+  box-shadow: none;
+}
+
+.github-mobile-file-list .github-mobile-file {
+  background: var(--ms-bg2);
+}
+
+.github-mobile-file-list .github-mobile-file-active {
+  background: color-mix(in srgb, var(--ms-accent) 16%, var(--ms-bg3));
+}
+
+.github-mobile-file-status {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--ms-border);
+  border-radius: 7px;
+  display: inline-grid;
+  place-items: center;
+  font-family: var(--ms-mono);
+  font-size: 11px;
+}
+
+.github-mobile-file-status-added {
+  color: var(--ms-green);
+}
+
+.github-mobile-file-status-removed {
+  color: var(--ms-red);
+}
+
+.github-mobile-file-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.github-mobile-file-main strong,
+.github-mobile-file-main span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.github-mobile-file-main strong {
+  font-size: 12px;
+}
+
+.github-mobile-file-main span {
+  color: var(--ms-text2);
+  font-family: var(--ms-mono);
+  font-size: 11px;
+}
+
+.github-mobile-risk-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--ms-green);
+}
+
+.github-mobile-risk-medium {
+  background: var(--ms-amber);
+}
+
+.github-mobile-risk-high {
+  background: var(--ms-red);
+}
+
+.github-mobile-diff {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.github-mobile-diff-header {
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--ms-border);
+}
+
+.github-mobile-risk-pill {
+  align-self: start;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: #14120d;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.github-mobile-risk-pill.github-mobile-risk-low {
+  background: var(--ms-green);
+}
+
+.github-mobile-risk-markers {
+  padding: 8px 10px;
+  display: grid;
+  gap: 8px;
+  border-bottom: 1px solid var(--ms-border);
+}
+
+.github-mobile-risk-marker {
+  padding: 8px;
+  border: 1px solid var(--ms-border);
+  border-radius: var(--r);
+  display: grid;
+  gap: 3px;
+  background: var(--ms-bg3);
+}
+
+.github-mobile-risk-marker strong {
+  color: var(--ms-text);
+  font-size: 12px;
+}
+
+.github-mobile-risk-marker span {
+  color: var(--ms-text2);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.github-mobile-diff-body {
+  min-height: 0;
+  overflow: auto;
+}
+
+.github-mobile-hunk {
+  margin: 0;
+}
+
+.github-mobile-hunk-header {
+  margin: 0;
+  padding: 7px 10px;
+  background: var(--ms-bg3);
+  color: var(--ms-text2);
+  font-family: var(--ms-mono);
+  font-size: 11px;
+}
+
+.github-mobile-hunk pre {
+  margin: 0;
+  padding: 8px 0;
+  overflow-x: auto;
+  font-family: var(--ms-mono);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.github-mobile-diff-line {
+  min-width: max-content;
+  padding: 0 10px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.github-mobile-diff-line-added {
+  background: rgba(85, 239, 196, 0.08);
+}
+
+.github-mobile-diff-line-removed {
+  background: rgba(255, 118, 117, 0.08);
+}
+
+.github-mobile-skeleton {
+  padding: 10px;
+}
+
+.github-mobile-skeleton-header,
+.github-mobile-skeleton-list,
+.github-mobile-skeleton-diff {
+  border: 1px solid var(--ms-border);
+  border-radius: var(--r);
+  background: var(--ms-bg2);
+}
+
+.github-mobile-skeleton-header {
+  height: 54px;
+}
+
+.github-mobile-skeleton-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.github-mobile-skeleton-list,
+.github-mobile-skeleton-diff {
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.github-mobile-skeleton-list span,
+.github-mobile-skeleton-diff span {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(155, 153, 168, 0.24);
+}
+
+.github-mobile-skeleton-list span:nth-child(1) { width: 86%; }
+.github-mobile-skeleton-list span:nth-child(2) { width: 72%; }
+.github-mobile-skeleton-list span:nth-child(3) { width: 64%; }
+.github-mobile-skeleton-diff span:nth-child(1) { width: 92%; }
+.github-mobile-skeleton-diff span:nth-child(2) { width: 78%; }
+.github-mobile-skeleton-diff span:nth-child(3) { width: 84%; }
+.github-mobile-skeleton-diff span:nth-child(4) { width: 58%; }
+
+@media (min-width: 620px) {
+  .github-mobile-layout,
+  .github-mobile-skeleton-grid {
+    grid-template-columns: minmax(180px, 0.82fr) minmax(0, 1.18fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+}

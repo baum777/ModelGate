@@ -22,8 +22,9 @@ Rationale:
 - Runtime font files use local latin `woff2` files:
   - `web/public/fonts/inter-latin.woff2`
   - `web/public/fonts/jetbrains-mono-latin.woff2`
-- Font declarations use `font-display: swap`, `unicode-range`, and metric overrides in `web/src/local-fonts.css`.
+- Font declarations use `font-display: swap`, `unicode-range`, and metric overrides in `web/public/local-fonts.css`.
 - Runtime aliases (`Inter`, `DM Sans`, `JetBrains Sans`, `JetBrains Mono`) stay local to keep transfer auditable.
+- Font CSS is loaded by the non-critical startup path in `web/src/main.tsx`, so fonts remain local without blocking mobile chat TTI.
 
 ## Critical CSS And Startup
 
@@ -31,6 +32,16 @@ Rationale:
 - `web/src/deferred.css` imports the full legacy shell styling and loads after first user interaction, with a delayed fallback outside the Lighthouse measurement window.
 - Mobile chat uses the static `ChatPage` entry so the initial route does not waterfall into a lazy chat chunk.
 - Desktop workspaces, full shell CSS, PWA registration, and console diagnostics are deferred so they do not compete with mobile TTI.
+
+## Phase 2 GitHub Surface Guardrails
+
+- Mobile GitHub review UI enters through `web/src/pages/GitHubPage.tsx` and is loaded with `React.lazy()` from `web/src/App.tsx`.
+- `GitHubPage`, `FileTree`, `DiffViewer`, and risk markers must not be imported at the top level of `App.tsx` or `ChatPage.tsx`.
+- The lazy GitHub page chunk is excluded from Vite modulepreload policy; it must not compete with the mobile chat critical path on 3G.
+- GitHub-specific mobile styles are served as `web/public/github-mobile.css` and injected only when the mobile GitHub tab is activated.
+- The lazy loader waits for `/github-mobile.css` before resolving `GitHubPage`, preventing unstyled GitHub content during fast tab switches.
+- GitHub data in this slice is mock review data loaded after mount; browser state remains a review surface and does not become backend execution truth.
+- Top-level favicon uses the existing lightweight SVG (`/icons/favicon.svg`) instead of the legacy transparent ICO to avoid unnecessary first-run transfer.
 
 ## Commands
 
@@ -63,9 +74,10 @@ Target thresholds:
 - median TTI gate: `<= 2600 ms` across 3 runs
 
 Latest local run (2026-05-09, production preview on `127.0.0.1:3000/console?mode=chat`):
-- Lighthouse median gate: `2117 ms` (`2117`, `2131`, `2117` ms)
-- performance: `97`
+- Lighthouse median gate: `2088 ms` (`2088`, `2107`, `2088` ms)
+- performance: `98`
 - accessibility: `100`
-- FCP: `1887 ms`
-- LCP: `2130 ms`
-- TTI: `2117 ms`
+- FCP: `1864 ms`
+- LCP: `2099 ms`
+- TTI: `2088 ms`
+- Bundle gate: `101.87 KiB gzip`, `87.70 KiB brotli` combined initial load
