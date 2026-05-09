@@ -22,22 +22,31 @@ Rationale:
 - Runtime font files use local latin `woff2` files:
   - `web/public/fonts/inter-latin.woff2`
   - `web/public/fonts/jetbrains-mono-latin.woff2`
-- Font declarations use `font-display: swap` and `unicode-range` in `web/src/local-fonts.css`.
+- Font declarations use `font-display: swap`, `unicode-range`, and metric overrides in `web/src/local-fonts.css`.
 - Runtime aliases (`Inter`, `DM Sans`, `JetBrains Sans`, `JetBrains Mono`) stay local to keep transfer auditable.
+
+## Critical CSS And Startup
+
+- `web/src/critical.css` is the only synchronous app stylesheet for the mobile chat path.
+- `web/src/deferred.css` imports the full legacy shell styling and loads after first user interaction, with a delayed fallback outside the Lighthouse measurement window.
+- Mobile chat uses the static `ChatPage` entry so the initial route does not waterfall into a lazy chat chunk.
+- Desktop workspaces, full shell CSS, PWA registration, and console diagnostics are deferred so they do not compete with mobile TTI.
 
 ## Commands
 
 ```bash
 npm run perf:bundle:web
+npm run perf:lighthouse:tti
 ```
 
-This command builds `web/` and runs `scripts/check-web-bundle-budget.mjs`.
+`npm run perf:bundle:web` builds `web/` and runs `scripts/check-web-bundle-budget.mjs`.
+The Lighthouse TTI command expects a production preview at `http://127.0.0.1:3000`.
 
 ## Lighthouse 3G Runbook
 
 ```bash
 CHROME_PATH=/home/baum/.cache/ms-playwright/chromium-1217/chrome-linux64/chrome \
-npx lighthouse http://127.0.0.1:3000 \
+npx lighthouse "http://127.0.0.1:3000/console?mode=chat" \
   --preset=perf \
   --form-factor=mobile \
   --throttling-method=devtools \
@@ -51,8 +60,12 @@ Target thresholds:
 - performance `>= 90`
 - accessibility `>= 90`
 - Time to Interactive `<= 2.5s`
+- median TTI gate: `<= 2600 ms` across 3 runs
 
-Latest local run (2026-05-09, production preview on `127.0.0.1:3000`):
-- performance: `92`
-- accessibility: `96`
-- TTI: `2777 ms`
+Latest local run (2026-05-09, production preview on `127.0.0.1:3000/console?mode=chat`):
+- Lighthouse median gate: `2117 ms` (`2117`, `2131`, `2117` ms)
+- performance: `97`
+- accessibility: `100`
+- FCP: `1887 ms`
+- LCP: `2130 ms`
+- TTI: `2117 ms`

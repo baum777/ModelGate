@@ -4,7 +4,6 @@ import react from "@vitejs/plugin-react";
 const DEFERRED_PRELOAD_CHUNK_PREFIXES = [
   "vendor-syntax",
   "vendor-ui",
-  "vendor-markdown",
 ];
 
 export default defineConfig({
@@ -21,16 +20,15 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes("node_modules/react-dom") || id.includes("node_modules/react/")) {
+          if (id.includes("node_modules/react-dom")
+            || id.includes("node_modules/react/")
+            || id.includes("node_modules/react-is")
+            || id.includes("node_modules/scheduler")) {
             return "vendor-react";
           }
 
           if (id.includes("node_modules/react-router")) {
             return "vendor-router";
-          }
-
-          if (id.includes("node_modules/react-markdown") || id.includes("node_modules/remark-gfm")) {
-            return "vendor-markdown";
           }
 
           if (id.includes("node_modules/highlight.js") || id.includes("node_modules/shiki")) {

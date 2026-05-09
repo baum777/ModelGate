@@ -77,20 +77,19 @@ import {
 } from "./lib/work-mode.js";
 import type { PinnedChatContext } from "./lib/pinned-chat-context.js";
 import { BottomNav } from "./components/navigation/BottomNav.js";
+import { ChatPage as MobileChatPage } from "./pages/ChatPage.js";
 
 const loadChatWorkspace = () => import("./components/ChatWorkspace.js");
 const loadGitHubWorkspace = () => import("./components/GitHubWorkspace.js");
 const loadMatrixWorkspace = () => import("./components/MatrixWorkspace.js");
 const loadReviewWorkspace = () => import("./components/ReviewWorkspace.js");
 const loadSettingsWorkspace = () => import("./components/SettingsWorkspace.js");
-const loadMobileChatPage = () => import("./pages/ChatPage.js");
 
 const ChatWorkspace = lazy(() => loadChatWorkspace().then((module) => ({ default: module.ChatWorkspace })));
 const GitHubWorkspace = lazy(() => loadGitHubWorkspace().then((module) => ({ default: module.GitHubWorkspace })));
 const MatrixWorkspace = lazy(() => loadMatrixWorkspace().then((module) => ({ default: module.MatrixWorkspace })));
 const ReviewWorkspace = lazy(() => loadReviewWorkspace().then((module) => ({ default: module.ReviewWorkspace })));
 const SettingsWorkspace = lazy(() => loadSettingsWorkspace().then((module) => ({ default: module.SettingsWorkspace })));
-const MobileChatPage = lazy(() => loadMobileChatPage().then((module) => ({ default: module.ChatPage })));
 
 const SETTINGS_VERIFICATION_INITIAL: Record<SettingsVerificationTarget, SettingsVerificationState> = {
   backend: {
@@ -115,17 +114,12 @@ const OPENROUTER_CREDENTIAL_STATUS_EMPTY: OpenRouterCredentialStatusResponse = {
   models: [],
 };
 
-function scheduleWorkspacePreload(callback: () => void) {
+function scheduleWorkspacePreload(callback: () => void, timeoutMs = 15_000) {
   if (typeof window === "undefined") {
     return undefined;
   }
 
-  if ("requestIdleCallback" in window) {
-    const handle = window.requestIdleCallback(callback, { timeout: 1800 });
-    return () => window.cancelIdleCallback(handle);
-  }
-
-  const handle = globalThis.setTimeout(callback, 900);
+  const handle = globalThis.setTimeout(callback, timeoutMs);
   return () => globalThis.clearTimeout(handle);
 }
 
@@ -1268,10 +1262,13 @@ function ConsoleShell() {
       }
     }
 
-    void loadConsoleState();
+    const handle = globalThis.setTimeout(() => {
+      void loadConsoleState();
+    }, 15_000);
 
     return () => {
       cancelled = true;
+      globalThis.clearTimeout(handle);
     };
   }, [appText]);
 
@@ -2353,7 +2350,9 @@ function ConsoleShell() {
     reviewItems,
   ]);
 
-  const workspaceSurface = mode === "chat" ? (
+  const workspaceSurface = isMobileViewport && mode === "chat" ? (
+    <MobileChatPage locale={locale} />
+  ) : mode === "chat" ? (
     <ChatWorkspace
       key={chatSession?.id ?? "chat-session"}
       session={chatSession}
@@ -2447,9 +2446,7 @@ function ConsoleShell() {
     : ui.common.loading;
   const showRouteOwnershipContext = mode === "github" || mode === "matrix";
   const mobileContextNavBadge = hasRepoContext ? (locale === "de" ? "Datei" : "Ask") : undefined;
-  const mobileWorkspaceSurface = mode === "chat"
-    ? <MobileChatPage locale={locale} />
-    : workspaceSurface;
+  const mobileWorkspaceSurface = workspaceSurface;
 
   if (isMobileViewport) {
     return (

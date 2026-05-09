@@ -30,6 +30,7 @@
     "test:integration-auth-rotation-live:matrix": "node --test --import tsx tests/live/integration-auth-rotation-live-matrix.test.ts",
     "test:integration-auth-rotation-live:both": "npm run test:integration-auth-rotation-live && npm run test:integration-auth-rotation-live:matrix",
     "perf:bundle:web": "npm run build --workspace web && node scripts/check-web-bundle-budget.mjs",
+    "perf:lighthouse:tti": "node scripts/check-lighthouse-tti.mjs",
     "test": "npm run test:server && npm run test:web",
     "dev": "npm run dev:server"
   },
