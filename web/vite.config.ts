@@ -3,7 +3,9 @@ import react from "@vitejs/plugin-react";
 
 const DEFERRED_PRELOAD_CHUNK_PREFIXES = [
   "GitHubPage",
+  "MatrixPage",
   "chunk-github",
+  "chunk-matrix",
   "vendor-syntax",
   "vendor-ui",
 ];

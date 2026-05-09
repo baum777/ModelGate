@@ -43,6 +43,16 @@ Rationale:
 - GitHub data in this slice is mock review data loaded after mount; browser state remains a review surface and does not become backend execution truth.
 - Top-level favicon uses the existing lightweight SVG (`/icons/favicon.svg`) instead of the legacy transparent ICO to avoid unnecessary first-run transfer.
 
+## Phase 3 Matrix Surface Guardrails
+
+- Mobile Matrix knowledge UI enters through `web/src/pages/MatrixPage.tsx` and is loaded with `React.lazy()` from `web/src/App.tsx`.
+- `MatrixPage`, `KnowledgeMap`, `TopicCard`, `ProvenancePanel`, and Matrix risk markers must not be imported at the top level of `App.tsx` or `ChatPage.tsx`.
+- The lazy Matrix page chunk is excluded from Vite modulepreload policy; it must not compete with the mobile chat critical path on 3G.
+- Matrix-specific mobile styles are served as `web/public/matrix-mobile.css` and injected only when the mobile Matrix tab is activated.
+- The lazy loader waits for `/matrix-mobile.css` before resolving `MatrixPage`, preventing unstyled Matrix content during fast tab switches.
+- Matrix mobile controls are excluded from the global deferred button retheme in `web/src/ui-adaptation.css`, so feature-scoped button colors remain stable after `deferred.css` loads.
+- Matrix data in this slice is mock read-only knowledge: browser state is advisory, credentials remain backend-owned, and malformed or partial Matrix state remains fail-closed.
+
 ## Commands
 
 ```bash
@@ -51,7 +61,7 @@ npm run perf:lighthouse:tti
 ```
 
 `npm run perf:bundle:web` builds `web/` and runs `scripts/check-web-bundle-budget.mjs`.
-The Lighthouse TTI command expects a production preview at `http://127.0.0.1:3000`.
+The Lighthouse TTI command expects a production preview at `http://127.0.0.1:3000` by default. Use `LIGHTHOUSE_URL=... npm run perf:lighthouse:tti` when the preview binds a different local port.
 
 ## Lighthouse 3G Runbook
 
@@ -73,11 +83,11 @@ Target thresholds:
 - Time to Interactive `<= 2.5s`
 - median TTI gate: `<= 2600 ms` across 3 runs
 
-Latest local run (2026-05-09, production preview on `127.0.0.1:3000/console?mode=chat`):
-- Lighthouse median gate: `2088 ms` (`2088`, `2107`, `2088` ms)
+Latest local run (2026-05-09, production preview on `127.0.0.1:3001/console?mode=chat`):
+- Lighthouse median gate: `2081 ms` (`2081`, `2053`, `2084` ms)
 - performance: `98`
 - accessibility: `100`
-- FCP: `1864 ms`
-- LCP: `2099 ms`
-- TTI: `2088 ms`
-- Bundle gate: `101.87 KiB gzip`, `87.70 KiB brotli` combined initial load
+- FCP: `1860 ms`
+- LCP: `2093 ms`
+- TTI: `2081 ms`
+- Bundle gate: `101.99 KiB gzip`, `87.77 KiB brotli` combined initial load

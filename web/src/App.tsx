@@ -85,6 +85,7 @@ const loadMatrixWorkspace = () => import("./components/MatrixWorkspace.js");
 const loadReviewWorkspace = () => import("./components/ReviewWorkspace.js");
 const loadSettingsWorkspace = () => import("./components/SettingsWorkspace.js");
 const GITHUB_MOBILE_STYLESHEET_ID = "mosaicstacked-mobile-github-css";
+const MATRIX_MOBILE_STYLESHEET_ID = "mosaicstacked-mobile-matrix-css";
 
 function loadMobileGitHubStylesheet() {
   if (typeof document === "undefined") {
@@ -92,7 +93,7 @@ function loadMobileGitHubStylesheet() {
   }
 
   const existingLink = document.getElementById(GITHUB_MOBILE_STYLESHEET_ID) as HTMLLinkElement | null;
-  if (existingLink?.dataset.loaded === "true") {
+  if (existingLink?.dataset.loaded || existingLink?.sheet) {
     return Promise.resolve();
   }
 
@@ -102,7 +103,10 @@ function loadMobileGitHubStylesheet() {
       link.dataset.loaded = "true";
       resolve();
     };
-    const handleError = () => resolve();
+    const handleError = () => {
+      link.dataset.loaded = "error";
+      resolve();
+    };
 
     link.addEventListener("load", handleLoad, { once: true });
     link.addEventListener("error", handleError, { once: true });
@@ -125,12 +129,55 @@ const loadMobileGitHubPage = async () => {
   return pageModule;
 };
 
+function loadMobileMatrixStylesheet() {
+  if (typeof document === "undefined") {
+    return Promise.resolve();
+  }
+
+  const existingLink = document.getElementById(MATRIX_MOBILE_STYLESHEET_ID) as HTMLLinkElement | null;
+  if (existingLink?.dataset.loaded || existingLink?.sheet) {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve) => {
+    const link = existingLink ?? document.createElement("link");
+    const handleLoad = () => {
+      link.dataset.loaded = "true";
+      resolve();
+    };
+    const handleError = () => {
+      link.dataset.loaded = "error";
+      resolve();
+    };
+
+    link.addEventListener("load", handleLoad, { once: true });
+    link.addEventListener("error", handleError, { once: true });
+
+    if (!existingLink) {
+      link.id = MATRIX_MOBILE_STYLESHEET_ID;
+      link.rel = "stylesheet";
+      link.href = "/matrix-mobile.css";
+      document.head.appendChild(link);
+    }
+  });
+}
+
+const loadMobileMatrixPage = async () => {
+  const [pageModule] = await Promise.all([
+    import("./pages/MatrixPage.js"),
+    loadMobileMatrixStylesheet(),
+  ]);
+
+  return pageModule;
+};
+
 const ChatWorkspace = lazy(() => loadChatWorkspace().then((module) => ({ default: module.ChatWorkspace })));
 const GitHubWorkspace = lazy(() => loadGitHubWorkspace().then((module) => ({ default: module.GitHubWorkspace })));
 const MatrixWorkspace = lazy(() => loadMatrixWorkspace().then((module) => ({ default: module.MatrixWorkspace })));
 const ReviewWorkspace = lazy(() => loadReviewWorkspace().then((module) => ({ default: module.ReviewWorkspace })));
 const SettingsWorkspace = lazy(() => loadSettingsWorkspace().then((module) => ({ default: module.SettingsWorkspace })));
 const MobileGitHubPage = lazy(() => loadMobileGitHubPage().then((module) => ({ default: module.GitHubPage })));
+const MobileMatrixPage = lazy(() => loadMobileMatrixPage().then((module) => ({ default: module.MatrixPage })));
 
 const SETTINGS_VERIFICATION_INITIAL: Record<SettingsVerificationTarget, SettingsVerificationState> = {
   backend: {
@@ -2395,6 +2442,8 @@ function ConsoleShell() {
     <MobileChatPage locale={locale} />
   ) : isMobileViewport && mode === "github" ? (
     <MobileGitHubPage locale={locale} />
+  ) : isMobileViewport && mode === "matrix" ? (
+    <MobileMatrixPage locale={locale} />
   ) : mode === "chat" ? (
     <ChatWorkspace
       key={chatSession?.id ?? "chat-session"}
