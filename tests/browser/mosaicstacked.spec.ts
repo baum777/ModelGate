@@ -690,6 +690,29 @@ test("console shell avoids page-level horizontal overflow in compact desktop lay
   expect(overflow.bodyScrollWidth).toBeLessThanOrEqual(overflow.bodyClientWidth);
 });
 
+test("mobile viewport renders functional chat workspace instead of reference-only mobile mock", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installBaseMocks(page, { matrixStatus: "ok" });
+
+  await page.route("**/chat", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "text/event-stream; charset=utf-8",
+      body: CHAT_STREAM,
+    });
+  });
+
+  await page.goto("/console?mode=chat", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("app-shell")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("chat-workspace")).toBeVisible();
+  await expect(page.getByTestId("mobile-chat-page")).toHaveCount(0);
+
+  await page.getByTestId("chat-composer").fill("Mobile backend check");
+  await page.getByTestId("chat-send").click();
+  await page.getByRole("button", { name: /Approve/i }).click();
+  await expect(page.getByTestId("chat-workspace")).toContainText("Hello from mocked backend");
+});
+
 test("locale toggle switches key copy and persists across reload", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
   await loadConsole(page);

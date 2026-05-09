@@ -21,6 +21,8 @@
     "test:server": "npm run test --workspace server",
     "test:web": "node --test --import tsx web/test/chat-workflow.test.ts web/test/mobile-redesign.test.ts web/test/markdown-message.test.ts web/test/matrix-gates.test.ts web/test/matrix-api.test.ts web/test/diagnostics-api.test.ts web/test/workspace-state.test.ts web/test/shell-view-model.test.ts web/test/approval-primitives.test.ts web/test/github-workspace.test.ts web/test/github-page.test.ts web/test/matrix-page.test.ts web/test/matrix-workspace.test.ts web/test/review-workspace.test.ts web/test/settings-workspace.test.ts web/test/browser-upstream-boundary.test.ts web/test/localization.test.ts web/test/app-localization.test.ts web/test/pwa.test.ts",
     "test:browser": "node scripts/run-browser-tests.mjs",
+    "cypress:open": "cypress open --e2e",
+    "cypress:run": "cypress run --e2e",
     "smoke:matrix": "node scripts/matrix-smoke.mjs",
     "smoke:matrix-evidence": "node scripts/matrix-evidence-smoke.mjs",
     "smoke:github": "node scripts/github-smoke.mjs",
@@ -36,6 +38,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",
-    "@types/react": "^19.2.14"
+    "@types/react": "^19.2.14",
+    "cypress": "^15.14.2"
   }
 }

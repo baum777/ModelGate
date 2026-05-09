@@ -142,6 +142,20 @@ npm run dev:server
 npm run dev:web
 ```
 
+Ubuntu-friendly local E2E alternative to Playwright (interactive browser runner):
+
+```bash
+npm run cypress:open
+```
+
+Headless CI-style run:
+
+```bash
+npm run cypress:run
+```
+
+`cypress.config.ts` defaults to `http://127.0.0.1:5173`. Override with `CYPRESS_BASE_URL` when needed.
+
 The backend reads the repo-root `.env`. The browser reads `web/.env` only for browser-side origin overrides.
 
 ## Deployment

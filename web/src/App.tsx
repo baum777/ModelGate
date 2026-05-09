@@ -224,6 +224,8 @@ function appendTelemetry(current: TelemetryEntry[], entry: TelemetryEntry) {
 const WORKSPACE_MODES: WorkspaceMode[] = ["chat", "github", "matrix", "review", "settings"];
 const MOBILE_NAV_MODES: WorkspaceMode[] = ["chat", "github", "matrix"];
 const MOBILE_BREAKPOINT_QUERY = "(max-width: 760px)";
+// Reference-only mobile demo pages stay in-repo, but runtime defaults to functional workspaces.
+const MOBILE_REFERENCE_SURFACES_ENABLED = false;
 
 function WorkspaceIcon({ mode }: { mode: WorkspaceMode }) {
   switch (mode) {
