@@ -1,0 +1,39 @@
+id: MSPR-20260510-001
+date: 2026-05-10
+status: proposed
+trigger: governance_bootstrap_review
+scope:
+  paths:
+    - WORKFLOW.md
+    - 00-schema/AGENTS.md
+    - 00-schema/mspr-spec.md
+    - 02-wiki/index.md
+    - 02-wiki/log.md
+    - 03-mspr/packets/2026-05-10-governance-bootstrap.yml
+authority:
+  observed:
+    - AGENTS.md
+    - README.md
+    - system/index.md
+    - system/repo-map.md
+    - system/file-conventions.md
+    - system/working-rules.md
+  inferred:
+    - governance_surfaces_should_follow_user_supplied_agent_contract
+risk:
+  level: low
+  statement: new_governance_surfaces_need_human_review_before_broader_promotion
+decision_needed: accept_or_adjust_governance_bootstrap
+review:
+  owner: human
+  state: pending
+verification:
+  proof:
+    - rg --files -g 'WORKFLOW.md' -g '00-schema/**' -g '02-wiki/**' -g '03-mspr/**'
+links:
+  - WORKFLOW.md
+  - 00-schema/AGENTS.md
+  - 00-schema/mspr-spec.md
+  - 02-wiki/index.md
+  - 02-wiki/log.md
+next_gate: human_review
