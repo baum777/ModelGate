@@ -120,6 +120,17 @@ test("console shell styles hide native scrollbars and clip page-level horizontal
   assert.match(styles, /\.app-shell-console[\s\S]*max-width:\s*100vw/);
 });
 
+test("mobile console shell gives nested workspace scrolling a definite viewport height", () => {
+  const styles = readFileSync("web/src/styles.css", "utf8");
+  const criticalStyles = readFileSync("web/src/critical.css", "utf8");
+
+  for (const stylesheet of [styles, criticalStyles]) {
+    assert.match(stylesheet, /\.app-shell-mobile\s*{[\s\S]*height:\s*100dvh/);
+    assert.match(stylesheet, /\.app-shell-mobile\s*{[\s\S]*overflow:\s*hidden/);
+    assert.match(stylesheet, /\.app-shell-mobile\s+\.mobile-workspace-surface\s*{[\s\S]*overflow:\s*auto/);
+  }
+});
+
 test("chat reducer finalizes exactly one assistant draft on done with route metadata", async () => {
   const events: Array<{ event: string; data: string }> = [];
   for await (const event of readSseEvents(

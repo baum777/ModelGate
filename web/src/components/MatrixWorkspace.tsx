@@ -1118,6 +1118,70 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       data-testid="matrix-workspace"
       aria-busy={status !== "ready" || scopeResolveLoading || spaceHierarchyLoading || provenanceLoading || topicPrepareLoading || topicExecuteLoading || topicVerifyLoading}
     >
+      <section className="matrix-mobile-panel mobile-panel-scroll" aria-label={locale === "de" ? "Matrix mobile Arbeitsfläche" : "Matrix mobile workspace"}>
+        <header className="matrix-mobile-summary">
+          <span className="mobile-mono">MATRIX KNOWLEDGE</span>
+          <strong>{connectionLabel}</strong>
+          <p>{identityLabel} · {homeserverLabel}</p>
+        </header>
+
+        <div className="matrix-mobile-status-grid">
+          <div>
+            <span>{ui.matrix.scopeTitle}</span>
+            <strong>{currentScope ? ui.matrix.scopeSelected : ui.matrix.scopeUnresolved}</strong>
+          </div>
+          <div>
+            <span>{ui.matrix.scopeSummaryTitle}</span>
+            <strong>{scopeSummary ? ui.matrix.scopeSummaryReady : ui.matrix.scopeSummaryUnavailable}</strong>
+          </div>
+          <div>
+            <span>{ui.matrix.topicTitle}</span>
+            <strong>{topicPlan ? localText.runtimeTopicPlanReady : localText.runtimeNoTopicPlan}</strong>
+          </div>
+          <div>
+            <span>{ui.matrix.submit}</span>
+            <strong>{ui.matrix.submitFailClosed}</strong>
+          </div>
+        </div>
+
+        <section className="matrix-mobile-list">
+          <span className="mobile-mono">{ui.matrix.joinedRoomsTitle}</span>
+          {visibleJoinedRooms.slice(0, 5).length > 0 ? visibleJoinedRooms.slice(0, 5).map((room) => (
+            <button
+              type="button"
+              key={room.roomId}
+              className="matrix-mobile-row"
+              onClick={() => {
+                setSelectedRoomIds((current) => current.includes(room.roomId) ? current : [...current, room.roomId]);
+                setRoomId((current) => (current ?? "").trim().length > 0 ? current : room.roomId);
+              }}
+            >
+              <strong>{room.name ?? room.canonicalAlias ?? ui.matrix.roomPickerRoom}</strong>
+              <span>{props.expertMode ? room.roomId : ui.github.readOnlyActive}</span>
+            </button>
+          )) : (
+            <p>{status === "loading" ? ui.matrix.scopeSummaryLoading : ui.matrix.roomPickerEmpty}</p>
+          )}
+        </section>
+
+        <section className="matrix-mobile-list">
+          <span className="mobile-mono">{ui.matrix.scopeSummaryTitle}</span>
+          {visibleScopeSummaryItems.slice(0, 5).length > 0 ? visibleScopeSummaryItems.slice(0, 5).map((item) => (
+            <button
+              type="button"
+              key={item.roomId}
+              className="matrix-mobile-row"
+              onClick={() => void loadProvenance(item.roomId)}
+            >
+              <strong>{props.expertMode ? text(item.canonicalAlias) : ui.matrix.scopeSummaryReady}</strong>
+              <span>{props.expertMode ? `${item.members} · ${item.lastEventSummary}` : ui.github.readOnlyActive}</span>
+            </button>
+          )) : (
+            <p>{scopeSummaryStatus === "loading" ? ui.matrix.scopeSummaryLoading : ui.matrix.scopeSummaryUnavailable}</p>
+          )}
+        </section>
+      </section>
+
       {" "}
       <section className="hero matrix-hero">
         {" "}

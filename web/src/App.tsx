@@ -77,107 +77,21 @@ import {
 } from "./lib/work-mode.js";
 import type { PinnedChatContext } from "./lib/pinned-chat-context.js";
 import { BottomNav } from "./components/navigation/BottomNav.js";
-import { ChatPage as MobileChatPage } from "./pages/ChatPage.js";
+import { ContextBrowserPanel } from "./components/mobile/context/ContextBrowserPanel.js";
+import { ContextStrip, type MobileContextStatus } from "./components/mobile/layout/ContextStrip.js";
+import { TopContextBar } from "./components/mobile/layout/TopContextBar.js";
 
 const loadChatWorkspace = () => import("./components/ChatWorkspace.js");
 const loadGitHubWorkspace = () => import("./components/GitHubWorkspace.js");
 const loadMatrixWorkspace = () => import("./components/MatrixWorkspace.js");
 const loadReviewWorkspace = () => import("./components/ReviewWorkspace.js");
 const loadSettingsWorkspace = () => import("./components/SettingsWorkspace.js");
-const GITHUB_MOBILE_STYLESHEET_ID = "mosaicstacked-mobile-github-css";
-const MATRIX_MOBILE_STYLESHEET_ID = "mosaicstacked-mobile-matrix-css";
-
-function loadMobileGitHubStylesheet() {
-  if (typeof document === "undefined") {
-    return Promise.resolve();
-  }
-
-  const existingLink = document.getElementById(GITHUB_MOBILE_STYLESHEET_ID) as HTMLLinkElement | null;
-  if (existingLink?.dataset.loaded || existingLink?.sheet) {
-    return Promise.resolve();
-  }
-
-  return new Promise<void>((resolve) => {
-    const link = existingLink ?? document.createElement("link");
-    const handleLoad = () => {
-      link.dataset.loaded = "true";
-      resolve();
-    };
-    const handleError = () => {
-      link.dataset.loaded = "error";
-      resolve();
-    };
-
-    link.addEventListener("load", handleLoad, { once: true });
-    link.addEventListener("error", handleError, { once: true });
-
-    if (!existingLink) {
-      link.id = GITHUB_MOBILE_STYLESHEET_ID;
-      link.rel = "stylesheet";
-      link.href = "/github-mobile.css";
-      document.head.appendChild(link);
-    }
-  });
-}
-
-const loadMobileGitHubPage = async () => {
-  const [pageModule] = await Promise.all([
-    import("./pages/GitHubPage.js"),
-    loadMobileGitHubStylesheet(),
-  ]);
-
-  return pageModule;
-};
-
-function loadMobileMatrixStylesheet() {
-  if (typeof document === "undefined") {
-    return Promise.resolve();
-  }
-
-  const existingLink = document.getElementById(MATRIX_MOBILE_STYLESHEET_ID) as HTMLLinkElement | null;
-  if (existingLink?.dataset.loaded || existingLink?.sheet) {
-    return Promise.resolve();
-  }
-
-  return new Promise<void>((resolve) => {
-    const link = existingLink ?? document.createElement("link");
-    const handleLoad = () => {
-      link.dataset.loaded = "true";
-      resolve();
-    };
-    const handleError = () => {
-      link.dataset.loaded = "error";
-      resolve();
-    };
-
-    link.addEventListener("load", handleLoad, { once: true });
-    link.addEventListener("error", handleError, { once: true });
-
-    if (!existingLink) {
-      link.id = MATRIX_MOBILE_STYLESHEET_ID;
-      link.rel = "stylesheet";
-      link.href = "/matrix-mobile.css";
-      document.head.appendChild(link);
-    }
-  });
-}
-
-const loadMobileMatrixPage = async () => {
-  const [pageModule] = await Promise.all([
-    import("./pages/MatrixPage.js"),
-    loadMobileMatrixStylesheet(),
-  ]);
-
-  return pageModule;
-};
 
 const ChatWorkspace = lazy(() => loadChatWorkspace().then((module) => ({ default: module.ChatWorkspace })));
 const GitHubWorkspace = lazy(() => loadGitHubWorkspace().then((module) => ({ default: module.GitHubWorkspace })));
 const MatrixWorkspace = lazy(() => loadMatrixWorkspace().then((module) => ({ default: module.MatrixWorkspace })));
 const ReviewWorkspace = lazy(() => loadReviewWorkspace().then((module) => ({ default: module.ReviewWorkspace })));
 const SettingsWorkspace = lazy(() => loadSettingsWorkspace().then((module) => ({ default: module.SettingsWorkspace })));
-const MobileGitHubPage = lazy(() => loadMobileGitHubPage().then((module) => ({ default: module.GitHubPage })));
-const MobileMatrixPage = lazy(() => loadMobileMatrixPage().then((module) => ({ default: module.MatrixPage })));
 
 const SETTINGS_VERIFICATION_INITIAL: Record<SettingsVerificationTarget, SettingsVerificationState> = {
   backend: {
@@ -211,7 +125,7 @@ function scheduleWorkspacePreload(callback: () => void, timeoutMs = 15_000) {
   return () => globalThis.clearTimeout(handle);
 }
 
-type WorkspaceMode = "chat" | "github" | "matrix" | "review" | "settings";
+type WorkspaceMode = "chat" | "github" | "matrix" | "review" | "settings" | "context";
 
 type TelemetryEntry = {
   id: string;
@@ -238,7 +152,8 @@ function isWorkspaceMode(value: string | null): value is WorkspaceMode {
     || value === "github"
     || value === "matrix"
     || value === "review"
-    || value === "settings";
+    || value === "settings"
+    || value === "context";
 }
 
 export function shouldConfirmGitHubReviewNavigation(options: {
@@ -1896,6 +1811,25 @@ function ConsoleShell() {
     matrixSession?.metadata.selectedRoomIds,
     matrixSession?.metadata.topicRoomId,
   ]);
+  const hasRepoContext = Boolean(githubSession?.metadata.selectedRepoFullName);
+  const repoChipLabel = hasRepoContext
+    ? `⊟ ${githubSession?.metadata.selectedRepoFullName}`
+    : (locale === "de" ? "⊡ Kein Kontext" : "⊡ No context");
+  const branchChipLabel = hasRepoContext
+    ? (
+        githubContext.expertDetails.branchName
+        ?? githubSession?.metadata.proposalPlan?.baseRef
+        ?? githubSession?.metadata.analysisBundle?.ref
+        ?? ui.common.na
+      )
+    : (locale === "de" ? "Tippe ⊡ für Repo" : "Tap ⊡ to load repo");
+  const fileChipLabel = hasRepoContext
+    ? (
+        githubSession?.metadata.analysisBundle?.files[0]?.path
+        ?? githubSession?.metadata.proposalPlan?.diff[0]?.path
+        ?? (locale === "de" ? "Keine Datei" : "No file")
+      )
+    : (locale === "de" ? "Datei wählen" : "Choose a file");
 
   const chatPendingProposal = chatSession?.metadata.chatState.pendingProposal ?? null;
   const chatLatestReceipt = chatSession?.metadata.chatState.receipts.at(-1) ?? null;
@@ -2138,6 +2072,8 @@ function ConsoleShell() {
 
   const currentRows = useMemo(() => {
     switch (mode) {
+      case "context":
+        return githubRows;
       case "github":
         return githubRows;
       case "matrix":
@@ -2153,6 +2089,12 @@ function ConsoleShell() {
 
   const currentStatusBadge = useMemo(() => {
     switch (mode) {
+      case "context":
+        if (!hasRepoContext) {
+          return ui.github.repoSelectLabel;
+        }
+
+        return githubContext.connectionLabel;
       case "github":
         if (githubContext.connectionLabel !== ui.shell.statusReady) {
           return githubContext.connectionLabel;
@@ -2241,6 +2183,7 @@ function ConsoleShell() {
     chatLatestReceipt?.outcome,
     chatPendingProposal?.status,
     expertMode,
+    hasRepoContext,
     githubContext.approvalLabel,
     githubContext.connectionLabel,
     githubContext.repositoryLabel,
@@ -2270,6 +2213,12 @@ function ConsoleShell() {
 
   const currentStatusTone = useMemo(() => {
     switch (mode) {
+      case "context":
+        if (githubContext.connectionLabel === ui.shell.statusError) {
+          return "error";
+        }
+
+        return hasRepoContext ? "ready" : "partial";
       case "github":
         if (githubContext.connectionLabel !== ui.shell.statusReady) {
           return githubContext.connectionLabel === ui.shell.statusError ? "error" : "partial";
@@ -2333,6 +2282,7 @@ function ConsoleShell() {
     backendHealthy,
     chatLatestReceipt?.outcome,
     chatPendingProposal?.status,
+    hasRepoContext,
     githubContext.approvalLabel,
     githubContext.connectionLabel,
     githubContext.repositoryLabel,
@@ -2348,6 +2298,10 @@ function ConsoleShell() {
 
   const currentHelperText = useMemo(() => {
     switch (mode) {
+      case "context":
+        return hasRepoContext
+          ? (locale === "de" ? "Aktiven Repo-, Branch- und Datei-Kontext prüfen oder ändern." : "Review or change the active repository, branch, and file context.")
+          : ui.github.workspaceNoticeSelection;
       case "github":
         if (githubContext.approvalLabel !== ui.common.none) {
           return ui.github.approveHelper;
@@ -2428,6 +2382,8 @@ function ConsoleShell() {
     chatLatestReceipt?.outcome,
     chatPendingProposal?.status,
     expertMode,
+    hasRepoContext,
+    locale,
     githubContext.approvalLabel,
     githubContext.repositoryLabel,
     matrixContext.connectionLabel,
@@ -2438,13 +2394,7 @@ function ConsoleShell() {
     reviewItems,
   ]);
 
-  const workspaceSurface = isMobileViewport && mode === "chat" ? (
-    <MobileChatPage locale={locale} />
-  ) : isMobileViewport && mode === "github" ? (
-    <MobileGitHubPage locale={locale} />
-  ) : isMobileViewport && mode === "matrix" ? (
-    <MobileMatrixPage locale={locale} />
-  ) : mode === "chat" ? (
+  const workspaceSurface = mode === "chat" ? (
     <ChatWorkspace
       key={chatSession?.id ?? "chat-session"}
       session={chatSession}
@@ -2493,6 +2443,18 @@ function ConsoleShell() {
       onReviewItemsChange={updateMatrixReviewItems}
       onSessionChange={handleMatrixSessionChange}
     />
+  ) : mode === "context" ? (
+    <ContextBrowserPanel
+      locale={locale}
+      repositoryLabel={repoChipLabel.replace(/^⊟\s?|^⊡\s?/, "")}
+      branchLabel={branchChipLabel}
+      fileLabel={fileChipLabel}
+      hasRepoContext={hasRepoContext}
+      statusRows={githubRows}
+      onOpenGitHub={() => handleWorkspaceTabSelect("github")}
+      onOpenSettings={() => handleWorkspaceTabSelect("settings")}
+      onReturnToChat={() => handleWorkspaceTabSelect("chat")}
+    />
   ) : mode === "review" ? (
     <ReviewWorkspace items={reviewItems} expertMode={expertMode} />
   ) : (
@@ -2521,21 +2483,38 @@ function ConsoleShell() {
   );
   const statusToneForBadge = currentStatusTone === "error" ? "error" : currentStatusTone === "ready" ? "ready" : "partial";
   const activeMobileNav = mode === "chat" || mode === "github" || mode === "matrix" ? mode : "context";
-  const hasRepoContext = Boolean(githubSession?.metadata.selectedRepoFullName);
-  const repoChipLabel = hasRepoContext
-    ? `⊟ ${githubSession?.metadata.selectedRepoFullName}`
-    : (locale === "de" ? "⊡ Kein Kontext" : "⊡ No context");
-  const branchChipLabel = hasRepoContext
-    ? (githubContext.expertDetails.branchName ?? ui.common.na)
-    : (locale === "de" ? "Tippe ⊡ für Repo" : "Tap ⊡ to load repo");
-  const commitChipLabel = hasRepoContext
-    ? (githubSession?.metadata.proposalPlan?.baseSha?.slice(0, 6)
-      ?? githubSession?.metadata.analysisBundle?.baseSha?.slice(0, 6)
-      ?? ui.common.na)
-    : (locale === "de" ? "Datei wählen" : "Choose a file");
-  const streamCounterLabel = runtimeDiagnostics
-    ? String(runtimeDiagnostics.counters.chatStreamStarted)
-    : ui.common.loading;
+  const mobileContextStatus: { label: MobileContextStatus; tone: MobileContextStatus } = (() => {
+    if (mode === "chat") {
+      if (chatSession?.metadata.chatState.connectionState === "streaming" || chatSession?.metadata.chatState.connectionState === "submitting") {
+        return { label: "streaming", tone: "streaming" };
+      }
+
+      if (chatPendingProposal?.status === "pending" || chatPendingProposal?.status === "executing") {
+        return { label: "pending", tone: "pending" };
+      }
+
+      if (
+        chatSession?.metadata.chatState.connectionState === "error"
+        || chatSession?.metadata.chatState.lastError
+        || chatLatestReceipt?.outcome === "failed"
+        || chatLatestReceipt?.outcome === "unverifiable"
+      ) {
+        return { label: "error", tone: "error" };
+      }
+
+      return { label: "idle", tone: "idle" };
+    }
+
+    if (currentStatusTone === "error") {
+      return { label: "error", tone: "error" };
+    }
+
+    if (currentStatusTone === "partial") {
+      return { label: "pending", tone: "pending" };
+    }
+
+    return { label: "idle", tone: "idle" };
+  })();
   const showRouteOwnershipContext = mode === "github" || mode === "matrix";
   const mobileContextNavBadge = hasRepoContext ? (locale === "de" ? "Datei" : "Ask") : undefined;
   const mobileWorkspaceSurface = workspaceSurface;
@@ -2543,48 +2522,29 @@ function ConsoleShell() {
   if (isMobileViewport) {
     return (
       <main className="app-shell app-shell-console app-shell-mobile" data-testid="app-shell">
-        <header className="mobile-topbar">
-          <button
-            type="button"
-            className="mobile-brand-button"
-            onPointerDown={handleMobileBrandPointerDown}
-            onPointerUp={clearMobileBrandLongPress}
-            onPointerCancel={clearMobileBrandLongPress}
-            onPointerLeave={clearMobileBrandLongPress}
-            onClick={handleMobileBrandClick}
-            aria-label={locale === "de" ? "Zur Chat-Ansicht wechseln. Lange drücken für Einstellungen." : "Switch to chat. Long press for settings."}
-          >
-            <span className="mosaicstacked-mark" aria-hidden="true">
-              <MosaicStackedIcon />
-            </span>
-            <span>{ui.shell.appTitle}</span>
-          </button>
+        <TopContextBar
+          brandIcon={<MosaicStackedIcon />}
+          title="MosaicStacked"
+          modelAlias={activeModelAlias ?? ui.common.na}
+          healthTone={healthState.tone}
+          brandAriaLabel={locale === "de" ? "Zur Chat-Ansicht wechseln. Lange drücken für Einstellungen." : "Switch to chat. Long press for settings."}
+          modelAriaLabel={locale === "de" ? "Modelleinstellungen öffnen" : "Open model settings"}
+          onBrandClick={handleMobileBrandClick}
+          onBrandPointerDown={handleMobileBrandPointerDown}
+          onBrandPointerUp={clearMobileBrandLongPress}
+          onBrandPointerCancel={clearMobileBrandLongPress}
+          onBrandPointerLeave={clearMobileBrandLongPress}
+          onModelPress={() => handleWorkspaceTabSelect("settings")}
+        />
 
-          <div className="mobile-topbar-actions">
-            <button
-              type="button"
-              className="secondary-button mobile-model-badge"
-              onClick={() => handleWorkspaceTabSelect("settings")}
-              aria-label={locale === "de" ? "Modelleinstellungen öffnen" : "Open model settings"}
-            >
-              {activeModelAlias ?? ui.common.na}
-            </button>
-            <span className={`mobile-live-indicator mobile-live-indicator-${healthState.tone}`} aria-hidden="true" />
-          </div>
-        </header>
-
-        <section className="mobile-context-strip" aria-label={locale === "de" ? "Aktiver Kontext" : "Active context"}>
-          <button
-            type="button"
-            className="mobile-context-chip mobile-context-chip-action"
-            onClick={handleMobileContextToggle}
-          >
-            {repoChipLabel}
-          </button>
-          <span className="mobile-context-chip">{branchChipLabel}</span>
-          <span className="mobile-context-chip">{commitChipLabel}</span>
-          <span className="mobile-context-live">{`↯ ${streamCounterLabel}`}</span>
-        </section>
+        <ContextStrip
+          repoLabel={repoChipLabel.replace(/^⊟\s?|^⊡\s?/, "")}
+          branchLabel={branchChipLabel}
+          fileLabel={fileChipLabel}
+          status={mobileContextStatus.label}
+          ariaLabel={locale === "de" ? "Command-Kontext öffnen" : "Open command context"}
+          onPress={handleMobileContextToggle}
+        />
 
         <section className="mobile-workspace-surface">
           <ShellCard variant="base" className="workspace-frame-card mobile-workspace-frame">
@@ -2600,20 +2560,14 @@ function ConsoleShell() {
           <>
             <button
               type="button"
-              className="mobile-context-backdrop"
+              className="mobile-context-backdrop mobile-bottom-sheet-backdrop"
               aria-label={locale === "de" ? "Kontext schließen" : "Close context"}
               onClick={() => setMobileContextOpen(false)}
             />
-            <section className="mobile-context-sheet" aria-label={ui.shell.workspaceContextSuffix}>
+            <section className="mobile-context-sheet mobile-bottom-sheet" aria-label={ui.shell.workspaceContextSuffix}>
+              <span className="mobile-context-sheet-handle mobile-bottom-sheet-handle" aria-hidden="true" />
               <header className="mobile-context-sheet-header">
                 <SectionLabel>{ui.shell.workspaceContextSuffix}</SectionLabel>
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => setMobileContextOpen(false)}
-                >
-                  {locale === "de" ? "Schließen" : "Close"}
-                </button>
               </header>
 
               <div className="mobile-context-sheet-body">
@@ -2684,9 +2638,9 @@ function ConsoleShell() {
               key: "context",
               label: locale === "de" ? "Kontext" : "Context",
               icon: <MobileContextIcon />,
-              active: activeMobileNav === "context" || mobileContextOpen,
-              onPress: handleMobileContextToggle,
-              testId: "tab-context",
+              active: activeMobileNav === "context",
+              onPress: () => handleMobileNavSelect("context"),
+              testId: "tab-context-browser",
               badge: mobileContextNavBadge,
             },
           ]}

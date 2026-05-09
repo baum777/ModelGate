@@ -6,7 +6,7 @@ export type SessionStatus = "draft" | "in_progress" | "review_required" | "done"
 export type ReviewStatus = "pending_review" | "approved" | "failed" | "rejected" | "stale" | "executed";
 export type ApprovalOutcome = "executed" | "failed" | "rejected" | "unverifiable";
 export type ConnectionState = "idle" | "submitting" | "streaming" | "completed" | "error";
-export type WorkspaceMode = "chat" | "github" | "matrix" | "review" | "settings";
+export type WorkspaceMode = "chat" | "github" | "matrix" | "review" | "settings" | "context";
 
 type WorkspaceTabCopy = {
   label: string;
@@ -473,6 +473,7 @@ const EN_COPY: LocalizationCopy = {
       matrix: { label: "Matrix", description: "Scope, provenance, and topic updates" },
       review: { label: "Review", description: "Review approvals and receipts" },
       settings: { label: "Settings", description: "View settings and diagnostics" },
+      context: { label: "Context", description: "Choose repository, branch, and file context" },
     },
   },
   sessionList: {
@@ -860,6 +861,7 @@ const DE_COPY: LocalizationCopy = {
       matrix: { label: "Matrix", description: "Scope, Provenienz und Topic-Updates" },
       review: { label: "Prüfung", description: "Freigaben und Belege prüfen" },
       settings: { label: "Einstellungen", description: "Ansicht und Diagnostik prüfen" },
+      context: { label: "Kontext", description: "Repository, Branch und Datei auswählen" },
     },
   },
   sessionList: {

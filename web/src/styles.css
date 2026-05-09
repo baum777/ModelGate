@@ -6450,6 +6450,7 @@ button:disabled,
 
 /* Mobile shell v2 (phase 1): topbar + context strip + workspace + bottom nav. */
 .app-shell-mobile {
+  height: 100dvh;
   min-height: 100dvh;
   background: var(--bg-primary);
   display: grid;
@@ -7228,4 +7229,1433 @@ button:disabled,
 @keyframes mobile-chat-pulse {
   0%, 80%, 100% { transform: scale(0.7); opacity: 0.35; }
   40% { transform: scale(1); opacity: 1; }
+}
+
+/* Real workspace in the mobile shell: keep compact mobile proportions without demo data. */
+.app-shell-mobile .mobile-workspace-frame {
+  padding: 0;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg-primary) 86%, transparent);
+}
+
+.app-shell-mobile .mobile-workspace-frame,
+.app-shell-mobile .workspace-frame-body,
+.app-shell-mobile .governed-chat-workspace,
+.app-shell-mobile .governed-chat-card {
+  min-height: 0;
+  height: 100%;
+}
+
+.app-shell-mobile .workspace-frame-body {
+  display: grid;
+}
+
+.app-shell-mobile .governed-chat-workspace {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.app-shell-mobile .chat-toolbar {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border-soft);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--bg-primary) 92%, transparent);
+}
+
+.app-shell-mobile .chat-toolbar-copy {
+  min-width: 0;
+  gap: 4px;
+}
+
+.app-shell-mobile .chat-toolbar-copy .shell-section-label {
+  font-size: 10px;
+}
+
+.app-shell-mobile .chat-toolbar-copy strong {
+  display: block;
+  margin-right: 0;
+  font-size: 11px;
+  line-height: 1.1;
+}
+
+.app-shell-mobile .chat-stream-status {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.app-shell-mobile .chat-toolbar-actions {
+  align-self: start;
+}
+
+.app-shell-mobile .chat-toolbar-actions .guide-cta {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+}
+
+.app-shell-mobile .chat-toolbar-controls {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  align-items: stretch;
+}
+
+.app-shell-mobile .chat-toolbar-control-group {
+  gap: 5px;
+}
+
+.app-shell-mobile .chat-toolbar-control-group label {
+  font-size: 10px;
+}
+
+.app-shell-mobile .chat-toolbar-control-group .mode-toggle {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 42px;
+  gap: 4px;
+}
+
+.app-shell-mobile .chat-toolbar-controls .mode-toggle-button {
+  min-height: 42px;
+  padding: 7px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.22;
+  text-align: left;
+}
+
+.app-shell-mobile .chat-toolbar-model-group {
+  display: none;
+}
+
+.app-shell-mobile .governed-chat-card {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--bg-primary) 84%, transparent);
+  overflow: hidden;
+}
+
+.app-shell-mobile .work-mode-guidance-card {
+  margin: 10px 12px;
+  padding: 12px;
+  border-radius: 14px;
+}
+
+.app-shell-mobile .work-mode-guidance-card p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.app-shell-mobile .governed-thread {
+  min-height: 0;
+  max-height: none;
+  padding: 10px 12px;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
+}
+
+.app-shell-mobile .governed-thread::-webkit-scrollbar {
+  display: none;
+}
+
+.app-shell-mobile .empty-state-cta {
+  min-height: 0;
+  padding: 22px 12px;
+  border: 0;
+  background: transparent;
+}
+
+.app-shell-mobile .empty-state-cta-icon {
+  width: 36px;
+  height: 36px;
+  font-size: 14px;
+}
+
+.app-shell-mobile .empty-state-cta h2 {
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.app-shell-mobile .empty-state-cta p {
+  font-size: 13px;
+}
+
+.app-shell-mobile .empty-state-cta-actions {
+  grid-template-columns: minmax(0, 1fr);
+  width: min(260px, 100%);
+  margin-inline: auto;
+}
+
+.app-shell-mobile .thread-block,
+.app-shell-mobile .thread-notice,
+.app-shell-mobile .chat-pinned-context {
+  border-radius: 14px;
+  padding: 10px;
+}
+
+.app-shell-mobile .thread-block-operator {
+  margin-left: auto;
+  max-width: min(92%, 560px);
+}
+
+.app-shell-mobile .thread-block-agent,
+.app-shell-mobile .thread-notice {
+  margin-right: auto;
+  max-width: min(92%, 560px);
+}
+
+.app-shell-mobile .markdown-message {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.app-shell-mobile .chat-routing-status-strip {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0 12px 8px;
+  padding: 8px;
+  border-radius: 14px;
+}
+
+.app-shell-mobile .chat-routing-status-item {
+  padding: 7px 8px;
+}
+
+.app-shell-mobile .chat-routing-status-item span {
+  font-size: 9px;
+}
+
+.app-shell-mobile .chat-routing-status-item strong {
+  font-size: 11px;
+}
+
+.app-shell-mobile .governed-composer {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  justify-self: stretch;
+  align-self: stretch;
+  margin: 0;
+  padding: 8px 12px 10px;
+  border: 0;
+  border-top: 1px solid var(--border-soft);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--bg-primary) 92%, transparent);
+}
+
+.app-shell-mobile .governed-composer textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 78px;
+  max-height: 118px;
+  padding: 10px 11px;
+  border-radius: 12px;
+  font-size: 13px;
+  resize: none;
+}
+
+.app-shell-mobile .composer-footer {
+  margin-top: 8px;
+  justify-content: stretch;
+}
+
+.app-shell-mobile .composer-footer button[type="submit"] {
+  width: 100%;
+  min-height: 38px;
+  border-radius: 10px;
+}
+
+/* Mobile chat redesign: focused work surface with command context. */
+.app-shell-mobile {
+  --mobile-redesign-bg: #090b10;
+  --mobile-redesign-panel: #11121a;
+  --mobile-redesign-panel-strong: #171821;
+  --mobile-redesign-line: rgba(158, 168, 190, 0.16);
+  --mobile-redesign-text: #f2f4f8;
+  --mobile-redesign-muted: #82899a;
+  --mobile-redesign-primary: #62c9ff;
+  --mobile-redesign-green: #36d487;
+  --mobile-redesign-amber: #d99b22;
+  --mobile-redesign-red: #f05252;
+  background: var(--mobile-redesign-bg);
+}
+
+.app-shell-mobile .mobile-topbar {
+  min-height: 42px;
+  padding: calc(env(safe-area-inset-top) + 9px) 14px 7px;
+  border-bottom-color: var(--mobile-redesign-line);
+  background: rgba(9, 11, 16, 0.97);
+  backdrop-filter: none;
+}
+
+.app-shell-mobile .mobile-brand-button {
+  min-height: 30px;
+  padding: 0;
+  color: var(--mobile-redesign-text);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.app-shell-mobile .mobile-brand-button .mosaicstacked-mark {
+  display: none;
+}
+
+.app-shell-mobile .mobile-model-badge {
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--mobile-redesign-muted);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  box-shadow: none;
+}
+
+.app-shell-mobile .mobile-live-indicator {
+  width: 7px;
+  height: 7px;
+  box-shadow: none;
+}
+
+.app-shell-mobile .mobile-context-strip {
+  position: sticky;
+  top: calc(env(safe-area-inset-top) + 42px);
+  z-index: 70;
+  width: 100%;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  border: 0;
+  border-bottom: 1px solid var(--mobile-redesign-line);
+  border-radius: 0;
+  background: rgba(9, 11, 16, 0.98);
+  color: var(--mobile-redesign-muted);
+  box-shadow: none;
+  text-align: left;
+}
+
+.app-shell-mobile .mobile-context-path {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--mobile-redesign-muted);
+}
+
+.app-shell-mobile .mobile-context-path span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell-mobile .mobile-context-path span:not(:first-child)::before {
+  content: "/";
+  margin-right: 7px;
+  color: rgba(130, 137, 154, 0.55);
+}
+
+.app-shell-mobile .mobile-context-live {
+  margin: 0;
+  height: 18px;
+  padding: 2px 7px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(130, 137, 154, 0.18);
+  background: rgba(130, 137, 154, 0.09);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 9px;
+  line-height: 1;
+}
+
+.app-shell-mobile .mobile-context-live-idle {
+  color: var(--mobile-redesign-green);
+  border-color: rgba(54, 212, 135, 0.2);
+  background: rgba(54, 212, 135, 0.08);
+}
+
+.app-shell-mobile .mobile-context-live-streaming {
+  color: var(--mobile-redesign-primary);
+  border-color: rgba(98, 201, 255, 0.24);
+  background: rgba(98, 201, 255, 0.08);
+}
+
+.app-shell-mobile .mobile-context-live-pending {
+  color: var(--mobile-redesign-amber);
+  border-color: rgba(217, 155, 34, 0.3);
+  background: rgba(217, 155, 34, 0.1);
+}
+
+.app-shell-mobile .mobile-context-live-error {
+  color: var(--mobile-redesign-red);
+  border-color: rgba(240, 82, 82, 0.3);
+  background: rgba(240, 82, 82, 0.1);
+}
+
+.app-shell-mobile .mobile-context-chevron {
+  color: rgba(130, 137, 154, 0.65);
+  font-size: 12px;
+}
+
+.app-shell-mobile .mobile-workspace-surface {
+  padding: 0 22px calc(62px + env(safe-area-inset-bottom));
+  overflow: hidden;
+  background: var(--mobile-redesign-bg);
+}
+
+.app-shell-mobile .mobile-workspace-frame {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.app-shell-mobile .governed-chat-workspace {
+  background: var(--mobile-redesign-bg);
+}
+
+.app-shell-mobile .chat-toolbar {
+  display: none;
+}
+
+.app-shell-mobile .governed-chat-card {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--mobile-redesign-bg);
+}
+
+.app-shell-mobile .work-mode-guidance-card,
+.app-shell-mobile .chat-routing-status-strip,
+.app-shell-mobile .chat-pinned-context {
+  display: none;
+}
+
+.app-shell-mobile .governed-thread {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 18px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.app-shell-mobile .governed-thread::-webkit-scrollbar {
+  display: none;
+}
+
+.app-shell-mobile .thread-block,
+.app-shell-mobile .thread-notice,
+.app-shell-mobile .empty-state-cta {
+  border: 1px solid var(--mobile-redesign-line);
+  border-radius: 8px;
+  background: var(--mobile-redesign-panel);
+  box-shadow: none;
+}
+
+.app-shell-mobile .thread-block {
+  padding: 11px;
+}
+
+.app-shell-mobile .thread-block-header {
+  min-height: 0;
+  margin-bottom: 7px;
+}
+
+.app-shell-mobile .thread-block-header .shell-section-label {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--mobile-redesign-muted);
+}
+
+.app-shell-mobile .thread-block-operator {
+  max-width: 78%;
+  align-self: flex-end;
+  border-color: rgba(158, 168, 190, 0.12);
+  background: #1a1b25;
+}
+
+.app-shell-mobile .thread-block-agent,
+.app-shell-mobile .thread-notice {
+  max-width: 100%;
+  align-self: stretch;
+}
+
+.app-shell-mobile .thread-block-agent-draft {
+  border-color: rgba(98, 201, 255, 0.24);
+}
+
+.app-shell-mobile .thread-notice-error {
+  border-left: 3px solid var(--red);
+  border-color: rgba(240, 82, 82, 0.42);
+  background: rgba(82, 18, 22, 0.44);
+}
+
+.app-shell-mobile .proposal-card,
+.app-shell-mobile [data-testid="chat-proposal-card"] {
+  border: 1px solid rgba(217, 155, 34, 0.55);
+  border-radius: 8px;
+  background: rgba(49, 39, 9, 0.62);
+  box-shadow: none;
+}
+
+.app-shell-mobile .markdown-message {
+  color: var(--mobile-redesign-text);
+  font-size: 12px;
+  line-height: 1.42;
+}
+
+.app-shell-mobile .markdown-message pre,
+.app-shell-mobile .markdown-message code {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+}
+
+.app-shell-mobile .markdown-message pre {
+  border-radius: 6px;
+  border-color: rgba(98, 201, 255, 0.16);
+  background: #10131d;
+}
+
+.app-shell-mobile .thread-message-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+  margin-top: 11px;
+  padding-top: 9px;
+  border-top: 1px solid rgba(158, 168, 190, 0.1);
+}
+
+.app-shell-mobile .thread-message-action-button {
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--mobile-redesign-muted);
+  box-shadow: none;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.app-shell-mobile .thread-message-action-primary {
+  justify-content: flex-start;
+  color: var(--mobile-redesign-primary);
+}
+
+.app-shell-mobile .thread-message-action-more {
+  color: rgba(130, 137, 154, 0.65);
+}
+
+.app-shell-mobile .thread-message-secondary-actions {
+  grid-column: 1 / -1;
+  display: none;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.app-shell-mobile .thread-message-actions-expanded .thread-message-secondary-actions {
+  display: grid;
+}
+
+.app-shell-mobile .thread-message-backend-badge {
+  margin-left: 6px;
+  color: var(--mobile-redesign-muted);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 9px;
+}
+
+.app-shell-mobile .streaming-work-block {
+  display: inline;
+}
+
+.app-shell-mobile .streaming-cursor {
+  color: var(--mobile-redesign-primary);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  animation: mobile-stream-cursor 1s steps(1, end) infinite;
+}
+
+@keyframes mobile-stream-cursor {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.app-shell-mobile .governed-composer {
+  margin: 0;
+  padding: 8px 14px calc(8px + env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 7px;
+  align-items: end;
+  border: 0;
+  border-radius: 0;
+  background: var(--mobile-redesign-bg);
+}
+
+.app-shell-mobile .governed-composer textarea {
+  height: auto;
+  min-height: 36px;
+  max-height: 96px;
+  padding: 8px 10px;
+  border-radius: 5px;
+  border-color: rgba(255, 255, 255, 0.86);
+  background: #f7f8fb;
+  color: #11131a;
+  font-size: 14px;
+  line-height: 1.25;
+  resize: none;
+  overflow-y: auto;
+}
+
+.app-shell-mobile .composer-footer {
+  margin: 0;
+  align-self: end;
+}
+
+.app-shell-mobile .composer-footer button[type="submit"] {
+  width: 34px;
+  min-width: 34px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 7px;
+  background: #151722;
+  color: var(--mobile-redesign-primary);
+  font-size: 0;
+  box-shadow: none;
+}
+
+.app-shell-mobile .composer-footer button[type="submit"]::before {
+  content: "↑";
+  font-size: 17px;
+  line-height: 1;
+}
+
+.app-shell-mobile .mobile-inline-diff {
+  margin-top: 10px;
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid rgba(158, 168, 190, 0.12);
+  padding-top: 10px;
+}
+
+.app-shell-mobile .mobile-inline-diff-summary,
+.app-shell-mobile .mobile-inline-diff-more {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  background: transparent;
+  color: var(--mobile-redesign-primary);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.app-shell-mobile .mobile-inline-diff-list {
+  display: grid;
+  gap: 2px;
+}
+
+.app-shell-mobile .mobile-inline-diff-row {
+  min-width: 0;
+  min-height: 28px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid rgba(158, 168, 190, 0.08);
+  color: var(--mobile-redesign-muted);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+}
+
+.app-shell-mobile .mobile-inline-diff-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell-mobile .mobile-inline-diff-row strong {
+  color: var(--mobile-redesign-green);
+  font-weight: 600;
+}
+
+.app-shell-mobile .mobile-inline-diff-row em {
+  color: var(--mobile-redesign-red);
+  font-style: normal;
+}
+
+.app-shell-mobile .mobile-inline-diff-row small {
+  color: var(--mobile-redesign-primary);
+  text-transform: uppercase;
+}
+
+.github-mobile-panel {
+  display: none;
+}
+
+.app-shell-mobile .github-workspace {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.app-shell-mobile .github-mobile-panel {
+  height: 100%;
+  padding: 18px 12px calc(74px + env(safe-area-inset-bottom));
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  background: var(--mobile-redesign-bg);
+}
+
+.app-shell-mobile .github-workspace > :not(.github-mobile-panel) {
+  display: none !important;
+}
+
+.app-shell-mobile .github-workspace > .workspace-hero,
+.app-shell-mobile .github-workspace > .empty-state-card,
+.app-shell-mobile .github-workspace > .github-action-grid,
+.app-shell-mobile .github-workspace > .github-review-card,
+.app-shell-mobile .github-workspace > .execution-receipt-card,
+.app-shell-mobile .github-workspace > .expert-details {
+  display: none !important;
+}
+
+.app-shell-mobile .github-mobile-summary,
+.app-shell-mobile .github-mobile-activity {
+  display: grid;
+  gap: 8px;
+  border-bottom: 1px solid rgba(158, 168, 190, 0.12);
+  padding-bottom: 12px;
+}
+
+.app-shell-mobile .github-mobile-summary > span,
+.app-shell-mobile .github-mobile-activity > span {
+  color: var(--mobile-redesign-muted);
+  font-size: 10px;
+}
+
+.app-shell-mobile .github-mobile-summary strong {
+  color: var(--mobile-redesign-text);
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.app-shell-mobile .github-mobile-summary p,
+.app-shell-mobile .github-mobile-activity p,
+.app-shell-mobile .mobile-diff-sheet-summary {
+  margin: 0;
+  color: var(--mobile-redesign-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.app-shell-mobile .github-mobile-action-list {
+  display: grid;
+  gap: 8px;
+}
+
+.app-shell-mobile .github-mobile-action-list button {
+  min-height: 44px;
+  justify-content: flex-start;
+  border: 1px solid rgba(158, 168, 190, 0.14);
+  border-radius: 8px;
+  background: #1b1c24;
+  color: var(--mobile-redesign-text);
+  box-shadow: none;
+}
+
+.app-shell-mobile .github-mobile-action-list button:disabled {
+  color: rgba(242, 244, 248, 0.34);
+}
+
+.app-shell-mobile .mobile-activity-row {
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-bottom: 1px solid rgba(158, 168, 190, 0.1);
+  background: transparent;
+  color: var(--mobile-redesign-text);
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.app-shell-mobile .mobile-activity-dot {
+  color: var(--mobile-redesign-primary);
+}
+
+.app-shell-mobile .mobile-activity-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.app-shell-mobile .mobile-activity-copy strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--mobile-redesign-text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell-mobile .mobile-activity-copy small {
+  color: var(--mobile-redesign-muted);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+}
+
+.app-shell-mobile .mobile-additions {
+  color: var(--mobile-redesign-green);
+}
+
+.app-shell-mobile .mobile-deletions {
+  color: var(--mobile-redesign-red);
+}
+
+.app-shell-mobile .mobile-diff-sheet {
+  display: grid;
+  gap: 12px;
+  padding: 0 12px 14px;
+}
+
+.app-shell-mobile .mobile-diff-file-list {
+  display: grid;
+  gap: 8px;
+}
+
+.app-shell-mobile .mobile-diff-file-row {
+  display: grid;
+  gap: 4px;
+  border-bottom: 1px solid rgba(158, 168, 190, 0.1);
+  padding-bottom: 8px;
+}
+
+.app-shell-mobile .mobile-diff-file-row strong,
+.app-shell-mobile .mobile-diff-file-row span,
+.app-shell-mobile .mobile-diff-file-row small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+}
+
+.app-shell-mobile .mobile-diff-file-row strong {
+  color: var(--mobile-redesign-text);
+}
+
+.app-shell-mobile .mobile-diff-file-row span,
+.app-shell-mobile .mobile-diff-file-row small {
+  color: var(--mobile-redesign-muted);
+}
+
+.matrix-mobile-panel,
+.settings-mobile-panel {
+  display: none;
+}
+
+.app-shell-mobile .matrix-workspace,
+.app-shell-mobile .settings-workspace {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.app-shell-mobile .matrix-mobile-panel,
+.app-shell-mobile .settings-mobile-panel {
+  height: 100%;
+  padding: 18px 12px calc(74px + env(safe-area-inset-bottom));
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  background: var(--mobile-redesign-bg);
+}
+
+.app-shell-mobile .matrix-workspace > :not(.matrix-mobile-panel),
+.app-shell-mobile .settings-workspace > :not(.settings-mobile-panel) {
+  display: none !important;
+}
+
+.app-shell-mobile .matrix-mobile-summary,
+.app-shell-mobile .settings-mobile-summary,
+.app-shell-mobile .matrix-mobile-list {
+  display: grid;
+  gap: 8px;
+  border-bottom: 1px solid rgba(158, 168, 190, 0.12);
+  padding-bottom: 12px;
+}
+
+.app-shell-mobile .matrix-mobile-summary span,
+.app-shell-mobile .settings-mobile-summary span,
+.app-shell-mobile .matrix-mobile-list > span {
+  color: var(--mobile-redesign-muted);
+  font-size: 10px;
+}
+
+.app-shell-mobile .matrix-mobile-summary strong,
+.app-shell-mobile .settings-mobile-summary strong {
+  color: var(--mobile-redesign-text);
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.app-shell-mobile .matrix-mobile-summary p,
+.app-shell-mobile .settings-mobile-summary p,
+.app-shell-mobile .matrix-mobile-list p,
+.app-shell-mobile .settings-mobile-sheet-body p {
+  margin: 0;
+  color: var(--mobile-redesign-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.app-shell-mobile .matrix-mobile-status-grid {
+  display: grid;
+  gap: 0;
+  border-block: 1px solid rgba(158, 168, 190, 0.12);
+}
+
+.app-shell-mobile .matrix-mobile-status-grid div,
+.app-shell-mobile .matrix-mobile-row {
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: minmax(0, 116px) minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  border: 0;
+  border-bottom: 1px solid rgba(158, 168, 190, 0.1);
+  background: transparent;
+  color: var(--mobile-redesign-text);
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.app-shell-mobile .matrix-mobile-status-grid span,
+.app-shell-mobile .matrix-mobile-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--mobile-redesign-muted);
+  font-size: 11px;
+}
+
+.app-shell-mobile .matrix-mobile-status-grid strong,
+.app-shell-mobile .matrix-mobile-row strong,
+.app-shell-mobile .settings-mobile-sheet-body strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--mobile-redesign-primary);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.app-shell-mobile .settings-mobile-row-list {
+  display: grid;
+  gap: 0;
+}
+
+.app-shell-mobile .settings-mobile-sheet-body {
+  display: grid;
+  gap: 8px;
+  padding: 0 12px 14px;
+}
+
+.app-shell-mobile .mobile-bottom-nav {
+  height: calc(50px + env(safe-area-inset-bottom));
+  padding: 3px 18px calc(env(safe-area-inset-bottom) + 4px);
+  gap: 4px;
+  border-top: 0;
+  background: rgba(9, 11, 16, 0.98);
+  backdrop-filter: none;
+}
+
+.app-shell-mobile .workspace-tab-mobile {
+  min-height: 40px;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: rgba(130, 137, 154, 0.68);
+  font-size: 9px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.app-shell-mobile .workspace-tab-mobile svg {
+  width: 15px;
+  height: 15px;
+}
+
+.app-shell-mobile .workspace-tab-mobile.workspace-tab-active {
+  position: relative;
+  background: transparent;
+  border: 0;
+  color: var(--mobile-redesign-primary);
+}
+
+.app-shell-mobile .workspace-tab-mobile.workspace-tab-active::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 1px;
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--mobile-redesign-primary);
+  transform: translateX(-50%);
+}
+
+.app-shell-mobile .mobile-context-backdrop {
+  background: rgba(0, 0, 0, 0.58);
+}
+
+.app-shell-mobile .mobile-context-sheet {
+  max-height: min(58dvh, 430px);
+  padding: 12px 18px calc(env(safe-area-inset-bottom) + 18px);
+  border-top: 1px solid var(--mobile-redesign-line);
+  border-radius: 14px 14px 0 0;
+  background: rgba(16, 17, 24, 0.98);
+  box-shadow: 0 -24px 70px rgba(0, 0, 0, 0.38);
+}
+
+.app-shell-mobile .mobile-context-sheet-handle {
+  display: block;
+  width: 36px;
+  height: 3px;
+  margin: 0 auto 12px;
+  border-radius: 999px;
+  background: rgba(130, 137, 154, 0.36);
+}
+
+.app-shell-mobile .mobile-context-sheet-header {
+  margin-bottom: 12px;
+}
+
+.app-shell-mobile .mobile-context-status-grid {
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+.app-shell-mobile .mobile-context-status-grid div {
+  padding: 8px 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  border: 0;
+  border-bottom: 1px solid rgba(158, 168, 190, 0.1);
+  border-radius: 0;
+  background: transparent;
+}
+
+.app-shell-mobile .mobile-context-status-grid span,
+.app-shell-mobile .mobile-context-status-grid strong {
+  margin: 0;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+}
+
+.app-shell-mobile .mobile-context-status-grid span {
+  color: var(--mobile-redesign-muted);
+}
+
+.app-shell-mobile .mobile-context-status-grid strong {
+  color: var(--mobile-redesign-primary);
+  text-align: right;
+}
+
+.app-shell-mobile .mobile-context-actions {
+  grid-template-columns: 1fr;
+}
+
+.app-shell-mobile .mobile-context-actions .secondary-button {
+  justify-content: flex-start;
+  min-height: 34px;
+  border-radius: 7px;
+  border-color: rgba(158, 168, 190, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--mobile-redesign-muted);
+  box-shadow: none;
+}
+
+/* Mobile redesign spec tokens and shared primitives. */
+:root {
+  --void: #050c14;
+  --surface: #0d1b2a;
+  --lift: #122030;
+  --border: rgba(0, 200, 180, 0.12);
+  --border-hi: rgba(0, 200, 180, 0.28);
+  --phosphor: #00c8b4;
+  --phosphor2: #00e5cf;
+  --amber: #f0a832;
+  --red: #ff4c4c;
+  --blue: #3b9eff;
+  --dim: rgba(255, 255, 255, 0.28);
+  --mid: rgba(255, 255, 255, 0.55);
+  --hi: rgba(255, 255, 255, 0.9);
+}
+
+.app-shell-mobile {
+  background:
+    repeating-linear-gradient(0deg, transparent 0 2px, rgba(0, 200, 180, 0.015) 2px 3px),
+    var(--void);
+  color: var(--hi);
+  font-family: "IBM Plex Sans", "Inter", "Segoe UI", sans-serif;
+  touch-action: manipulation;
+}
+
+.app-shell-mobile code,
+.app-shell-mobile pre,
+.app-shell-mobile .mobile-mono {
+  font-family: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
+}
+
+.app-shell-mobile button,
+.app-shell-mobile [role="button"] {
+  touch-action: manipulation;
+}
+
+.app-shell-mobile .mobile-panel-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.app-shell-mobile .mobile-panel-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.app-shell-mobile .mobile-compose-zone {
+  position: sticky;
+  bottom: 0;
+  z-index: 30;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  min-height: auto;
+}
+
+.app-shell-mobile .mobile-compose-input {
+  font-size: 16px;
+  resize: none;
+}
+
+.app-shell-mobile .workspace-tab-mobile {
+  min-height: 44px;
+}
+
+.mobile-bottom-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  border: 0;
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.mobile-bottom-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  max-height: 90dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 14px 14px 0 0;
+  border-top: 1px solid var(--border);
+  background: rgba(16, 17, 24, 0.98);
+  color: var(--hi);
+}
+
+.mobile-bottom-sheet-content {
+  max-height: min(72dvh, 560px);
+}
+
+.mobile-bottom-sheet-handle {
+  display: block;
+  width: 36px;
+  height: 3px;
+  margin: 0 auto 12px;
+  border-radius: 999px;
+  background: rgba(130, 137, 154, 0.36);
+}
+
+.mobile-sheet-warning {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--amber);
+  border-radius: 8px;
+  background: rgba(240, 168, 50, 0.08);
+  color: var(--hi);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.mobile-sheet-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.mobile-danger-action,
+.mobile-error-action {
+  min-height: 44px;
+  border: 1px solid rgba(255, 76, 76, 0.34);
+  border-radius: 8px;
+  background: rgba(255, 76, 76, 0.12);
+  color: var(--hi);
+  font-weight: 700;
+  touch-action: manipulation;
+}
+
+.mobile-danger-action {
+  padding: 0 14px;
+}
+
+.mobile-error-block {
+  display: grid;
+  gap: 10px;
+}
+
+.mobile-error-block div {
+  display: grid;
+  gap: 3px;
+}
+
+.mobile-error-block span {
+  color: var(--mid);
+  font-family: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.mobile-error-block strong {
+  color: var(--hi);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.mobile-error-action {
+  justify-self: start;
+  padding: 0 12px;
+}
+
+.mobile-status-pill {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 7px;
+  border: 1px solid rgba(158, 168, 190, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--hi);
+  font-family: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.mobile-status-pill-dot {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentcolor;
+}
+
+.mobile-status-pill-ready {
+  color: var(--phosphor);
+}
+
+.mobile-status-pill-checking,
+.mobile-status-pill-loading,
+.mobile-status-pill-pending {
+  color: var(--amber);
+}
+
+.mobile-status-pill-error {
+  color: var(--red);
+}
+
+.mobile-segmented-control {
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid rgba(158, 168, 190, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.mobile-segmented-control-item {
+  min-width: 0;
+  min-height: 40px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mid);
+  font: inherit;
+  font-size: 12px;
+  touch-action: manipulation;
+}
+
+.mobile-segmented-control-item-active {
+  background: rgba(0, 200, 180, 0.12);
+  color: var(--hi);
+}
+
+.mobile-settings-row {
+  min-height: 52px;
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto) 16px;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-bottom: 1px solid rgba(158, 168, 190, 0.12);
+  background: transparent;
+  color: var(--hi);
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.mobile-settings-row span,
+.mobile-settings-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mobile-settings-row > span:first-child {
+  color: var(--mid);
+  font-size: 12px;
+}
+
+.mobile-settings-row strong {
+  color: var(--hi);
+  font-family: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.mobile-settings-row-chevron {
+  justify-self: end;
+  color: var(--dim);
+}
+
+.context-browser-panel {
+  height: 100%;
+  padding: 18px 12px calc(74px + env(safe-area-inset-bottom));
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  background: transparent;
+}
+
+.context-browser-header {
+  display: grid;
+  gap: 5px;
+}
+
+.context-browser-header span {
+  color: var(--mid);
+  font-size: 10px;
+}
+
+.context-browser-header h1 {
+  margin: 0;
+  color: var(--hi);
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.context-browser-active,
+.context-browser-status {
+  display: grid;
+  gap: 0;
+  border-block: 1px solid rgba(158, 168, 190, 0.14);
+}
+
+.context-browser-active div,
+.context-browser-status div {
+  min-width: 0;
+  padding: 9px 0;
+  display: grid;
+  grid-template-columns: minmax(0, 76px) minmax(0, 1fr);
+  gap: 10px;
+  border-bottom: 1px solid rgba(158, 168, 190, 0.1);
+}
+
+.context-browser-active div:last-child,
+.context-browser-status div:last-child {
+  border-bottom: 0;
+}
+
+.context-browser-active span,
+.context-browser-status span,
+.context-browser-active strong,
+.context-browser-status strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.context-browser-active span,
+.context-browser-status span {
+  color: var(--mid);
+}
+
+.context-browser-active strong,
+.context-browser-status strong {
+  color: var(--phosphor);
+  font-weight: 500;
+}
+
+.context-browser-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.context-browser-actions button {
+  justify-content: flex-start;
+  min-height: 38px;
 }

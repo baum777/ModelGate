@@ -49,6 +49,9 @@ import {
   readGuideSetupState,
   writeGuideSetupState,
 } from "../lib/guide-state.js";
+import { ComposeZone } from "./mobile/chat/ComposeZone.js";
+import { InlineDiff } from "./mobile/chat/InlineDiff.js";
+import { BottomSheet } from "./mobile/shared/BottomSheet.js";
 
 type PublicModelEntry = {
   alias: string;
@@ -367,6 +370,8 @@ type ThreadMessageCardProps = {
   locale: "en" | "de";
   copyState: "idle" | "copied" | "failed";
   highlightedAction: "github" | "matrix" | null;
+  expandedActions: boolean;
+  onToggleActions: (messageId: string) => void;
   onGitHubAction: (message: ChatMessage) => void;
   onMatrixAction: (message: ChatMessage) => void;
   onCopyAction: (message: ChatMessage) => void;
@@ -375,11 +380,17 @@ type ThreadMessageCardProps = {
 const ThreadMessageCard = React.memo(function ThreadMessageCard(props: ThreadMessageCardProps) {
   const roleLabel = props.message.role === "user" ? props.operatorLabel : props.agentLabel;
   const isAssistant = props.message.role === "assistant";
+  const contentLooksLikeCode = /```|^\s*(?:const|let|function|class|import|export|expect|npm|git)\b|[{};]/im.test(props.message.content);
+  const contentLooksRepoReady = /\b(?:checklist|diff|commit|github|pull request|pr|branch|file|repo|assertion|typecheck)\b/i.test(props.message.content);
+  const primaryAction = contentLooksLikeCode && !contentLooksRepoReady ? "copy" : contentLooksRepoReady ? "github" : "copy";
   const copyLabel = props.copyState === "copied"
     ? (props.locale === "de" ? "Kopiert" : "Copied")
     : props.copyState === "failed"
       ? (props.locale === "de" ? "Fehlgeschlagen" : "Failed")
       : (props.locale === "de" ? "Kopieren" : "Copy");
+  const primaryLabel = primaryAction === "github"
+    ? (props.locale === "de" ? "GitHub vorbereiten" : "Prepare GitHub")
+    : copyLabel;
 
   return (
     <ShellCard
@@ -391,39 +402,76 @@ const ThreadMessageCard = React.memo(function ThreadMessageCard(props: ThreadMes
         {props.expertMode && props.message.modelAlias ? <StatusBadge tone="muted">{props.message.modelAlias}</StatusBadge> : null}
       </header>
       <MarkdownMessage content={props.message.content} />
+      {isAssistant ? <InlineDiff content={props.message.content} /> : null}
       {isAssistant ? (
-        <div className="thread-message-actions" role="group" aria-label={props.locale === "de" ? "Nachrichtenaktionen" : "Message actions"}>
+        <div
+          className={props.expandedActions ? "thread-message-actions thread-message-actions-expanded" : "thread-message-actions"}
+          role="group"
+          aria-label={props.locale === "de" ? "Nachrichtenaktionen" : "Message actions"}
+        >
           <button
             type="button"
-            className={props.highlightedAction === "github"
-              ? "ghost-button thread-message-action-button thread-message-action-button-highlight"
-              : "ghost-button thread-message-action-button"}
-            onClick={() => props.onGitHubAction(props.message)}
-            aria-label={props.locale === "de" ? "In GitHub dispatchen" : "Dispatch to GitHub"}
-            title={props.locale === "de" ? "In GitHub dispatchen" : "Dispatch to GitHub"}
+            className="ghost-button thread-message-action-button thread-message-action-primary"
+            onClick={() => {
+              if (primaryAction === "github") {
+                props.onGitHubAction(props.message);
+                return;
+              }
+              props.onCopyAction(props.message);
+            }}
+            aria-label={primaryLabel}
+            title={primaryLabel}
           >
-            ↯
+            {primaryLabel}
+            {primaryAction === "github" ? <span className="thread-message-backend-badge">→ backend</span> : null}
           </button>
           <button
             type="button"
-            className={props.highlightedAction === "matrix"
-              ? "ghost-button thread-message-action-button thread-message-action-button-highlight"
-              : "ghost-button thread-message-action-button"}
-            onClick={() => props.onMatrixAction(props.message)}
-            aria-label={props.locale === "de" ? "Als Matrix-Post vorbereiten" : "Prepare as Matrix post"}
-            title={props.locale === "de" ? "Als Matrix-Post vorbereiten" : "Prepare as Matrix post"}
+            className="ghost-button thread-message-action-button thread-message-action-more"
+            onClick={() => props.onToggleActions(props.message.id)}
+            aria-expanded={props.expandedActions}
+            aria-label={props.locale === "de" ? "Weitere Aktionen anzeigen" : "Show more actions"}
+            title={props.locale === "de" ? "Weitere Aktionen" : "More actions"}
           >
-            ⊛
+            ··· mehr
           </button>
-          <button
-            type="button"
-            className="ghost-button thread-message-action-button thread-message-action-copy"
-            onClick={() => props.onCopyAction(props.message)}
-            aria-label={props.locale === "de" ? "Nachricht kopieren" : "Copy message"}
-            title={props.locale === "de" ? "Nachricht kopieren" : "Copy message"}
-          >
-            {copyLabel}
-          </button>
+          <div className="thread-message-secondary-actions">
+            {primaryAction !== "github" ? (
+              <button
+                type="button"
+                className={props.highlightedAction === "github"
+                  ? "ghost-button thread-message-action-button thread-message-action-button-highlight"
+                  : "ghost-button thread-message-action-button"}
+                onClick={() => props.onGitHubAction(props.message)}
+                aria-label={props.locale === "de" ? "In GitHub dispatchen" : "Dispatch to GitHub"}
+                title={props.locale === "de" ? "In GitHub dispatchen" : "Dispatch to GitHub"}
+              >
+                ↯ GitHub <span className="thread-message-backend-badge">→ backend</span>
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className={props.highlightedAction === "matrix"
+                ? "ghost-button thread-message-action-button thread-message-action-button-highlight"
+                : "ghost-button thread-message-action-button"}
+              onClick={() => props.onMatrixAction(props.message)}
+              aria-label={props.locale === "de" ? "Als Matrix-Post vorbereiten" : "Prepare as Matrix post"}
+              title={props.locale === "de" ? "Als Matrix-Post vorbereiten" : "Prepare as Matrix post"}
+            >
+              ⊛ Matrix <span className="thread-message-backend-badge">→ backend</span>
+            </button>
+            {primaryAction !== "copy" ? (
+              <button
+                type="button"
+                className="ghost-button thread-message-action-button thread-message-action-copy"
+                onClick={() => props.onCopyAction(props.message)}
+                aria-label={props.locale === "de" ? "Nachricht kopieren" : "Copy message"}
+                title={props.locale === "de" ? "Nachricht kopieren" : "Copy message"}
+              >
+                {copyLabel}
+              </button>
+            ) : null}
+          </div>
         </div>
       ) : null}
     </ShellCard>
@@ -494,6 +542,8 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const [activeInlineGuide, setActiveInlineGuide] = useState<"matrix" | "github" | null>(null);
   const [contextTipPending, setContextTipPending] = useState<{ prompt: string; fileName: string } | null>(null);
   const [copyDiscoveryPending, setCopyDiscoveryPending] = useState(false);
+  const [expandedActionMessageId, setExpandedActionMessageId] = useState<string | null>(null);
+  const [approvalConfirmProposal, setApprovalConfirmProposal] = useState<ChatProposal | null>(null);
   const [highlightedMessageAction, setHighlightedMessageAction] = useState<{
     messageId: string;
     action: "github" | "matrix";
@@ -534,6 +584,19 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
 
     setMatrixComposeRoomId(matrixRoomOptions[0]);
   }, [matrixComposeOpen, matrixComposeRoomId, matrixRoomOptions]);
+
+  useEffect(() => {
+    if (!approvalConfirmProposal) {
+      return;
+    }
+
+    if (
+      chatState.pendingProposal?.id !== approvalConfirmProposal.id
+      || chatState.pendingProposal.status !== "pending"
+    ) {
+      setApprovalConfirmProposal(null);
+    }
+  }, [approvalConfirmProposal, chatState.pendingProposal?.id, chatState.pendingProposal?.status]);
 
   useEffect(() => {
     const nextState = selectedModel.trim().length > 0 ? "done" : "pending";
@@ -1307,13 +1370,47 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             <DecisionZone
               testId="chat-decision-zone"
               onApprove={() => {
-                void executeProposal(pendingProposal);
+                setApprovalConfirmProposal(pendingProposal);
               }}
               onReject={rejectProposal}
               helperText={ui.chat.proposalHelper}
             />
           </ProposalCard>
         ) : null}
+
+        <BottomSheet
+          open={Boolean(approvalConfirmProposal)}
+          title={locale === "de" ? "Im Backend ausführen?" : "Execute on backend?"}
+          onDismiss={() => setApprovalConfirmProposal(null)}
+        >
+          <div className="chat-approval-confirm-sheet" data-testid="chat-approval-confirm-sheet">
+            <p className="mobile-sheet-warning">
+              {locale === "de"
+                ? "Das sendet den freigegebenen Vorschlag an die backend-owned Ausführung. Der Browser übergibt nur deine Freigabeabsicht."
+                : "This sends the approved proposal to backend-owned execution. The browser only hands over your approval intent."}
+            </p>
+            <div className="mobile-sheet-actions">
+              <button type="button" className="secondary-button" onClick={() => setApprovalConfirmProposal(null)}>
+                {locale === "de" ? "Abbrechen" : "Cancel"}
+              </button>
+              <button
+                type="button"
+                className="mobile-danger-action"
+                disabled={!approvalConfirmProposal}
+                onClick={() => {
+                  if (!approvalConfirmProposal) {
+                    return;
+                  }
+
+                  setApprovalConfirmProposal(null);
+                  void executeProposal(approvalConfirmProposal);
+                }}
+              >
+                {locale === "de" ? "Ausführen" : "Execute"}
+              </button>
+            </div>
+          </div>
+        </BottomSheet>
 
         {executionMode === "governed" && pendingProposal?.status === "executing" ? (
           <ApprovalTransitionCard
@@ -1453,6 +1550,10 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
                   ? highlightedMessageAction.action
                   : null
               }
+              expandedActions={expandedActionMessageId === message.id}
+              onToggleActions={(messageId) => {
+                setExpandedActionMessageId((current) => current === messageId ? null : messageId);
+              }}
               onGitHubAction={openGitHubDispatchFromMessage}
               onMatrixAction={openMatrixComposeFromMessage}
               onCopyAction={(nextMessage) => {
@@ -1467,7 +1568,10 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
                 <SectionLabel>{ui.chat.agentDraft}</SectionLabel>
                 {expertMode ? <StatusBadge tone="partial">{draft.model ?? "pending"}</StatusBadge> : null}
               </header>
-              <MarkdownMessage content={draft.text || ui.chat.composerLocked.approval} />
+              <div className="streaming-work-block">
+                <MarkdownMessage content={draft.text || ui.chat.composerLocked.approval} />
+                <span className="streaming-cursor" aria-hidden="true">|</span>
+              </div>
             </ShellCard>
           ) : null}
 
@@ -1492,21 +1596,54 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             </ExecutionReceiptCard>
           ))}
 
-          {notices.map((notice) => (
-            <ShellCard
-              key={notice.id}
-              variant="muted"
-              className={`thread-notice ${notice.level === "error" ? "thread-notice-error" : "thread-notice-system"}`}
-            >
-              <header className="thread-block-header">
-                <SectionLabel>{notice.level === "error" ? ui.chat.errorNotice : ui.chat.systemNotice}</SectionLabel>
-                <StatusBadge tone={notice.level === "error" ? "error" : "partial"}>
-                  {notice.level === "error" ? ui.chat.noticeError : ui.chat.noticeSystem}
-                </StatusBadge>
-              </header>
-              <p>{notice.message}</p>
-            </ShellCard>
-          ))}
+          {notices.map((notice) => {
+            const isErrorNotice = notice.level === "error";
+            const errorReason = chatState.streamState.malformed
+              ? (locale === "de" ? "Stream-Reihenfolge war nicht verifizierbar." : "Stream ordering was not verifiable.")
+              : backendUnreachable
+                ? ui.chat.composerLocked.backend
+                : (locale === "de" ? "Backend meldete einen terminalen Stream-Fehler." : "Backend returned a terminal stream error.");
+
+            return (
+              <ShellCard
+                key={notice.id}
+                variant="muted"
+                className={`thread-notice ${isErrorNotice ? "thread-notice-error" : "thread-notice-system"}`}
+              >
+                <header className="thread-block-header">
+                  <SectionLabel>{isErrorNotice ? ui.chat.errorNotice : ui.chat.systemNotice}</SectionLabel>
+                  <StatusBadge tone={isErrorNotice ? "error" : "partial"}>
+                    {isErrorNotice ? ui.chat.noticeError : ui.chat.noticeSystem}
+                  </StatusBadge>
+                </header>
+                {isErrorNotice ? (
+                  <div className="mobile-error-block">
+                    <div>
+                      <span>{locale === "de" ? "Was passiert ist" : "What happened"}</span>
+                      <strong>{notice.message}</strong>
+                    </div>
+                    <div>
+                      <span>{locale === "de" ? "Warum" : "Why"}</span>
+                      <strong>{errorReason}</strong>
+                    </div>
+                    <button
+                      type="button"
+                      className="mobile-error-action"
+                      onClick={() => {
+                        if (typeof window !== "undefined") {
+                          window.location.assign("/console?mode=settings");
+                        }
+                      }}
+                    >
+                      {locale === "de" ? "Settings prüfen" : "Check settings"}
+                    </button>
+                  </div>
+                ) : (
+                  <p>{notice.message}</p>
+                )}
+              </ShellCard>
+            );
+          })}
 
           <div ref={messageEndRef} />
         </div>
@@ -1683,36 +1820,25 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           />
         ) : null}
 
-        <form className="composer governed-composer" onSubmit={handleSubmit}>
-          <textarea
-            data-testid="chat-composer"
-            aria-label={ui.chat.title}
-            ref={composerRef}
-            value={chatState.input}
-            onChange={(event) => dispatch({ type: "set_input", input: event.target.value })}
-            onKeyDown={(event) => {
-              if (!shouldSubmitChatComposerOnKey(event)) {
-                return;
-              }
+        <ComposeZone
+          value={chatState.input}
+          placeholder={ui.chat.composerPlaceholder}
+          disabled={Boolean(composerBlockReason)}
+          submitDisabled={Boolean(composerBlockReason) || chatState.input.trim().length === 0}
+          submitLabel={executionMode === "direct" ? ui.chat.sendDirect : ui.chat.prepareProposal}
+          ariaLabel={ui.chat.title}
+          textareaRef={composerRef}
+          onChange={(input) => dispatch({ type: "set_input", input })}
+          onKeyDown={(event) => {
+            if (!shouldSubmitChatComposerOnKey(event)) {
+              return;
+            }
 
-              event.preventDefault();
-              event.currentTarget.form?.requestSubmit();
-            }}
-            placeholder={ui.chat.composerPlaceholder}
-            rows={4}
-            disabled={Boolean(composerBlockReason)}
-          />
-
-          <div className="composer-footer">
-            <button
-              type="submit"
-              data-testid="chat-send"
-              disabled={Boolean(composerBlockReason) || chatState.input.trim().length === 0}
-            >
-              {executionMode === "direct" ? ui.chat.sendDirect : ui.chat.prepareProposal}
-            </button>
-          </div>
-        </form>
+            event.preventDefault();
+            event.currentTarget.form?.requestSubmit();
+          }}
+          onSubmit={handleSubmit}
+        />
       </section>
     </section>
   );

@@ -16,6 +16,8 @@ import {
   type FlowIndicatorState,
   type SystemNodeStatus,
 } from "./system-visuals/index.js";
+import { BottomSheet } from "./mobile/shared/BottomSheet.js";
+import { SettingsRow } from "./mobile/shared/SettingsRow.js";
 
 export type DiagnosticEntry = {
   kind: "info" | "warning" | "error";
@@ -332,6 +334,46 @@ export function SettingsWorkspace({
     { id: "github", label: verificationCopy.github },
     { id: "matrix", label: verificationCopy.matrix },
   ];
+  const [mobileSettingsSheet, setMobileSettingsSheet] = React.useState<string | null>(null);
+  const mobileSettingsRows = [
+    {
+      id: "model",
+      label: locale === "de" ? "Modell" : "Model",
+      value: truthSnapshot.models.activeAlias,
+      detail: truthSnapshot.models.registrySourceLabel,
+    },
+    {
+      id: "provider",
+      label: "Provider",
+      value: openRouterCredentialStatus.configured ? (locale === "de" ? "Konfiguriert" : "Configured") : (locale === "de" ? "Fehlt" : "Missing"),
+      detail: locale === "de" ? "Nur Status, kein Secret-Wert." : "Status only, no secret value.",
+    },
+    {
+      id: "workmode",
+      label: locale === "de" ? "Arbeitsdichte" : "Work mode",
+      value: activeCopy.label,
+      detail: activeCopy.description,
+    },
+    {
+      id: "github",
+      label: "GitHub",
+      value: truthSnapshot.github.connectionLabel,
+      detail: truthSnapshot.github.repositoryLabel,
+    },
+    {
+      id: "matrix",
+      label: "Matrix",
+      value: truthSnapshot.matrix.connectionLabel,
+      detail: truthSnapshot.matrix.scopeLabel,
+    },
+    {
+      id: "backend",
+      label: "Backend",
+      value: truthSnapshot.backend.label,
+      detail: truthSnapshot.backend.detail,
+    },
+  ];
+  const selectedMobileSettingsRow = mobileSettingsRows.find((row) => row.id === mobileSettingsSheet) ?? null;
 
   function getVerificationStatusLabel(status: SettingsVerificationState["status"]) {
     return verificationCopy[status];
@@ -351,6 +393,34 @@ export function SettingsWorkspace({
 
   return (
     <section className="workspace-panel settings-workspace" data-testid="settings-workspace">
+      <section className="settings-mobile-panel mobile-panel-scroll" aria-label={locale === "de" ? "Mobile Einstellungen" : "Mobile settings"}>
+        <header className="settings-mobile-summary">
+          <span className="mobile-mono">SETTINGS</span>
+          <strong>{ui.settings.backendTruth}</strong>
+          <p>{locale === "de" ? "Status und Kontrolle ohne Credential-Werte." : "Status and controls without credential values."}</p>
+        </header>
+        <div className="settings-mobile-row-list">
+          {mobileSettingsRows.map((row) => (
+            <SettingsRow
+              key={row.id}
+              label={row.label}
+              value={row.value}
+              action={() => setMobileSettingsSheet(row.id)}
+            />
+          ))}
+        </div>
+        <BottomSheet
+          open={Boolean(selectedMobileSettingsRow)}
+          title={selectedMobileSettingsRow?.label ?? ui.settings.title}
+          onDismiss={() => setMobileSettingsSheet(null)}
+        >
+          <div className="settings-mobile-sheet-body">
+            <strong>{selectedMobileSettingsRow?.value}</strong>
+            <p>{selectedMobileSettingsRow?.detail}</p>
+          </div>
+        </BottomSheet>
+      </section>
+
       <section className="workspace-hero">
         <div>
           <p className="status-pill status-partial">{ui.settings.heroStatus}</p>

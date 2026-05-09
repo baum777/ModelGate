@@ -35,6 +35,8 @@ import { useLocalization, type Locale } from "../lib/localization.js";
 import { GuideOverlay, getWorkspaceGuide } from "./GuideOverlay.js";
 import { EmptyStateCTA } from "./EmptyStateCTA.js";
 import { isExpertMode, type WorkMode } from "../lib/work-mode.js";
+import { ActivityRow } from "./mobile/github/ActivityRow.js";
+import { DiffSheet, type DiffSheetFile } from "./mobile/github/DiffSheet.js";
 
 export type GitHubWorkspaceStatus = {
   repositoryLabel: string;
@@ -400,6 +402,29 @@ function friendlyTargetBranchLabel(targetBranch: string | null, repo: GitHubRepo
   return locale === "de" ? "Zielzweig" : "Target branch";
 }
 
+function formatActivityAge(timestamp: string | null | undefined, locale: Locale) {
+  if (!timestamp) {
+    return locale === "de" ? "lokal" : "local";
+  }
+
+  return new Intl.DateTimeFormat(locale, {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(timestamp));
+}
+
+function summarizeDiff(files: DiffSheetFile[]) {
+  return files.reduce(
+    (summary, file) => ({
+      additions: summary.additions + file.additions,
+      deletions: summary.deletions + file.deletions,
+    }),
+    { additions: 0, deletions: 0 },
+  );
+}
+
 export function buildGitHubReviewItems(
   proposalPlan: GitHubChangePlan | null,
   executionResult: GitHubExecuteResult | null,
@@ -479,6 +504,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
   const [proposalError, setProposalError] = useState<string | null>(null);
   const [requestId, setRequestId] = useState<string | null>(props.session.metadata.requestId);
   const [eventTrail, setEventTrail] = useState<string[]>(props.session.metadata.eventTrail);
+  const [diffSheetOpen, setDiffSheetOpen] = useState(false);
   const [approvalChecked, setApprovalChecked] = useState(props.session.metadata.approvalChecked);
   const [executing, setExecuting] = useState(false);
   const [executionResult, setExecutionResult] = useState<GitHubExecuteResult | null>(
@@ -967,6 +993,55 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
   const hasSelection = Boolean(selectedRepo);
   const analysisFiles = analysisBundle?.files ?? [];
   const proposalFiles = proposalPlan?.diff ?? [];
+  const mobileDiffFiles: DiffSheetFile[] = proposalFiles.map((file) => ({
+    path: file.path,
+    changeType: file.changeType,
+    additions: file.additions,
+    deletions: file.deletions,
+    patch: file.patch,
+  }));
+  const mobileDiffSummary = summarizeDiff(mobileDiffFiles);
+  const mobileActivityRows = [
+    proposalPlan ? {
+      id: `proposal:${proposalPlan.planId}`,
+      title: proposalPlan.summary,
+      additions: mobileDiffSummary.additions,
+      deletions: mobileDiffSummary.deletions,
+      age: formatActivityAge(proposalPlan.generatedAt, locale),
+      onPress: () => setDiffSheetOpen(true),
+    } : null,
+    executionResult ? {
+      id: `execution:${executionResult.planId}`,
+      title: localText.eventPullRequestCreated(executionResult.prNumber),
+      additions: mobileDiffSummary.additions,
+      deletions: mobileDiffSummary.deletions,
+      age: formatActivityAge(executionResult.executedAt, locale),
+      onPress: () => setDiffSheetOpen(true),
+    } : null,
+    verificationResult ? {
+      id: `verification:${verificationResult.status}`,
+      title: localText.eventPullRequestVerified(verificationResult.status),
+      additions: 0,
+      deletions: 0,
+      age: locale === "de" ? "Prüfung" : "verify",
+      onPress: () => setDiffSheetOpen(true),
+    } : null,
+    analysisBundle ? {
+      id: `analysis:${analysisBundle.generatedAt}`,
+      title: analysisBundle.question,
+      additions: analysisBundle.files.length,
+      deletions: 0,
+      age: formatActivityAge(analysisBundle.generatedAt, locale),
+      onPress: () => setDiffSheetOpen(true),
+    } : null,
+  ].filter((row): row is {
+    id: string;
+    title: string;
+    additions: number;
+    deletions: number;
+    age: string;
+    onPress: () => void;
+  } => Boolean(row));
   const proposalReady = Boolean(proposalPlan);
   const proposalHeadline = proposalPlan
     ? executionResult
@@ -1033,6 +1108,81 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       data-testid="github-workspace"
       aria-busy={reposLoading || analysisLoading || proposalLoading || executing || verifying}
     >
+      <section className="github-mobile-panel mobile-panel-scroll" aria-label={locale === "de" ? "GitHub mobile Arbeitsfläche" : "GitHub mobile workspace"}>
+        <header className="github-mobile-summary">
+          <span className="mobile-mono">GITHUB</span>
+          <strong>{selectedRepo ? (expertMode ? selectedRepo.fullName : ui.github.repoSelected) : ui.github.nextStepChooseRepo}</strong>
+          <p>
+            {selectedRepo
+              ? `${accessLabel} · ${selectedRepo.defaultBranch}`
+              : githubConnected
+                ? ui.github.noRepos
+                : githubConnectLabel}
+          </p>
+        </header>
+
+        <div className="github-mobile-action-list" aria-label={locale === "de" ? "GitHub Aktionen" : "GitHub actions"}>
+          <button
+            type="button"
+            onClick={() => {
+              if (!selectedRepo && !githubConnected) {
+                props.onIntegrationAction("github", githubConnectAction);
+                return;
+              }
+              if (!selectedRepo) {
+                repoSelectRef.current?.focus();
+                return;
+              }
+              void runAnalysis();
+            }}
+            disabled={analysisLoading || reposLoading}
+          >
+            {analysisLoading ? ui.common.loading : ui.github.nextStepAnalysis}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void createProposal();
+            }}
+            disabled={proposalLoading || !analysisBundle}
+          >
+            {proposalLoading ? ui.common.loading : ui.github.nextStepProposal}
+          </button>
+          <button
+            type="button"
+            onClick={() => setDiffSheetOpen(true)}
+            disabled={!proposalPlan}
+          >
+            {locale === "de" ? "Diff ansehen" : "View diff"}
+          </button>
+        </div>
+
+        <section className="github-mobile-activity" aria-label={locale === "de" ? "GitHub Aktivität" : "GitHub activity"}>
+          <span className="mobile-mono">{locale === "de" ? "AKTIVITÄT" : "ACTIVITY"}</span>
+          {mobileActivityRows.length > 0 ? mobileActivityRows.map((row) => (
+            <ActivityRow
+              key={row.id}
+              title={row.title}
+              additions={row.additions}
+              deletions={row.deletions}
+              age={row.age}
+              onPress={row.onPress}
+            />
+          )) : (
+            <p>{locale === "de" ? "Noch keine Analyse oder Proposal in dieser Session." : "No analysis or proposal in this session yet."}</p>
+          )}
+        </section>
+
+        <DiffSheet
+          open={diffSheetOpen}
+          title={locale === "de" ? "GitHub Diff" : "GitHub diff"}
+          summary={proposalPlan?.summary ?? analysisBundle?.question ?? ui.github.diffAppearsLater}
+          emptyLabel={ui.github.diffAppearsLater}
+          files={mobileDiffFiles}
+          onDismiss={() => setDiffSheetOpen(false)}
+        />
+      </section>
+
       <section className="workspace-hero github-hero">
         <div>
           <p className={`status-pill ${hasSelection ? "status-ready" : "status-partial"}`}>
