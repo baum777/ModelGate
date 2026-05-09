@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.js";
+import "./local-fonts.css";
 import "./styles.css";
 import "./ui-adaptation.css";
 import { registerPwa } from "./pwa.js";

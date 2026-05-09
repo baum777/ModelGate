@@ -1,0 +1,137 @@
+/* Local font hosting to avoid external render-path requests. */
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/NotoSansMono-Regular.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/NotoSansMono-Medium.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 500;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/NotoSansMono-Bold.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
+
+@font-face {
+  font-family: "JetBrains Sans";
+  src: url("/fonts/NotoSans-Regular.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "JetBrains Sans";
+  src: url("/fonts/NotoSans-Medium.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 500;
+}
+
+@font-face {
+  font-family: "JetBrains Sans";
+  src: url("/fonts/NotoSans-SemiBold.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 600;
+}
+
+@font-face {
+  font-family: "JetBrains Sans";
+  src: url("/fonts/NotoSans-Bold.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
+
+@font-face {
+  font-family: "DM Sans";
+  src: url("/fonts/NotoSans-Light.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 300;
+}
+
+@font-face {
+  font-family: "DM Sans";
+  src: url("/fonts/NotoSans-LightItalic.ttf") format("truetype");
+  font-display: swap;
+  font-style: italic;
+  font-weight: 300;
+}
+
+@font-face {
+  font-family: "DM Sans";
+  src: url("/fonts/NotoSans-Regular.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "DM Sans";
+  src: url("/fonts/NotoSans-Medium.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 500;
+}
+
+@font-face {
+  font-family: "DM Sans";
+  src: url("/fonts/NotoSans-SemiBold.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 600;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/NotoSans-Regular.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/NotoSans-Italic.ttf") format("truetype");
+  font-display: swap;
+  font-style: italic;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/NotoSans-Medium.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 500;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/NotoSans-SemiBold.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 600;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/NotoSans-Bold.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
