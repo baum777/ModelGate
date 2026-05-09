@@ -31,6 +31,17 @@ MosaicStacked is currently a backend-first console overlay with a browser UI.
 
 The browser renders results, keeps local UI state, and sends approval intent. The backend owns provider calls, model routing, GitHub reads/writes, Matrix credentials, SSE framing, and execution truth.
 
+The current console UI is mobile-first and work-surface oriented:
+
+- a permanent Context Strip answers what the user is working on and exposes only `idle`, `streaming`, `pending`, or `error` state,
+- the Command Sheet shows current system/control state without replacing the chat screen,
+- the Kontext tab opens a context browser for selecting repo/branch/file context,
+- Chat responses render as work blocks with one visible primary action,
+- backend-owned actions use explicit approval handoff before execution,
+- GitHub, Matrix, and Settings use compact mobile panels backed by existing app/session state rather than demo data.
+
+This UI is intentionally quiet and operational: it presents current browser-held state and backend-reported facts without turning provider IDs, credentials, or restored local state into product truth.
+
 ### GitHub Viewer And Review Surface
 
 The GitHub layer is the main viewer-facing path:
@@ -78,7 +89,7 @@ Read-only Matrix routes and several planning surfaces exist in this repo. Matrix
 ### Contract-Only Or Deferred
 
 - Matrix Analyze, Review, Execute, Verify, and Matrix write flows remain external-backend or contract-bound until verified against a real Matrix origin.
-- Matrix hierarchy preview is browser-side advisory/mock-only in this repo.
+- Matrix hierarchy preview is browser-side advisory only unless a backend implementation verifies it.
 - Undo, cross-device sync, bulk review queue, and advanced observability are deferred.
 - `GITHUB_APP_*` fields are reserved placeholders and are not wired into the current runtime path.
 
