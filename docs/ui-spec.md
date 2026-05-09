@@ -145,11 +145,8 @@ Transparent tinted fills (`rgba(colour, 0.08–0.15)`) are used for badge backgr
 | UI / prose | `DM Sans` | `system-ui, sans-serif` |
 | Code / tokens | `JetBrains Mono` | `'Courier New', monospace` |
 
-Both fonts are loaded from Google Fonts. The `display=swap` descriptor is required to prevent layout blocking.
-
-```
-https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap
-```
+Both fonts are self-hosted from `web/public/fonts/` and declared in `web/public/local-fonts.css`.
+The `display=swap` descriptor plus metric overrides are required to prevent layout blocking and reduce swap-induced layout shift.
 
 ### 3.2 Type Scale
 

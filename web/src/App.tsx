@@ -76,18 +76,108 @@ import {
   type WorkMode,
 } from "./lib/work-mode.js";
 import type { PinnedChatContext } from "./lib/pinned-chat-context.js";
+import { BottomNav } from "./components/navigation/BottomNav.js";
+import { ChatPage as MobileChatPage } from "./pages/ChatPage.js";
 
 const loadChatWorkspace = () => import("./components/ChatWorkspace.js");
 const loadGitHubWorkspace = () => import("./components/GitHubWorkspace.js");
 const loadMatrixWorkspace = () => import("./components/MatrixWorkspace.js");
 const loadReviewWorkspace = () => import("./components/ReviewWorkspace.js");
 const loadSettingsWorkspace = () => import("./components/SettingsWorkspace.js");
+const GITHUB_MOBILE_STYLESHEET_ID = "mosaicstacked-mobile-github-css";
+const MATRIX_MOBILE_STYLESHEET_ID = "mosaicstacked-mobile-matrix-css";
+
+function loadMobileGitHubStylesheet() {
+  if (typeof document === "undefined") {
+    return Promise.resolve();
+  }
+
+  const existingLink = document.getElementById(GITHUB_MOBILE_STYLESHEET_ID) as HTMLLinkElement | null;
+  if (existingLink?.dataset.loaded || existingLink?.sheet) {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve) => {
+    const link = existingLink ?? document.createElement("link");
+    const handleLoad = () => {
+      link.dataset.loaded = "true";
+      resolve();
+    };
+    const handleError = () => {
+      link.dataset.loaded = "error";
+      resolve();
+    };
+
+    link.addEventListener("load", handleLoad, { once: true });
+    link.addEventListener("error", handleError, { once: true });
+
+    if (!existingLink) {
+      link.id = GITHUB_MOBILE_STYLESHEET_ID;
+      link.rel = "stylesheet";
+      link.href = "/github-mobile.css";
+      document.head.appendChild(link);
+    }
+  });
+}
+
+const loadMobileGitHubPage = async () => {
+  const [pageModule] = await Promise.all([
+    import("./pages/GitHubPage.js"),
+    loadMobileGitHubStylesheet(),
+  ]);
+
+  return pageModule;
+};
+
+function loadMobileMatrixStylesheet() {
+  if (typeof document === "undefined") {
+    return Promise.resolve();
+  }
+
+  const existingLink = document.getElementById(MATRIX_MOBILE_STYLESHEET_ID) as HTMLLinkElement | null;
+  if (existingLink?.dataset.loaded || existingLink?.sheet) {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve) => {
+    const link = existingLink ?? document.createElement("link");
+    const handleLoad = () => {
+      link.dataset.loaded = "true";
+      resolve();
+    };
+    const handleError = () => {
+      link.dataset.loaded = "error";
+      resolve();
+    };
+
+    link.addEventListener("load", handleLoad, { once: true });
+    link.addEventListener("error", handleError, { once: true });
+
+    if (!existingLink) {
+      link.id = MATRIX_MOBILE_STYLESHEET_ID;
+      link.rel = "stylesheet";
+      link.href = "/matrix-mobile.css";
+      document.head.appendChild(link);
+    }
+  });
+}
+
+const loadMobileMatrixPage = async () => {
+  const [pageModule] = await Promise.all([
+    import("./pages/MatrixPage.js"),
+    loadMobileMatrixStylesheet(),
+  ]);
+
+  return pageModule;
+};
 
 const ChatWorkspace = lazy(() => loadChatWorkspace().then((module) => ({ default: module.ChatWorkspace })));
 const GitHubWorkspace = lazy(() => loadGitHubWorkspace().then((module) => ({ default: module.GitHubWorkspace })));
 const MatrixWorkspace = lazy(() => loadMatrixWorkspace().then((module) => ({ default: module.MatrixWorkspace })));
 const ReviewWorkspace = lazy(() => loadReviewWorkspace().then((module) => ({ default: module.ReviewWorkspace })));
 const SettingsWorkspace = lazy(() => loadSettingsWorkspace().then((module) => ({ default: module.SettingsWorkspace })));
+const MobileGitHubPage = lazy(() => loadMobileGitHubPage().then((module) => ({ default: module.GitHubPage })));
+const MobileMatrixPage = lazy(() => loadMobileMatrixPage().then((module) => ({ default: module.MatrixPage })));
 
 const SETTINGS_VERIFICATION_INITIAL: Record<SettingsVerificationTarget, SettingsVerificationState> = {
   backend: {
@@ -112,17 +202,12 @@ const OPENROUTER_CREDENTIAL_STATUS_EMPTY: OpenRouterCredentialStatusResponse = {
   models: [],
 };
 
-function scheduleWorkspacePreload(callback: () => void) {
+function scheduleWorkspacePreload(callback: () => void, timeoutMs = 15_000) {
   if (typeof window === "undefined") {
     return undefined;
   }
 
-  if ("requestIdleCallback" in window) {
-    const handle = window.requestIdleCallback(callback, { timeout: 1800 });
-    return () => window.cancelIdleCallback(handle);
-  }
-
-  const handle = globalThis.setTimeout(callback, 900);
+  const handle = globalThis.setTimeout(callback, timeoutMs);
   return () => globalThis.clearTimeout(handle);
 }
 
@@ -1265,10 +1350,13 @@ function ConsoleShell() {
       }
     }
 
-    void loadConsoleState();
+    const handle = globalThis.setTimeout(() => {
+      void loadConsoleState();
+    }, 15_000);
 
     return () => {
       cancelled = true;
+      globalThis.clearTimeout(handle);
     };
   }, [appText]);
 
@@ -2350,7 +2438,13 @@ function ConsoleShell() {
     reviewItems,
   ]);
 
-  const workspaceSurface = mode === "chat" ? (
+  const workspaceSurface = isMobileViewport && mode === "chat" ? (
+    <MobileChatPage locale={locale} />
+  ) : isMobileViewport && mode === "github" ? (
+    <MobileGitHubPage locale={locale} />
+  ) : isMobileViewport && mode === "matrix" ? (
+    <MobileMatrixPage locale={locale} />
+  ) : mode === "chat" ? (
     <ChatWorkspace
       key={chatSession?.id ?? "chat-session"}
       session={chatSession}
@@ -2443,6 +2537,8 @@ function ConsoleShell() {
     ? String(runtimeDiagnostics.counters.chatStreamStarted)
     : ui.common.loading;
   const showRouteOwnershipContext = mode === "github" || mode === "matrix";
+  const mobileContextNavBadge = hasRepoContext ? (locale === "de" ? "Datei" : "Ask") : undefined;
+  const mobileWorkspaceSurface = workspaceSurface;
 
   if (isMobileViewport) {
     return (
@@ -2494,7 +2590,7 @@ function ConsoleShell() {
           <ShellCard variant="base" className="workspace-frame-card mobile-workspace-frame">
             <div className="workspace-frame-body">
               <Suspense fallback={<p className="empty-state" role="status">{ui.shell.healthChecking}</p>}>
-                {workspaceSurface}
+                {mobileWorkspaceSurface}
               </Suspense>
             </div>
           </ShellCard>
@@ -2573,32 +2669,28 @@ function ConsoleShell() {
           </>
         ) : null}
 
-        <nav className="mobile-bottom-nav" aria-label={ui.shell.workspacesLabel}>
-          {MOBILE_NAV_MODES.map((workspaceMode) => (
-            <button
-              key={workspaceMode}
-              type="button"
-              className={activeMobileNav === workspaceMode ? "workspace-tab workspace-tab-active workspace-tab-mobile" : "workspace-tab workspace-tab-mobile"}
-              onClick={() => handleMobileNavSelect(workspaceMode)}
-              aria-label={ui.shell.workspaceTabs[workspaceMode].label}
-              aria-current={activeMobileNav === workspaceMode ? "page" : undefined}
-              data-testid={`tab-${workspaceMode}`}
-            >
-              <WorkspaceIcon mode={workspaceMode} />
-              <span>{ui.shell.workspaceTabs[workspaceMode].label}</span>
-            </button>
-          ))}
-          <button
-            type="button"
-            className={activeMobileNav === "context" || mobileContextOpen ? "workspace-tab workspace-tab-active workspace-tab-mobile" : "workspace-tab workspace-tab-mobile"}
-            onClick={handleMobileContextToggle}
-            aria-label={locale === "de" ? "Kontext" : "Context"}
-            data-testid="tab-context"
-          >
-            <MobileContextIcon />
-            <span>{locale === "de" ? "Kontext" : "Context"}</span>
-          </button>
-        </nav>
+        <BottomNav
+          ariaLabel={ui.shell.workspacesLabel}
+          items={[
+            ...MOBILE_NAV_MODES.map((workspaceMode) => ({
+              key: workspaceMode,
+              label: ui.shell.workspaceTabs[workspaceMode].label,
+              icon: <WorkspaceIcon mode={workspaceMode} />,
+              active: activeMobileNav === workspaceMode,
+              onPress: () => handleMobileNavSelect(workspaceMode),
+              testId: `tab-${workspaceMode}`,
+            })),
+            {
+              key: "context",
+              label: locale === "de" ? "Kontext" : "Context",
+              icon: <MobileContextIcon />,
+              active: activeMobileNav === "context" || mobileContextOpen,
+              onPress: handleMobileContextToggle,
+              testId: "tab-context",
+              badge: mobileContextNavBadge,
+            },
+          ]}
+        />
       </main>
     );
   }

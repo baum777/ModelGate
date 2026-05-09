@@ -19,7 +19,7 @@
     "typecheck:web": "npm run typecheck --workspace web",
     "typecheck": "npm run typecheck:server && npm run typecheck:web",
     "test:server": "npm run test --workspace server",
-    "test:web": "node --test --import tsx web/test/chat-workflow.test.ts web/test/markdown-message.test.ts web/test/matrix-gates.test.ts web/test/matrix-api.test.ts web/test/diagnostics-api.test.ts web/test/workspace-state.test.ts web/test/shell-view-model.test.ts web/test/approval-primitives.test.ts web/test/github-workspace.test.ts web/test/matrix-workspace.test.ts web/test/review-workspace.test.ts web/test/settings-workspace.test.ts web/test/browser-upstream-boundary.test.ts web/test/localization.test.ts web/test/app-localization.test.ts web/test/pwa.test.ts",
+    "test:web": "node --test --import tsx web/test/chat-workflow.test.ts web/test/markdown-message.test.ts web/test/matrix-gates.test.ts web/test/matrix-api.test.ts web/test/diagnostics-api.test.ts web/test/workspace-state.test.ts web/test/shell-view-model.test.ts web/test/approval-primitives.test.ts web/test/github-workspace.test.ts web/test/github-page.test.ts web/test/matrix-page.test.ts web/test/matrix-workspace.test.ts web/test/review-workspace.test.ts web/test/settings-workspace.test.ts web/test/browser-upstream-boundary.test.ts web/test/localization.test.ts web/test/app-localization.test.ts web/test/pwa.test.ts",
     "test:browser": "node scripts/run-browser-tests.mjs",
     "smoke:matrix": "node scripts/matrix-smoke.mjs",
     "smoke:matrix-evidence": "node scripts/matrix-evidence-smoke.mjs",
@@ -30,6 +30,7 @@
     "test:integration-auth-rotation-live:matrix": "node --test --import tsx tests/live/integration-auth-rotation-live-matrix.test.ts",
     "test:integration-auth-rotation-live:both": "npm run test:integration-auth-rotation-live && npm run test:integration-auth-rotation-live:matrix",
     "perf:bundle:web": "npm run build --workspace web && node scripts/check-web-bundle-budget.mjs",
+    "perf:lighthouse:tti": "node scripts/check-lighthouse-tti.mjs",
     "test": "npm run test:server && npm run test:web",
     "dev": "npm run dev:server"
   },

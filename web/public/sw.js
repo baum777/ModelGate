@@ -1,11 +1,11 @@
-const CACHE_NAME = "mosaicstacked-shell-v4";
+const CACHE_NAME = "mosaicstacked-shell-v5";
 const SHELL_ASSETS = [
   "/",
   "/index.html",
   "/manifest.webmanifest",
   "/manifest-light.webmanifest",
   "/manifest-dark.webmanifest",
-  "/favicon/favicon-transparent.ico",
+  "/icons/favicon.svg",
   "/favicon/favicon-transparent-16.png",
   "/favicon/favicon-transparent-32.png",
   "/icons/light/apple-touch-icon-light-180.png",
