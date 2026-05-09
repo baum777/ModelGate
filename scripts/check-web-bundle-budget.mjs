@@ -6,14 +6,14 @@ const distDir = join(process.cwd(), "web", "dist");
 const assetsDir = join(distDir, "assets");
 const indexHtmlPath = join(distDir, "index.html");
 
-const TOTAL_GZIP_BUDGET_BYTES = 160 * 1024;
-const TOTAL_BROTLI_BUDGET_BYTES = 150 * 1024;
+const COMBINED_GZIP_BUDGET_BYTES = 180 * 1024;
+const COMBINED_BROTLI_BUDGET_BYTES = 160 * 1024;
 
 function formatKiB(bytes) {
   return `${(bytes / 1024).toFixed(2)} KiB`;
 }
 
-function readInitialAssetPaths(html) {
+function readSyncAssetPaths(html) {
   const scriptPattern = /<script\b[^>]*src="([^"]+)"[^>]*>/gi;
   const stylesheetPattern = /<link\b[^>]*rel="stylesheet"[^>]*href="([^"]+)"[^>]*>/gi;
   const assetPaths = new Set();
@@ -38,7 +38,26 @@ function readInitialAssetPaths(html) {
   return [...assetPaths].sort();
 }
 
-function readExternalStyleOrScriptUrls(html) {
+function readPreloadAssetPaths(html) {
+  const preloadPattern = /<link\b[^>]*rel="modulepreload"[^>]*href="([^"]+)"[^>]*>/gi;
+  const preloadPaths = new Set();
+
+  while (true) {
+    const match = preloadPattern.exec(html);
+    if (!match) {
+      break;
+    }
+
+    const path = match[1];
+    if (path.startsWith("/assets/") && path.endsWith(".js")) {
+      preloadPaths.add(path.replace(/^\//, ""));
+    }
+  }
+
+  return [...preloadPaths].sort();
+}
+
+function readExternalAssetUrls(html) {
   const externalUrls = new Set();
   const pattern = /<(script|link)\b[^>]*(src|href)="([^"]+)"[^>]*>/gi;
 
@@ -52,7 +71,7 @@ function readExternalStyleOrScriptUrls(html) {
     const url = match[3];
     const rel = (match[0].match(/\brel="([^"]+)"/i)?.[1] ?? "").toLowerCase();
 
-    const isRelevantTag = tag === "script" || (tag === "link" && rel === "stylesheet");
+    const isRelevantTag = tag === "script" || (tag === "link" && (rel === "stylesheet" || rel === "modulepreload"));
     if (!isRelevantTag) {
       continue;
     }
@@ -68,47 +87,88 @@ function readExternalStyleOrScriptUrls(html) {
 readdirSync(assetsDir);
 const indexHtml = readFileSync(indexHtmlPath, "utf8");
 
-const externalUrls = readExternalStyleOrScriptUrls(indexHtml);
+const externalUrls = readExternalAssetUrls(indexHtml);
 if (externalUrls.length > 0) {
-  console.error("FAIL external script/stylesheet URLs detected in web/dist/index.html:");
+  console.error("FAIL external script/stylesheet/modulepreload URLs detected in web/dist/index.html:");
   for (const url of externalUrls) {
     console.error(`- ${url}`);
   }
   process.exit(1);
 }
 
-const initialAssets = readInitialAssetPaths(indexHtml);
-if (initialAssets.length === 0) {
+const syncAssets = readSyncAssetPaths(indexHtml);
+if (syncAssets.length === 0) {
   console.error("FAIL no initial JS/CSS assets found in web/dist/index.html");
   process.exit(1);
 }
 
-let totalRaw = 0;
-let totalGzip = 0;
-let totalBrotli = 0;
+const preloadAssets = readPreloadAssetPaths(indexHtml);
 
-for (const relativeAssetPath of initialAssets) {
+function readCompressedSize(relativeAssetPath) {
   const absoluteAssetPath = join(distDir, relativeAssetPath);
   const raw = readFileSync(absoluteAssetPath);
   const rawBytes = raw.byteLength;
   const gzipBytes = gzipSync(raw).byteLength;
   const brotliBytes = brotliCompressSync(raw).byteLength;
+  return { rawBytes, gzipBytes, brotliBytes };
+}
 
-  totalRaw += rawBytes;
-  totalGzip += gzipBytes;
-  totalBrotli += brotliBytes;
+let syncRaw = 0;
+let syncGzip = 0;
+let syncBrotli = 0;
+
+for (const relativeAssetPath of syncAssets) {
+  const { rawBytes, gzipBytes, brotliBytes } = readCompressedSize(relativeAssetPath);
+
+  syncRaw += rawBytes;
+  syncGzip += gzipBytes;
+  syncBrotli += brotliBytes;
 
   console.log(
-    `INFO ${relativeAssetPath} raw ${formatKiB(rawBytes)} | gzip ${formatKiB(gzipBytes)} | brotli ${formatKiB(brotliBytes)}`,
+    `SYNC ${relativeAssetPath} raw ${formatKiB(rawBytes)} | gzip ${formatKiB(gzipBytes)} | brotli ${formatKiB(brotliBytes)}`,
   );
 }
 
-const gzipPass = totalGzip <= TOTAL_GZIP_BUDGET_BYTES;
-const brotliPass = totalBrotli <= TOTAL_BROTLI_BUDGET_BYTES;
+let preloadRaw = 0;
+let preloadGzip = 0;
+let preloadBrotli = 0;
+
+for (const relativeAssetPath of preloadAssets) {
+  const { rawBytes, gzipBytes, brotliBytes } = readCompressedSize(relativeAssetPath);
+
+  preloadRaw += rawBytes;
+  preloadGzip += gzipBytes;
+  preloadBrotli += brotliBytes;
+
+  console.log(
+    `PRELOAD ${relativeAssetPath} raw ${formatKiB(rawBytes)} | gzip ${formatKiB(gzipBytes)} | brotli ${formatKiB(brotliBytes)}`,
+  );
+}
+
+const combinedAssets = [...new Set([...syncAssets, ...preloadAssets])];
+let combinedRaw = 0;
+let combinedGzip = 0;
+let combinedBrotli = 0;
+
+for (const relativeAssetPath of combinedAssets) {
+  const { rawBytes, gzipBytes, brotliBytes } = readCompressedSize(relativeAssetPath);
+  combinedRaw += rawBytes;
+  combinedGzip += gzipBytes;
+  combinedBrotli += brotliBytes;
+}
+
+const gzipPass = combinedGzip <= COMBINED_GZIP_BUDGET_BYTES;
+const brotliPass = combinedBrotli <= COMBINED_BROTLI_BUDGET_BYTES;
 const totalPass = gzipPass && brotliPass;
 
 console.log(
-  `TOTAL initial assets raw ${formatKiB(totalRaw)} | gzip ${formatKiB(totalGzip)} / budget ${formatKiB(TOTAL_GZIP_BUDGET_BYTES)} | brotli ${formatKiB(totalBrotli)} / budget ${formatKiB(TOTAL_BROTLI_BUDGET_BYTES)} => ${totalPass ? "PASS" : "FAIL"}`,
+  `TOTAL sync raw ${formatKiB(syncRaw)} | gzip ${formatKiB(syncGzip)} | brotli ${formatKiB(syncBrotli)}`,
+);
+console.log(
+  `TOTAL preload raw ${formatKiB(preloadRaw)} | gzip ${formatKiB(preloadGzip)} | brotli ${formatKiB(preloadBrotli)}`,
+);
+console.log(
+  `TOTAL combined raw ${formatKiB(combinedRaw)} | gzip ${formatKiB(combinedGzip)} / budget ${formatKiB(COMBINED_GZIP_BUDGET_BYTES)} | brotli ${formatKiB(combinedBrotli)} / budget ${formatKiB(COMBINED_BROTLI_BUDGET_BYTES)} => ${totalPass ? "PASS" : "FAIL"}`,
 );
 
 if (!totalPass) {
