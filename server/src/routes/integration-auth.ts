@@ -4,7 +4,8 @@ import { z } from "zod";
 import type { AppEnv } from "../lib/env.js";
 import {
   formatMissingServerConfigDetails,
-  resolveGitHubAppConfig
+  resolveGitHubAppConfig,
+  resolveGitHubOAuthConfig
 } from "../lib/integration-auth-config.js";
 import { createGitHubAppAuthClient, GitHubAppAuthError } from "../lib/github-app-auth.js";
 import type { GitHubConfig } from "../lib/github-env.js";
@@ -23,6 +24,7 @@ const AuthStartQuerySchema = z.object({
 
 const GitHubCallbackQuerySchema = z.object({
   state: z.string().trim().min(1),
+  code: z.string().trim().optional(),
   installation_id: z.string().trim().optional(),
   setup_action: z.string().trim().optional(),
   error: z.string().trim().optional(),
@@ -490,6 +492,84 @@ async function exchangeGitHubInstallation(
   }
 }
 
+async function exchangeGitHubOAuthCode(
+  deps: IntegrationAuthRouteDependencies,
+  code: string
+) {
+  const oauthConfig = resolveGitHubOAuthConfig(deps.env);
+
+  if (!oauthConfig.enabled) {
+    throw new Error("missing_server_config");
+  }
+
+  const tokenBody = new URLSearchParams({
+    client_id: oauthConfig.clientId,
+    client_secret: oauthConfig.clientSecret,
+    code,
+    redirect_uri: oauthConfig.callbackUrl
+  });
+  const tokenResponse = await requestJson(
+    deps.fetchImpl ?? fetch,
+    oauthConfig.tokenUrl,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: tokenBody.toString()
+    },
+    "github_oauth_token_exchange"
+  );
+
+  const tokenPayload = tokenResponse.payload && typeof tokenResponse.payload === "object"
+    ? tokenResponse.payload as Record<string, unknown>
+    : null;
+  const accessToken = typeof tokenPayload?.access_token === "string" ? tokenPayload.access_token.trim() : "";
+
+  if (!tokenResponse.ok || !tokenPayload || accessToken.length === 0) {
+    throw new Error("token_exchange_failed");
+  }
+
+  const userResponse = await requestJson(
+    deps.fetchImpl ?? fetch,
+    "https://api.github.com/user",
+    {
+      method: "GET",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${accessToken}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "mosaicstacked"
+      }
+    },
+    "github_oauth_user_lookup"
+  );
+  const userPayload = userResponse.payload && typeof userResponse.payload === "object"
+    ? userResponse.payload as Record<string, unknown>
+    : null;
+  const login = typeof userPayload?.login === "string" ? userPayload.login.trim() : "";
+
+  if (!userResponse.ok || !userPayload || login.length === 0) {
+    throw new Error(userResponse.status === 401 || userResponse.status === 403 ? "auth_expired" : "token_exchange_failed");
+  }
+
+  const scope = typeof tokenPayload.scope === "string"
+    ? tokenPayload.scope.split(",").map((entry) => entry.trim()).filter(Boolean)
+    : [];
+
+  return {
+    safeIdentityLabel: login,
+    credential: {
+      kind: "github_oauth_user",
+      accessToken,
+      login,
+      scopes: scope,
+      connectedAt: new Date().toISOString()
+    }
+  };
+}
+
 async function fetchMatrixLoginFlows(
   deps: IntegrationAuthRouteDependencies
 ) {
@@ -603,6 +683,39 @@ async function reverifyGitHubCredential(
   deps: IntegrationAuthRouteDependencies,
   credential: Record<string, unknown>
 ) {
+  if (credential.kind === "github_oauth_user") {
+    const accessToken = typeof credential.accessToken === "string" ? credential.accessToken.trim() : "";
+
+    if (accessToken.length === 0) {
+      throw new Error("auth_expired");
+    }
+
+    const response = await requestJson(
+      deps.fetchImpl ?? fetch,
+      "https://api.github.com/user",
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${accessToken}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": "mosaicstacked"
+        }
+      },
+      "github_oauth_user_reverify"
+    );
+    const payload = response.payload && typeof response.payload === "object"
+      ? response.payload as Record<string, unknown>
+      : null;
+    const login = typeof payload?.login === "string" ? payload.login.trim() : "";
+
+    if (!response.ok || !payload || login.length === 0) {
+      throw new Error(response.status === 401 || response.status === 403 ? "auth_expired" : "upstream_unreachable");
+    }
+
+    return login;
+  }
+
   const installationIdRaw = typeof credential.installationId === "string"
     ? credential.installationId.trim()
     : typeof credential.installationId === "number"
@@ -773,13 +886,16 @@ function registerProviderStartRoute(
 
     if (provider === "github") {
       const appConfig = resolveGitHubAppConfig(deps.env);
+      const oauthConfig = resolveGitHubOAuthConfig(deps.env);
 
-      if (!appConfig.enabled) {
+      if (!appConfig.enabled && !oauthConfig.enabled) {
+        const requirements = oauthConfig.configured ? oauthConfig.requirements : appConfig.requirements;
+        const providerLabel = oauthConfig.configured ? "GitHub OAuth" : "GitHub App";
         return sendIntegrationAuthError(
           reply,
           "missing_server_config",
           statusForErrorCode("missing_server_config"),
-          formatMissingServerConfigDetails("GitHub App", appConfig.requirements) ?? undefined
+          formatMissingServerConfigDetails(providerLabel, requirements) ?? undefined
         );
       }
 
@@ -798,6 +914,15 @@ function registerProviderStartRoute(
         returnTo,
         expiresAtMs: new Date(intent.expiresAt).getTime()
       });
+
+      if (!appConfig.enabled && oauthConfig.enabled) {
+        const url = new URL(oauthConfig.authorizeUrl);
+        url.searchParams.set("client_id", oauthConfig.clientId);
+        url.searchParams.set("redirect_uri", oauthConfig.callbackUrl);
+        url.searchParams.set("state", intent.state);
+        url.searchParams.set("scope", oauthConfig.scopes.join(","));
+        return reply.redirect(url.toString(), 302);
+      }
 
       const url = new URL(appConfig.installUrl);
       url.searchParams.set("state", intent.state);
@@ -886,14 +1011,17 @@ function registerProviderCallbackRoute(
       if (provider === "github") {
         const query = parsedQuery.data as z.infer<typeof GitHubCallbackQuerySchema>;
         const appConfig = resolveGitHubAppConfig(deps.env);
+        const oauthConfig = resolveGitHubOAuthConfig(deps.env);
 
-        if (!appConfig.enabled) {
+        if (!appConfig.enabled && !oauthConfig.enabled) {
           deps.authStore.setErrorCode(intent.sessionId, provider, "missing_server_config");
+          const requirements = oauthConfig.configured ? oauthConfig.requirements : appConfig.requirements;
+          const providerLabel = oauthConfig.configured ? "GitHub OAuth" : "GitHub App";
           return sendIntegrationAuthError(
             reply,
             "missing_server_config",
             statusForErrorCode("missing_server_config"),
-            formatMissingServerConfigDetails("GitHub App", appConfig.requirements) ?? undefined
+            formatMissingServerConfigDetails(providerLabel, requirements) ?? undefined
           );
         }
 
@@ -902,15 +1030,14 @@ function registerProviderCallbackRoute(
           return sendIntegrationAuthError(reply, "scope_denied", statusForErrorCode("scope_denied"), query.error_description);
         }
 
-        if (!query.installation_id || query.installation_id.trim().length === 0) {
+        if ((!query.installation_id || query.installation_id.trim().length === 0) && (!query.code || query.code.trim().length === 0)) {
           deps.authStore.setErrorCode(intent.sessionId, provider, "invalid_request");
           return sendIntegrationAuthError(reply, "invalid_request", statusForErrorCode("invalid_request"));
         }
 
-        const exchange = await exchangeGitHubInstallation(
-          deps,
-          query.installation_id
-        );
+        const exchange = query.installation_id && query.installation_id.trim().length > 0
+          ? await exchangeGitHubInstallation(deps, query.installation_id)
+          : await exchangeGitHubOAuthCode(deps, query.code ?? "");
 
         const stored = deps.authStore.storeCredential(intent.sessionId, provider, exchange.credential);
 
@@ -1105,10 +1232,13 @@ function registerGitHubStatusRoute(
     const sessionId = readIntegrationSessionCookie(request);
     const connection = deps.authStore.readConnection(sessionId, "github");
     const appConfig = resolveGitHubAppConfig(deps.env);
+    const oauthConfig = resolveGitHubOAuthConfig(deps.env);
+    const githubAuthReady = appConfig.enabled || oauthConfig.enabled;
+    const requirements = oauthConfig.configured ? oauthConfig.requirements : appConfig.requirements;
     const connected = connection?.connected === true;
     const status = connected
       ? "connected"
-      : appConfig.configured && !appConfig.enabled
+      : (appConfig.configured || oauthConfig.configured) && !githubAuthReady
         ? "missing_server_config"
         : "not_connected";
 
@@ -1119,8 +1249,8 @@ function registerGitHubStatusRoute(
       status,
       connected,
       appReady: appConfig.enabled,
-      oauthReady: appConfig.enabled,
-      requirements: connected || appConfig.enabled ? [] : appConfig.requirements,
+      oauthReady: githubAuthReady,
+      requirements: connected || githubAuthReady ? [] : requirements,
       identity: connected ? (connection?.safeIdentityLabel ?? null) : null,
       credentialSource: connected ? connection?.source ?? "not_connected" : "not_connected",
       lastVerifiedAt: connected ? connection?.lastVerifiedAt ?? null : null,

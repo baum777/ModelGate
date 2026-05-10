@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { GitHubConfig } from "../lib/github-env.js";
 import type { AppEnv } from "../lib/env.js";
-import { getGitHubAppRequirements } from "../lib/integration-auth-config.js";
+import { getGitHubAppRequirements, resolveGitHubAppConfig, resolveGitHubOAuthConfig } from "../lib/integration-auth-config.js";
 import type { MatrixConfig } from "../lib/matrix-env.js";
 import type { IntegrationAuthStore, IntegrationConnectionRecord, IntegrationProvider } from "../lib/integration-auth-store.js";
 
@@ -240,7 +240,14 @@ function getGitHubWorkspaceRequirements(config: GitHubConfig) {
 }
 
 function getGitHubStatusRequirements(env: AppEnv, config: GitHubConfig) {
-  const appRequirements = getGitHubAppRequirements(env);
+  const appConfig = resolveGitHubAppConfig(env);
+  const oauthConfig = resolveGitHubOAuthConfig(env);
+
+  if (oauthConfig.configured) {
+    return oauthConfig.requirements;
+  }
+
+  const appRequirements = appConfig.configured ? appConfig.requirements : getGitHubAppRequirements(env);
 
   return appRequirements.length > 0
     ? appRequirements
@@ -268,19 +275,23 @@ function providerIdentityFallback(provider: IntegrationProvider, credentialSourc
 }
 
 function buildGithubStatus(env: AppEnv, config: GitHubConfig, connection: IntegrationConnectionRecord | null): IntegrationStatusPayload {
+  const appConfig = resolveGitHubAppConfig(env);
+  const oauthConfig = resolveGitHubOAuthConfig(env);
   const credentialSource = getCredentialSource(config.instanceReady, connection);
   const lastErrorCode = connection?.lastErrorCode ?? null;
   const hasUserCredential = connection?.connected === true && connection.source === "user_connected";
   const githubOperationalReady = hasUserCredential || config.instanceReady;
+  const authConfigConfigured = appConfig.configured || oauthConfig.configured;
+  const authConfigReady = oauthConfig.enabled;
   const authState = getAuthState({
-    configReady: githubOperationalReady,
+    configReady: githubOperationalReady || authConfigReady,
     connection,
     lastErrorCode
   });
   const status = getConnectionStatus({
     credentialSource,
-    configEnabled: config.enabled,
-    configReady: githubOperationalReady,
+    configEnabled: config.enabled || authConfigConfigured,
+    configReady: githubOperationalReady || authConfigReady,
     lastErrorCode
   });
   const executionMode = deriveGitHubExecutionMode(config);

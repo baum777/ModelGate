@@ -53,6 +53,13 @@ const TEST_GITHUB_APP_ENV = {
   GITHUB_APP_SLUG: TEST_GITHUB_APP_SLUG
 };
 
+const TEST_GITHUB_OAUTH_ENV = {
+  GITHUB_OAUTH_CLIENT_ID: "github-oauth-client-id",
+  GITHUB_OAUTH_CLIENT_SECRET: "github-oauth-client-secret",
+  GITHUB_OAUTH_CALLBACK_URL: "https://app.example.test/api/auth/github/callback",
+  GITHUB_OAUTH_SCOPES: ["read:user", "user:email"]
+};
+
 function createGitHubAppIntegrationFetch(options: {
   installationId?: string;
   accountLogin?: string;
@@ -110,6 +117,58 @@ function createGitHubAppIntegrationFetch(options: {
     }
 
     return new Response(null, { status: 404 });
+  };
+}
+
+function createGitHubOAuthIntegrationFetch(options: {
+  accessToken?: string;
+  login?: string;
+  tokenStatus?: number;
+  userStatus?: number;
+  tokenPayload?: Record<string, unknown> | null;
+  userPayload?: Record<string, unknown> | null;
+} = {}) {
+  const accessToken = options.accessToken ?? "gho_user_access_token";
+  const login = options.login ?? "octocat";
+
+  return async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    const method = init?.method ?? "GET";
+
+    if (url.pathname === "/login/oauth/access_token" && method === "POST") {
+      return new Response(JSON.stringify(options.tokenPayload ?? {
+        access_token: accessToken,
+        token_type: "bearer",
+        scope: "read:user,user:email"
+      }), {
+        status: options.tokenStatus ?? 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    if (url.pathname === "/user" && method === "GET") {
+      const authorization = new Headers(init?.headers).get("authorization");
+
+      if (authorization !== `Bearer ${accessToken}`) {
+        return new Response(JSON.stringify({ message: "Bad credentials" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      return new Response(JSON.stringify(options.userPayload ?? {
+        id: 1,
+        login
+      }), {
+        status: options.userStatus ?? 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    return new Response(JSON.stringify({ message: "Unexpected GitHub OAuth request" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" }
+    });
   };
 }
 
@@ -652,6 +711,100 @@ test("real GitHub App callback stores a user-connected credential source", async
 
   assert.equal(payload.github.credentialSource, "user_connected");
   assert.equal(payload.github.labels.identity, `octocat (installation ${TEST_GITHUB_INSTALLATION_ID})`);
+});
+
+test("GitHub OAuth app start uses configured OAuth authorize flow when GitHub App config is absent", async (t) => {
+  const env = createTestEnv({
+    ...TEST_GITHUB_OAUTH_ENV,
+    MOSAIC_STACK_SESSION_SECRET: "github-oauth-session-secret",
+    ...TEST_ENCRYPTION_KEY
+  });
+
+  const app = createApp({
+    env,
+    openRouter: createMockOpenRouterClient(),
+    integrationFetch: createGitHubOAuthIntegrationFetch(),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const start = await app.inject({
+    method: "GET",
+    url: "/api/auth/github/start"
+  });
+
+  assert.equal(start.statusCode, 302);
+  const location = new URL(String(start.headers.location ?? ""));
+  assert.equal(location.origin + location.pathname, "https://github.com/login/oauth/authorize");
+  assert.equal(location.searchParams.get("client_id"), TEST_GITHUB_OAUTH_ENV.GITHUB_OAUTH_CLIENT_ID);
+  assert.equal(location.searchParams.get("redirect_uri"), TEST_GITHUB_OAUTH_ENV.GITHUB_OAUTH_CALLBACK_URL);
+  assert.equal(location.searchParams.get("scope"), TEST_GITHUB_OAUTH_ENV.GITHUB_OAUTH_SCOPES.join(","));
+  assert.ok(location.searchParams.get("state"));
+});
+
+test("GitHub OAuth app callback exchanges code and stores a user-connected credential", async (t) => {
+  const env = createTestEnv({
+    ...TEST_GITHUB_OAUTH_ENV,
+    MOSAIC_STACK_SESSION_SECRET: "github-oauth-callback-secret",
+    ...TEST_ENCRYPTION_KEY
+  });
+  const fetchImpl = createGitHubOAuthIntegrationFetch({ login: "mona" });
+
+  const app = createApp({
+    env,
+    openRouter: createMockOpenRouterClient(),
+    integrationFetch: fetchImpl,
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const start = await app.inject({
+    method: "GET",
+    url: "/api/auth/github/start"
+  });
+
+  assert.equal(start.statusCode, 302);
+  const state = readGitHubStateFromAuthorizeLocation(String(start.headers.location ?? ""));
+  const browserCookie = joinCookiesForRequest(readSetCookies(start));
+  assert.ok(state);
+  assert.ok(browserCookie);
+
+  const callback = await app.inject({
+    method: "GET",
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=oauth-code`,
+    headers: {
+      cookie: browserCookie
+    }
+  });
+
+  assert.equal(callback.statusCode, 302);
+  assert.equal(callback.headers.location, "/console?mode=settings");
+
+  const status = await app.inject({
+    method: "GET",
+    url: "/api/integrations/status",
+    headers: {
+      cookie: browserCookie
+    }
+  });
+
+  const payload = JSON.parse(status.body) as {
+    github: {
+      credentialSource: string;
+      labels: {
+        identity: string | null;
+      };
+    };
+  };
+
+  assert.equal(payload.github.credentialSource, "user_connected");
+  assert.equal(payload.github.labels.identity, "mona");
 });
 
 test("real GitHub App callback survives a fresh serverless auth store", async (t) => {

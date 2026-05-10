@@ -10,6 +10,18 @@ export type GitHubAppConfig = {
   requirements: string[];
 };
 
+export type GitHubOAuthConfig = {
+  enabled: boolean;
+  configured: boolean;
+  clientId: string;
+  clientSecret: string;
+  callbackUrl: string;
+  authorizeUrl: string;
+  tokenUrl: string;
+  scopes: string[];
+  requirements: string[];
+};
+
 function normalizeBaseUrl(input: string) {
   return input.trim().replace(/\/+$/, "");
 }
@@ -63,6 +75,54 @@ export function resolveGitHubAppConfig(env: AppEnv): GitHubAppConfig {
     privateKey,
     slug,
     installUrl: `https://github.com/apps/${normalizeBaseUrl(slug || "")}/installations/new`,
+    requirements
+  };
+}
+
+export function getGitHubOAuthRequirements(env: AppEnv): string[] {
+  const clientId = env.GITHUB_OAUTH_CLIENT_ID.trim();
+  const clientSecret = env.GITHUB_OAUTH_CLIENT_SECRET.trim();
+  const callbackUrl = env.GITHUB_OAUTH_CALLBACK_URL.trim();
+  const sessionSecret = env.MOSAIC_STACK_SESSION_SECRET.trim();
+  const requirements: string[] = [];
+
+  if (clientId.length === 0) {
+    requirements.push("GITHUB_OAUTH_CLIENT_ID");
+  }
+
+  if (clientSecret.length === 0) {
+    requirements.push("GITHUB_OAUTH_CLIENT_SECRET");
+  }
+
+  if (callbackUrl.length === 0) {
+    requirements.push("GITHUB_OAUTH_CALLBACK_URL");
+  }
+
+  if (sessionSecret.length === 0) {
+    requirements.push("MOSAIC_STACK_SESSION_SECRET");
+  }
+
+  return requirements;
+}
+
+export function resolveGitHubOAuthConfig(env: AppEnv): GitHubOAuthConfig {
+  const clientId = env.GITHUB_OAUTH_CLIENT_ID.trim();
+  const clientSecret = env.GITHUB_OAUTH_CLIENT_SECRET.trim();
+  const callbackUrl = env.GITHUB_OAUTH_CALLBACK_URL.trim();
+  const authorizeUrl = env.GITHUB_OAUTH_AUTHORIZE_URL.trim();
+  const tokenUrl = env.GITHUB_OAUTH_TOKEN_URL.trim();
+  const requirements = getGitHubOAuthRequirements(env);
+  const configured = clientId.length > 0 || clientSecret.length > 0;
+
+  return {
+    enabled: requirements.length === 0,
+    configured,
+    clientId,
+    clientSecret,
+    callbackUrl,
+    authorizeUrl,
+    tokenUrl,
+    scopes: env.GITHUB_OAUTH_SCOPES,
     requirements
   };
 }
