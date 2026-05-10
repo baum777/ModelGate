@@ -2526,14 +2526,22 @@ function ConsoleShell() {
           title="MosaicStacked"
           modelAlias={activeModelAlias ?? ui.common.na}
           healthTone={healthState.tone}
+          theme={theme}
+          locale={locale}
           brandAriaLabel={locale === "de" ? "Zur Chat-Ansicht wechseln. Lange drücken für Einstellungen." : "Switch to chat. Long press for settings."}
           modelAriaLabel={locale === "de" ? "Modelleinstellungen öffnen" : "Open model settings"}
+          themeAriaLabel={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          languageAriaLabel={ui.shell.languageLabel}
+          languageOptionEnglish={ui.shell.languageOptionEnglish}
+          languageOptionGerman={ui.shell.languageOptionGerman}
           onBrandClick={handleMobileBrandClick}
           onBrandPointerDown={handleMobileBrandPointerDown}
           onBrandPointerUp={clearMobileBrandLongPress}
           onBrandPointerCancel={clearMobileBrandLongPress}
           onBrandPointerLeave={clearMobileBrandLongPress}
           onModelPress={() => handleWorkspaceTabSelect("settings")}
+          onThemeToggle={toggleTheme}
+          onLocaleChange={setLocale}
         />
 
         <ContextStrip

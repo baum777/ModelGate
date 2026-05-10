@@ -47,10 +47,18 @@ function loadDeferredCssForViewport() {
     }
 
     loadDeferredCssOnce();
-    desktopQuery.removeEventListener("change", loadWhenDesktop);
+    if (typeof desktopQuery.removeEventListener === "function") {
+      desktopQuery.removeEventListener("change", loadWhenDesktop);
+    } else {
+      desktopQuery.removeListener(loadWhenDesktop);
+    }
   };
 
-  desktopQuery.addEventListener("change", loadWhenDesktop);
+  if (typeof desktopQuery.addEventListener === "function") {
+    desktopQuery.addEventListener("change", loadWhenDesktop);
+  } else {
+    desktopQuery.addListener(loadWhenDesktop);
+  }
 }
 
 function scheduleNonCriticalWork(callback: () => void, timeout = 15_000) {
@@ -85,8 +93,8 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 );
 
 loadStylesheetOnce("mosaicstacked-local-fonts", "/local-fonts.css");
+loadDeferredCssForViewport();
 
 scheduleNonCriticalWork(() => {
-  loadDeferredCssForViewport();
   void registerPwa();
 });

@@ -131,6 +131,34 @@ const CHAT_EXAMPLE_PROMPTS = [
   "Was ist der aktuelle Stand des Projekts?",
   "Erkläre die Trust Boundaries aus AGENTS.md.",
 ] as const;
+const MOBILE_CHAT_TIPS = {
+  en: [
+    "Enter prepares the next step · Shift+Enter inserts a line break.",
+    "Pick repo context before asking about specific files.",
+    "GitHub and Matrix actions stay backend-owned and approval-gated.",
+  ],
+  de: [
+    "Enter bereitet den nächsten Schritt vor · Shift+Enter setzt eine neue Zeile.",
+    "Wähle Repo-Kontext, bevor du konkrete Dateien referenzierst.",
+    "GitHub- und Matrix-Aktionen bleiben backend-owned und freigabegesteuert.",
+  ],
+} as const;
+
+function MobileChatTipRail({ locale }: { locale: "en" | "de" }) {
+  const tips = MOBILE_CHAT_TIPS[locale];
+
+  return (
+    <div
+      className="mobile-chat-tip-rail"
+      aria-label={locale === "de" ? "Chat-Hinweis" : "Chat hint"}
+      data-testid="mobile-chat-tip-rail"
+    >
+      {tips.map((tip) => (
+        <span key={tip} aria-hidden="true">{tip}</span>
+      ))}
+    </div>
+  );
+}
 
 export function buildChatRoutingStatusItems(options: {
   selectedModel: string;
@@ -1758,38 +1786,42 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           </ShellCard>
         ) : null}
 
-        {showCopyDiscoveryChip ? (
-          <DiscoveryChip
-            id="copy-guide"
-            position="composer-above"
-            autoDismissMs={5000}
-            text="⎘ Kopiert · Auch als Matrix-Post: ⊛"
-            onDismiss={() => {
-              markCopyGuideSeen();
-              setCopyDiscoveryPending(false);
+        <div className="mobile-chat-input-stack">
+          {showCopyDiscoveryChip ? (
+            <DiscoveryChip
+              id="copy-guide"
+              position="composer-above"
+              autoDismissMs={5000}
+              text="⎘ Kopiert · Auch als Matrix-Post: ⊛"
+              onDismiss={() => {
+                markCopyGuideSeen();
+                setCopyDiscoveryPending(false);
+              }}
+            />
+          ) : null}
+
+          <ComposeZone
+            value={chatState.input}
+            placeholder={ui.chat.composerPlaceholder}
+            disabled={Boolean(composerBlockReason)}
+            submitDisabled={Boolean(composerBlockReason) || chatState.input.trim().length === 0}
+            submitLabel={executionMode === "direct" ? ui.chat.sendDirect : ui.chat.prepareProposal}
+            ariaLabel={ui.chat.title}
+            textareaRef={composerRef}
+            onChange={(input) => dispatch({ type: "set_input", input })}
+            onKeyDown={(event) => {
+              if (!shouldSubmitChatComposerOnKey(event)) {
+                return;
+              }
+
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
             }}
+            onSubmit={handleSubmit}
           />
-        ) : null}
 
-        <ComposeZone
-          value={chatState.input}
-          placeholder={ui.chat.composerPlaceholder}
-          disabled={Boolean(composerBlockReason)}
-          submitDisabled={Boolean(composerBlockReason) || chatState.input.trim().length === 0}
-          submitLabel={executionMode === "direct" ? ui.chat.sendDirect : ui.chat.prepareProposal}
-          ariaLabel={ui.chat.title}
-          textareaRef={composerRef}
-          onChange={(input) => dispatch({ type: "set_input", input })}
-          onKeyDown={(event) => {
-            if (!shouldSubmitChatComposerOnKey(event)) {
-              return;
-            }
-
-            event.preventDefault();
-            event.currentTarget.form?.requestSubmit();
-          }}
-          onSubmit={handleSubmit}
-        />
+          <MobileChatTipRail locale={locale} />
+        </div>
       </section>
     </section>
   );

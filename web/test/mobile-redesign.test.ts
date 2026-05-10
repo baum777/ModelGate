@@ -24,6 +24,7 @@ const styles = () => [
   readFileSync("web/src/styles.css", "utf8"),
   readFileSync("web/src/ui-adaptation.css", "utf8"),
 ].join("\n");
+const criticalSource = () => readFileSync("web/src/critical.css", "utf8");
 const uiAdaptationSource = () => readFileSync("web/src/ui-adaptation.css", "utf8");
 
 test("mobile shell keeps Kontext as the fourth context-browser tab", () => {
@@ -47,6 +48,24 @@ test("mobile context strip keeps canonical state labels and opens command sheet"
   assert.match(source, /mobile-context-strip/);
   assert.match(source, /handleMobileContextToggle/);
   assert.match(source, /mobile-context-sheet/);
+});
+
+test("mobile topbar exposes theme and locale controls", () => {
+  const source = mobileLayoutSource();
+  const css = styles();
+
+  assert.match(source, /theme=\{theme\}/);
+  assert.match(source, /locale=\{locale\}/);
+  assert.match(source, /className="theme-toggle-button"/);
+  assert.match(source, /\{theme === "dark" \? "☀" : "☾"\}/);
+  assert.match(source, /className="shell-language-toggle"/);
+  assert.match(source, /data-testid="locale-en"/);
+  assert.match(source, /data-testid="locale-de"/);
+  assert.doesNotMatch(source, /mobile-theme-toggle/);
+  assert.doesNotMatch(source, /mobile-locale-/);
+  assert.match(css, /\.app-shell-mobile \.theme-toggle-button/);
+  assert.match(css, /\.app-shell-mobile \.shell-language-toggle/);
+  assert.match(css, /\.app-shell-mobile \.shell-language-button-active/);
 });
 
 test("mobile redesign does not restore deleted mock mobile surfaces", () => {
@@ -92,9 +111,18 @@ test("mobile chat slice uses bounded composer and inline diff primitives", () =>
   const css = styles();
 
   assert.match(source, /ComposeZone/);
+  assert.match(source, /MobileChatTipRail/);
   assert.match(source, /InlineDiff/);
+  assert.match(source, /mobile-compose-field/);
+  assert.match(source, /mobile-compose-submit/);
   assert.match(source, /Math\.min\(textarea\.scrollHeight,\s*96\)/);
   assert.match(source, /extractInlineDiffFiles/);
+  assert.match(css, /--mobile-chat-golden-ratio:\s*1\.618/);
+  assert.match(css, /\.mobile-compose-field[\s\S]*position:\s*relative/);
+  assert.match(css, /\.mobile-compose-submit[\s\S]*position:\s*absolute/);
+  assert.match(css, /\.governed-composer textarea[\s\S]*scrollbar-width:\s*none/);
+  assert.match(css, /\.mobile-chat-input-stack[\s\S]*flex:\s*0 0 auto/);
+  assert.match(css, /\.mobile-chat-tip-rail[\s\S]*animation:\s*mobile-tip-cycle/);
   assert.match(css, /\.governed-chat-card[\s\S]*display:\s*flex/);
   assert.match(css, /\.governed-thread[\s\S]*overflow-y:\s*auto/);
   assert.match(css, /\.mobile-inline-diff/);
@@ -168,6 +196,19 @@ test("mobile viewport does not import deferred desktop CSS after idle timeout", 
   assert.match(source, /function loadDeferredCssForViewport\(\)/);
   assert.match(source, /window\.matchMedia\(DESKTOP_DEFERRED_CSS_QUERY\)/);
   assert.match(source, /if \(desktopQuery\.matches\) \{[\s\S]*loadDeferredCssOnce\(\)/);
-  assert.match(source, /loadStylesheetOnce\("mosaicstacked-local-fonts", "\/local-fonts\.css"\);[\s\S]*scheduleNonCriticalWork/);
+  assert.match(source, /loadStylesheetOnce\("mosaicstacked-local-fonts", "\/local-fonts\.css"\);\s*loadDeferredCssForViewport\(\);\s*scheduleNonCriticalWork/);
   assert.doesNotMatch(source, /scheduleNonCriticalWork\(\(\) => \{[\s\S]*import\("\.\/deferred\.css"\)/);
+  assert.doesNotMatch(source, /scheduleNonCriticalWork\(\(\) => \{[\s\S]*loadDeferredCssForViewport\(\)/);
+});
+
+test("desktop shell has critical and deferred responsive guards", () => {
+  const critical = criticalSource();
+  const ui = uiAdaptationSource();
+
+  assert.match(critical, /Desktop shell critical layout/);
+  assert.match(critical, /@media \(min-width:\s*761px\)[\s\S]*\.app-shell-console:not\(\.app-shell-mobile\) \.console-layout\s*{[\s\S]*grid-template-columns:\s*220px minmax\(0,\s*1fr\) minmax\(280px,\s*320px\)/);
+  assert.match(ui, /Desktop shell responsive stability guard/);
+  assert.match(ui, /@media \(min-width:\s*1024px\)[\s\S]*\.app-shell-console:not\(\.app-shell-mobile\) \.console-layout\s*{[\s\S]*grid-template-columns:\s*220px minmax\(0,\s*1fr\) minmax\(280px,\s*320px\) !important/);
+  assert.match(ui, /@media \(min-width:\s*1024px\) and \(max-width:\s*1279px\)[\s\S]*grid-template-columns:\s*220px minmax\(0,\s*1fr\) 280px !important/);
+  assert.match(ui, /\.app-shell-console:not\(\.app-shell-mobile\) \.workspace-tab-vertical span,[\s\S]*\.app-shell-console:not\(\.app-shell-mobile\) \.workspace-tab-vertical strong,[\s\S]*\.app-shell-console:not\(\.app-shell-mobile\) \.workspace-tab-vertical small,[\s\S]*overflow:\s*hidden/);
 });

@@ -7530,6 +7530,7 @@ button:disabled,
 
 .app-shell-mobile .mobile-model-badge {
   min-height: 24px;
+  max-width: 68px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -7537,6 +7538,43 @@ button:disabled,
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 10px;
   box-shadow: none;
+}
+
+.app-shell-mobile .theme-toggle-button {
+  min-height: 28px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.app-shell-mobile .shell-language-toggle {
+  min-height: 28px;
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--ms-border2);
+  border-radius: 999px;
+  background: var(--ms-bg3);
+}
+
+.app-shell-mobile .shell-language-button {
+  min-width: 28px;
+  min-height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ms-text2);
+  font-family: var(--ms-mono);
+  font-size: 10px;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.app-shell-mobile .shell-language-button-active {
+  background: rgba(98, 201, 255, 0.18);
+  color: var(--ms-text);
 }
 
 .app-shell-mobile .mobile-live-indicator {
@@ -7655,9 +7693,11 @@ button:disabled,
 }
 
 .app-shell-mobile .governed-chat-card {
+  --mobile-chat-golden-ratio: 1.618;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  align-items: center;
   overflow: hidden;
   background: var(--mobile-redesign-bg);
 }
@@ -7670,7 +7710,9 @@ button:disabled,
 
 .app-shell-mobile .governed-thread {
   flex: 1 1 auto;
+  width: min(100%, 430px);
   min-height: 0;
+  margin-inline: auto;
   padding: 18px 10px 12px;
   display: flex;
   flex-direction: column;
@@ -7822,52 +7864,69 @@ button:disabled,
 
 .app-shell-mobile .governed-composer {
   margin: 0;
-  padding: 8px 14px calc(8px + env(safe-area-inset-bottom));
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 34px;
-  gap: 7px;
-  align-items: end;
+  padding: 0;
+  display: block;
   border: 0;
   border-radius: 0;
   background: var(--mobile-redesign-bg);
 }
 
+.app-shell-mobile .mobile-compose-field {
+  position: relative;
+  min-height: 44px;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+  border: 1px solid rgba(158, 168, 190, 0.28);
+  border-radius: 12px;
+  background: #f7f8fb;
+}
+
 .app-shell-mobile .governed-composer textarea {
+  width: 100%;
   height: auto;
   min-height: 36px;
   max-height: 96px;
-  padding: 8px 10px;
-  border-radius: 5px;
-  border-color: rgba(255, 255, 255, 0.86);
-  background: #f7f8fb;
+  padding: 10px 48px 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
   color: #11131a;
   font-size: 14px;
   line-height: 1.25;
   resize: none;
   overflow-y: auto;
+  scrollbar-width: none;
 }
 
-.app-shell-mobile .composer-footer {
-  margin: 0;
-  align-self: end;
+.app-shell-mobile .governed-composer textarea::-webkit-scrollbar {
+  display: none;
 }
 
-.app-shell-mobile .composer-footer button[type="submit"] {
+.app-shell-mobile .mobile-compose-submit {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
   width: 34px;
   min-width: 34px;
-  min-height: 36px;
+  min-height: 34px;
   padding: 0;
-  border-radius: 7px;
+  border: 0;
+  border-radius: 10px;
   background: #151722;
   color: var(--mobile-redesign-primary);
   font-size: 0;
   box-shadow: none;
 }
 
-.app-shell-mobile .composer-footer button[type="submit"]::before {
+.app-shell-mobile .mobile-compose-submit::before {
   content: "↑";
   font-size: 17px;
   line-height: 1;
+}
+
+.app-shell-mobile .mobile-compose-submit:disabled {
+  opacity: 0.45;
 }
 
 .app-shell-mobile .mobile-inline-diff {

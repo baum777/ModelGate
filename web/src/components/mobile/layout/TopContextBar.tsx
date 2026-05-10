@@ -7,27 +7,43 @@ export function TopContextBar({
   title,
   modelAlias,
   healthTone,
+  theme,
+  locale,
   brandAriaLabel,
   modelAriaLabel,
+  themeAriaLabel,
+  languageAriaLabel,
+  languageOptionEnglish,
+  languageOptionGerman,
   onBrandClick,
   onBrandPointerCancel,
   onBrandPointerDown,
   onBrandPointerLeave,
   onBrandPointerUp,
   onModelPress,
+  onThemeToggle,
+  onLocaleChange,
 }: {
   brandIcon: ReactNode;
   title: string;
   modelAlias: string;
   healthTone: MobileHealthTone;
+  theme: "dark" | "light";
+  locale: "en" | "de";
   brandAriaLabel: string;
   modelAriaLabel: string;
+  themeAriaLabel: string;
+  languageAriaLabel: string;
+  languageOptionEnglish: string;
+  languageOptionGerman: string;
   onBrandClick: () => void;
   onBrandPointerCancel: PointerEventHandler<HTMLButtonElement>;
   onBrandPointerDown: PointerEventHandler<HTMLButtonElement>;
   onBrandPointerLeave: PointerEventHandler<HTMLButtonElement>;
   onBrandPointerUp: PointerEventHandler<HTMLButtonElement>;
   onModelPress: () => void;
+  onThemeToggle: () => void;
+  onLocaleChange: (locale: "en" | "de") => void;
 }) {
   return (
     <header className="mobile-topbar">
@@ -56,6 +72,36 @@ export function TopContextBar({
         >
           {modelAlias}
         </button>
+        <button
+          type="button"
+          className="theme-toggle-button"
+          onClick={onThemeToggle}
+          aria-label={themeAriaLabel}
+        >
+          {theme === "dark" ? "☀" : "☾"}
+        </button>
+        <div className="shell-language-toggle" role="group" aria-label={languageAriaLabel}>
+          <button
+            type="button"
+            className={locale === "en" ? "secondary-button shell-language-button shell-language-button-active" : "secondary-button shell-language-button"}
+            onClick={() => onLocaleChange("en")}
+            aria-pressed={locale === "en"}
+            aria-label={locale === "de" ? "Sprache: Englisch" : "Language: English"}
+            data-testid="locale-en"
+          >
+            {languageOptionEnglish}
+          </button>
+          <button
+            type="button"
+            className={locale === "de" ? "secondary-button shell-language-button shell-language-button-active" : "secondary-button shell-language-button"}
+            onClick={() => onLocaleChange("de")}
+            aria-pressed={locale === "de"}
+            aria-label={locale === "de" ? "Sprache: Deutsch" : "Language: German"}
+            data-testid="locale-de"
+          >
+            {languageOptionGerman}
+          </button>
+        </div>
         <span className={`mobile-live-indicator mobile-live-indicator-${healthTone}`} aria-hidden="true" />
       </div>
     </header>

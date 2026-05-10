@@ -35,24 +35,24 @@ export function ComposeZone({
 
   return (
     <form className="composer governed-composer mobile-compose-zone" onSubmit={onSubmit}>
-      <textarea
-        className="mobile-compose-input"
-        data-testid="chat-composer"
-        aria-label={ariaLabel}
-        ref={(node) => {
-          textareaRef.current = node;
-        }}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={onKeyDown}
-        placeholder={placeholder}
-        rows={1}
-        disabled={disabled}
-      />
-
-      <div className="composer-footer mobile-compose-footer">
+      <div className="mobile-compose-field">
+        <textarea
+          className="mobile-compose-input"
+          data-testid="chat-composer"
+          aria-label={ariaLabel}
+          ref={(node) => {
+            textareaRef.current = node;
+          }}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={onKeyDown}
+          placeholder={placeholder}
+          rows={1}
+          disabled={disabled}
+        />
         <button
           type="submit"
+          className="secondary-button mobile-compose-submit"
           data-testid="chat-send"
           disabled={submitDisabled}
         >

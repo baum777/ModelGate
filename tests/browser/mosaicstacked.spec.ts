@@ -691,6 +691,61 @@ test("console shell avoids page-level horizontal overflow in compact desktop lay
   expect(overflow.bodyScrollWidth).toBeLessThanOrEqual(overflow.bodyClientWidth);
 });
 
+test("console shell keeps desktop side panels and main body within pane bounds", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+
+  for (const viewport of [
+    { width: 1100, height: 760 },
+    { width: 1280, height: 760 },
+    { width: 1440, height: 760 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await loadConsole(page);
+    await expect(page.locator(".workspace-sidebar")).toBeVisible();
+    await expect(page.locator(".console-main")).toBeVisible();
+    await expect(page.locator(".workspace-context")).toBeVisible();
+
+    const metrics = await page.evaluate(() => {
+      const readPane = (selector: string) => {
+        const element = document.querySelector<HTMLElement>(selector);
+        if (!element) {
+          return null;
+        }
+
+        const rect = element.getBoundingClientRect();
+        return {
+          clientWidth: element.clientWidth,
+          scrollWidth: element.scrollWidth,
+          left: rect.left,
+          right: rect.right,
+          width: rect.width,
+        };
+      };
+
+      return {
+        viewportWidth: document.documentElement.clientWidth,
+        htmlClientWidth: document.documentElement.clientWidth,
+        htmlScrollWidth: document.documentElement.scrollWidth,
+        bodyClientWidth: document.body.clientWidth,
+        bodyScrollWidth: document.body.scrollWidth,
+        sidebar: readPane(".workspace-sidebar"),
+        main: readPane(".console-main"),
+        context: readPane(".workspace-context"),
+      };
+    });
+
+    expect(metrics.htmlScrollWidth).toBeLessThanOrEqual(metrics.htmlClientWidth);
+    expect(metrics.bodyScrollWidth).toBeLessThanOrEqual(metrics.bodyClientWidth);
+
+    for (const pane of [metrics.sidebar, metrics.main, metrics.context]) {
+      expect(pane).not.toBeNull();
+      expect(pane!.left).toBeGreaterThanOrEqual(0);
+      expect(Math.ceil(pane!.right)).toBeLessThanOrEqual(metrics.viewportWidth);
+      expect(pane!.scrollWidth).toBeLessThanOrEqual(pane!.clientWidth + 1);
+    }
+  }
+});
+
 test("mobile viewport renders functional chat workspace instead of reference-only mobile mock", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await installBaseMocks(page, { matrixStatus: "ok" });
@@ -707,6 +762,59 @@ test("mobile viewport renders functional chat workspace instead of reference-onl
   await expect(page.getByTestId("app-shell")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("chat-workspace")).toBeVisible();
   await expect(page.getByTestId("mobile-chat-page")).toHaveCount(0);
+  await expect(page.getByTestId("mobile-chat-tip-rail")).toBeVisible();
+  await expect(page.locator(".mobile-topbar .theme-toggle-button")).toBeVisible();
+  await expect(page.getByTestId("locale-en")).toBeVisible();
+  await expect(page.getByTestId("locale-de")).toBeVisible();
+
+  const mobileChatLayout = await page.evaluate(() => {
+    const rectFor = (selector: string) => {
+      const element = document.querySelector<HTMLElement>(selector);
+      if (!element) {
+        return null;
+      }
+
+      const rect = element.getBoundingClientRect();
+      return {
+        top: rect.top,
+        bottom: rect.bottom,
+        height: rect.height,
+      };
+    };
+
+    return {
+      themeText: document.querySelector(".mobile-topbar .theme-toggle-button")?.textContent?.trim() ?? null,
+      localeToggleClass: document.querySelector(".mobile-topbar .shell-language-toggle")?.className ?? null,
+      thread: rectFor(".governed-thread"),
+      inputStack: rectFor(".mobile-chat-input-stack"),
+      tip: rectFor(".mobile-chat-tip-rail"),
+      nav: rectFor(".mobile-bottom-nav"),
+      composeField: rectFor(".mobile-compose-field"),
+      composeInput: rectFor(".mobile-compose-input"),
+      composeSubmit: rectFor(".mobile-compose-submit"),
+      tipCount: document.querySelectorAll(".mobile-chat-tip-rail span").length,
+      textareaScrollbarWidth: window.getComputedStyle(document.querySelector(".mobile-compose-input") as HTMLElement).scrollbarWidth,
+      goldenRatio: window.getComputedStyle(document.querySelector(".governed-chat-card") as HTMLElement).getPropertyValue("--mobile-chat-golden-ratio").trim(),
+    };
+  });
+
+  expect(mobileChatLayout.thread).not.toBeNull();
+  expect(mobileChatLayout.inputStack).not.toBeNull();
+  expect(mobileChatLayout.tip).not.toBeNull();
+  expect(mobileChatLayout.nav).not.toBeNull();
+  expect(mobileChatLayout.composeField).not.toBeNull();
+  expect(mobileChatLayout.composeInput).not.toBeNull();
+  expect(mobileChatLayout.composeSubmit).not.toBeNull();
+  expect(mobileChatLayout.tipCount).toBe(3);
+  expect(mobileChatLayout.themeText).toMatch(/^[☀☾]$/);
+  expect(mobileChatLayout.localeToggleClass).toContain("shell-language-toggle");
+  expect(mobileChatLayout.textareaScrollbarWidth).toBe("none");
+  expect(mobileChatLayout.goldenRatio).toBe("1.618");
+  expect(mobileChatLayout.thread!.height).toBeGreaterThan(mobileChatLayout.inputStack!.height);
+  expect(mobileChatLayout.thread!.bottom).toBeLessThanOrEqual(mobileChatLayout.inputStack!.top + 1);
+  expect(mobileChatLayout.composeSubmit!.top).toBeGreaterThanOrEqual(mobileChatLayout.composeField!.top);
+  expect(mobileChatLayout.composeSubmit!.bottom).toBeLessThanOrEqual(mobileChatLayout.composeField!.bottom);
+  expect(mobileChatLayout.tip!.bottom).toBeLessThan(mobileChatLayout.nav!.top);
 
   await page.getByTestId("chat-composer").fill("Mobile backend check");
   await page.getByTestId("chat-send").click();

@@ -196,6 +196,8 @@ button:disabled {
 }
 
 .app-shell-mobile .mobile-brand-button {
+  min-width: 0;
+  flex: 1 1 auto;
   min-height: 36px;
   padding: 4px 8px;
   gap: var(--sp-2);
@@ -207,26 +209,72 @@ button:disabled {
   box-shadow: none;
 }
 
+.app-shell-mobile .mobile-brand-button > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .app-shell-mobile .mobile-brand-button .mosaicstacked-mark {
+  flex: 0 0 auto;
   width: 24px;
   height: 24px;
 }
 
 .app-shell-mobile .mobile-topbar-actions {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: var(--sp-2);
+  gap: 5px;
 }
 
 .app-shell-mobile .mobile-model-badge {
   min-height: 28px;
-  max-width: 140px;
-  padding: 4px 10px;
+  max-width: 68px;
+  padding: 4px 8px;
   border-radius: 999px;
   font-size: 11px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.app-shell-mobile .theme-toggle-button {
+  min-height: 28px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.app-shell-mobile .shell-language-toggle {
+  min-height: 28px;
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--ms-border2);
+  border-radius: 999px;
+  background: var(--ms-bg3);
+}
+
+.app-shell-mobile .shell-language-button {
+  min-width: 28px;
+  min-height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ms-text2);
+  font-family: var(--ms-mono);
+  font-size: 10px;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.app-shell-mobile .shell-language-button-active {
+  background: rgba(98, 201, 255, 0.18);
+  color: var(--ms-text);
 }
 
 .app-shell-mobile .mobile-live-indicator {
@@ -292,6 +340,26 @@ button:disabled {
 
 .app-shell-mobile .mobile-workspace-frame {
   min-height: 100%;
+}
+
+.app-shell-mobile .mobile-workspace-frame,
+.app-shell-mobile .workspace-frame-body,
+.app-shell-mobile .governed-chat-workspace,
+.app-shell-mobile .governed-chat-card {
+  min-height: 0;
+  height: 100%;
+}
+
+.app-shell-mobile .workspace-frame-body {
+  display: grid;
+}
+
+.app-shell-mobile .governed-chat-workspace {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
 }
 
 .app-shell-mobile .mobile-bottom-nav {
@@ -709,15 +777,19 @@ button:disabled {
 }
 
 .app-shell-mobile .governed-chat-card {
+  --mobile-chat-golden-ratio: 1.618;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  align-items: center;
   overflow: hidden;
 }
 
 .app-shell-mobile .governed-thread {
   flex: 1 1 auto;
+  width: min(100%, 430px);
   min-height: 0;
+  margin-inline: auto;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -726,33 +798,121 @@ button:disabled {
   margin: 0;
   border: 0;
   border-radius: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 34px;
+  display: block;
+}
+
+.app-shell-mobile .mobile-compose-field {
+  position: relative;
+  min-height: 44px;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+  border: 1px solid rgba(158, 168, 190, 0.28);
+  border-radius: 12px;
+  background: #f7f8fb;
 }
 
 .app-shell-mobile .governed-composer textarea {
+  width: 100%;
   height: auto;
   min-height: 36px;
   max-height: 96px;
-  border-radius: 5px;
-  background: #f7f8fb;
+  padding: 10px 48px 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
   color: #11131a;
   resize: none;
   overflow-y: auto;
+  scrollbar-width: none;
 }
 
-.app-shell-mobile .composer-footer button[type="submit"] {
+.app-shell-mobile .governed-composer textarea::-webkit-scrollbar {
+  display: none;
+}
+
+.app-shell-mobile .mobile-compose-submit {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
   width: 34px;
   min-width: 34px;
-  min-height: 36px;
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
   font-size: 0;
   background: #151722;
   color: #62c9ff;
 }
 
-.app-shell-mobile .composer-footer button[type="submit"]::before {
+.app-shell-mobile .mobile-compose-submit::before {
   content: "↑";
   font-size: 17px;
+}
+
+.app-shell-mobile .mobile-compose-submit:disabled {
+  opacity: 0.45;
+}
+
+.app-shell-mobile .mobile-chat-input-stack {
+  flex: 0 0 auto;
+  width: min(100%, 430px);
+  display: grid;
+  gap: 8px;
+  margin-inline: auto;
+  padding: calc(18px / var(--mobile-chat-golden-ratio, 1.618)) 10px calc(26px / var(--mobile-chat-golden-ratio, 1.618));
+  background: #090b10;
+}
+
+.app-shell-mobile .mobile-chat-input-stack .governed-composer {
+  padding: 0;
+}
+
+.app-shell-mobile .mobile-chat-tip-rail {
+  position: relative;
+  min-height: 18px;
+  overflow: hidden;
+  color: #82899a;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.app-shell-mobile .mobile-chat-tip-rail span {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: mobile-tip-cycle 12s ease-in-out infinite;
+}
+
+.app-shell-mobile .mobile-chat-tip-rail span:nth-child(2) {
+  animation-delay: 4s;
+}
+
+.app-shell-mobile .mobile-chat-tip-rail span:nth-child(3) {
+  animation-delay: 8s;
+}
+
+@keyframes mobile-tip-cycle {
+  0%, 8% { opacity: 0; transform: translateY(4px); }
+  12%, 30% { opacity: 1; transform: translateY(0); }
+  34%, 100% { opacity: 0; transform: translateY(-4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell-mobile .mobile-chat-tip-rail span {
+    animation: none;
+  }
+
+  .app-shell-mobile .mobile-chat-tip-rail span:first-child {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .app-shell-mobile .empty-state-cta h2 {
@@ -1100,4 +1260,83 @@ button:disabled {
 .app-shell-mobile .settings-mobile-row-list {
   display: grid;
   gap: 0;
+}
+
+/* Desktop shell critical layout: prevents a stacked first paint before deferred CSS arrives. */
+@media (min-width: 761px) {
+  .app-shell-console:not(.app-shell-mobile) {
+    height: 100vh;
+    max-width: 100vw;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .app-shell-console:not(.app-shell-mobile) .global-header-shell {
+    min-height: 57px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-4);
+    padding: var(--sp-2) var(--sp-4);
+  }
+
+  .app-shell-console:not(.app-shell-mobile) .console-layout {
+    width: 100%;
+    min-width: 0;
+    height: calc(100vh - 57px);
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr) minmax(280px, 320px);
+    align-items: stretch;
+    overflow: hidden;
+  }
+
+  .app-shell-console:not(.app-shell-mobile) .workspace-sidebar,
+  .app-shell-console:not(.app-shell-mobile) .workspace-context,
+  .app-shell-console:not(.app-shell-mobile) .console-main {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .app-shell-console:not(.app-shell-mobile) .workspace-tab-vertical {
+    width: 100%;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .app-shell-console:not(.app-shell-mobile) .workspace-tab-vertical span,
+  .app-shell-console:not(.app-shell-mobile) .workspace-tab-vertical strong,
+  .app-shell-console:not(.app-shell-mobile) .workspace-tab-vertical small {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1023px) {
+  .app-shell-console:not(.app-shell-mobile) {
+    height: auto;
+    min-height: 100vh;
+    overflow-y: auto;
+  }
+
+  .app-shell-console:not(.app-shell-mobile) .console-layout {
+    height: auto;
+    min-height: calc(100vh - 57px);
+    grid-template-columns: minmax(0, 1fr);
+    overflow: visible;
+  }
+
+  .app-shell-console:not(.app-shell-mobile) .workspace-sidebar,
+  .app-shell-console:not(.app-shell-mobile) .workspace-context {
+    position: static;
+    height: auto;
+    max-height: none;
+  }
 }
