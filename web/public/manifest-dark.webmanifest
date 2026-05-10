@@ -3,9 +3,12 @@
   "short_name": "MosaicStacked",
   "description": "Model-agnostic workspace for chat, repositories, Matrix context, and review.",
   "display": "standalone",
+  "orientation": "portrait",
+  "display_override": ["window-controls-overlay"],
+  "prefer_related_applications": false,
   "start_url": "/",
-  "background_color": "#010a20",
-  "theme_color": "#2563eb",
+  "background_color": "#050c14",
+  "theme_color": "#050c14",
   "icons": [
     {
       "src": "/icons/dark/icon-dark-192.png",

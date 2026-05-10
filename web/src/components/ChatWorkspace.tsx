@@ -51,7 +51,6 @@ import {
 } from "../lib/guide-state.js";
 import { ComposeZone } from "./mobile/chat/ComposeZone.js";
 import { InlineDiff } from "./mobile/chat/InlineDiff.js";
-import { BottomSheet } from "./mobile/shared/BottomSheet.js";
 
 type PublicModelEntry = {
   alias: string;
@@ -543,7 +542,6 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const [contextTipPending, setContextTipPending] = useState<{ prompt: string; fileName: string } | null>(null);
   const [copyDiscoveryPending, setCopyDiscoveryPending] = useState(false);
   const [expandedActionMessageId, setExpandedActionMessageId] = useState<string | null>(null);
-  const [approvalConfirmProposal, setApprovalConfirmProposal] = useState<ChatProposal | null>(null);
   const [highlightedMessageAction, setHighlightedMessageAction] = useState<{
     messageId: string;
     action: "github" | "matrix";
@@ -584,19 +582,6 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
 
     setMatrixComposeRoomId(matrixRoomOptions[0]);
   }, [matrixComposeOpen, matrixComposeRoomId, matrixRoomOptions]);
-
-  useEffect(() => {
-    if (!approvalConfirmProposal) {
-      return;
-    }
-
-    if (
-      chatState.pendingProposal?.id !== approvalConfirmProposal.id
-      || chatState.pendingProposal.status !== "pending"
-    ) {
-      setApprovalConfirmProposal(null);
-    }
-  }, [approvalConfirmProposal, chatState.pendingProposal?.id, chatState.pendingProposal?.status]);
 
   useEffect(() => {
     const nextState = selectedModel.trim().length > 0 ? "done" : "pending";
@@ -1370,47 +1355,13 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             <DecisionZone
               testId="chat-decision-zone"
               onApprove={() => {
-                setApprovalConfirmProposal(pendingProposal);
+                void executeProposal(pendingProposal);
               }}
               onReject={rejectProposal}
               helperText={ui.chat.proposalHelper}
             />
           </ProposalCard>
         ) : null}
-
-        <BottomSheet
-          open={Boolean(approvalConfirmProposal)}
-          title={locale === "de" ? "Im Backend ausführen?" : "Execute on backend?"}
-          onDismiss={() => setApprovalConfirmProposal(null)}
-        >
-          <div className="chat-approval-confirm-sheet" data-testid="chat-approval-confirm-sheet">
-            <p className="mobile-sheet-warning">
-              {locale === "de"
-                ? "Das sendet den freigegebenen Vorschlag an die backend-owned Ausführung. Der Browser übergibt nur deine Freigabeabsicht."
-                : "This sends the approved proposal to backend-owned execution. The browser only hands over your approval intent."}
-            </p>
-            <div className="mobile-sheet-actions">
-              <button type="button" className="secondary-button" onClick={() => setApprovalConfirmProposal(null)}>
-                {locale === "de" ? "Abbrechen" : "Cancel"}
-              </button>
-              <button
-                type="button"
-                className="mobile-danger-action"
-                disabled={!approvalConfirmProposal}
-                onClick={() => {
-                  if (!approvalConfirmProposal) {
-                    return;
-                  }
-
-                  setApprovalConfirmProposal(null);
-                  void executeProposal(approvalConfirmProposal);
-                }}
-              >
-                {locale === "de" ? "Ausführen" : "Execute"}
-              </button>
-            </div>
-          </div>
-        </BottomSheet>
 
         {executionMode === "governed" && pendingProposal?.status === "executing" ? (
           <ApprovalTransitionCard

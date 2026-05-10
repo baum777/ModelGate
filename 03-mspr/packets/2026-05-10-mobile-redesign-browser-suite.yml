@@ -1,0 +1,42 @@
+id: MSPR-20260510-002
+date: 2026-05-10
+status: superseded
+trigger: validation_gap
+scope:
+  paths:
+    - web/src/App.tsx
+    - web/src/critical.css
+    - web/src/components/mobile/shared/BottomSheet.tsx
+    - web/src/components/ChatWorkspace.tsx
+    - web/test/mobile-redesign.test.ts
+authority:
+  observed:
+    - npm run test:web passed 19/19
+    - npm run build:web exited 0
+    - npm run test:browser passed 16/25 and failed 9/25
+    - npm run test:browser passed 25/25 after browser-suite repair
+    - npm test passed server 30/30 and web 19/19 after browser-suite repair
+    - npm run typecheck passed server and web after browser-suite repair
+    - pre-existing test-results directories matched several failed browser scenario slugs
+  inferred:
+    - original validation gap is superseded by direct repair and full-suite proof
+risk:
+  level: low
+  statement: browser-suite validation gap is closed by 25/25 browser tests plus root test and typecheck proof
+decision_needed: none
+review:
+  owner: agent
+  state: superseded_by_verification
+verification:
+  proof:
+    - node --test --import tsx web/test/mobile-redesign.test.ts web/test/pwa.test.ts
+    - npm run typecheck:web
+    - npm run test:web
+    - npm run build:web
+    - npm run test:browser
+    - npm test
+    - npm run typecheck
+links:
+  - ../web/test/mobile-redesign.test.ts
+  - ../test-results
+next_gate: none

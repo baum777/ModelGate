@@ -13,16 +13,17 @@ export function ActivityRow({
 }) {
   return (
     <button type="button" className="mobile-activity-row" onClick={onPress}>
-      <span className="mobile-activity-dot" aria-hidden="true">•</span>
       <span className="mobile-activity-copy">
         <strong>{title}</strong>
-        <small>
+        <small className="mobile-activity-meta">{age}</small>
+      </span>
+      <span className="mobile-activity-stats" aria-label={`Diff ${additions} additions, ${deletions} deletions`}>
+        {additions > 0 ? (
           <span className="mobile-additions">+{additions}</span>
-          {" "}
+        ) : null}
+        {deletions > 0 ? (
           <span className="mobile-deletions">-{deletions}</span>
-          {" · "}
-          {age}
-        </small>
+        ) : null}
       </span>
     </button>
   );

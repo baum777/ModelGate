@@ -14,4 +14,4 @@ Format: `[[link]] | summary | #tags | YYYY-MM-DD`
 [[../docs/test-matrix.md]] | Verifikationsmatrix und Statusmodell fuer Checks | #docs #verification #derived | 2026-05-10
 [[../docs/vercel-deployment.md]] | Vercel-Deployment-Topologie und Ops-Referenz | #docs #deployment #derived | 2026-05-10
 [[../03-mspr/packets/2026-05-10-governance-bootstrap.yml]] | Review-Packet fuer neu gebootstrappte Governance-Surfaces | #mspr #governance #proposed | 2026-05-10
-
+[[../03-mspr/packets/2026-05-10-mobile-redesign-browser-suite.yml]] | Superseded Browser-Suite-Validierungsluecke nach Mobile Redesign | #mspr #verification #superseded | 2026-05-10
