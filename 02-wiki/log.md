@@ -29,3 +29,5 @@
 ## [2026-05-10] mobile-openrouter-settings-dropdown | added a mobile Settings OpenRouter dropdown for backend-owned API key and alias/model-id entry, preserving desktop form behavior and secret redaction [[../web/src/components/SettingsWorkspace.tsx]] [[../tests/browser/mosaicstacked.spec.ts]]
 
 ## [2026-05-10] mobile-openrouter-sheet-padding | tightened global mobile BottomSheet text padding and OpenRouter dropdown typography to prevent oversized overlapping copy while keeping 16px input text for mobile keyboards [[../web/src/components/SettingsWorkspace.tsx]] [[../web/src/critical.css]] [[../web/src/styles.css]] [[../web/src/ui-adaptation.css]]
+
+## [2026-05-10] vercel-production-deploy | deployed main commit 31c473f to Vercel production dpl_C2ijFGzgD4FpfoBPowaHbn5mbXv4 and verified /health on https://mosaicstacked.vercel.app [[../docs/vercel-deployment.md]]
