@@ -21,3 +21,7 @@
 ## [2026-05-10] mobile-chat-composer-header-polish | integrated the mobile send CTA into the input field, hid the textarea scrollbar, aligned chat/input surfaces with a golden-ratio layout token, and added mobile theme plus en/de toggles to the header [[../web/src/components/mobile/chat/ComposeZone.tsx]] [[../web/src/components/mobile/layout/TopContextBar.tsx]] [[../web/src/App.tsx]] [[../web/src/critical.css]] [[../web/src/ui-adaptation.css]]
 
 ## [2026-05-10] mobile-header-desktop-toggle-parity | aligned the mobile header controls with desktop theme and language toggles by reusing theme-toggle-button, shell-language-toggle, shell-language-button, and the desktop ☀/☾ theme glyphs [[../web/src/components/mobile/layout/TopContextBar.tsx]] [[../web/src/App.tsx]] [[../web/src/critical.css]] [[../web/src/ui-adaptation.css]]
+
+## [2026-05-10] settings-authority-control-center-plan | created implementation plan for the confirmed Settings authority control center concept [[../docs/superpowers/plans/2026-05-10-settings-authority-control-center.md]]
+
+## [2026-05-10] settings-authority-control-center | reworked mobile Settings into a backend-authority control center with truth snapshot, grouped access/operation/expert rows, safe BottomSheet details, and browser coverage [[../web/src/components/SettingsWorkspace.tsx]] [[../web/src/components/mobile/shared/SettingsRow.tsx]] [[../tests/browser/mosaicstacked.spec.ts]]

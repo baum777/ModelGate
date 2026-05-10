@@ -15,3 +15,4 @@ Format: `[[link]] | summary | #tags | YYYY-MM-DD`
 [[../docs/vercel-deployment.md]] | Vercel-Deployment-Topologie und Ops-Referenz | #docs #deployment #derived | 2026-05-10
 [[../03-mspr/packets/2026-05-10-governance-bootstrap.yml]] | Review-Packet fuer neu gebootstrappte Governance-Surfaces | #mspr #governance #proposed | 2026-05-10
 [[../03-mspr/packets/2026-05-10-mobile-redesign-browser-suite.yml]] | Superseded Browser-Suite-Validierungsluecke nach Mobile Redesign | #mspr #verification #superseded | 2026-05-10
+[[../docs/superpowers/plans/2026-05-10-settings-authority-control-center.md]] | Implementation plan for Settings authority control center redesign | #docs #plan #settings | 2026-05-10
