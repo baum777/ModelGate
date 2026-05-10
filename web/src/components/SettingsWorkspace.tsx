@@ -164,6 +164,54 @@ function isActiveNodeStatus(status: SystemNodeStatus) {
   return status === "connected" || status === "pending" || status === "executing";
 }
 
+type MobileSettingsTone = "ready" | "partial" | "error" | "muted";
+type MobileSettingsSectionId = "access" | "operation" | "expert";
+
+type MobileSettingsTruthItem = {
+  id: "backend" | "model" | "github" | "matrix";
+  label: string;
+  value: string;
+  tone: MobileSettingsTone;
+};
+
+type MobileSettingsRowModel = {
+  id: string;
+  section: MobileSettingsSectionId;
+  label: string;
+  value: string;
+  detail: string;
+  tone: MobileSettingsTone;
+};
+
+function toneFromStatusText(value: string): MobileSettingsTone {
+  const normalized = value.toLowerCase();
+
+  if (
+    normalized.includes("ready") ||
+    normalized.includes("bereit") ||
+    normalized.includes("connected") ||
+    normalized.includes("verbunden") ||
+    normalized.includes("configured") ||
+    normalized.includes("konfiguriert")
+  ) {
+    return "ready";
+  }
+
+  if (
+    normalized.includes("error") ||
+    normalized.includes("fehler") ||
+    normalized.includes("unavailable") ||
+    normalized.includes("nicht verfügbar") ||
+    normalized.includes("missing") ||
+    normalized.includes("fehlt") ||
+    normalized.includes("rejected")
+  ) {
+    return "error";
+  }
+
+  return "partial";
+}
+
 export function SettingsWorkspace({
   workMode,
   onWorkModeChange,
@@ -335,42 +383,107 @@ export function SettingsWorkspace({
     { id: "matrix", label: verificationCopy.matrix },
   ];
   const [mobileSettingsSheet, setMobileSettingsSheet] = React.useState<string | null>(null);
-  const mobileSettingsRows = [
+  const mobileTruthItems: MobileSettingsTruthItem[] = [
+    {
+      id: "backend",
+      label: "Backend",
+      value: truthSnapshot.backend.label,
+      tone: toneFromStatusText(truthSnapshot.backend.label),
+    },
     {
       id: "model",
       label: locale === "de" ? "Modell" : "Model",
-      value: truthSnapshot.models.activeAlias,
-      detail: truthSnapshot.models.registrySourceLabel,
-    },
-    {
-      id: "provider",
-      label: "Provider",
       value: openRouterCredentialStatus.configured ? (locale === "de" ? "Konfiguriert" : "Configured") : (locale === "de" ? "Fehlt" : "Missing"),
-      detail: locale === "de" ? "Nur Status, kein Secret-Wert." : "Status only, no secret value.",
-    },
-    {
-      id: "workmode",
-      label: locale === "de" ? "Arbeitsdichte" : "Work mode",
-      value: activeCopy.label,
-      detail: activeCopy.description,
+      tone: openRouterCredentialStatus.configured ? "ready" : "error",
     },
     {
       id: "github",
       label: "GitHub",
       value: truthSnapshot.github.connectionLabel,
-      detail: truthSnapshot.github.repositoryLabel,
+      tone: toneFromStatusText(truthSnapshot.github.connectionLabel),
     },
     {
       id: "matrix",
       label: "Matrix",
       value: truthSnapshot.matrix.connectionLabel,
+      tone: toneFromStatusText(truthSnapshot.matrix.connectionLabel),
+    },
+  ];
+
+  const mobileSettingsRows: MobileSettingsRowModel[] = [
+    {
+      id: "openrouter",
+      section: "access",
+      label: openRouterCopy.title,
+      value: openRouterCredentialStatus.configured ? openRouterCopy.configured : openRouterCopy.empty,
+      detail: openRouterCopy.subtitle,
+      tone: openRouterCredentialStatus.configured ? "ready" : "error",
+    },
+    {
+      id: "github",
+      section: "access",
+      label: "GitHub",
+      value: truthSnapshot.github.connectionLabel,
+      detail: truthSnapshot.github.repositoryLabel,
+      tone: toneFromStatusText(truthSnapshot.github.connectionLabel),
+    },
+    {
+      id: "matrix",
+      section: "access",
+      label: "Matrix",
+      value: truthSnapshot.matrix.connectionLabel,
       detail: truthSnapshot.matrix.scopeLabel,
+      tone: toneFromStatusText(truthSnapshot.matrix.connectionLabel),
     },
     {
       id: "backend",
+      section: "operation",
       label: "Backend",
       value: truthSnapshot.backend.label,
       detail: truthSnapshot.backend.detail,
+      tone: toneFromStatusText(truthSnapshot.backend.label),
+    },
+    {
+      id: "workmode",
+      section: "operation",
+      label: locale === "de" ? "Arbeitsdichte" : "Work mode",
+      value: activeCopy.label,
+      detail: activeCopy.description,
+      tone: "muted",
+    },
+    {
+      id: "diagnostics",
+      section: "expert",
+      label: ui.settings.diagnosticsCardTitle,
+      value: ui.settings.diagnosticsSummary,
+      detail: ui.settings.diagnosticsSafetyNote,
+      tone: "muted",
+    },
+    {
+      id: "journal",
+      section: "expert",
+      label: ui.settings.journalCardTitle,
+      value: truthSnapshot.journal.status,
+      detail: `${truthSnapshot.journal.mode} · ${truthSnapshot.journal.retention}`,
+      tone: toneFromStatusText(truthSnapshot.journal.status),
+    },
+  ];
+
+  const mobileSettingsSections: Array<{ id: MobileSettingsSectionId; title: string; rows: MobileSettingsRowModel[] }> = [
+    {
+      id: "access",
+      title: locale === "de" ? "Zugänge" : "Access",
+      rows: mobileSettingsRows.filter((row) => row.section === "access"),
+    },
+    {
+      id: "operation",
+      title: locale === "de" ? "Betrieb" : "Operation",
+      rows: mobileSettingsRows.filter((row) => row.section === "operation"),
+    },
+    {
+      id: "expert",
+      title: locale === "de" ? "Expert Details" : "Expert details",
+      rows: mobileSettingsRows.filter((row) => row.section === "expert"),
     },
   ];
   const selectedMobileSettingsRow = mobileSettingsRows.find((row) => row.id === mobileSettingsSheet) ?? null;
@@ -394,29 +507,58 @@ export function SettingsWorkspace({
   return (
     <section className="workspace-panel settings-workspace" data-testid="settings-workspace">
       <section className="settings-mobile-panel mobile-panel-scroll" aria-label={locale === "de" ? "Mobile Einstellungen" : "Mobile settings"}>
-        <header className="settings-mobile-summary">
+        <header className="settings-mobile-summary" data-testid="settings-mobile-truth-snapshot">
           <span className="mobile-mono">SETTINGS</span>
-          <strong>{ui.settings.backendTruth}</strong>
-          <p>{locale === "de" ? "Status und Kontrolle ohne Credential-Werte." : "Status and controls without credential values."}</p>
+          <strong>{locale === "de" ? "Authority Control Center" : "Authority Control Center"}</strong>
+          <p>{locale === "de" ? "Backend-bestätigte Wahrheit, sichere Zugänge und Expert-Diagnostik ohne Credential-Werte." : "Backend-proven truth, safe access controls, and expert diagnostics without credential values."}</p>
+          <div className="settings-mobile-truth-grid" aria-label={locale === "de" ? "Systemstatus" : "System status"}>
+            {mobileTruthItems.map((item) => (
+              <div className={`settings-mobile-truth-item settings-mobile-truth-item-${item.tone}`} key={item.id}>
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </div>
+            ))}
+          </div>
         </header>
-        <div className="settings-mobile-row-list">
-          {mobileSettingsRows.map((row) => (
-            <SettingsRow
-              key={row.id}
-              label={row.label}
-              value={row.value}
-              action={() => setMobileSettingsSheet(row.id)}
-            />
-          ))}
-        </div>
+
+        {mobileSettingsSections.map((section) => (
+          <section className="settings-mobile-section" data-testid={`settings-mobile-section-${section.id}`} key={section.id}>
+            <header className="settings-mobile-section-header">
+              <span className="mobile-mono">{section.title}</span>
+            </header>
+            <div className="settings-mobile-row-list">
+              {section.rows.map((row) => (
+                <SettingsRow
+                  key={row.id}
+                  label={row.label}
+                  value={row.value}
+                  detail={row.detail}
+                  tone={row.tone}
+                  testId={`settings-mobile-row-${row.id}`}
+                  action={() => setMobileSettingsSheet(row.id)}
+                />
+              ))}
+            </div>
+          </section>
+        ))}
+
         <BottomSheet
           open={Boolean(selectedMobileSettingsRow)}
           title={selectedMobileSettingsRow?.label ?? ui.settings.title}
           onDismiss={() => setMobileSettingsSheet(null)}
+          maxHeight="large"
         >
-          <div className="settings-mobile-sheet-body">
-            <strong>{selectedMobileSettingsRow?.value}</strong>
+          <div className="settings-mobile-sheet-body" data-testid="settings-mobile-sheet-body">
+            <span className={`status-pill status-${selectedMobileSettingsRow?.tone === "error" ? "error" : selectedMobileSettingsRow?.tone === "ready" ? "ready" : "partial"}`}>
+              {selectedMobileSettingsRow?.value}
+            </span>
+            <strong>{selectedMobileSettingsRow?.label}</strong>
             <p>{selectedMobileSettingsRow?.detail}</p>
+            <p className="muted-copy">
+              {locale === "de"
+                ? "Aktionen bleiben backend-owned. Der Browser zeigt nur Status, Intent und sichere Zusammenfassungen."
+                : "Actions stay backend-owned. The browser only shows status, intent, and safe summaries."}
+            </p>
           </div>
         </BottomSheet>
       </section>

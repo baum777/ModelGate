@@ -237,6 +237,17 @@ test("Settings workspace renders integration cards and keeps secrets out of the 
   assert.match(markup, /data-testid="openrouter-credentials-test"/);
   assert.match(markup, /data-testid="settings-verification-backend"/);
   assert.match(markup, /data-testid="settings-verification-github-action"/);
+  assert.match(markup, /data-testid="settings-mobile-truth-snapshot"/);
+  assert.match(markup, /data-testid="settings-mobile-section-access"/);
+  assert.match(markup, /data-testid="settings-mobile-section-operation"/);
+  assert.match(markup, /data-testid="settings-mobile-section-expert"/);
+  assert.match(markup, /data-testid="settings-mobile-row-openrouter"/);
+  assert.match(markup, /data-testid="settings-mobile-row-github"/);
+  assert.match(markup, /data-testid="settings-mobile-row-matrix"/);
+  assert.match(markup, /data-testid="settings-mobile-row-backend"/);
+  assert.match(markup, /data-testid="settings-mobile-row-workmode"/);
+  assert.match(markup, /data-testid="settings-mobile-row-diagnostics"/);
+  assert.match(markup, /data-testid="settings-mobile-row-journal"/);
   assert.match(markup, /mosaicstacked-test \(local\)/);
   assert.match(markup, /Matrix credentials were rejected/);
   assert.doesNotMatch(markup, /name=".*token/i);
