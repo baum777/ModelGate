@@ -2874,13 +2874,17 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
   color: var(--hi);
 }
 
-.mobile-settings-row {
-  min-height: 52px;
+.app-shell-mobile .mobile-settings-row {
+  min-height: 56px;
   width: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, auto) 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "label value"
+    "detail chevron";
   align-items: center;
-  gap: 10px;
+  column-gap: 10px;
+  row-gap: 3px;
   border: 0;
   border-bottom: 1px solid rgba(158, 168, 190, 0.12);
   background: transparent;
@@ -2889,27 +2893,53 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
   touch-action: manipulation;
 }
 
-.mobile-settings-row span,
-.mobile-settings-row strong {
+.app-shell-mobile .mobile-settings-row span,
+.app-shell-mobile .mobile-settings-row strong {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.mobile-settings-row > span:first-child {
+.app-shell-mobile .mobile-settings-row-label {
+  grid-area: label;
   color: var(--mid);
   font-size: 12px;
 }
 
-.mobile-settings-row strong {
+.app-shell-mobile .mobile-settings-row-value {
+  grid-area: value;
   color: var(--hi);
   font-family: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
   font-size: 11px;
   font-weight: 500;
 }
 
-.mobile-settings-row-chevron {
+.app-shell-mobile .mobile-settings-row-detail {
+  grid-area: detail;
+  min-width: 0;
+  color: var(--mobile-redesign-muted, var(--ms-text2));
+  font-size: 11px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell-mobile .mobile-settings-row-chevron {
+  grid-area: chevron;
   justify-self: end;
   color: var(--dim);
+}
+
+.app-shell-mobile .mobile-settings-row-ready .mobile-settings-row-value {
+  color: var(--mobile-redesign-green, var(--ms-green));
+}
+
+.app-shell-mobile .mobile-settings-row-partial .mobile-settings-row-value {
+  color: var(--mobile-redesign-amber, var(--ms-amber));
+}
+
+.app-shell-mobile .mobile-settings-row-error .mobile-settings-row-value {
+  color: var(--mobile-redesign-red, var(--ms-red));
 }
 
 .github-mobile-panel {

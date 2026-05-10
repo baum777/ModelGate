@@ -128,6 +128,20 @@ test("mobile chat slice uses bounded composer and inline diff primitives", () =>
   assert.match(css, /\.mobile-inline-diff/);
 });
 
+test("mobile settings rows support detail, tone, and stable test ids", () => {
+  const source = readFileSync("web/src/components/mobile/shared/SettingsRow.tsx", "utf8");
+  const css = styles();
+
+  assert.match(source, /detail\?: ReactNode/);
+  assert.match(source, /tone\?: "ready" \| "partial" \| "error" \| "muted"/);
+  assert.match(source, /testId\?: string/);
+  assert.match(source, /data-testid=\{testId\}/);
+  assert.match(source, /mobile-settings-row-\$\{tone\}/);
+  assert.match(css, /\.mobile-settings-row-detail/);
+  assert.match(css, /\.mobile-settings-row-ready/);
+  assert.match(css, /\.mobile-settings-row-error/);
+});
+
 test("mobile GitHub slice uses real workspace state and bottom sheet diff primitives", () => {
   const source = mobileGitHubSource();
   const css = styles();
