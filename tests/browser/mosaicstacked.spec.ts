@@ -822,6 +822,34 @@ test("mobile viewport renders functional chat workspace instead of reference-onl
   await expect(page.getByTestId("chat-workspace")).toContainText("Hello from mocked backend");
 });
 
+test("mobile settings renders authority control center and opens detail sheet", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installBaseMocks(page, { matrixStatus: "ok" });
+
+  await page.goto("/console?mode=settings", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("app-shell")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("settings-workspace")).toBeVisible();
+  await expect(page.getByTestId("settings-mobile-truth-snapshot")).toBeVisible();
+  await expect(page.getByTestId("settings-mobile-section-access")).toBeVisible();
+  await expect(page.getByTestId("settings-mobile-section-operation")).toBeVisible();
+  await expect(page.getByTestId("settings-mobile-section-expert")).toBeVisible();
+
+  const layout = await page.evaluate(() => ({
+    htmlClientWidth: document.documentElement.clientWidth,
+    htmlScrollWidth: document.documentElement.scrollWidth,
+    visibleDesktopSettingsCards: Array.from(document.querySelectorAll(".settings-workspace > :not(.settings-mobile-panel)")).filter((element) => getComputedStyle(element as HTMLElement).display !== "none").length,
+    truthItemCount: document.querySelectorAll(".settings-mobile-truth-item").length,
+  }));
+
+  expect(layout.htmlScrollWidth).toBeLessThanOrEqual(layout.htmlClientWidth);
+  expect(layout.visibleDesktopSettingsCards).toBe(0);
+  expect(layout.truthItemCount).toBe(4);
+
+  await page.getByTestId("settings-mobile-row-openrouter").click();
+  await expect(page.getByRole("dialog", { name: "OpenRouter models" })).toBeVisible();
+  await expect(page.getByTestId("settings-mobile-sheet-body")).toContainText("backend-owned");
+});
+
 test("locale toggle switches key copy and persists across reload", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
   await loadConsole(page);
