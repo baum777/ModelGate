@@ -5810,6 +5810,13 @@ textarea:focus {
   font: inherit;
 }
 
+.settings-openrouter-validation {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
 .settings-model-list {
   display: grid;
   gap: var(--space-2);
@@ -8369,6 +8376,16 @@ button:disabled,
 
 .app-shell-mobile .settings-mobile-openrouter-form button {
   width: 100%;
+}
+
+.app-shell-mobile .settings-mobile-openrouter-form .settings-openrouter-validation,
+.app-shell-mobile .settings-mobile-openrouter-form .status-pill {
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
 }
 
 .app-shell-mobile .matrix-mobile-status-grid {

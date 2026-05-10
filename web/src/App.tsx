@@ -50,6 +50,9 @@ import {
   deriveSettingsLoginAdapters,
 } from "./lib/settings-login-adapters.js";
 import {
+  areOpenRouterCredentialInputsValid,
+} from "./lib/openrouter-inputs.js";
+import {
   appendSession,
   createChatSessionMetadata,
   createGitHubSessionMetadata,
@@ -1617,11 +1620,13 @@ function ConsoleShell() {
     const modelId = openRouterModelInput.trim();
     const apiKey = openRouterApiKeyInput.trim();
 
-    if (!apiKey || !modelId) {
+    if (!areOpenRouterCredentialInputsValid(apiKey, modelId)) {
+      setOpenRouterCredentialMessage("OpenRouter credential input does not match the backend contract.");
       return;
     }
 
     setIsSavingOpenRouterCredentials(true);
+    setOpenRouterCredentialMessage(null);
 
     try {
       const result = await saveOpenRouterCredentials({ apiKey, modelId });
@@ -1630,10 +1635,12 @@ function ConsoleShell() {
       await refreshOpenRouterCredentialStatus();
       recordTelemetry("info", "OpenRouter credentials saved", `Backend public alias ${result.model.alias} is selectable.`);
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to save OpenRouter credentials.";
+      setOpenRouterCredentialMessage(message);
       recordTelemetry(
         "error",
         "OpenRouter credential save failed",
-        error instanceof Error ? error.message : "Unable to save OpenRouter credentials.",
+        message,
       );
     } finally {
       setIsSavingOpenRouterCredentials(false);
@@ -1644,21 +1651,25 @@ function ConsoleShell() {
     const modelId = openRouterModelInput.trim();
     const apiKey = openRouterApiKeyInput.trim();
 
-    if (!apiKey || !modelId) {
+    if (!areOpenRouterCredentialInputsValid(apiKey, modelId)) {
+      setOpenRouterCredentialMessage("OpenRouter credential input does not match the backend contract.");
       return;
     }
 
     setIsTestingOpenRouterCredentials(true);
+    setOpenRouterCredentialMessage(null);
 
     try {
       const result = await testOpenRouterCredentials({ apiKey, modelId });
       setOpenRouterCredentialMessage(`Test passed for ${result.model.alias}`);
       recordTelemetry("info", "OpenRouter credential test passed", `Backend tested alias ${result.model.alias} without saving credentials.`);
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to test OpenRouter credentials.";
+      setOpenRouterCredentialMessage(message);
       recordTelemetry(
         "error",
         "OpenRouter credential test failed",
-        error instanceof Error ? error.message : "Unable to test OpenRouter credentials.",
+        message,
       );
     } finally {
       setIsTestingOpenRouterCredentials(false);

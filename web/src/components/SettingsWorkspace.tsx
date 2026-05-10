@@ -9,6 +9,10 @@ import {
 } from "../lib/work-mode.js";
 import type { SettingsLoginAdapter } from "../lib/settings-login-adapters.js";
 import {
+  areOpenRouterCredentialInputsValid,
+  OPENROUTER_API_KEY_MIN_LENGTH,
+} from "../lib/openrouter-inputs.js";
+import {
   FlowIndicator,
   GovernanceSpine,
   SystemLayerFrame,
@@ -327,6 +331,7 @@ export function SettingsWorkspace({
         subtitle: "Speichere deinen eigenen OpenRouter API Key backend-seitig. Der Browser zeigt danach nur einen maskierten Status.",
         keyLabel: "OpenRouter API Key",
         inputLabel: "OpenRouter Modell-ID",
+        validation: `OpenRouter API Key braucht mindestens ${OPENROUTER_API_KEY_MIN_LENGTH} Zeichen; die Modell-ID muss provider/model verwenden.`,
         keyPlaceholder: "sk-or-v1-...",
         placeholder: "provider/model",
         save: "Speichern",
@@ -341,6 +346,7 @@ export function SettingsWorkspace({
         subtitle: "Store your own OpenRouter API key on the backend. The browser only shows masked status after save.",
         keyLabel: "OpenRouter API key",
         inputLabel: "OpenRouter model ID",
+        validation: `OpenRouter API key must have at least ${OPENROUTER_API_KEY_MIN_LENGTH} characters; model ID must use provider/model.`,
         keyPlaceholder: "sk-or-v1-...",
         placeholder: "provider/model",
         save: "Save",
@@ -350,6 +356,12 @@ export function SettingsWorkspace({
         configured: "OpenRouter key configured",
         empty: "No OpenRouter key is configured for this local profile yet.",
       };
+  const openRouterCredentialInputsValid = areOpenRouterCredentialInputsValid(openRouterApiKeyInput, openRouterModelInput);
+  const openRouterControlsDisabled = !openRouterCredentialInputsValid;
+  const openRouterMessageTone = openRouterCredentialMessage
+    && /(failed|invalid|error|fehler|nicht konfiguriert|not configured|not saved|missing)/i.test(openRouterCredentialMessage)
+    ? "error"
+    : "ready";
   const verificationCopy = locale === "de"
     ? {
         title: "Verbindung testen",
@@ -516,11 +528,15 @@ export function SettingsWorkspace({
     prefix,
     className = "settings-inline-form",
     inputLabel = openRouterCopy.inputLabel,
+    showMessage = false,
   }: {
     prefix: "openrouter" | "mobile-openrouter";
     className?: string;
     inputLabel?: string;
+    showMessage?: boolean;
   }) {
+    const validationId = `${prefix}-validation`;
+
     return (
       <form
         className={className}
@@ -539,6 +555,7 @@ export function SettingsWorkspace({
           value={openRouterApiKeyInput}
           onChange={(event) => onOpenRouterApiKeyInputChange(event.target.value)}
           placeholder={openRouterCopy.keyPlaceholder}
+          aria-describedby={validationId}
         />
         <label htmlFor={`${prefix}-model-input`}>{inputLabel}</label>
         <div className="settings-inline-controls">
@@ -552,11 +569,12 @@ export function SettingsWorkspace({
             value={openRouterModelInput}
             onChange={(event) => onOpenRouterModelInputChange(event.target.value)}
             placeholder={openRouterCopy.placeholder}
+            aria-describedby={validationId}
           />
           <button
             type="submit"
             data-testid={`${prefix}-credentials-save`}
-            disabled={isSavingOpenRouterCredentials || openRouterApiKeyInput.trim().length === 0 || openRouterModelInput.trim().length === 0}
+            disabled={isSavingOpenRouterCredentials || openRouterControlsDisabled}
           >
             {isSavingOpenRouterCredentials ? openRouterCopy.saving : openRouterCopy.save}
           </button>
@@ -565,11 +583,19 @@ export function SettingsWorkspace({
             className="secondary-button"
             data-testid={`${prefix}-credentials-test`}
             onClick={onTestOpenRouterCredentials}
-            disabled={isTestingOpenRouterCredentials || openRouterApiKeyInput.trim().length === 0 || openRouterModelInput.trim().length === 0}
+            disabled={isTestingOpenRouterCredentials || openRouterControlsDisabled}
           >
             {isTestingOpenRouterCredentials ? openRouterCopy.testing : openRouterCopy.test}
           </button>
         </div>
+        <p id={validationId} className="settings-openrouter-validation" data-testid={`${prefix}-validation`}>
+          {openRouterCopy.validation}
+        </p>
+        {showMessage && openRouterCredentialMessage ? (
+          <p className={`status-pill status-${openRouterMessageTone}`} data-testid={`${prefix}-message`}>
+            {openRouterCredentialMessage}
+          </p>
+        ) : null}
       </form>
     );
   }
@@ -631,7 +657,7 @@ export function SettingsWorkspace({
             </p>
             {selectedMobileSettingsRow?.id === "openrouter" ? (
               <details className="settings-mobile-dropdown" data-testid="mobile-openrouter-dropdown" open>
-                <summary>{locale === "de" ? "Key und Alias eingeben" : "Enter key and alias"}</summary>
+                <summary>{locale === "de" ? "Key und Modell-ID eingeben" : "Enter key and model ID"}</summary>
                 <p className="muted-copy">
                   {locale === "de"
                     ? "Der Backend-Contract speichert API-Key und Modell-ID. Der öffentliche Alias bleibt backend-owned."
@@ -640,7 +666,7 @@ export function SettingsWorkspace({
                 {renderOpenRouterCredentialForm({
                   prefix: "mobile-openrouter",
                   className: "settings-inline-form settings-mobile-openrouter-form",
-                  inputLabel: locale === "de" ? "Alias / Modell-ID" : "Alias / model ID",
+                  showMessage: true,
                 })}
               </details>
             ) : null}

@@ -3213,6 +3213,16 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
   width: 100%;
 }
 
+.app-shell-mobile .settings-mobile-openrouter-form .settings-openrouter-validation,
+.app-shell-mobile .settings-mobile-openrouter-form .status-pill {
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+}
+
 .app-shell-mobile .matrix-mobile-status-grid {
   display: grid;
   border-block: 1px solid rgba(158, 168, 190, 0.12);

@@ -31,3 +31,5 @@
 ## [2026-05-10] mobile-openrouter-sheet-padding | tightened global mobile BottomSheet text padding and OpenRouter dropdown typography to prevent oversized overlapping copy while keeping 16px input text for mobile keyboards [[../web/src/components/SettingsWorkspace.tsx]] [[../web/src/critical.css]] [[../web/src/styles.css]] [[../web/src/ui-adaptation.css]]
 
 ## [2026-05-10] vercel-production-deploy | deployed main commit 31c473f to Vercel production dpl_C2ijFGzgD4FpfoBPowaHbn5mbXv4 and verified /health on https://mosaicstacked.vercel.app [[../docs/vercel-deployment.md]]
+
+## [2026-05-10] openrouter-settings-submit-validation | aligned Settings OpenRouter form validation with backend credential contract, surfaced save/test errors inline, and removed misleading mobile alias-entry copy [[../web/src/components/SettingsWorkspace.tsx]] [[../web/src/lib/openrouter-inputs.ts]] [[../web/src/App.tsx]] [[../web/test/settings-workspace.test.ts]]

@@ -1427,6 +1427,16 @@ button:disabled {
   width: 100%;
 }
 
+.app-shell-mobile .settings-mobile-openrouter-form .settings-openrouter-validation,
+.app-shell-mobile .settings-mobile-openrouter-form .status-pill {
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+}
+
 .app-shell-mobile .matrix-mobile-status-grid {
   display: grid;
   gap: 0;

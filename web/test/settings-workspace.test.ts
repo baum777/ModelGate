@@ -80,6 +80,108 @@ function createVerificationFixture(): Record<"backend" | "github" | "matrix", Se
   };
 }
 
+function createSettingsTruthSnapshotFixture(): SettingsTruthSnapshot {
+  return {
+    backend: { label: "Ready", detail: "Backend truth." },
+    github: {
+      sessionLabel: "n/a",
+      connectionLabel: "n/a",
+      repositoryLabel: "n/a",
+      accessLabel: "n/a",
+    },
+    matrix: {
+      identityLabel: "n/a",
+      connectionLabel: "n/a",
+      homeserverLabel: "n/a",
+      scopeLabel: "n/a",
+    },
+    models: {
+      activeAlias: "default",
+      availableCount: 1,
+      registrySourceLabel: "backend-policy",
+    },
+    diagnostics: {
+      runtimeMode: "local",
+      defaultPublicAlias: "default",
+      publicAliases: "default",
+      routingMode: "policy",
+      fallbackEnabled: "Active",
+      failClosed: "Active",
+      rateLimitEnabled: "Active",
+      actionStoreMode: "memory",
+      githubConfigured: "Configured",
+      matrixConfigured: "Configured",
+      generatedAt: "2026-04-27T12:00:00.000Z",
+      uptimeMs: "0",
+      chatRequests: "0",
+      chatStreamStarted: "0",
+      chatStreamCompleted: "0",
+      chatStreamError: "0",
+      chatStreamAborted: "0",
+      upstreamError: "0",
+      rateLimitBlocked: "none",
+    },
+    journal: {
+      status: "Configured",
+      mode: "memory",
+      retention: "0/500",
+      recentCount: "0",
+      entries: [],
+    },
+  };
+}
+
+function renderSettingsWorkspaceMarkup(overrides: Partial<React.ComponentProps<typeof SettingsWorkspace>> = {}) {
+  const loginAdapters = deriveSettingsLoginAdapters({
+    copy: {
+      checking: "Checking",
+      unavailable: "Unavailable",
+      none: "None",
+    },
+    integrations: createIntegrationsStatusFixture(),
+  });
+
+  return renderToStaticMarkup(
+    React.createElement(SettingsWorkspace, {
+      workMode: "expert",
+      onWorkModeChange: () => undefined,
+      diagnostics: [],
+      onClearDiagnostics: () => undefined,
+      truthSnapshot: createSettingsTruthSnapshotFixture(),
+      loginAdapters,
+      onIntegrationAction: () => undefined,
+      openRouterCredentialStatus: {
+        configured: false,
+        models: [],
+      },
+      openRouterApiKeyInput: "",
+      openRouterModelInput: "",
+      onOpenRouterApiKeyInputChange: () => undefined,
+      onOpenRouterModelInputChange: () => undefined,
+      onSaveOpenRouterCredentials: () => undefined,
+      onTestOpenRouterCredentials: () => undefined,
+      isSavingOpenRouterCredentials: false,
+      isTestingOpenRouterCredentials: false,
+      openRouterCredentialMessage: null,
+      buildIntegrationStartUrl: (provider: "github" | "matrix") => `/api/auth/${provider}/start?returnTo=%2Fconsole%3Fmode%3Dsettings`,
+      verificationResults: createVerificationFixture(),
+      onVerifyConnection: () => undefined,
+      ...overrides,
+    }),
+  );
+}
+
+test("Settings workspace keeps OpenRouter credential actions disabled until backend-valid input", () => {
+  const markup = renderSettingsWorkspaceMarkup({
+    openRouterApiKeyInput: "sk-or-v1-test",
+    openRouterModelInput: "anthropic/claude-3.5-sonnet",
+  });
+
+  assert.match(markup, /OpenRouter API key must have at least 20 characters/);
+  assert.match(markup, /data-testid="openrouter-credentials-save" disabled=""/);
+  assert.match(markup, /data-testid="openrouter-credentials-test" disabled=""/);
+});
+
 test("Settings workspace renders integration cards and keeps secrets out of the DOM", () => {
   const truthSnapshot: SettingsTruthSnapshot = {
     backend: {

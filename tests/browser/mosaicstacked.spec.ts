@@ -853,6 +853,10 @@ test("mobile settings renders authority control center and opens detail sheet", 
   await expect(page.getByTestId("mobile-openrouter-credentials-save")).toBeDisabled();
   await page.getByTestId("mobile-openrouter-api-key-input").fill("sk-or-v1-test");
   await page.getByTestId("mobile-openrouter-model-input").fill("anthropic/claude-3.5-sonnet");
+  await expect(page.getByTestId("mobile-openrouter-credentials-save")).toBeDisabled();
+  await expect(page.getByTestId("mobile-openrouter-credentials-test")).toBeDisabled();
+  await expect(page.getByTestId("settings-mobile-sheet-body")).toContainText("provider/model");
+  await page.getByTestId("mobile-openrouter-api-key-input").fill("sk-or-v1-test-key-with-valid-length");
   await expect(page.getByTestId("mobile-openrouter-credentials-save")).toBeEnabled();
   await expect(page.getByTestId("mobile-openrouter-credentials-test")).toBeEnabled();
   await expect(page.locator("body")).not.toContainText("sk-or-v1-test");
