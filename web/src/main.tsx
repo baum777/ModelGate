@@ -5,6 +5,9 @@ import "./critical.css";
 import { registerPwa } from "./pwa.js";
 import { LocaleProvider } from "./lib/localization.js";
 
+const DESKTOP_DEFERRED_CSS_QUERY = "(min-width: 761px)";
+let deferredCssLoaded = false;
+
 function loadStylesheetOnce(id: string, href: string) {
   if (typeof document === "undefined" || document.getElementById(id)) {
     return;
@@ -15,6 +18,39 @@ function loadStylesheetOnce(id: string, href: string) {
   link.rel = "stylesheet";
   link.href = href;
   document.head.appendChild(link);
+}
+
+function loadDeferredCssOnce() {
+  if (deferredCssLoaded) {
+    return;
+  }
+
+  deferredCssLoaded = true;
+  void import("./deferred.css");
+}
+
+function loadDeferredCssForViewport() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    loadDeferredCssOnce();
+    return;
+  }
+
+  const desktopQuery = window.matchMedia(DESKTOP_DEFERRED_CSS_QUERY);
+  if (desktopQuery.matches) {
+    loadDeferredCssOnce();
+    return;
+  }
+
+  const loadWhenDesktop = (event: MediaQueryListEvent) => {
+    if (!event.matches) {
+      return;
+    }
+
+    loadDeferredCssOnce();
+    desktopQuery.removeEventListener("change", loadWhenDesktop);
+  };
+
+  desktopQuery.addEventListener("change", loadWhenDesktop);
 }
 
 function scheduleNonCriticalWork(callback: () => void, timeout = 15_000) {
@@ -48,8 +84,9 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   </React.StrictMode>
 );
 
+loadStylesheetOnce("mosaicstacked-local-fonts", "/local-fonts.css");
+
 scheduleNonCriticalWork(() => {
-  loadStylesheetOnce("mosaicstacked-local-fonts", "/local-fonts.css");
-  void import("./deferred.css");
+  loadDeferredCssForViewport();
   void registerPwa();
 });

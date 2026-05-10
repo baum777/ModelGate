@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const appSource = () => readFileSync("web/src/App.tsx", "utf8");
+const mainSource = () => readFileSync("web/src/main.tsx", "utf8");
 const mobileLayoutSource = () => [
   readFileSync("web/src/App.tsx", "utf8"),
   readFileSync("web/src/components/mobile/layout/TopContextBar.tsx", "utf8"),
@@ -23,6 +24,7 @@ const styles = () => [
   readFileSync("web/src/styles.css", "utf8"),
   readFileSync("web/src/ui-adaptation.css", "utf8"),
 ].join("\n");
+const uiAdaptationSource = () => readFileSync("web/src/ui-adaptation.css", "utf8");
 
 test("mobile shell keeps Kontext as the fourth context-browser tab", () => {
   const source = mobileLayoutSource();
@@ -140,4 +142,32 @@ test("mobile shell shows aliases, not provider IDs, in top-level chrome", () => 
 
   assert.match(source, /activeModelAlias/);
   assert.doesNotMatch(source, /mobile-model-badge[\s\S]*(providerId|providerTarget|modelId)/);
+});
+
+test("deferred CSS keeps restored mobile shell chrome stable", () => {
+  const source = uiAdaptationSource();
+  const guardIndex = source.indexOf("Deferred mobile stability guard");
+
+  assert.ok(guardIndex > source.indexOf("Legacy hard overrides"));
+
+  const guard = source.slice(guardIndex);
+  assert.ok((source.match(/:not\(\.mobile-context-strip\)/g) ?? []).length >= 3);
+  assert.match(guard, /\.app-shell-mobile \.mobile-brand-button\s*{[\s\S]*background:\s*transparent !important/);
+  assert.match(guard, /\.app-shell-mobile \.mobile-brand-button \.mosaicstacked-mark\s*{[\s\S]*display:\s*inline-flex !important/);
+  assert.match(guard, /\.app-shell-mobile \.mobile-context-strip\s*{[\s\S]*display:\s*grid !important[\s\S]*background:\s*rgba\(9,\s*11,\s*16,\s*0\.98\) !important/);
+  assert.match(guard, /\.app-shell-mobile \.mobile-context-path span:not\(:first-child\)::before,[\s\S]*\.app-shell-mobile \.mobile-context-live::before\s*{[\s\S]*content:\s*none !important/);
+  assert.match(guard, /\.app-shell-mobile \.mobile-context-live\s*{[\s\S]*background:\s*transparent !important/);
+  assert.match(guard, /\.app-shell-mobile \.workspace-tab-mobile\.workspace-tab-active\s*{[\s\S]*background:\s*rgba\(108,\s*92,\s*231,\s*0\.16\) !important/);
+  assert.match(guard, /\.app-shell-mobile \.workspace-tab-mobile\.workspace-tab-active::after\s*{[\s\S]*display:\s*none !important/);
+});
+
+test("mobile viewport does not import deferred desktop CSS after idle timeout", () => {
+  const source = mainSource();
+
+  assert.match(source, /DESKTOP_DEFERRED_CSS_QUERY = "\(min-width: 761px\)"/);
+  assert.match(source, /function loadDeferredCssForViewport\(\)/);
+  assert.match(source, /window\.matchMedia\(DESKTOP_DEFERRED_CSS_QUERY\)/);
+  assert.match(source, /if \(desktopQuery\.matches\) \{[\s\S]*loadDeferredCssOnce\(\)/);
+  assert.match(source, /loadStylesheetOnce\("mosaicstacked-local-fonts", "\/local-fonts\.css"\);[\s\S]*scheduleNonCriticalWork/);
+  assert.doesNotMatch(source, /scheduleNonCriticalWork\(\(\) => \{[\s\S]*import\("\.\/deferred\.css"\)/);
 });

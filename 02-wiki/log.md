@@ -11,3 +11,5 @@
 ## [2026-05-10] github-oauth-production-fallback | added GitHub OAuth App start/callback support for production GITHUB_OAUTH_* configuration while preserving GitHub App installation flow [[../server/src/routes/integration-auth.ts]] [[../server/src/lib/integration-auth-config.ts]] [[../server/test/integration-auth-routes.test.ts]]
 
 ## [2026-05-10] mobile-ui-safe-restore | restored mobile/landing visual surfaces to last good checkpoint 08a88df while preserving OAuth backend fix and browser-suite approval/state-loading repairs [[../web/src/App.tsx]] [[../web/src/critical.css]] [[../web/src/styles.css]] [[../tests/browser/mosaicstacked.spec.ts]]
+
+## [2026-05-10] mobile-css-load-stability | prevented deferred desktop CSS from repainting restored mobile shell chrome after idle timeout and loaded local font CSS immediately [[../web/src/main.tsx]] [[../web/src/ui-adaptation.css]] [[../web/test/mobile-redesign.test.ts]]

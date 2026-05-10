@@ -1595,7 +1595,7 @@ select:disabled {
   line-height: 1.2 !important;
 }
 
-button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.shell-language-button):not(.workspace-tab):not(.session-list-item):not(.mode-toggle-button):not(.mobile-brand-button):not(.mobile-context-chip-action):not(.matrix-mobile-room):not(.matrix-mobile-ask-button),
+button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.shell-language-button):not(.workspace-tab):not(.session-list-item):not(.mode-toggle-button):not(.mobile-brand-button):not(.mobile-context-strip):not(.mobile-context-chip-action):not(.matrix-mobile-room):not(.matrix-mobile-ask-button),
 .primary-link-button {
   background: var(--ms-accent) !important;
   border-color: var(--ms-accent) !important;
@@ -1603,14 +1603,14 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
   box-shadow: none !important;
 }
 
-button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.shell-language-button):not(.workspace-tab):not(.session-list-item):not(.mode-toggle-button):not(.mobile-brand-button):not(.mobile-context-chip-action):not(.matrix-mobile-room):not(.matrix-mobile-ask-button):hover:not(:disabled),
+button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.shell-language-button):not(.workspace-tab):not(.session-list-item):not(.mode-toggle-button):not(.mobile-brand-button):not(.mobile-context-strip):not(.mobile-context-chip-action):not(.matrix-mobile-room):not(.matrix-mobile-ask-button):hover:not(:disabled),
 .primary-link-button:hover:not(.is-disabled) {
   background: #7d6df0 !important;
   border-color: #7d6df0 !important;
   box-shadow: none !important;
 }
 
-button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.shell-language-button):not(.workspace-tab):not(.session-list-item):not(.mode-toggle-button):not(.mobile-brand-button):not(.mobile-context-chip-action):not(.matrix-mobile-room):not(.matrix-mobile-ask-button):active:not(:disabled),
+button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.shell-language-button):not(.workspace-tab):not(.session-list-item):not(.mode-toggle-button):not(.mobile-brand-button):not(.mobile-context-strip):not(.mobile-context-chip-action):not(.matrix-mobile-room):not(.matrix-mobile-ask-button):active:not(:disabled),
 .primary-link-button:active:not(.is-disabled) {
   background: #5a4bd1 !important;
   border-color: #5a4bd1 !important;
@@ -2908,4 +2908,126 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
   grid-template-columns: minmax(0, 76px) minmax(0, 1fr);
   gap: 10px;
   border-bottom: 1px solid rgba(158, 168, 190, 0.1);
+}
+
+/* Deferred mobile stability guard: keep the restored shell chrome stable after deferred.css loads. */
+.app-shell-mobile .mobile-topbar {
+  min-height: 57px !important;
+  padding: calc(env(safe-area-inset-top) + 8px) var(--sp-3) var(--sp-2) !important;
+  border-bottom: 1px solid var(--ms-border) !important;
+  background: rgba(9, 11, 16, 0.98) !important;
+  backdrop-filter: none !important;
+}
+
+.app-shell-mobile .mobile-brand-button {
+  min-height: 36px !important;
+  padding: 4px 8px !important;
+  gap: var(--sp-2) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--ms-text) !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+}
+
+.app-shell-mobile .mobile-brand-button .mosaicstacked-mark {
+  display: inline-flex !important;
+  width: 24px !important;
+  height: 24px !important;
+}
+
+.app-shell-mobile .mobile-model-badge {
+  min-height: 28px !important;
+  max-width: 140px !important;
+  padding: 4px 10px !important;
+  border-radius: 999px !important;
+  border: 1px solid var(--ms-border2) !important;
+  background: var(--ms-bg3) !important;
+  color: var(--ms-text) !important;
+  font-family: var(--ms-sans) !important;
+  font-size: 11px !important;
+}
+
+.app-shell-mobile .mobile-context-strip {
+  top: calc(env(safe-area-inset-top) + 57px) !important;
+  min-height: 32px !important;
+  padding: 0 var(--sp-3) !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto auto !important;
+  align-items: center !important;
+  gap: var(--sp-2) !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--ms-border) !important;
+  border-radius: 0 !important;
+  background: rgba(9, 11, 16, 0.98) !important;
+  box-shadow: none !important;
+}
+
+.app-shell-mobile .mobile-context-path {
+  gap: var(--sp-2) !important;
+  font-family: var(--ms-mono) !important;
+  font-size: 11px !important;
+}
+
+.app-shell-mobile .mobile-context-path span:not(:first-child)::before,
+.app-shell-mobile .mobile-context-live::before {
+  content: none !important;
+}
+
+.app-shell-mobile .mobile-context-chip-action {
+  border-color: var(--ms-border2) !important;
+  background: var(--ms-bg3) !important;
+  color: var(--ms-text2) !important;
+}
+
+.app-shell-mobile .mobile-context-live {
+  margin-left: auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--ms-text2) !important;
+  font-family: var(--ms-mono) !important;
+  font-size: 11px !important;
+  display: block !important;
+}
+
+.app-shell-mobile .mobile-bottom-nav {
+  height: calc(52px + env(safe-area-inset-bottom)) !important;
+  padding: 4px 8px calc(env(safe-area-inset-bottom) + 4px) !important;
+  gap: 6px !important;
+  border-top: 1px solid var(--ms-border2) !important;
+  background: rgba(9, 11, 16, 0.98) !important;
+  backdrop-filter: none !important;
+}
+
+.app-shell-mobile .workspace-tab-mobile {
+  min-height: 44px !important;
+  padding: 4px 6px !important;
+  border: 1px solid var(--ms-border) !important;
+  border-radius: var(--r) !important;
+  background: transparent !important;
+  color: var(--ms-text2) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  box-shadow: none !important;
+}
+
+.app-shell-mobile .workspace-tab-mobile svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+.app-shell-mobile .workspace-tab-mobile.workspace-tab-active {
+  color: var(--ms-text) !important;
+  border-color: rgba(108, 92, 231, 0.6) !important;
+  background: rgba(108, 92, 231, 0.16) !important;
+}
+
+.app-shell-mobile .workspace-tab-mobile.workspace-tab-active::after {
+  content: none !important;
+  display: none !important;
 }
