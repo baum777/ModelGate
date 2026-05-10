@@ -33,3 +33,5 @@
 ## [2026-05-10] vercel-production-deploy | deployed main commit 31c473f to Vercel production dpl_C2ijFGzgD4FpfoBPowaHbn5mbXv4 and verified /health on https://mosaicstacked.vercel.app [[../docs/vercel-deployment.md]]
 
 ## [2026-05-10] openrouter-settings-submit-validation | aligned Settings OpenRouter form validation with backend credential contract, surfaced save/test errors inline, and removed misleading mobile alias-entry copy [[../web/src/components/SettingsWorkspace.tsx]] [[../web/src/lib/openrouter-inputs.ts]] [[../web/src/App.tsx]] [[../web/test/settings-workspace.test.ts]]
+
+## [2026-05-10] openrouter-settings-production-deploy | deployed main commit 1073ed3 to Vercel production dpl_6ShjN52ry85fLw24vhR7VxfC1r6B and verified /health on https://mosaicstacked.vercel.app [[../web/src/components/SettingsWorkspace.tsx]] [[../web/src/lib/openrouter-inputs.ts]] [[../docs/vercel-deployment.md]]
