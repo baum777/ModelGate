@@ -848,6 +848,14 @@ test("mobile settings renders authority control center and opens detail sheet", 
   await page.getByTestId("settings-mobile-row-openrouter").click();
   await expect(page.getByRole("dialog", { name: "OpenRouter models" })).toBeVisible();
   await expect(page.getByTestId("settings-mobile-sheet-body")).toContainText("backend-owned");
+  await expect(page.getByTestId("mobile-openrouter-api-key-input")).toBeVisible();
+  await expect(page.getByTestId("mobile-openrouter-model-input")).toBeVisible();
+  await expect(page.getByTestId("mobile-openrouter-credentials-save")).toBeDisabled();
+  await page.getByTestId("mobile-openrouter-api-key-input").fill("sk-or-v1-test");
+  await page.getByTestId("mobile-openrouter-model-input").fill("anthropic/claude-3.5-sonnet");
+  await expect(page.getByTestId("mobile-openrouter-credentials-save")).toBeEnabled();
+  await expect(page.getByTestId("mobile-openrouter-credentials-test")).toBeEnabled();
+  await expect(page.locator("body")).not.toContainText("sk-or-v1-test");
 });
 
 test("locale toggle switches key copy and persists across reload", async ({ page }) => {

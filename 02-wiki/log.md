@@ -25,3 +25,5 @@
 ## [2026-05-10] settings-authority-control-center-plan | created implementation plan for the confirmed Settings authority control center concept [[../docs/superpowers/plans/2026-05-10-settings-authority-control-center.md]]
 
 ## [2026-05-10] settings-authority-control-center | reworked mobile Settings into a backend-authority control center with truth snapshot, grouped access/operation/expert rows, safe BottomSheet details, and browser coverage [[../web/src/components/SettingsWorkspace.tsx]] [[../web/src/components/mobile/shared/SettingsRow.tsx]] [[../tests/browser/mosaicstacked.spec.ts]]
+
+## [2026-05-10] mobile-openrouter-settings-dropdown | added a mobile Settings OpenRouter dropdown for backend-owned API key and alias/model-id entry, preserving desktop form behavior and secret redaction [[../web/src/components/SettingsWorkspace.tsx]] [[../tests/browser/mosaicstacked.spec.ts]]

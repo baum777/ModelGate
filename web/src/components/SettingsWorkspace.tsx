@@ -509,6 +509,68 @@ export function SettingsWorkspace({
     return "partial";
   }
 
+  function renderOpenRouterCredentialForm({
+    prefix,
+    className = "settings-inline-form",
+    inputLabel = openRouterCopy.inputLabel,
+  }: {
+    prefix: "openrouter" | "mobile-openrouter";
+    className?: string;
+    inputLabel?: string;
+  }) {
+    return (
+      <form
+        className={className}
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSaveOpenRouterCredentials();
+        }}
+      >
+        <label htmlFor={`${prefix}-api-key-input`}>{openRouterCopy.keyLabel}</label>
+        <input
+          id={`${prefix}-api-key-input`}
+          data-testid={`${prefix}-api-key-input`}
+          type="password"
+          autoComplete="off"
+          spellCheck={false}
+          value={openRouterApiKeyInput}
+          onChange={(event) => onOpenRouterApiKeyInputChange(event.target.value)}
+          placeholder={openRouterCopy.keyPlaceholder}
+        />
+        <label htmlFor={`${prefix}-model-input`}>{inputLabel}</label>
+        <div className="settings-inline-controls">
+          <input
+            id={`${prefix}-model-input`}
+            data-testid={`${prefix}-model-input`}
+            type="text"
+            inputMode="text"
+            autoComplete="off"
+            spellCheck={false}
+            value={openRouterModelInput}
+            onChange={(event) => onOpenRouterModelInputChange(event.target.value)}
+            placeholder={openRouterCopy.placeholder}
+          />
+          <button
+            type="submit"
+            data-testid={`${prefix}-credentials-save`}
+            disabled={isSavingOpenRouterCredentials || openRouterApiKeyInput.trim().length === 0 || openRouterModelInput.trim().length === 0}
+          >
+            {isSavingOpenRouterCredentials ? openRouterCopy.saving : openRouterCopy.save}
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            data-testid={`${prefix}-credentials-test`}
+            onClick={onTestOpenRouterCredentials}
+            disabled={isTestingOpenRouterCredentials || openRouterApiKeyInput.trim().length === 0 || openRouterModelInput.trim().length === 0}
+          >
+            {isTestingOpenRouterCredentials ? openRouterCopy.testing : openRouterCopy.test}
+          </button>
+        </div>
+      </form>
+    );
+  }
+
   return (
     <section className="workspace-panel settings-workspace" data-testid="settings-workspace">
       <section className="settings-mobile-panel mobile-panel-scroll" aria-label={locale === "de" ? "Mobile Einstellungen" : "Mobile settings"}>
@@ -564,6 +626,21 @@ export function SettingsWorkspace({
                 ? "Aktionen bleiben backend-owned. Der Browser zeigt nur Status, Intent und sichere Zusammenfassungen."
                 : "Actions stay backend-owned. The browser only shows status, intent, and safe summaries."}
             </p>
+            {selectedMobileSettingsRow?.id === "openrouter" ? (
+              <details className="settings-mobile-dropdown" data-testid="mobile-openrouter-dropdown" open>
+                <summary>{locale === "de" ? "Key und Alias eingeben" : "Enter key and alias"}</summary>
+                <p className="muted-copy">
+                  {locale === "de"
+                    ? "Der Backend-Contract speichert API-Key und Modell-ID. Der öffentliche Alias bleibt backend-owned."
+                    : "The backend contract stores API key and model ID. The public alias stays backend-owned."}
+                </p>
+                {renderOpenRouterCredentialForm({
+                  prefix: "mobile-openrouter",
+                  className: "settings-inline-form settings-mobile-openrouter-form",
+                  inputLabel: locale === "de" ? "Alias / Modell-ID" : "Alias / model ID",
+                })}
+              </details>
+            ) : null}
           </div>
         </BottomSheet>
       </section>
@@ -879,55 +956,7 @@ export function SettingsWorkspace({
           {openRouterCredentialMessage ? (
             <p className="status-pill status-ready">{openRouterCredentialMessage}</p>
           ) : null}
-          <form
-            className="settings-inline-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              onSaveOpenRouterCredentials();
-            }}
-          >
-            <label htmlFor="openrouter-api-key-input">{openRouterCopy.keyLabel}</label>
-            <input
-              id="openrouter-api-key-input"
-              data-testid="openrouter-api-key-input"
-              type="password"
-              autoComplete="off"
-              spellCheck={false}
-              value={openRouterApiKeyInput}
-              onChange={(event) => onOpenRouterApiKeyInputChange(event.target.value)}
-              placeholder={openRouterCopy.keyPlaceholder}
-            />
-            <label htmlFor="openrouter-model-input">{openRouterCopy.inputLabel}</label>
-            <div className="settings-inline-controls">
-              <input
-                id="openrouter-model-input"
-                data-testid="openrouter-model-input"
-                type="text"
-                inputMode="text"
-                autoComplete="off"
-                spellCheck={false}
-                value={openRouterModelInput}
-                onChange={(event) => onOpenRouterModelInputChange(event.target.value)}
-                placeholder={openRouterCopy.placeholder}
-              />
-              <button
-                type="submit"
-                data-testid="openrouter-credentials-save"
-                disabled={isSavingOpenRouterCredentials || openRouterApiKeyInput.trim().length === 0 || openRouterModelInput.trim().length === 0}
-              >
-                {isSavingOpenRouterCredentials ? openRouterCopy.saving : openRouterCopy.save}
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                data-testid="openrouter-credentials-test"
-                onClick={onTestOpenRouterCredentials}
-                disabled={isTestingOpenRouterCredentials || openRouterApiKeyInput.trim().length === 0 || openRouterModelInput.trim().length === 0}
-              >
-                {isTestingOpenRouterCredentials ? openRouterCopy.testing : openRouterCopy.test}
-              </button>
-            </div>
-          </form>
+          {renderOpenRouterCredentialForm({ prefix: "openrouter" })}
           {openRouterCredentialStatus.models.length === 0 ? (
             <p className="empty-state">{openRouterCopy.empty}</p>
           ) : (

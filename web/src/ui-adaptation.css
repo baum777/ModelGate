@@ -3116,6 +3116,47 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
   border-block: 1px solid rgba(158, 168, 190, 0.12);
 }
 
+.app-shell-mobile .settings-mobile-dropdown {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(158, 168, 190, 0.14);
+  border-radius: 12px;
+  background: rgba(17, 18, 26, 0.74);
+}
+
+.app-shell-mobile .settings-mobile-dropdown summary {
+  color: var(--mobile-redesign-text, var(--hi));
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.app-shell-mobile .settings-mobile-openrouter-form,
+.app-shell-mobile .settings-mobile-openrouter-form .settings-inline-controls {
+  display: grid;
+  gap: 8px;
+}
+
+.app-shell-mobile .settings-mobile-openrouter-form label {
+  color: var(--mobile-redesign-muted, var(--ms-text2));
+  font-family: var(--ms-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.app-shell-mobile .settings-mobile-openrouter-form input {
+  min-width: 0;
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--hi);
+  padding: 10px 12px;
+}
+
 .app-shell-mobile .matrix-mobile-status-grid {
   display: grid;
   border-block: 1px solid rgba(158, 168, 190, 0.12);
