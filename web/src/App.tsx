@@ -76,7 +76,6 @@ import {
   type WorkMode,
 } from "./lib/work-mode.js";
 import type { PinnedChatContext } from "./lib/pinned-chat-context.js";
-import { useHapticFeedback } from "./hooks/useHapticFeedback.js";
 import { BottomNav } from "./components/navigation/BottomNav.js";
 import { ContextBrowserPanel } from "./components/mobile/context/ContextBrowserPanel.js";
 import { ContextStrip, type MobileContextStatus } from "./components/mobile/layout/ContextStrip.js";
@@ -949,14 +948,7 @@ function LandingPage() {
 }
 
 function PublicPreview() {
-  return (
-    <div data-testid="public-preview">
-      <LandingPage />
-      <p className="public-preview-contract">
-        Public preview shell. Governed workspace access stays separate from this route.
-      </p>
-    </div>
-  );
+  return <LandingPage />;
 }
 
 function ReadmeLandingPage() {
@@ -991,7 +983,6 @@ function ConsoleShell() {
   const { locale, setLocale, copy: ui } = useLocalization();
   const { theme, toggleTheme } = useTheme();
   const isMobileViewport = useIsMobileViewport();
-  const haptic = useHapticFeedback();
   const appText = useMemo(
     () => locale === "de"
       ? {
@@ -1403,15 +1394,13 @@ function ConsoleShell() {
   }, [githubReviewDirty, mode, ui.github.reviewDirtyConfirmNavigation]);
 
   const handleMobileNavSelect = useCallback((nextMode: WorkspaceMode) => {
-    haptic.light();
     setMobileContextOpen(false);
     handleWorkspaceTabSelect(nextMode);
-  }, [handleWorkspaceTabSelect, haptic]);
+  }, [handleWorkspaceTabSelect]);
 
   const handleMobileContextToggle = useCallback(() => {
-    haptic.medium();
     setMobileContextOpen((current) => !current);
-  }, [haptic]);
+  }, []);
 
   const handleMobileBrandPointerDown = useCallback(() => {
     if (!isMobileViewport) {
@@ -1421,11 +1410,10 @@ function ConsoleShell() {
     mobileSettingsLongPressTriggeredRef.current = false;
     mobileSettingsLongPressRef.current = globalThis.setTimeout(() => {
       mobileSettingsLongPressTriggeredRef.current = true;
-      haptic.medium();
       setMobileContextOpen(false);
       handleWorkspaceTabSelect("settings");
     }, 650);
-  }, [handleWorkspaceTabSelect, haptic, isMobileViewport]);
+  }, [handleWorkspaceTabSelect, isMobileViewport]);
 
   const clearMobileBrandLongPress = useCallback(() => {
     if (mobileSettingsLongPressRef.current !== null) {

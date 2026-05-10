@@ -1112,10 +1112,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     }
   }
   const showMatrixConnectionEmptyState = status === "error" && Boolean(identityError || roomsError);
-  const matrixWriteConfigured = false;
-  const matrixWriteHint = locale === "de"
-    ? "Matrix-Schreiben nicht konfiguriert - Setup Guide"
-    : "Matrix write not configured - Setup guide";
   return (
     <section
       className="workspace-panel matrix-workspace"
@@ -1154,8 +1150,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             <button
               type="button"
               key={room.roomId}
-              className={`matrix-mobile-row ${matrixWriteConfigured ? "" : "matrix-mobile-row-disabled"}`}
-              disabled={!matrixWriteConfigured}
+              className="matrix-mobile-row"
               onClick={() => {
                 setSelectedRoomIds((current) => current.includes(room.roomId) ? current : [...current, room.roomId]);
                 setRoomId((current) => (current ?? "").trim().length > 0 ? current : room.roomId);
@@ -1167,9 +1162,6 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
           )) : (
             <p>{status === "loading" ? ui.matrix.scopeSummaryLoading : ui.matrix.roomPickerEmpty}</p>
           )}
-          {!matrixWriteConfigured ? (
-            <p className="matrix-mobile-inline-hint">{matrixWriteHint}</p>
-          ) : null}
         </section>
 
         <section className="matrix-mobile-list">
