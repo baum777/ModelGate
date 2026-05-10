@@ -1264,6 +1264,72 @@ button:disabled {
   padding-bottom: 12px;
 }
 
+.app-shell-mobile .settings-mobile-summary {
+  padding-bottom: 14px;
+}
+
+.app-shell-mobile .settings-mobile-truth-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.app-shell-mobile .settings-mobile-truth-item {
+  min-height: 54px;
+  padding: 9px 10px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  border: 1px solid rgba(158, 168, 190, 0.14);
+  border-radius: 12px;
+  background: rgba(17, 18, 26, 0.88);
+}
+
+.app-shell-mobile .settings-mobile-truth-item span {
+  color: var(--mobile-redesign-muted, var(--ms-text2));
+  font-size: 10px;
+}
+
+.app-shell-mobile .settings-mobile-truth-item strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--ms-mono);
+  font-size: 11px;
+}
+
+.app-shell-mobile .settings-mobile-truth-item-ready strong {
+  color: var(--mobile-redesign-green, var(--ms-green));
+}
+
+.app-shell-mobile .settings-mobile-truth-item-partial strong {
+  color: var(--mobile-redesign-amber, var(--ms-amber));
+}
+
+.app-shell-mobile .settings-mobile-truth-item-error strong {
+  color: var(--mobile-redesign-red, var(--ms-red));
+}
+
+.app-shell-mobile .settings-mobile-section {
+  display: grid;
+  gap: 0;
+  border-block-start: 1px solid rgba(158, 168, 190, 0.12);
+}
+
+.app-shell-mobile .settings-mobile-section-header {
+  min-height: 34px;
+  display: flex;
+  align-items: end;
+  padding: 10px 0 7px;
+  color: var(--mobile-redesign-muted, var(--ms-text2));
+}
+
+.app-shell-mobile .settings-mobile-section .settings-mobile-row-list {
+  border-block: 1px solid rgba(158, 168, 190, 0.12);
+}
+
 .app-shell-mobile .matrix-mobile-status-grid {
   display: grid;
   gap: 0;

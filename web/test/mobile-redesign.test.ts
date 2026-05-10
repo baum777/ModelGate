@@ -68,6 +68,20 @@ test("mobile topbar exposes theme and locale controls", () => {
   assert.match(css, /\.app-shell-mobile \.shell-language-button-active/);
 });
 
+test("mobile settings control center has truth grid and grouped sections", () => {
+  const css = styles();
+  const source = readFileSync("web/src/components/SettingsWorkspace.tsx", "utf8");
+
+  assert.match(source, /settings-mobile-truth-snapshot/);
+  assert.match(source, /settings-mobile-section-access/);
+  assert.match(source, /settings-mobile-section-operation/);
+  assert.match(source, /settings-mobile-section-expert/);
+  assert.match(css, /\.settings-mobile-truth-grid/);
+  assert.match(css, /\.settings-mobile-section/);
+  assert.match(css, /\.settings-mobile-truth-item-ready/);
+  assert.match(css, /\.settings-mobile-truth-item-error/);
+});
+
 test("mobile redesign does not restore deleted mock mobile surfaces", () => {
   const removedPaths = [
     "web/src/pages/ChatPage.tsx",

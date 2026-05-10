@@ -486,6 +486,11 @@ export function SettingsWorkspace({
       rows: mobileSettingsRows.filter((row) => row.section === "expert"),
     },
   ];
+  const mobileSettingsSectionTestIds: Record<MobileSettingsSectionId, string> = {
+    access: "settings-mobile-section-access",
+    operation: "settings-mobile-section-operation",
+    expert: "settings-mobile-section-expert",
+  };
   const selectedMobileSettingsRow = mobileSettingsRows.find((row) => row.id === mobileSettingsSheet) ?? null;
 
   function getVerificationStatusLabel(status: SettingsVerificationState["status"]) {
@@ -522,7 +527,7 @@ export function SettingsWorkspace({
         </header>
 
         {mobileSettingsSections.map((section) => (
-          <section className="settings-mobile-section" data-testid={`settings-mobile-section-${section.id}`} key={section.id}>
+          <section className="settings-mobile-section" data-testid={mobileSettingsSectionTestIds[section.id]} key={section.id}>
             <header className="settings-mobile-section-header">
               <span className="mobile-mono">{section.title}</span>
             </header>
