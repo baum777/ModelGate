@@ -82,6 +82,21 @@ test("mobile settings control center has truth grid and grouped sections", () =>
   assert.match(css, /\.settings-mobile-truth-item-error/);
 });
 
+test("mobile settings sheet scopes text padding and openrouter form spacing", () => {
+  const css = styles();
+
+  assert.match(css, /\.app-shell-mobile \.mobile-bottom-sheet[\s\S]*box-sizing:\s*border-box/);
+  assert.match(css, /\.app-shell-mobile \.settings-mobile-sheet-body[\s\S]*padding:\s*0 16px calc\(18px \+ env\(safe-area-inset-bottom\)\)/);
+  assert.match(css, /\.app-shell-mobile \.settings-mobile-sheet-body \.status-pill[\s\S]*width:\s*100%/);
+  assert.match(css, /\.app-shell-mobile \.settings-mobile-sheet-body \.status-pill[\s\S]*font-size:\s*12px/);
+  assert.match(css, /\.app-shell-mobile \.settings-mobile-sheet-body \.status-pill[\s\S]*white-space:\s*normal/);
+  assert.match(css, /\.app-shell-mobile \.settings-mobile-sheet-body > strong[\s\S]*font-size:\s*14px/);
+  assert.match(css, /\.app-shell-mobile \.settings-mobile-dropdown \.muted-copy[\s\S]*font-size:\s*13px/);
+  assert.match(css, /\.app-shell-mobile \.settings-mobile-openrouter-form input[\s\S]*box-sizing:\s*border-box/);
+  assert.match(css, /\.app-shell-mobile \.settings-mobile-openrouter-form input[\s\S]*font-size:\s*16px/);
+  assert.match(css, /\.app-shell-mobile \.settings-mobile-openrouter-form button[\s\S]*width:\s*100%/);
+});
+
 test("mobile redesign does not restore deleted mock mobile surfaces", () => {
   const removedPaths = [
     "web/src/pages/ChatPage.tsx",

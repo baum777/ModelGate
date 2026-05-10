@@ -27,3 +27,5 @@
 ## [2026-05-10] settings-authority-control-center | reworked mobile Settings into a backend-authority control center with truth snapshot, grouped access/operation/expert rows, safe BottomSheet details, and browser coverage [[../web/src/components/SettingsWorkspace.tsx]] [[../web/src/components/mobile/shared/SettingsRow.tsx]] [[../tests/browser/mosaicstacked.spec.ts]]
 
 ## [2026-05-10] mobile-openrouter-settings-dropdown | added a mobile Settings OpenRouter dropdown for backend-owned API key and alias/model-id entry, preserving desktop form behavior and secret redaction [[../web/src/components/SettingsWorkspace.tsx]] [[../tests/browser/mosaicstacked.spec.ts]]
+
+## [2026-05-10] mobile-openrouter-sheet-padding | tightened global mobile BottomSheet text padding and OpenRouter dropdown typography to prevent oversized overlapping copy while keeping 16px input text for mobile keyboards [[../web/src/components/SettingsWorkspace.tsx]] [[../web/src/critical.css]] [[../web/src/styles.css]] [[../web/src/ui-adaptation.css]]

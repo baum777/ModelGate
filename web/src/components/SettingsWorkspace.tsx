@@ -383,6 +383,9 @@ export function SettingsWorkspace({
     { id: "matrix", label: verificationCopy.matrix },
   ];
   const [mobileSettingsSheet, setMobileSettingsSheet] = React.useState<string | null>(null);
+  const openRouterMobileStatusValue = openRouterCredentialStatus.configured
+    ? (locale === "de" ? "Konfiguriert" : "Configured")
+    : (locale === "de" ? "Fehlt" : "Missing");
   const mobileTruthItems: MobileSettingsTruthItem[] = [
     {
       id: "backend",
@@ -415,7 +418,7 @@ export function SettingsWorkspace({
       id: "openrouter",
       section: "access",
       label: openRouterCopy.title,
-      value: openRouterCredentialStatus.configured ? openRouterCopy.configured : openRouterCopy.empty,
+      value: openRouterMobileStatusValue,
       detail: openRouterCopy.subtitle,
       tone: openRouterCredentialStatus.configured ? "ready" : "error",
     },

@@ -2769,6 +2769,13 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
   background: rgba(16, 17, 24, 0.98);
 }
 
+.app-shell-mobile .mobile-bottom-sheet {
+  box-sizing: border-box;
+  width: 100%;
+  padding-top: 12px;
+  color: var(--hi);
+}
+
 .mobile-bottom-sheet-handle {
   display: block;
   width: 36px;
@@ -3116,10 +3123,46 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
   border-block: 1px solid rgba(158, 168, 190, 0.12);
 }
 
+.app-shell-mobile .settings-mobile-sheet-body {
+  box-sizing: border-box;
+  display: grid;
+  gap: 12px;
+  padding: 0 16px calc(18px + env(safe-area-inset-bottom));
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.app-shell-mobile .settings-mobile-sheet-body .status-pill {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 7px 10px;
+  font-size: 12px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-transform: none;
+  letter-spacing: 0;
+  line-height: 1.35;
+}
+
+.app-shell-mobile .settings-mobile-sheet-body > strong {
+  color: var(--mobile-redesign-text, var(--hi));
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.app-shell-mobile .settings-mobile-sheet-body > p {
+  margin: 0;
+  color: var(--mobile-redesign-muted, var(--ms-text2));
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .app-shell-mobile .settings-mobile-dropdown {
   display: grid;
   gap: 10px;
-  padding: 10px;
+  padding: 12px;
   border: 1px solid rgba(158, 168, 190, 0.14);
   border-radius: 12px;
   background: rgba(17, 18, 26, 0.74);
@@ -3127,10 +3170,16 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
 
 .app-shell-mobile .settings-mobile-dropdown summary {
   color: var(--mobile-redesign-text, var(--hi));
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   touch-action: manipulation;
+}
+
+.app-shell-mobile .settings-mobile-dropdown .muted-copy {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .app-shell-mobile .settings-mobile-openrouter-form,
@@ -3147,6 +3196,7 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
 }
 
 .app-shell-mobile .settings-mobile-openrouter-form input {
+  box-sizing: border-box;
   min-width: 0;
   width: 100%;
   min-height: 44px;
@@ -3154,7 +3204,13 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
   border-radius: 8px;
   background: var(--surface);
   color: var(--hi);
+  font-size: 16px;
+  line-height: 1.4;
   padding: 10px 12px;
+}
+
+.app-shell-mobile .settings-mobile-openrouter-form button {
+  width: 100%;
 }
 
 .app-shell-mobile .matrix-mobile-status-grid {
