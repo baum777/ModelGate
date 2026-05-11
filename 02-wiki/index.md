@@ -16,3 +16,5 @@ Format: `[[link]] | summary | #tags | YYYY-MM-DD`
 [[../03-mspr/packets/2026-05-10-governance-bootstrap.yml]] | Review-Packet fuer neu gebootstrappte Governance-Surfaces | #mspr #governance #proposed | 2026-05-10
 [[../03-mspr/packets/2026-05-10-mobile-redesign-browser-suite.yml]] | Superseded Browser-Suite-Validierungsluecke nach Mobile Redesign | #mspr #verification #superseded | 2026-05-10
 [[../docs/superpowers/plans/2026-05-10-settings-authority-control-center.md]] | Implementation plan for Settings authority control center redesign | #docs #plan #settings | 2026-05-10
+[[../web/src/App.tsx]] | 4-Tab shell (`chat`, `workbench`, `matrix`, `settings`) with legacy mode normalization to `workbench` | #workbench #navigation #authority | 2026-05-11
+[[../web/src/components/GitHubWorkspace.tsx]] | Summary-first Workbench review center with explicit local/backend action effect semantics | #workbench #review #authority | 2026-05-11

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   describeRepositoryAccess,
@@ -232,4 +233,20 @@ test("GitHub review dirty state tracks unsaved local review progress", () => {
     approvalChecked: false,
     executionError: "stale execute failed",
   }), true);
+});
+
+test("Workbench action semantics keep local review state separate from backend execution", () => {
+  const source = readFileSync("web/src/components/GitHubWorkspace.tsx", "utf8");
+
+  assert.match(source, /type WorkbenchActionEffectType =[\s\S]*"local_review_state"[\s\S]*"backend_prepare"[\s\S]*"backend_execute_pr"/);
+  assert.match(source, /Mark for stage/);
+  assert.match(source, /Zur Übergabe vormerken/);
+  assert.match(source, /Prepare PR/);
+  assert.match(source, /Create PR/);
+  assert.match(source, /data-effect-type=\{workbenchActionEffects\.markForStage\}/);
+  assert.match(source, /data-effect-type=\{workbenchActionEffects\.preparePr\}/);
+  assert.match(source, /data-effect-type=\{workbenchActionEffects\.createPr\}/);
+  assert.match(source, /workbenchActionState !== "pr_prepared"/);
+  assert.match(source, /function handleMarkForStage\(\)[\s\S]*setWorkbenchActionState\("staged"\)/);
+  assert.match(source, /function handleRemoveFromReview\(\)[\s\S]*setWorkbenchActionState\("removed"\)/);
 });

@@ -80,20 +80,17 @@ import {
 } from "./lib/work-mode.js";
 import type { PinnedChatContext } from "./lib/pinned-chat-context.js";
 import { BottomNav } from "./components/navigation/BottomNav.js";
-import { ContextBrowserPanel } from "./components/mobile/context/ContextBrowserPanel.js";
 import { ContextStrip, type MobileContextStatus } from "./components/mobile/layout/ContextStrip.js";
 import { TopContextBar } from "./components/mobile/layout/TopContextBar.js";
 
 const loadChatWorkspace = () => import("./components/ChatWorkspace.js");
 const loadGitHubWorkspace = () => import("./components/GitHubWorkspace.js");
 const loadMatrixWorkspace = () => import("./components/MatrixWorkspace.js");
-const loadReviewWorkspace = () => import("./components/ReviewWorkspace.js");
 const loadSettingsWorkspace = () => import("./components/SettingsWorkspace.js");
 
 const ChatWorkspace = lazy(() => loadChatWorkspace().then((module) => ({ default: module.ChatWorkspace })));
 const GitHubWorkspace = lazy(() => loadGitHubWorkspace().then((module) => ({ default: module.GitHubWorkspace })));
 const MatrixWorkspace = lazy(() => loadMatrixWorkspace().then((module) => ({ default: module.MatrixWorkspace })));
-const ReviewWorkspace = lazy(() => loadReviewWorkspace().then((module) => ({ default: module.ReviewWorkspace })));
 const SettingsWorkspace = lazy(() => loadSettingsWorkspace().then((module) => ({ default: module.SettingsWorkspace })));
 
 const SETTINGS_VERIFICATION_INITIAL: Record<SettingsVerificationTarget, SettingsVerificationState> = {
@@ -128,7 +125,7 @@ function scheduleWorkspacePreload(callback: () => void, timeoutMs = 15_000) {
   return () => globalThis.clearTimeout(handle);
 }
 
-type WorkspaceMode = "chat" | "github" | "matrix" | "review" | "settings" | "context";
+type WorkspaceMode = "chat" | "workbench" | "matrix" | "settings";
 
 type TelemetryEntry = {
   id: string;
@@ -138,7 +135,7 @@ type TelemetryEntry = {
 };
 
 type PersistedShellState = {
-  activeTab?: WorkspaceMode;
+  activeTab?: string;
   workMode?: WorkMode;
   expertMode?: boolean;
 };
@@ -152,11 +149,25 @@ type ThemeMode = "dark" | "light";
 
 function isWorkspaceMode(value: string | null): value is WorkspaceMode {
   return value === "chat"
-    || value === "github"
+    || value === "workbench"
     || value === "matrix"
-    || value === "review"
-    || value === "settings"
-    || value === "context";
+    || value === "settings";
+}
+
+function normalizeWorkspaceMode(value: string | null | undefined): WorkspaceMode | null {
+  if (!value) {
+    return null;
+  }
+
+  if (isWorkspaceMode(value)) {
+    return value;
+  }
+
+  if (value === "github" || value === "review" || value === "context") {
+    return "workbench";
+  }
+
+  return null;
 }
 
 export function shouldConfirmGitHubReviewNavigation(options: {
@@ -164,8 +175,8 @@ export function shouldConfirmGitHubReviewNavigation(options: {
   nextMode: WorkspaceMode;
   githubReviewDirty: boolean;
 }) {
-  return options.currentMode === "github"
-    && options.nextMode !== "github"
+  return options.currentMode === "workbench"
+    && options.nextMode !== "workbench"
     && options.githubReviewDirty;
 }
 
@@ -176,7 +187,7 @@ function readUrlWorkspaceMode() {
 
   const url = new URL(window.location.href);
   const requestedMode = url.searchParams.get("mode");
-  return isWorkspaceMode(requestedMode) ? requestedMode : null;
+  return normalizeWorkspaceMode(requestedMode);
 }
 
 function replaceConsoleUrl(mode?: WorkspaceMode) {
@@ -224,15 +235,15 @@ function appendTelemetry(current: TelemetryEntry[], entry: TelemetryEntry) {
   return [...current, entry].slice(-8);
 }
 
-const WORKSPACE_MODES: WorkspaceMode[] = ["chat", "github", "matrix", "review", "settings"];
-const MOBILE_NAV_MODES: WorkspaceMode[] = ["chat", "github", "matrix"];
+const WORKSPACE_MODES: WorkspaceMode[] = ["chat", "workbench", "matrix", "settings"];
+const MOBILE_NAV_MODES: WorkspaceMode[] = ["chat", "workbench", "matrix", "settings"];
 const MOBILE_BREAKPOINT_QUERY = "(max-width: 760px)";
 // Reference-only mobile demo pages stay in-repo, but runtime defaults to functional workspaces.
 const MOBILE_REFERENCE_SURFACES_ENABLED = false;
 
 function WorkspaceIcon({ mode }: { mode: WorkspaceMode }) {
   switch (mode) {
-    case "github":
+    case "workbench":
       return (
         <svg aria-hidden="true" viewBox="0 0 24 24">
           <path d="M6 6.75A2.75 2.75 0 0 1 8.75 4H15l3 3v10.25A2.75 2.75 0 0 1 15.25 20H8.75A2.75 2.75 0 0 1 6 17.25V6.75Z" />
@@ -248,15 +259,6 @@ function WorkspaceIcon({ mode }: { mode: WorkspaceMode }) {
           <rect x="14" y="4" width="6" height="6" rx="1.5" />
           <rect x="4" y="14" width="6" height="6" rx="1.5" />
           <rect x="14" y="14" width="6" height="6" rx="1.5" />
-        </svg>
-      );
-    case "review":
-      return (
-        <svg aria-hidden="true" viewBox="0 0 24 24">
-          <path d="M6 5.5A1.5 1.5 0 0 1 7.5 4h9A1.5 1.5 0 0 1 18 5.5v11A1.5 1.5 0 0 1 16.5 18H10l-4 4v-3.5A1.5 1.5 0 0 1 4.5 17V5.5Z" />
-          <path d="M8 8.5h8" />
-          <path d="M8 11.5h8" />
-          <path d="M8 14.5h5" />
         </svg>
       );
     case "settings":
@@ -276,16 +278,6 @@ function WorkspaceIcon({ mode }: { mode: WorkspaceMode }) {
         </svg>
       );
   }
-}
-
-function MobileContextIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 24 24">
-      <path d="M4 7.5h16" />
-      <path d="M4 12h16" />
-      <path d="M4 16.5h16" />
-    </svg>
-  );
 }
 
 function MosaicStackedIcon() {
@@ -341,8 +333,24 @@ function mergeReviewItems(current: ReviewItem[], next: ReviewItem[]) {
   return [...remaining, ...next];
 }
 
-function isSessionWorkspace(mode: WorkspaceMode): mode is WorkspaceKind {
-  return mode === "chat" || mode === "github" || mode === "matrix";
+function isSessionWorkspace(mode: WorkspaceMode): mode is "chat" | "workbench" | "matrix" {
+  return mode === "chat" || mode === "workbench" || mode === "matrix";
+}
+
+function toWorkspaceKind(mode: "chat" | "workbench" | "matrix"): WorkspaceKind {
+  if (mode === "workbench") {
+    return "github";
+  }
+
+  return mode;
+}
+
+function toWorkspaceMode(workspace: WorkspaceKind): "chat" | "workbench" | "matrix" {
+  if (workspace === "github") {
+    return "workbench";
+  }
+
+  return workspace;
 }
 
 function nowIso() {
@@ -532,20 +540,20 @@ const LANDING_FEATURES = [
     },
   },
   {
-    key: "github",
-    icon: <WorkspaceIcon mode="github" />,
-    href: "/console?mode=github",
+    key: "workbench",
+    icon: <WorkspaceIcon mode="workbench" />,
+    href: "/console?mode=workbench",
     title: {
-      de: "GitHub",
-      en: "GitHub",
+      de: "Workbench",
+      en: "Workbench",
     },
     description: {
-      de: "Lade Repo-Kontext, prüfe Dateien und bereite Issues, Reviews oder PR-Kommentare vor.",
-      en: "Load repo context, inspect files, and prepare issues, reviews, or PR comments.",
+      de: "Lade Repo-Kontext, prüfe Änderungen und steuere Review, Übergabe und PR-Vorbereitung.",
+      en: "Load repository context, review changes, and control handoff and PR preparation.",
     },
     useCase: {
-      de: "Datei laden und konkrete Risiken oder Bugs prüfen lassen.",
-      en: "Load a file and ask for concrete risks or bugs.",
+      de: "Arbeitszusammenfassung prüfen und nur bei Bedarf den Raw Diff öffnen.",
+      en: "Review the work summary first and open raw diff only when needed.",
     },
   },
   {
@@ -563,23 +571,6 @@ const LANDING_FEATURES = [
     useCase: {
       de: "Zusammenfassung direkt als Wissenseintrag übernehmen.",
       en: "Save a summary directly as a knowledge entry.",
-    },
-  },
-  {
-    key: "context",
-    icon: <span className="landing-glyph">⊡</span>,
-    href: "/console?mode=github",
-    title: {
-      de: "Context",
-      en: "Context",
-    },
-    description: {
-      de: "Behalte aktives Repo, Branch, Datei und Token-Kontext im Blick.",
-      en: "Keep active repo, branch, file, and token context visible.",
-    },
-    useCase: {
-      de: "Vor der Frage prüfen, ob die richtige Datei im Fokus ist.",
-      en: "Check that the right file is in focus before asking.",
     },
   },
   {
@@ -1008,7 +999,7 @@ function ConsoleShell() {
           chatGovernanceLastExecutionFailed: "Letzte Ausführung fehlgeschlagen",
           chatGovernanceNoOpenProposal: "Kein offener Vorschlag",
           sessionHeaderNote: "Wiederaufnehmbare Sessions pro Arbeitsbereich",
-          processGoReview: "Review öffnen",
+          processGoReview: "Workbench öffnen",
           processGoWorkspace: "Workspace öffnen",
           processCreateSession: "Neue Session",
         }
@@ -1032,7 +1023,7 @@ function ConsoleShell() {
           chatGovernanceLastExecutionFailed: "Last execution failed",
           chatGovernanceNoOpenProposal: "No open proposal",
           sessionHeaderNote: "Resumable sessions per workspace",
-          processGoReview: "Open review",
+          processGoReview: "Open workbench",
           processGoWorkspace: "Open workspace",
           processCreateSession: "New session",
         },
@@ -1092,7 +1083,9 @@ function ConsoleShell() {
     }),
     [ui],
   );
-  const [mode, setMode] = useState<WorkspaceMode>(() => readUrlWorkspaceMode() ?? persisted?.activeTab ?? "chat");
+  const [mode, setMode] = useState<WorkspaceMode>(
+    () => readUrlWorkspaceMode() ?? normalizeWorkspaceMode(persisted?.activeTab) ?? "chat",
+  );
   const [workMode, setWorkMode] = useState<WorkMode>(() => resolvePersistedWorkMode(persisted));
   const expertMode = isExpertMode(workMode);
   const workModeCopy = getWorkModeCopy(locale, workMode);
@@ -1339,7 +1332,6 @@ function ConsoleShell() {
       loadChatWorkspace(),
       loadGitHubWorkspace(),
       loadMatrixWorkspace(),
-      loadReviewWorkspace(),
       loadSettingsWorkspace(),
     ]);
   }), []);
@@ -1367,10 +1359,6 @@ function ConsoleShell() {
     setReviewItems((current) => mergeReviewItems(current.filter((item) => item.source !== "matrix"), items));
   }, []);
 
-  const removeModeReviewItems = useCallback((source: ReviewItem["source"]) => {
-    setReviewItems((current) => current.filter((item) => item.source !== source));
-  }, []);
-
   const handleWorkspaceTabSelect = useCallback((nextMode: WorkspaceMode) => {
     if (shouldConfirmGitHubReviewNavigation({
       currentMode: mode,
@@ -1389,9 +1377,10 @@ function ConsoleShell() {
     setMode(nextMode);
 
     if (isSessionWorkspace(nextMode)) {
+      const workspace = toWorkspaceKind(nextMode);
       setWorkspaceState((current) => {
-        const activeSessionId = current.activeSessionIdByWorkspace[nextMode];
-        return selectSession(current, nextMode, activeSessionId);
+        const activeSessionId = current.activeSessionIdByWorkspace[workspace];
+        return selectSession(current, workspace, activeSessionId);
       });
     }
   }, [githubReviewDirty, mode, ui.github.reviewDirtyConfirmNavigation]);
@@ -1515,7 +1504,7 @@ function ConsoleShell() {
     sourceMessageId: string;
     content: string;
   }) => {
-    setMode("github");
+    setMode("workbench");
     setWorkspaceState((current) => {
       const sessionId = current.activeSessionIdByWorkspace.github;
       return selectSession(current, "github", sessionId);
@@ -1530,7 +1519,7 @@ function ConsoleShell() {
   const handleWorkspaceSessionCreate = useCallback((workspace: WorkspaceKind) => {
     const now = nowIso();
 
-    setMode(workspace);
+    setMode(toWorkspaceMode(workspace));
     setWorkspaceState((current) => {
       switch (workspace) {
         case "github":
@@ -1576,7 +1565,7 @@ function ConsoleShell() {
   }, [activeModelAlias]);
 
   const handleWorkspaceSessionSelect = useCallback((workspace: WorkspaceKind, sessionId: string) => {
-    setMode(workspace);
+    setMode(toWorkspaceMode(workspace));
     setWorkspaceState((current) => selectSession(current, workspace, sessionId));
   }, []);
 
@@ -1788,7 +1777,7 @@ function ConsoleShell() {
     setWorkspaceState((current) => updateSession(current, "matrix", session.id, () => session));
   }, []);
 
-  const sessionWorkspace = isSessionWorkspace(mode) ? mode : workspaceState.activeWorkspace;
+  const sessionWorkspace: WorkspaceKind = isSessionWorkspace(mode) ? toWorkspaceKind(mode) : workspaceState.activeWorkspace;
   const sessionWorkspaceSessions = workspaceState.sessionsByWorkspace[sessionWorkspace] as WorkspaceSession<unknown>[];
   const sessionWorkspaceActiveId = workspaceState.activeSessionIdByWorkspace[sessionWorkspace];
   const activeSession = sessionWorkspaceSessions.find((session) => session.id === sessionWorkspaceActiveId) ?? sessionWorkspaceSessions[0] ?? null;
@@ -1822,6 +1811,17 @@ function ConsoleShell() {
     matrixSession?.metadata.topicRoomId,
   ]);
   const hasRepoContext = Boolean(githubSession?.metadata.selectedRepoFullName);
+  const workbenchRepoBinding = githubSession?.metadata.selectedRepoFullName ?? null;
+  const workbenchBranchBinding =
+    githubContext.expertDetails.branchName
+    ?? githubSession?.metadata.proposalPlan?.branchName
+    ?? githubSession?.metadata.proposalPlan?.baseRef
+    ?? githubSession?.metadata.analysisBundle?.ref
+    ?? null;
+  const workbenchScopeBinding =
+    githubSession?.metadata.proposalPlan?.diff[0]?.path
+    ?? githubSession?.metadata.analysisBundle?.files[0]?.path
+    ?? null;
   const repoChipLabel = hasRepoContext
     ? `⊟ ${githubSession?.metadata.selectedRepoFullName}`
     : (locale === "de" ? "⊡ Kein Kontext" : "⊡ No context");
@@ -1897,7 +1897,7 @@ function ConsoleShell() {
       ? [{ label: ui.review.approvalNeeded, value: matrixContext.approvalLabel }]
       : []),
   ];
-  const routeOwnershipRows = mode === "github"
+  const routeOwnershipRows = mode === "workbench"
     ? [
         {
           label: "identity",
@@ -1959,29 +1959,6 @@ function ConsoleShell() {
           },
         ]
       : [];
-  const reviewHasStale = reviewItems.some((item) => item.status === "stale");
-  const reviewHasPending = reviewItems.some((item) => item.status === "pending_review");
-  const reviewHasExecuting = reviewItems.some((item) => item.status === "approved");
-  const reviewHasTerminal = reviewItems.some((item) => item.status === "rejected" || item.status === "failed");
-
-  const reviewRows: StatusPanelRow[] = [
-    { label: ui.review.openReviews, value: String(reviewItems.length) },
-    {
-      label: ui.review.rowClassification,
-      value:
-        reviewItems.length === 0
-          ? ui.review.emptyTitle
-          : reviewHasStale
-            ? ui.review.blocked
-            : reviewHasPending
-              ? ui.review.approvalNeeded
-              : reviewHasExecuting
-                ? ui.review.executing
-                : reviewHasTerminal
-                  ? ui.review.terminalDeviation
-                  : ui.review.ready,
-    },
-  ];
 
   const settingsTruthSnapshot = {
     backend: {
@@ -2075,37 +2052,27 @@ function ConsoleShell() {
 
   const settingsRows: StatusPanelRow[] = [
     { label: ui.settings.backend, value: settingsTruthSnapshot.backend.label },
-    { label: ui.shell.workspaceTabs.github.label, value: `${settingsTruthSnapshot.github.sessionLabel} · ${settingsTruthSnapshot.github.accessLabel}` },
+    { label: ui.shell.workspaceTabs.workbench.label, value: `${settingsTruthSnapshot.github.sessionLabel} · ${settingsTruthSnapshot.github.accessLabel}` },
     { label: ui.shell.workspaceTabs.matrix.label, value: `${settingsTruthSnapshot.matrix.identityLabel} · ${settingsTruthSnapshot.matrix.connectionLabel}` },
     { label: ui.settings.modelCardTitle, value: settingsTruthSnapshot.models.activeAlias },
   ];
 
   const currentRows = useMemo(() => {
     switch (mode) {
-      case "context":
-        return githubRows;
-      case "github":
+      case "workbench":
         return githubRows;
       case "matrix":
         return matrixRows;
-      case "review":
-        return reviewRows;
       case "settings":
         return settingsRows;
       default:
         return chatRows;
     }
-  }, [chatRows, githubRows, matrixRows, mode, reviewRows, settingsRows]);
+  }, [chatRows, githubRows, matrixRows, mode, settingsRows]);
 
   const currentStatusBadge = useMemo(() => {
     switch (mode) {
-      case "context":
-        if (!hasRepoContext) {
-          return ui.github.repoSelectLabel;
-        }
-
-        return githubContext.connectionLabel;
-      case "github":
+      case "workbench":
         if (githubContext.connectionLabel !== ui.shell.statusReady) {
           return githubContext.connectionLabel;
         }
@@ -2134,28 +2101,6 @@ function ConsoleShell() {
 
         if (matrixContext.summaryLabel === ui.matrix.scopeSummaryUnavailable) {
           return ui.matrix.scopeSummaryReady;
-        }
-
-        return ui.shell.statusReady;
-      case "review":
-        if (reviewItems.length === 0) {
-          return ui.shell.statusPartial;
-        }
-
-        if (reviewHasStale) {
-          return ui.shell.statusError;
-        }
-
-        if (reviewHasPending) {
-          return ui.review.approvalNeeded;
-        }
-
-        if (reviewHasExecuting) {
-          return ui.review.executing;
-        }
-
-    if (reviewHasTerminal) {
-          return ui.review.terminalDeviation;
         }
 
         return ui.shell.statusReady;
@@ -2192,19 +2137,15 @@ function ConsoleShell() {
     backendHealthy,
     chatLatestReceipt?.outcome,
     chatPendingProposal?.status,
-    expertMode,
-    hasRepoContext,
     githubContext.approvalLabel,
     githubContext.connectionLabel,
     githubContext.repositoryLabel,
-    backendHealthy,
     activeModelAlias,
     matrixContext.approvalLabel,
     matrixContext.connectionLabel,
     matrixContext.scopeLabel,
     matrixContext.summaryLabel,
     mode,
-    reviewItems,
   ]);
 
   const healthState = useMemo(() => getShellHealthCopy(locale, backendHealthy), [backendHealthy, locale]);
@@ -2223,13 +2164,7 @@ function ConsoleShell() {
 
   const currentStatusTone = useMemo(() => {
     switch (mode) {
-      case "context":
-        if (githubContext.connectionLabel === ui.shell.statusError) {
-          return "error";
-        }
-
-        return hasRepoContext ? "ready" : "partial";
-      case "github":
+      case "workbench":
         if (githubContext.connectionLabel !== ui.shell.statusReady) {
           return githubContext.connectionLabel === ui.shell.statusError ? "error" : "partial";
         }
@@ -2249,16 +2184,6 @@ function ConsoleShell() {
         return matrixContext.approvalLabel !== ui.common.none || matrixContext.scopeLabel === ui.matrix.scopeUnresolved || matrixContext.summaryLabel === ui.matrix.scopeSummaryUnavailable
           ? "partial"
           : "ready";
-      case "review":
-        if (reviewItems.length === 0) {
-          return "partial";
-        }
-
-    if (reviewHasStale || reviewHasTerminal) {
-          return "error";
-        }
-
-        return reviewHasPending || reviewHasExecuting ? "partial" : "ready";
       case "settings":
         if (backendHealthy === false) {
           return "error";
@@ -2292,27 +2217,20 @@ function ConsoleShell() {
     backendHealthy,
     chatLatestReceipt?.outcome,
     chatPendingProposal?.status,
-    hasRepoContext,
     githubContext.approvalLabel,
     githubContext.connectionLabel,
     githubContext.repositoryLabel,
-    backendHealthy,
     activeModelAlias,
     matrixContext.connectionLabel,
     matrixContext.approvalLabel,
     matrixContext.scopeLabel,
     matrixContext.summaryLabel,
     mode,
-    reviewItems,
   ]);
 
   const currentHelperText = useMemo(() => {
     switch (mode) {
-      case "context":
-        return hasRepoContext
-          ? (locale === "de" ? "Aktiven Repo-, Branch- und Datei-Kontext prüfen oder ändern." : "Review or change the active repository, branch, and file context.")
-          : ui.github.workspaceNoticeSelection;
-      case "github":
+      case "workbench":
         if (githubContext.approvalLabel !== ui.common.none) {
           return ui.github.approveHelper;
         }
@@ -2336,28 +2254,6 @@ function ConsoleShell() {
         }
 
         return ui.matrix.scopeNotice;
-      case "review":
-        if (reviewItems.length === 0) {
-          return ui.review.emptyBody;
-        }
-
-        if (reviewHasStale) {
-          return ui.review.warning;
-        }
-
-        if (reviewHasPending) {
-          return ui.review.approvalNeeded;
-        }
-
-        if (reviewHasExecuting) {
-          return ui.review.executing;
-        }
-
-    if (reviewHasTerminal) {
-          return ui.review.terminalDeviation;
-        }
-
-        return ui.review.ready;
       case "settings":
         if (backendHealthy === false) {
           return ui.shell.healthUnavailableDetail;
@@ -2392,8 +2288,6 @@ function ConsoleShell() {
     chatLatestReceipt?.outcome,
     chatPendingProposal?.status,
     expertMode,
-    hasRepoContext,
-    locale,
     githubContext.approvalLabel,
     githubContext.repositoryLabel,
     matrixContext.connectionLabel,
@@ -2401,7 +2295,6 @@ function ConsoleShell() {
     matrixContext.scopeLabel,
     matrixContext.summaryLabel,
     mode,
-    reviewItems,
   ]);
 
   const workspaceSurface = mode === "chat" ? (
@@ -2423,10 +2316,15 @@ function ConsoleShell() {
       onClearPinnedContext={handleClearPinnedChatContext}
       matrixDraftDefaultRoomId={matrixDraftDefaultRoomId}
       matrixDraftRoomOptions={matrixDraftRoomOptions}
+      workbenchBinding={{
+        repo: workbenchRepoBinding,
+        branch: workbenchBranchBinding,
+        scope: workbenchScopeBinding,
+      }}
       onQueueMatrixDraft={handleQueueMatrixDraftFromChat}
       onOpenGitHubFromChatAction={handleOpenGitHubFromChatAction}
     />
-  ) : mode === "github" ? (
+  ) : mode === "workbench" ? (
     <GitHubWorkspace
       key={githubSession?.id ?? "github-session"}
       session={githubSession}
@@ -2453,20 +2351,6 @@ function ConsoleShell() {
       onReviewItemsChange={updateMatrixReviewItems}
       onSessionChange={handleMatrixSessionChange}
     />
-  ) : mode === "context" ? (
-    <ContextBrowserPanel
-      locale={locale}
-      repositoryLabel={repoChipLabel.replace(/^⊟\s?|^⊡\s?/, "")}
-      branchLabel={branchChipLabel}
-      fileLabel={fileChipLabel}
-      hasRepoContext={hasRepoContext}
-      statusRows={githubRows}
-      onOpenGitHub={() => handleWorkspaceTabSelect("github")}
-      onOpenSettings={() => handleWorkspaceTabSelect("settings")}
-      onReturnToChat={() => handleWorkspaceTabSelect("chat")}
-    />
-  ) : mode === "review" ? (
-    <ReviewWorkspace items={reviewItems} expertMode={expertMode} />
   ) : (
     <SettingsWorkspace
       workMode={workMode}
@@ -2492,7 +2376,7 @@ function ConsoleShell() {
     />
   );
   const statusToneForBadge = currentStatusTone === "error" ? "error" : currentStatusTone === "ready" ? "ready" : "partial";
-  const activeMobileNav = mode === "chat" || mode === "github" || mode === "matrix" ? mode : "context";
+  const activeMobileNav = mode;
   const mobileContextStatus: { label: MobileContextStatus; tone: MobileContextStatus } = (() => {
     if (mode === "chat") {
       if (chatSession?.metadata.chatState.connectionState === "streaming" || chatSession?.metadata.chatState.connectionState === "submitting") {
@@ -2525,8 +2409,7 @@ function ConsoleShell() {
 
     return { label: "idle", tone: "idle" };
   })();
-  const showRouteOwnershipContext = mode === "github" || mode === "matrix";
-  const mobileContextNavBadge = hasRepoContext ? (locale === "de" ? "Datei" : "Ask") : undefined;
+  const showRouteOwnershipContext = mode === "workbench" || mode === "matrix";
   const mobileWorkspaceSurface = workspaceSurface;
 
   if (isMobileViewport) {
@@ -2611,14 +2494,14 @@ function ConsoleShell() {
                 {!hasRepoContext ? (
                   <p className="mobile-context-empty-note">
                     {locale === "de"
-                      ? "Kein Kontext geladen. Öffne GitHub und wähle ein Repo oder eine Datei."
-                      : "No context loaded yet. Open GitHub and choose a repository or file."}
+                      ? "Kein Kontext geladen. Öffne Workbench und wähle ein Repo oder eine Datei."
+                      : "No context loaded yet. Open Workbench and choose a repository or file."}
                   </p>
                 ) : null}
 
                 <div className="mobile-context-actions">
-                  <button type="button" className="secondary-button" onClick={() => handleMobileNavSelect("review")}>
-                    {appText.processGoReview}
+                  <button type="button" className="secondary-button" onClick={() => handleMobileNavSelect("workbench")}>
+                    {ui.shell.workspaceTabs.workbench.label}
                   </button>
                   <button type="button" className="secondary-button" onClick={() => handleMobileNavSelect("settings")}>
                     {ui.shell.workspaceTabs.settings.label}
@@ -2632,7 +2515,7 @@ function ConsoleShell() {
 
                 {showRouteOwnershipContext && routeOwnershipRows.length > 0 ? (
                   <RouteStatusLadder
-                    title={mode === "github" ? "GitHub status ladder" : "Matrix status ladder"}
+                    title={mode === "workbench" ? "Workbench status ladder" : "Matrix status ladder"}
                     rows={routeOwnershipRows}
                   />
                 ) : null}
@@ -2643,25 +2526,14 @@ function ConsoleShell() {
 
         <BottomNav
           ariaLabel={ui.shell.workspacesLabel}
-          items={[
-            ...MOBILE_NAV_MODES.map((workspaceMode) => ({
-              key: workspaceMode,
-              label: ui.shell.workspaceTabs[workspaceMode].label,
-              icon: <WorkspaceIcon mode={workspaceMode} />,
-              active: activeMobileNav === workspaceMode,
-              onPress: () => handleMobileNavSelect(workspaceMode),
-              testId: `tab-${workspaceMode}`,
-            })),
-            {
-              key: "context",
-              label: locale === "de" ? "Kontext" : "Context",
-              icon: <MobileContextIcon />,
-              active: activeMobileNav === "context",
-              onPress: () => handleMobileNavSelect("context"),
-              testId: "tab-context-browser",
-              badge: mobileContextNavBadge,
-            },
-          ]}
+          items={MOBILE_NAV_MODES.map((workspaceMode) => ({
+            key: workspaceMode,
+            label: ui.shell.workspaceTabs[workspaceMode].label,
+            icon: <WorkspaceIcon mode={workspaceMode} />,
+            active: activeMobileNav === workspaceMode,
+            onPress: () => handleMobileNavSelect(workspaceMode),
+            testId: `tab-${workspaceMode}`,
+          }))}
         />
       </main>
     );
@@ -2805,7 +2677,7 @@ function ConsoleShell() {
 
           {routeOwnershipRows.length > 0 ? (
             <TruthRailSection
-              title={mode === "github" ? "GitHub route ownership" : "Matrix route ownership"}
+              title={mode === "workbench" ? "Workbench route ownership" : "Matrix route ownership"}
               testId="truth-rail-route-ownership"
               badge={<StatusBadge tone="muted">backend-owned</StatusBadge>}
             >
@@ -2813,7 +2685,7 @@ function ConsoleShell() {
                 GitHub and Matrix are not browser integrations. The console sends governed intent; backend owns credentials, execution, verification, and sanitized errors.
               </MutedSystemCopy>
               <RouteStatusLadder
-                title={mode === "github" ? "GitHub status ladder" : "Matrix status ladder"}
+                title={mode === "workbench" ? "Workbench status ladder" : "Matrix status ladder"}
                 rows={routeOwnershipRows}
               />
             </TruthRailSection>
@@ -2851,13 +2723,9 @@ function ConsoleShell() {
             </div>
             <MutedSystemCopy>{currentHelperText}</MutedSystemCopy>
             <div className="truth-rail-actions">
-              {approvalSummary.hasApprovals && mode !== "review" ? (
-                <button type="button" className="secondary-button" onClick={() => handleWorkspaceTabSelect("review")}>
+              {approvalSummary.hasApprovals && mode !== "workbench" ? (
+                <button type="button" className="secondary-button" onClick={() => handleWorkspaceTabSelect("workbench")}>
                   {appText.processGoReview}
-                </button>
-              ) : mode === "review" && reviewItems.length === 0 ? (
-                <button type="button" className="secondary-button" onClick={() => handleWorkspaceTabSelect(workspaceState.activeWorkspace)}>
-                  {appText.processGoWorkspace}
                 </button>
               ) : isSessionWorkspace(mode) ? (
                 <button type="button" className="secondary-button" onClick={() => handleWorkspaceSessionCreate(sessionWorkspace)}>

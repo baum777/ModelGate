@@ -27,15 +27,13 @@ const styles = () => [
 const criticalSource = () => readFileSync("web/src/critical.css", "utf8");
 const uiAdaptationSource = () => readFileSync("web/src/ui-adaptation.css", "utf8");
 
-test("mobile shell keeps Kontext as the fourth context-browser tab", () => {
+test("mobile shell exposes exactly four tabs with Workbench as fused review center", () => {
   const source = mobileLayoutSource();
 
-  assert.match(source, /type WorkspaceMode = "chat" \| "github" \| "matrix" \| "review" \| "settings" \| "context"/);
-  assert.match(source, /key:\s*"context"/);
-  assert.match(source, /testId:\s*"tab-context-browser"/);
-  assert.match(source, /label:\s*locale === "de" \? "Kontext"/);
-  assert.match(source, /ContextBrowserPanel/);
-  assert.match(source, /onPress:\s*\(\) => handleMobileNavSelect\("context"\)/);
+  assert.match(source, /type WorkspaceMode = "chat" \| "workbench" \| "matrix" \| "settings"/);
+  assert.match(source, /const MOBILE_NAV_MODES: WorkspaceMode\[\] = \["chat", "workbench", "matrix", "settings"\]/);
+  assert.doesNotMatch(source, /tab-context-browser/);
+  assert.doesNotMatch(source, /ContextBrowserPanel/);
 });
 
 test("mobile context strip keeps canonical state labels and opens command sheet", () => {

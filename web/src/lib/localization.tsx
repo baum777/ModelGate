@@ -6,7 +6,7 @@ export type SessionStatus = "draft" | "in_progress" | "review_required" | "done"
 export type ReviewStatus = "pending_review" | "approved" | "failed" | "rejected" | "stale" | "executed";
 export type ApprovalOutcome = "executed" | "failed" | "rejected" | "unverifiable";
 export type ConnectionState = "idle" | "submitting" | "streaming" | "completed" | "error";
-export type WorkspaceMode = "chat" | "github" | "matrix" | "review" | "settings" | "context";
+export type WorkspaceMode = "chat" | "workbench" | "matrix" | "settings";
 
 type WorkspaceTabCopy = {
   label: string;
@@ -455,7 +455,7 @@ const EN_COPY: LocalizationCopy = {
     pendingApprovalsTitle: "Pending approvals",
     pendingApprovalsSummary: (pending, stale) => `${pending} pending, ${stale} stale`,
     pendingApprovalsChat: "At least one chat proposal is waiting for approval. Further details are in the active workspace.",
-    pendingApprovalsSeparate: "Approvals stay separate from execution. Check details in the Review workspace.",
+    pendingApprovalsSeparate: "Approvals stay separate from execution. Check details in the Workbench.",
     diagnosticsAvailable: "Diagnostics is available. Usage stays read-only and contextual.",
     diagnosticsHidden: "Beginner mode keeps diagnostics hidden by default. It becomes visible when something fails.",
     healthTitle: "Health",
@@ -469,11 +469,9 @@ const EN_COPY: LocalizationCopy = {
     publicAliasLabel: "Public alias",
     workspaceTabs: {
       chat: { label: "Chat", description: "Ask questions and inspect responses" },
-      github: { label: "GitHub", description: "Read repositories and prepare proposals" },
+      workbench: { label: "Workbench", description: "Review branch work, summary log, and handoff actions" },
       matrix: { label: "Matrix", description: "Scope, provenance, and topic updates" },
-      review: { label: "Review", description: "Review approvals and receipts" },
       settings: { label: "Settings", description: "View settings and diagnostics" },
-      context: { label: "Context", description: "Choose repository, branch, and file context" },
     },
   },
   sessionList: {
@@ -601,11 +599,11 @@ const EN_COPY: LocalizationCopy = {
     title: "Chat workspace",
     intro: "Conversation stays separate from governed work objects. The backend remains the execution authority.",
     sessionLabel: "Conversation state",
-    modeLabel: "Execution mode",
-    modeDirect: "Read-only · no external writes",
-    modeGoverned: "Approval required · execution receipt",
-    modeDirectHint: "Direct Chat stays read-only and still uses backend-owned routing.",
-    modeGovernedHint: "Governed Execution is required for action-bearing workflows.",
+    modeLabel: "Work mode",
+    modeDirect: "Read only",
+    modeGoverned: "Read & Write",
+    modeDirectHint: "Read only: read repository context, plan architecture, no direct writes.",
+    modeGovernedHint: "Read & Write requires an active branch and review-first handoff in Workbench.",
     modelSelectLabel: "Public model alias",
     noModels: "No public aliases available",
     onlyPublicAlias: "Only public alias metadata is exposed. Provider targets stay backend-only.",
@@ -843,7 +841,7 @@ const DE_COPY: LocalizationCopy = {
     pendingApprovalsTitle: "Ausstehende Freigaben",
     pendingApprovalsSummary: (pending, stale) => `${pending} zur Freigabe, ${stale} veraltet`,
     pendingApprovalsChat: "Mindestens ein Chat-Vorschlag wartet auf Freigabe. Weitere Details im aktiven Workspace.",
-    pendingApprovalsSeparate: "Freigaben bleiben getrennt von Ausführung. Prüfe Details im Review-Workspace.",
+    pendingApprovalsSeparate: "Freigaben bleiben getrennt von Ausführung. Prüfe Details in der Workbench.",
     diagnosticsAvailable: "Diagnostik ist verfügbar. Nutzung bleibt read-only und kontextbezogen.",
     diagnosticsHidden: "Basismodus blendet Diagnostik standardmäßig aus. Bei Störungen wird sie sichtbar.",
     healthTitle: "Status",
@@ -857,11 +855,9 @@ const DE_COPY: LocalizationCopy = {
     publicAliasLabel: "Öffentlicher Alias",
     workspaceTabs: {
       chat: { label: "Chat", description: "Fragen stellen und Antworten prüfen" },
-      github: { label: "GitHub", description: "Repository lesen und Vorschläge vorbereiten" },
+      workbench: { label: "Workbench", description: "Branch-Arbeit, Summary-Log und Übergabe-Aktionen prüfen" },
       matrix: { label: "Matrix", description: "Scope, Provenienz und Topic-Updates" },
-      review: { label: "Prüfung", description: "Freigaben und Belege prüfen" },
       settings: { label: "Einstellungen", description: "Ansicht und Diagnostik prüfen" },
-      context: { label: "Kontext", description: "Repository, Branch und Datei auswählen" },
     },
   },
   sessionList: {
@@ -989,11 +985,11 @@ const DE_COPY: LocalizationCopy = {
     title: "Chat-Arbeitsbereich",
     intro: "Konversation bleibt getrennt von gouvernierten Arbeitsobjekten. Das Backend bleibt Ausführungsautorität.",
     sessionLabel: "Konversationszustand",
-    modeLabel: "Ausführungsmodus",
-    modeDirect: "Nur Lesen · keine externen Writes",
-    modeGoverned: "Freigabe nötig · Ausführungsbeleg",
-    modeDirectHint: "Direct Chat bleibt read-only und nutzt weiterhin backend-owned Routing.",
-    modeGovernedHint: "Governed Execution ist für action-bearing Workflows erforderlich.",
+    modeLabel: "Arbeitsmodus",
+    modeDirect: "Read only",
+    modeGoverned: "Read & Write",
+    modeDirectHint: "Read only: Repository-Kontext lesen, Architektur planen, keine direkten Writes.",
+    modeGovernedHint: "Read & Write braucht aktive Branch und review-first Übergabe in der Workbench.",
     modelSelectLabel: "Öffentlicher Modellalias",
     noModels: "Keine öffentlichen Aliase verfügbar",
     onlyPublicAlias: "Nur öffentliche Alias-Metadaten sind sichtbar. Provider-Ziele bleiben backend-seitig.",

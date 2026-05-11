@@ -16,5 +16,5 @@ test("mobile GitHub uses the original workspace instead of mock review pages", (
   assert.doesNotMatch(appSource, /MobileGitHubPage/);
   assert.doesNotMatch(appSource, /import\("\.\/pages\/GitHubPage\.js"\)/);
   assert.doesNotMatch(appSource, /github-mobile\.css/);
-  assert.match(appSource, /mode === "github" \? \(\s*<GitHubWorkspace/);
+  assert.match(appSource, /mode === "workbench" \? \(\s*<GitHubWorkspace/);
 });

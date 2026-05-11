@@ -115,7 +115,7 @@ export function ReviewWorkspace({ items, expertMode }: ReviewWorkspaceProps) {
   const countLabel =
     items.length === 0 ? ui.common.none : String(items.length);
   const sourceLabelFor = (item: ReviewItem) =>
-    item.sourceLabel ?? (item.source === "github" ? ui.shell.workspaceTabs.github.label : ui.shell.workspaceTabs.matrix.label);
+    item.sourceLabel ?? (item.source === "github" ? ui.shell.workspaceTabs.workbench.label : ui.shell.workspaceTabs.matrix.label);
   const provenanceRowsFor = (item: ReviewItem) => item.provenanceRows ?? [];
   const primaryMetadata = primaryItem
     ? [

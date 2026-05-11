@@ -81,6 +81,11 @@ type ChatWorkspaceProps = {
   onClearPinnedContext: () => void;
   matrixDraftDefaultRoomId: string | null;
   matrixDraftRoomOptions: string[];
+  workbenchBinding: {
+    repo: string | null;
+    branch: string | null;
+    scope: string | null;
+  };
   onQueueMatrixDraft: (payload: {
     sourceMessageId: string;
     roomId: string;
@@ -1156,6 +1161,22 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       return;
     }
 
+    if (executionMode === "governed" && readWriteGuardrailBlocked) {
+      const message = !workbenchBranch
+        ? (locale === "de"
+          ? "Read & Write ist blockiert: aktive Branch in der Workbench auswählen."
+          : "Read & Write is blocked: select an active branch in Workbench.")
+        : (locale === "de"
+          ? "Read & Write ist blockiert: direkte Main-Arbeit ist nicht erlaubt."
+          : "Read & Write is blocked: direct main branch work is not allowed.");
+      dispatch({
+        type: "stream_error",
+        message,
+      });
+      props.onTelemetry("warning", "Read & Write blocked", message);
+      return;
+    }
+
     const prompt = buildPinnedChatContextPrompt(trimmed, props.pinnedContext, locale);
     const contextFilename = extractFilenameCandidate(trimmed);
     const shouldOfferContextTip = Boolean(
@@ -1176,6 +1197,11 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const warning = chatState.lastStreamWarning;
   const error = chatState.lastError;
   const draft = chatState.currentAssistantDraft;
+  const workbenchRepo = props.workbenchBinding.repo?.trim() || null;
+  const workbenchBranch = props.workbenchBinding.branch?.trim() || null;
+  const workbenchScope = props.workbenchBinding.scope?.trim() || null;
+  const directMainBranch = workbenchBranch === "main" || workbenchBranch === "master";
+  const readWriteGuardrailBlocked = executionMode === "governed" && (!workbenchBranch || directMainBranch);
   const awaitingApproval = executionMode === "governed" && pendingProposal?.status === "pending";
   const executionRunning =
     pendingProposal?.status === "executing"
@@ -1323,6 +1349,35 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
                 {ui.chat.modeGoverned}
               </button>
             </div>
+          </div>
+          <div className="chat-toolbar-control-group chat-work-mode-guardrail" data-testid="chat-work-mode-guardrail">
+            {executionMode === "direct" ? (
+              <>
+                <strong>{locale === "de" ? "Read only" : "Read only"}</strong>
+                <p>{locale === "de" ? "Repo lesen, Kontext verstehen, Architektur planen. Keine Änderungen ausführen." : "Read repository context and plan architecture. No changes are executed."}</p>
+              </>
+            ) : (
+              <>
+                <strong>{locale === "de" ? "Read & Write" : "Read & Write"}</strong>
+                <p>
+                  {locale === "de"
+                    ? `Aktive Branch: ${workbenchBranch ?? "nicht gesetzt"} · Scope: ${workbenchScope ?? "nicht gesetzt"}`
+                    : `Active branch: ${workbenchBranch ?? "not set"} · Scope: ${workbenchScope ?? "not set"}`}
+                </p>
+                <p>
+                  {locale === "de"
+                    ? `Repo: ${workbenchRepo ?? "nicht gesetzt"} · Main bleibt geschützt, Änderungen werden erst in Workbench reviewbar.`
+                    : `Repository: ${workbenchRepo ?? "not set"} · Main stays protected and changes become reviewable in Workbench first.`}
+                </p>
+                {readWriteGuardrailBlocked ? (
+                  <p className="warning-banner" role="status">
+                    {locale === "de"
+                      ? (workbenchBranch ? "Direkte Main-Arbeit ist nicht erlaubt." : "Aktive Branch erforderlich.")
+                      : (workbenchBranch ? "Direct main branch work is not allowed." : "An active branch is required.")}
+                  </p>
+                ) : null}
+              </>
+            )}
           </div>
           {expertMode ? (
           <div className="chat-toolbar-control-group chat-toolbar-model-group">
@@ -1766,7 +1821,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           <ShellCard variant="muted" className="chat-pinned-context" data-testid="chat-pinned-context">
             <header className="chat-pinned-context-header">
               <SectionLabel>{ui.chat.pinnedContext.title}</SectionLabel>
-              <StatusBadge tone="partial">{ui.shell.workspaceTabs.github.label}</StatusBadge>
+              <StatusBadge tone="partial">{ui.shell.workspaceTabs.workbench.label}</StatusBadge>
             </header>
             <p className="chat-pinned-context-summary">{props.pinnedContext.summary}</p>
             <p className="chat-pinned-context-meta">
@@ -1803,8 +1858,8 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           <ComposeZone
             value={chatState.input}
             placeholder={ui.chat.composerPlaceholder}
-            disabled={Boolean(composerBlockReason)}
-            submitDisabled={Boolean(composerBlockReason) || chatState.input.trim().length === 0}
+            disabled={Boolean(composerBlockReason) || readWriteGuardrailBlocked}
+            submitDisabled={Boolean(composerBlockReason) || readWriteGuardrailBlocked || chatState.input.trim().length === 0}
             submitLabel={executionMode === "direct" ? ui.chat.sendDirect : ui.chat.prepareProposal}
             ariaLabel={ui.chat.title}
             textareaRef={composerRef}
