@@ -315,7 +315,7 @@ async function installGitHubWorkspaceMocks(page: Page, options: GitHubWorkspaceM
             description: "Demo repository",
             isPrivate: false,
             status: "ready",
-            permissions: { canWrite: false },
+            permissions: { canWrite: true },
             checkedAt: "2026-04-16T08:00:00.000Z",
           },
           {
@@ -327,7 +327,7 @@ async function installGitHubWorkspaceMocks(page: Page, options: GitHubWorkspaceM
             description: "Sample repository",
             isPrivate: false,
             status: "ready",
-            permissions: { canWrite: false },
+            permissions: { canWrite: true },
             checkedAt: "2026-04-16T08:00:00.000Z",
           },
         ],
@@ -356,7 +356,7 @@ async function installGitHubWorkspaceMocks(page: Page, options: GitHubWorkspaceM
             description: "Demo repository",
             isPrivate: false,
             status: "ready",
-            permissions: { canWrite: false },
+            permissions: { canWrite: true },
             checkedAt: "2026-04-16T08:00:00.000Z",
           },
           ref: "main",
@@ -413,7 +413,7 @@ async function installGitHubWorkspaceMocks(page: Page, options: GitHubWorkspaceM
             description: "Demo repository",
             isPrivate: false,
             status: "ready",
-            permissions: { canWrite: false },
+            permissions: { canWrite: true },
             checkedAt: "2026-04-16T08:00:00.000Z",
           },
           baseRef: "main",
@@ -575,10 +575,12 @@ async function loadConsole(page: Page) {
   await expect(page.getByTestId("app-shell")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("MosaicStacked Console")).toBeVisible();
   await expect(page.getByTestId("tab-chat")).toBeVisible();
-  await expect(page.getByTestId("tab-github")).toBeVisible();
+  await expect(page.getByTestId("tab-workbench")).toBeVisible();
   await expect(page.getByTestId("tab-matrix")).toBeVisible();
-  await expect(page.getByTestId("tab-review")).toBeVisible();
   await expect(page.getByTestId("tab-settings")).toBeVisible();
+  await expect(page.locator("[data-testid^='tab-']")).toHaveCount(4);
+  await expect(page.getByTestId("tab-github")).toHaveCount(0);
+  await expect(page.getByTestId("tab-review")).toHaveCount(0);
 }
 
 test("root route renders public preview without console internals", async ({ page }) => {
@@ -600,9 +602,9 @@ test("console route normalizes legacy query entry and keeps active workspace in 
   await expect(page.getByTestId("app-shell")).toBeVisible({ timeout: 15_000 });
   await expect(page).toHaveURL(/\/console\?mode=chat$/);
 
-  await page.getByTestId("tab-github").click();
+  await page.getByTestId("tab-workbench").click();
   await expect(page.getByTestId("github-workspace")).toBeVisible();
-  await expect(page).toHaveURL(/\/console\?mode=github$/);
+  await expect(page).toHaveURL(/\/console\?mode=workbench$/);
 
   await page.goto("/console?mode=matrix", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("matrix-workspace")).toBeVisible({ timeout: 15_000 });
@@ -613,7 +615,7 @@ test("GitHub and Matrix workspaces expose backend route ownership in the truth r
   await installBaseMocks(page, { matrixStatus: "ok" });
   await loadConsole(page);
 
-  await page.getByTestId("tab-github").click();
+  await page.getByTestId("tab-workbench").click();
   await expect(page.getByTestId("truth-rail-route-ownership")).toBeVisible();
   await expect(page.getByTestId("truth-rail-route-ownership")).toContainText("GitHub and Matrix are not browser integrations.");
   await expect(page.getByTestId("truth-rail-route-ownership")).toContainText("identity");
@@ -816,10 +818,9 @@ test("mobile viewport renders functional chat workspace instead of reference-onl
   expect(mobileChatLayout.composeSubmit!.bottom).toBeLessThanOrEqual(mobileChatLayout.composeField!.bottom);
   expect(mobileChatLayout.tip!.bottom).toBeLessThan(mobileChatLayout.nav!.top);
 
-  await page.getByTestId("chat-composer").fill("Mobile backend check");
-  await page.getByTestId("chat-send").click();
-  await page.getByRole("button", { name: /Approve/i }).click();
-  await expect(page.getByTestId("chat-workspace")).toContainText("Hello from mocked backend");
+  await expect(page.getByTestId("chat-composer")).toBeDisabled();
+  await expect(page.getByTestId("chat-composer")).toHaveAttribute("placeholder", "Plan the next change");
+  await expect(page.getByTestId("chat-send")).toBeDisabled();
 });
 
 test("mobile settings renders authority control center and opens detail sheet", async ({ page }) => {
@@ -866,14 +867,14 @@ test("locale toggle switches key copy and persists across reload", async ({ page
   await installBaseMocks(page, { matrixStatus: "ok" });
   await loadConsole(page);
 
-  await page.getByTestId("tab-review").click();
-  await expect(page.getByTestId("review-workspace")).toContainText("No open reviews yet.");
+  await page.getByTestId("tab-workbench").click();
+  await expect(page.getByTestId("github-workspace")).toContainText("No active work yet.");
 
   await setLocale(page, "de");
-  await expect(page.getByTestId("review-workspace")).toContainText("Noch keine offenen Prüfungen.");
+  await expect(page.getByTestId("github-workspace")).toContainText("Noch keine aktive Arbeit.");
 
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(page.getByTestId("review-workspace")).toContainText("Noch keine offenen Prüfungen.");
+  await expect(page.getByTestId("github-workspace")).toContainText("Noch keine aktive Arbeit.");
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
 });
 
@@ -908,9 +909,7 @@ test("all workspace guides expose detailed operational cards", async ({ page }) 
 
   const workspaces = [
     { tab: "chat", guide: "guide-chat", title: "Chat guide", expected: "backend status" },
-    { tab: "github", guide: "guide-github", title: "GitHub guide", expected: "GitHub readiness" },
     { tab: "matrix", guide: "guide-matrix", title: "Matrix guide", expected: "explicit target" },
-    { tab: "review", guide: "guide-review", title: "Review guide", expected: "human decision" },
     { tab: "settings", guide: "guide-settings", title: "Settings guide", expected: "backend authority" },
   ];
 
@@ -926,34 +925,18 @@ test("all workspace guides expose detailed operational cards", async ({ page }) 
   }
 });
 
-test("chat enforces proposal-first execution and sends backend request only on approve", async ({ page }) => {
+test("chat blocks Read & Write when no branch is bound and opens branch selector", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
 
-  let chatRequests = 0;
-  await page.route("**/chat", async (route) => {
-    if (route.request().method() !== "POST") {
-      await route.continue();
-      return;
-    }
-    chatRequests += 1;
-    await route.fulfill({
-      status: 200,
-      contentType: "text/event-stream; charset=utf-8",
-      body: CHAT_STREAM,
-    });
-  });
-
   await loadConsole(page);
-  await page.getByTestId("chat-composer").fill("Please propose a safe backend action.");
-  await page.getByTestId("chat-composer").press("Enter");
+  await page.getByRole("button", { name: "Read only" }).click();
+  await page.getByRole("button", { name: "Read & Write" }).click();
 
-  await expect(page.getByTestId("chat-proposal-card")).toBeVisible();
-  expect(chatRequests).toBe(0);
-
-  await page.getByTestId("chat-decision-zone").getByRole("button", { name: "Approve" }).click();
-  await expect(page.getByTestId("chat-connection-state")).toHaveText("Completed");
-  await expect(page.locator(".thread-block-agent")).toHaveCount(1);
-  expect(chatRequests).toBe(1);
+  const branchSelector = page.getByTestId("chat-branch-selector");
+  await expect(branchSelector).toBeVisible();
+  await expect(branchSelector).toContainText("Branch required");
+  await branchSelector.getByRole("button", { name: "Open Workbench" }).click();
+  await expect(page).toHaveURL(/\/console\?mode=workbench$/);
 });
 
 test("chat routing status strip reflects backend routing without exposing provider targets", async ({ page }) => {
@@ -983,9 +966,9 @@ test("chat routing status strip reflects backend routing without exposing provid
   await expect(routingStatus).toContainText("Fallback enabled");
   await expect(routingStatus).toContainText("Route pending");
 
+  await page.getByRole("button", { name: "Read only" }).click();
   await page.getByTestId("chat-composer").fill("Show route status.");
   await page.getByTestId("chat-send").click();
-  await page.getByTestId("chat-decision-zone").getByRole("button", { name: "Approve" }).click();
 
   await expect(routingStatus).toContainText("Fallback used");
   await expect(routingStatus).toContainText("degraded");
@@ -998,9 +981,9 @@ test("chat abort keeps fail-closed behavior and does not fabricate assistant com
   await installAbortableChatFetchMock(page);
   await loadConsole(page);
 
+  await page.getByRole("button", { name: "Read only" }).click();
   await page.getByTestId("chat-composer").fill("Abort this stream");
   await page.getByTestId("chat-send").click();
-  await page.getByTestId("chat-decision-zone").getByRole("button", { name: "Approve" }).click();
 
   await expect(page.getByRole("button", { name: "Stop execution" })).toBeVisible();
   await page.getByRole("button", { name: "Stop execution" }).click();
@@ -1015,13 +998,16 @@ test("GitHub workspace runs analysis and proposal, then executes and verifies on
   const counters = await installGitHubWorkspaceMocks(page);
   await loadConsole(page);
 
-  await page.getByTestId("tab-github").click();
+  await page.getByTestId("tab-workbench").click();
   await page.locator("#github-repo-select").selectOption("octo/demo");
   await page.getByRole("button", { name: "Start analysis" }).click();
   await page.getByRole("button", { name: "Review proposal" }).click();
 
-  await expect(page.getByTestId("github-approval-surface")).toBeVisible();
-  await page.getByTestId("github-decision-zone").getByRole("button", { name: "Approve and execute" }).click();
+  await expect(page.getByTestId("workbench-change-log")).toContainText("Demo plan");
+  await page.getByTestId("workbench-action-mark-for-stage").click();
+  await expect(page.getByTestId("workbench-change-log")).toContainText("marked");
+  await page.getByTestId("workbench-action-prepare-pr").click();
+  await page.getByTestId("workbench-action-create-pr").click();
 
   await expect(page.getByTestId("github-pr-result")).toBeVisible();
   await expect(page.getByTestId("github-pr-result")).toContainText("verified");
@@ -1046,11 +1032,13 @@ test("GitHub stale-plan execute failure is surfaced and no receipt is fabricated
   });
 
   await loadConsole(page);
-  await page.getByTestId("tab-github").click();
+  await page.getByTestId("tab-workbench").click();
   await page.locator("#github-repo-select").selectOption("octo/demo");
   await page.getByRole("button", { name: "Start analysis" }).click();
   await page.getByRole("button", { name: "Review proposal" }).click();
-  await page.getByTestId("github-decision-zone").getByRole("button", { name: "Approve and execute" }).click();
+  await page.getByTestId("workbench-action-mark-for-stage").click();
+  await page.getByTestId("workbench-action-prepare-pr").click();
+  await page.getByTestId("workbench-action-create-pr").click();
 
   await expect(page.getByTestId("github-workspace-notice")).toContainText("stale");
   await expect(page.getByTestId("github-pr-result")).toHaveCount(0);
@@ -1190,7 +1178,7 @@ test("Matrix malformed backend data is surfaced as explicit fail-closed error st
   await expect(page.getByTestId("matrix-rooms-error")).toContainText("Matrix joined rooms");
 });
 
-test("Review workspace aggregates pending items from GitHub and Matrix", async ({ page }) => {
+test("Workbench replaces separate GitHub and Review tabs for pending branch work", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
   await installGitHubWorkspaceMocks(page);
 
@@ -1230,13 +1218,15 @@ test("Review workspace aggregates pending items from GitHub and Matrix", async (
   });
 
   await loadConsole(page);
-  await page.getByTestId("tab-review").click();
-  await expect(page.getByTestId("review-workspace")).toContainText("No open reviews yet.");
+  await expect(page.getByTestId("tab-review")).toHaveCount(0);
+  await expect(page.getByTestId("tab-github")).toHaveCount(0);
 
-  await page.getByTestId("tab-github").click();
+  await page.getByTestId("tab-workbench").click();
   await page.locator("#github-repo-select").selectOption("octo/demo");
   await page.getByRole("button", { name: "Start analysis" }).click();
   await page.getByRole("button", { name: "Review proposal" }).click();
+  await expect(page.getByTestId("workbench-change-log")).toContainText("Demo plan");
+  await expect(page.getByTestId("workbench-review-actions")).toContainText("Mark for stage");
 
   page.once("dialog", async (dialog) => {
     await dialog.accept();
@@ -1248,11 +1238,9 @@ test("Review workspace aggregates pending items from GitHub and Matrix", async (
   await page.getByTestId("matrix-topic-text").fill("New topic");
   await page.getByTestId("matrix-topic-update-panel").getByRole("button", { name: "Topic update" }).first().click();
 
-  await page.getByTestId("tab-review").click();
-  await expect(page.locator(".review-queue-item")).toHaveCount(2);
-  await expect(page.getByTestId("review-workspace")).toContainText("Demo plan");
-  await expect(page.getByTestId("review-workspace")).toContainText("Room topic update plan");
-  await expect(page.getByTestId("review-workspace")).toContainText("Waiting for approval");
+  await page.getByTestId("tab-workbench").click();
+  await expect(page.getByTestId("workbench-change-log")).toContainText("Demo plan");
+  await expect(page.getByTestId("workbench-change-log")).toContainText("analysis/proposal checked, no execute call");
 });
 
 test("Settings keeps diagnostics behind Expert mode and allows clearing local entries", async ({ page }) => {

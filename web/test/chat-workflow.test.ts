@@ -111,6 +111,17 @@ test("chat visual review styles expose active mode color and subtle hidden guide
   assert.match(styles, /\.guide-card::-webkit-scrollbar[\s\S]*display:\s*none/);
 });
 
+test("chat Read & Write mode opens branch selector when no branch is bound", () => {
+  const source = readFileSync("web/src/components/ChatWorkspace.tsx", "utf8");
+
+  assert.match(source, /branchSelectorOpen/);
+  assert.match(source, /data-testid="chat-branch-selector"/);
+  assert.match(source, /setBranchSelectorOpen\(true\)/);
+  assert.match(source, /onClick=\{\(\) => \{[\s\S]*if \(!workbenchBranch\) \{[\s\S]*setBranchSelectorOpen\(true\)/);
+  assert.match(source, /Direct main branch work is not allowed/);
+  assert.match(source, /direkte Main-Arbeit ist nicht erlaubt/i);
+});
+
 test("console shell styles hide native scrollbars and clip page-level horizontal overflow", () => {
   const styles = readFileSync("web/src/styles.css", "utf8");
 

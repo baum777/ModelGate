@@ -6,6 +6,7 @@ import {
   buildGitHubReviewItems,
   buildGitHubPinnedChatContext,
   isGitHubReviewDirty,
+  deriveWorkbenchActionLabel,
 } from "../src/components/GitHubWorkspace.js";
 import type { GitHubChangePlan, GitHubExecuteResult, GitHubVerifyResult } from "../src/lib/github-api.js";
 import { buildPinnedChatContextPrompt } from "../src/lib/pinned-chat-context.js";
@@ -239,14 +240,78 @@ test("Workbench action semantics keep local review state separate from backend e
   const source = readFileSync("web/src/components/GitHubWorkspace.tsx", "utf8");
 
   assert.match(source, /type WorkbenchActionEffectType =[\s\S]*"local_review_state"[\s\S]*"backend_prepare"[\s\S]*"backend_execute_pr"/);
+  assert.match(source, /type WorkbenchActionState =[\s\S]*"unmarked"[\s\S]*"marked"[\s\S]*"removed"[\s\S]*"pr_prepared"[\s\S]*"pr_ready"/);
+  assert.doesNotMatch(source, /\|\s*"unstaged"/);
+  assert.doesNotMatch(source, /\|\s*"staged"/);
+  assert.doesNotMatch(source, /setWorkbenchActionState\("staged"\)/);
+  assert.doesNotMatch(source, /status:\$\{workbenchStatus\}[\s\S]*staged/);
   assert.match(source, /Mark for stage/);
   assert.match(source, /Zur Übergabe vormerken/);
+  assert.match(source, /Remove from review/);
+  assert.match(source, /Aus Review entfernen/);
   assert.match(source, /Prepare PR/);
   assert.match(source, /Create PR/);
   assert.match(source, /data-effect-type=\{workbenchActionEffects\.markForStage\}/);
   assert.match(source, /data-effect-type=\{workbenchActionEffects\.preparePr\}/);
   assert.match(source, /data-effect-type=\{workbenchActionEffects\.createPr\}/);
   assert.match(source, /workbenchActionState !== "pr_prepared"/);
-  assert.match(source, /function handleMarkForStage\(\)[\s\S]*setWorkbenchActionState\("staged"\)/);
+  assert.match(source, /function handleMarkForStage\(\)[\s\S]*setWorkbenchActionState\("marked"\)/);
   assert.match(source, /function handleRemoveFromReview\(\)[\s\S]*setWorkbenchActionState\("removed"\)/);
+
+  const markHandler = source.slice(
+    source.indexOf("function handleMarkForStage()"),
+    source.indexOf("function handleRemoveFromReview()"),
+  );
+  const removeHandler = source.slice(
+    source.indexOf("function handleRemoveFromReview()"),
+    source.indexOf("function handlePreparePr()"),
+  );
+  assert.doesNotMatch(markHandler, /executeGitHubPlan|handleExecuteProposal|fetch\(/);
+  assert.doesNotMatch(removeHandler, /executeGitHubPlan|handleExecuteProposal|fetch\(/);
+});
+
+test("Workbench labels are derived from effect, action state, backend capability, and locale", () => {
+  assert.equal(deriveWorkbenchActionLabel({
+    effectType: "local_review_state",
+    actionState: "unmarked",
+    action: "mark_for_stage",
+    backendCapability: false,
+    locale: "en",
+  }), "Mark for stage");
+  assert.equal(deriveWorkbenchActionLabel({
+    effectType: "local_review_state",
+    actionState: "marked",
+    action: "remove_from_review",
+    backendCapability: false,
+    locale: "de",
+  }), "Aus Review entfernen");
+  assert.equal(deriveWorkbenchActionLabel({
+    effectType: "backend_prepare",
+    actionState: "marked",
+    action: "prepare_pr",
+    backendCapability: true,
+    locale: "de",
+  }), "PR vorbereiten");
+  assert.equal(deriveWorkbenchActionLabel({
+    effectType: "backend_execute_pr",
+    actionState: "pr_prepared",
+    action: "create_pr",
+    backendCapability: true,
+    locale: "en",
+  }), "Create PR");
+  assert.equal(deriveWorkbenchActionLabel({
+    effectType: "backend_execute_pr",
+    actionState: "pr_prepared",
+    action: "create_pr",
+    backendCapability: false,
+    locale: "de",
+  }), "PR vorbereiten");
+});
+
+test("Workbench Create PR is guarded by explicit backend execute capability", () => {
+  const source = readFileSync("web/src/components/GitHubWorkspace.tsx", "utf8");
+
+  assert.match(source, /backendCapabilities[\s\S]*executePr/);
+  assert.match(source, /const executeDisabled =[\s\S]*!backendCapabilities\.executePr/);
+  assert.match(source, /data-backend-capability=\{String\(backendCapabilities\.executePr\)\}/);
 });

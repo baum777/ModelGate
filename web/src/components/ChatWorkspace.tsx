@@ -527,6 +527,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const [executionMode, setExecutionMode] = useState<ChatExecutionMode>(
     props.session.metadata.executionMode
   );
+  const [branchSelectorOpen, setBranchSelectorOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const malformedAbortRef = useRef(false);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
@@ -1202,6 +1203,9 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const workbenchScope = props.workbenchBinding.scope?.trim() || null;
   const directMainBranch = workbenchBranch === "main" || workbenchBranch === "master";
   const readWriteGuardrailBlocked = executionMode === "governed" && (!workbenchBranch || directMainBranch);
+  const composerPlaceholder = executionMode === "direct"
+    ? (locale === "de" ? "Frage stellen — Repo ist schreibgeschützt" : "Ask anything — repo is read-only")
+    : (locale === "de" ? "Nächste Änderung planen" : "Plan the next change");
   const awaitingApproval = executionMode === "governed" && pendingProposal?.status === "pending";
   const executionRunning =
     pendingProposal?.status === "executing"
@@ -1266,6 +1270,12 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     && !pendingProposal;
   const showInlineGuideCta = !showSetupBlockingCta && !showChatEmptyCta && Boolean(contextTipPending || activeInlineGuide);
   const showCopyDiscoveryChip = !showSetupBlockingCta && !showChatEmptyCta && !showInlineGuideCta && copyDiscoveryPending;
+
+  useEffect(() => {
+    if (workbenchBranch && branchSelectorOpen) {
+      setBranchSelectorOpen(false);
+    }
+  }, [branchSelectorOpen, workbenchBranch]);
 
   useEffect(() => {
     if (assistantMessageCount > 0 && !hasSeenGuideKey(GUIDE_KEY_FIRST_AI_RESPONSE)) {
@@ -1342,6 +1352,12 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
                 aria-pressed={executionMode === "governed"}
                 disabled={executionRunning}
                 onClick={() => {
+                  if (!workbenchBranch) {
+                    setBranchSelectorOpen(true);
+                    props.onTelemetry("warning", "Read & Write branch required", "Read & Write mode requires a Workbench branch.");
+                    return;
+                  }
+
                   setExecutionMode("governed");
                   props.onTelemetry("info", "Chat mode changed", "Governed execution mode enabled.");
                 }}
@@ -1350,13 +1366,8 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               </button>
             </div>
           </div>
-          <div className="chat-toolbar-control-group chat-work-mode-guardrail" data-testid="chat-work-mode-guardrail">
-            {executionMode === "direct" ? (
-              <>
-                <strong>{locale === "de" ? "Read only" : "Read only"}</strong>
-                <p>{locale === "de" ? "Repo lesen, Kontext verstehen, Architektur planen. Keine Änderungen ausführen." : "Read repository context and plan architecture. No changes are executed."}</p>
-              </>
-            ) : (
+          {executionMode === "governed" ? (
+            <div className="chat-toolbar-control-group chat-work-mode-guardrail" data-testid="chat-work-mode-guardrail">
               <>
                 <strong>{locale === "de" ? "Read & Write" : "Read & Write"}</strong>
                 <p>
@@ -1377,8 +1388,8 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
                   </p>
                 ) : null}
               </>
-            )}
-          </div>
+            </div>
+          ) : null}
           {expertMode ? (
           <div className="chat-toolbar-control-group chat-toolbar-model-group">
             <label htmlFor="model-select">{ui.chat.modelSelectLabel}</label>
@@ -1682,6 +1693,56 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           <div ref={messageEndRef} />
         </div>
 
+        {branchSelectorOpen ? (
+          <>
+            <button
+              type="button"
+              className="chat-action-sheet-backdrop"
+              aria-label={locale === "de" ? "Branch-Auswahl schließen" : "Close branch selector"}
+              onClick={() => setBranchSelectorOpen(false)}
+            />
+            <section
+              className="chat-action-sheet branch-selector-sheet"
+              aria-label={locale === "de" ? "Branch für Read & Write auswählen" : "Select branch for Read & Write"}
+              data-testid="chat-branch-selector"
+            >
+              <header className="chat-action-sheet-header">
+                <SectionLabel>{locale === "de" ? "Branch erforderlich" : "Branch required"}</SectionLabel>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setBranchSelectorOpen(false)}
+                >
+                  {locale === "de" ? "Abbrechen" : "Cancel"}
+                </button>
+              </header>
+
+              <div className="chat-action-sheet-body">
+                <p className="muted-copy">
+                  {locale === "de"
+                    ? "Read & Write startet erst, wenn die Workbench eine Branch außerhalb von main gebunden hat."
+                    : "Read & Write starts only after Workbench has a non-main branch bound."}
+                </p>
+                <div className="chat-action-sheet-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => {
+                      setBranchSelectorOpen(false);
+                      props.onOpenGitHubFromChatAction({
+                        sourceMessageId: "chat-rw-branch-selector",
+                        content: chatState.input,
+                      });
+                    }}
+                  >
+                    {locale === "de" ? "Workbench öffnen" : "Open Workbench"}
+                  </button>
+                </div>
+              </div>
+            </section>
+          </>
+        ) : null}
+
         {matrixComposeOpen ? (
           <>
             <button
@@ -1855,10 +1916,10 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             />
           ) : null}
 
-          <ComposeZone
-            value={chatState.input}
-            placeholder={ui.chat.composerPlaceholder}
-            disabled={Boolean(composerBlockReason) || readWriteGuardrailBlocked}
+              <ComposeZone
+                value={chatState.input}
+                placeholder={composerPlaceholder}
+                disabled={Boolean(composerBlockReason) || readWriteGuardrailBlocked}
             submitDisabled={Boolean(composerBlockReason) || readWriteGuardrailBlocked || chatState.input.trim().length === 0}
             submitLabel={executionMode === "direct" ? ui.chat.sendDirect : ui.chat.prepareProposal}
             ariaLabel={ui.chat.title}

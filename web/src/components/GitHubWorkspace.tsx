@@ -76,12 +76,22 @@ export type WorkbenchActionEffectType =
   | "backend_prepare"
   | "backend_execute_pr";
 
+export type WorkbenchActionEffect = WorkbenchActionEffectType;
+
 export type WorkbenchActionState =
-  | "unstaged"
-  | "staged"
+  | "unmarked"
+  | "marked"
   | "removed"
   | "pr_prepared"
   | "pr_ready";
+
+export type WorkbenchActionId =
+  | "mark_for_stage"
+  | "remove_from_review"
+  | "open_diff"
+  | "prepare_pr"
+  | "create_pr"
+  | "copy_summary";
 
 const ANALYSIS_QUESTION =
   "Beschreibe die Projektstruktur und nenne die sichere nächste Aktion.";
@@ -273,20 +283,67 @@ function formatGitHubRiskLevel(riskLevel: GitHubChangePlan["riskLevel"]) {
 function formatWorkbenchActionState(state: WorkbenchActionState, locale: Locale) {
   if (locale === "de") {
     switch (state) {
-      case "staged":
-        return "staged";
+      case "marked":
+        return "vorgemerkt";
       case "removed":
-        return "removed";
+        return "entfernt";
       case "pr_prepared":
-        return "pr_prepared";
+        return "PR vorbereitet";
       case "pr_ready":
-        return "pr_ready";
+        return "PR bereit";
       default:
-        return "unstaged";
+        return "nicht vorgemerkt";
     }
   }
 
-  return state;
+  switch (state) {
+    case "unmarked":
+      return "unmarked";
+    case "marked":
+      return "marked";
+    case "removed":
+      return "removed";
+    case "pr_prepared":
+      return "PR prepared";
+    case "pr_ready":
+      return "PR-ready";
+    default:
+      return state;
+  }
+}
+
+export function deriveWorkbenchActionLabel(options: {
+  effectType: WorkbenchActionEffectType;
+  actionState: WorkbenchActionState;
+  action: WorkbenchActionId;
+  backendCapability: boolean;
+  locale: Locale;
+}) {
+  const de = options.locale === "de";
+
+  if (
+    options.action === "create_pr"
+    && (options.effectType !== "backend_execute_pr" || !options.backendCapability || options.actionState !== "pr_prepared")
+  ) {
+    return de ? "PR vorbereiten" : "Prepare PR";
+  }
+
+  switch (options.action) {
+    case "mark_for_stage":
+      return de ? "Zur Übergabe vormerken" : "Mark for stage";
+    case "remove_from_review":
+      return de ? "Aus Review entfernen" : "Remove from review";
+    case "open_diff":
+      return de ? "Diff öffnen ↗" : "Open diff ↗";
+    case "prepare_pr":
+      return de ? "PR vorbereiten" : "Prepare PR";
+    case "create_pr":
+      return de ? "PR erstellen" : "Create PR";
+    case "copy_summary":
+      return de ? "Zusammenfassung kopieren" : "Copy summary";
+    default:
+      return de ? "Aktion" : "Action";
+  }
 }
 
 function buildRawDiffPreview(plan: GitHubChangePlan | null) {
@@ -532,7 +589,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     props.session.metadata.verificationError,
   );
   const [workbenchActionState, setWorkbenchActionState] = useState<WorkbenchActionState>(() =>
-    props.session.metadata.executionResult ? "pr_ready" : "unstaged",
+    props.session.metadata.executionResult ? "pr_ready" : "unmarked",
   );
   const [rawDiffExpanded, setRawDiffExpanded] = useState(false);
   const repoSelectRef = useRef<HTMLSelectElement | null>(null);
@@ -710,6 +767,15 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       || verificationError?.toLowerCase().includes("stale"),
   );
   const executionConsumed = Boolean(executionResult);
+  const backendCapabilities = {
+    preparePr: Boolean(proposalPlan && selectedRepo && props.backendHealthy !== false),
+    executePr: Boolean(
+      proposalPlan
+      && selectedRepo?.permissions.canWrite
+      && props.backendHealthy === true
+      && !proposalPlan.stale
+    ),
+  };
   const markForStageDisabled =
     !proposalPlan
     || executing
@@ -717,7 +783,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     || stalePlanBlocked
     || executionConsumed
     || proposalLoading
-    || workbenchActionState === "staged"
+    || workbenchActionState === "marked"
     || workbenchActionState === "pr_prepared"
     || workbenchActionState === "pr_ready";
   const removeFromReviewDisabled =
@@ -727,13 +793,15 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     || workbenchActionState === "removed";
   const preparePrDisabled =
     !proposalPlan
+    || !backendCapabilities.preparePr
     || executing
     || verifying
     || stalePlanBlocked
     || executionConsumed
-    || workbenchActionState !== "staged";
+    || workbenchActionState !== "marked";
   const executeDisabled =
     !proposalPlan
+    || !backendCapabilities.executePr
     || executing
     || verifying
     || stalePlanBlocked
@@ -804,7 +872,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       setVerificationResult(null);
       setExecutionError(null);
       setVerificationError(null);
-      setWorkbenchActionState("unstaged");
+      setWorkbenchActionState("unmarked");
     }
   }, [proposalPlan?.planId, proposalPlan?.stale, selectedRepoFullName]);
 
@@ -822,7 +890,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     setVerificationResult(null);
     setExecutionError(null);
     setVerificationError(null);
-    setWorkbenchActionState("unstaged");
+    setWorkbenchActionState("unmarked");
     setRawDiffExpanded(false);
   }
 
@@ -912,7 +980,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       });
 
       setProposalPlan(response.plan);
-      setWorkbenchActionState("unstaged");
+      setWorkbenchActionState("unmarked");
       setRawDiffExpanded(false);
       setEventTrail((current) => [...current, `${ui.github.reviewTitle} · ${response.plan.planId}`].slice(-4));
       props.onTelemetry("info", localText.telemetryProposalReady, localText.telemetryProposalReadyDetail(response.plan.planId));
@@ -1071,16 +1139,18 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     onPress: () => void;
   } => Boolean(row));
   const workbenchStatus = executionResult
-    ? "needs review"
-    : workbenchActionState === "staged" || workbenchActionState === "pr_prepared"
-      ? "staged"
+    ? "PR-ready"
+    : stalePlanBlocked || executionError || verificationError
+      ? "needs review"
+      : workbenchActionState === "marked" || workbenchActionState === "pr_prepared"
+        ? "marked"
       : proposalPlan
         ? "pending"
         : "clean";
   const workbenchModeLabel =
-    workbenchActionState === "staged" || workbenchActionState === "pr_prepared" || workbenchActionState === "pr_ready"
+    proposalPlan || analysisBundle
       ? "Read & Write"
-      : "Read only";
+      : "Read Only";
   const workbenchSummaryTitle = proposalPlan?.summary
     ?? analysisBundle?.question
     ?? (locale === "de" ? "Noch keine aktive Arbeit." : "No active work yet.");
@@ -1111,6 +1181,50 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     createPr: "backend_execute_pr" as WorkbenchActionEffectType,
     copySummary: "local_review_state" as WorkbenchActionEffectType,
   };
+  const workbenchActionLabels = {
+    markForStage: deriveWorkbenchActionLabel({
+      effectType: workbenchActionEffects.markForStage,
+      actionState: workbenchActionState,
+      action: "mark_for_stage",
+      backendCapability: false,
+      locale,
+    }),
+    removeReview: deriveWorkbenchActionLabel({
+      effectType: workbenchActionEffects.removeReview,
+      actionState: workbenchActionState,
+      action: "remove_from_review",
+      backendCapability: false,
+      locale,
+    }),
+    openDiff: deriveWorkbenchActionLabel({
+      effectType: workbenchActionEffects.openDiff,
+      actionState: workbenchActionState,
+      action: "open_diff",
+      backendCapability: false,
+      locale,
+    }),
+    preparePr: deriveWorkbenchActionLabel({
+      effectType: workbenchActionEffects.preparePr,
+      actionState: workbenchActionState,
+      action: "prepare_pr",
+      backendCapability: backendCapabilities.preparePr,
+      locale,
+    }),
+    createPr: deriveWorkbenchActionLabel({
+      effectType: workbenchActionEffects.createPr,
+      actionState: workbenchActionState,
+      action: "create_pr",
+      backendCapability: backendCapabilities.executePr,
+      locale,
+    }),
+    copySummary: deriveWorkbenchActionLabel({
+      effectType: workbenchActionEffects.copySummary,
+      actionState: workbenchActionState,
+      action: "copy_summary",
+      backendCapability: false,
+      locale,
+    }),
+  };
   const pinnableChatContext = useMemo(
     () => buildGitHubPinnedChatContext({
       selectedRepo,
@@ -1124,7 +1238,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       return;
     }
 
-    setWorkbenchActionState("staged");
+    setWorkbenchActionState("marked");
     setApprovalChecked(true);
     setEventTrail((current) => [...current, locale === "de" ? "Zur Übergabe vorgemerkt" : "Marked for stage"].slice(-4));
   }
@@ -1146,7 +1260,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
 
     setWorkbenchActionState("pr_prepared");
     setApprovalChecked(true);
-    setEventTrail((current) => [...current, "Prepare PR"].slice(-4));
+    setEventTrail((current) => [...current, workbenchActionLabels.preparePr].slice(-4));
   }
 
   async function handleCopySummary() {
@@ -1239,7 +1353,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             onClick={() => setDiffSheetOpen(true)}
             disabled={!proposalPlan}
           >
-            {locale === "de" ? "Diff ansehen" : "View diff"}
+            {workbenchActionLabels.openDiff}
           </button>
         </div>
 
@@ -1276,13 +1390,20 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             <strong>{locale === "de" ? "Workbench Review Center" : "Workbench Review Center"}</strong>
           </div>
           <div className="plan-badges">
-            <span className="workflow-chip workflow-chip-active">{selectedRepo?.fullName ?? ui.github.noRepoSelected}</span>
-            <span className="workflow-chip workflow-chip-idle">{proposalPlan?.branchName ?? selectedRepo?.defaultBranch ?? ui.common.na}</span>
-            <span className={`workflow-chip ${workbenchStatus === "clean" ? "workflow-chip-idle" : "workflow-chip-active"}`}>
+            <span className="workflow-chip workflow-chip-active" aria-label={`repo:${selectedRepo?.fullName ?? ui.github.noRepoSelected}`}>
+              {selectedRepo?.fullName ?? ui.github.noRepoSelected}
+            </span>
+            <span className="workflow-chip workflow-chip-idle" aria-label={`branch:${proposalPlan?.branchName ?? selectedRepo?.defaultBranch ?? ui.common.na}`}>
+              {proposalPlan?.branchName ?? selectedRepo?.defaultBranch ?? ui.common.na}
+            </span>
+            <span className={`workflow-chip ${workbenchStatus === "clean" ? "workflow-chip-idle" : "workflow-chip-active"}`} aria-label={`mode:${workbenchModeLabel}`}>
               {`mode:${workbenchModeLabel}`}
             </span>
-            <span className={`workflow-chip ${workbenchStatus === "clean" ? "workflow-chip-idle" : "workflow-chip-active"}`}>
+            <span className={`workflow-chip ${workbenchStatus === "clean" ? "workflow-chip-idle" : "workflow-chip-active"}`} aria-label={`status:${workbenchStatus}`}>
               {`status:${workbenchStatus}`}
+            </span>
+            <span className="workflow-chip workflow-chip-idle" aria-label={`scope:${proposalFiles[0]?.path ?? analysisFiles[0]?.path ?? ui.common.na}`}>
+              {`scope:${proposalFiles[0]?.path ?? analysisFiles[0]?.path ?? ui.common.na}`}
             </span>
           </div>
         </header>
@@ -1463,7 +1584,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             data-testid="workbench-action-mark-for-stage"
             data-effect-type={workbenchActionEffects.markForStage}
           >
-            {locale === "de" ? "Zur Übergabe vormerken" : "Mark for stage"}
+            {workbenchActionLabels.markForStage}
           </button>
           <button
             type="button"
@@ -1473,7 +1594,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             data-testid="workbench-action-remove-review"
             data-effect-type={workbenchActionEffects.removeReview}
           >
-            {locale === "de" ? "Aus Review entfernen" : "Proposal verwerfen"}
+            {workbenchActionLabels.removeReview}
           </button>
           <button
             type="button"
@@ -1483,7 +1604,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             data-testid="workbench-action-open-diff"
             data-effect-type={workbenchActionEffects.openDiff}
           >
-            {locale === "de" ? "Diff öffnen" : "Open diff"}
+            {workbenchActionLabels.openDiff}
           </button>
           <button
             type="button"
@@ -1493,7 +1614,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             data-testid="workbench-action-prepare-pr"
             data-effect-type={workbenchActionEffects.preparePr}
           >
-            Prepare PR
+            {workbenchActionLabels.preparePr}
           </button>
           <button
             type="button"
@@ -1503,8 +1624,9 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             disabled={executeDisabled}
             data-testid="workbench-action-create-pr"
             data-effect-type={workbenchActionEffects.createPr}
+            data-backend-capability={String(backendCapabilities.executePr)}
           >
-            Create PR
+            {workbenchActionLabels.createPr}
           </button>
           <button
             type="button"
@@ -1516,13 +1638,13 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             data-testid="workbench-action-copy-summary"
             data-effect-type={workbenchActionEffects.copySummary}
           >
-            {locale === "de" ? "Summary kopieren" : "Copy summary"}
+            {workbenchActionLabels.copySummary}
           </button>
         </div>
         <p className="muted-copy">
           {locale === "de"
             ? "Mark for stage und Aus Review entfernen ändern nur lokalen Workbench-Review-State."
-            : "Mark for stage and Proposal verwerfen only change local workbench review state."}
+            : "Mark for stage and Remove from review only change local workbench review state."}
         </p>
       </article>
 
@@ -1538,7 +1660,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             onClick={() => setRawDiffExpanded((current) => !current)}
             disabled={!canOpenRawDiff}
           >
-            {rawDiffExpanded ? (locale === "de" ? "Diff ausblenden" : "Hide diff") : (locale === "de" ? "Diff anzeigen" : "Show diff")}
+            {rawDiffExpanded ? (locale === "de" ? "Diff schließen" : "Close diff") : workbenchActionLabels.openDiff}
           </button>
         </header>
         {rawDiffExpanded && rawDiffForView ? (
@@ -1549,7 +1671,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       </article>
 
       {proposalPlan && executionResult ? (
-        <article className="workspace-card github-review-card">
+        <article className="workspace-card github-review-card" data-testid="github-pr-result">
           <header className="card-header">
             <div>
               <span>{locale === "de" ? "PR Status" : "PR status"}</span>
