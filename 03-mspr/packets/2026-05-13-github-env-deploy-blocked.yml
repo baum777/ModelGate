@@ -1,0 +1,40 @@
+id: MSPR-20260513-001
+date: 2026-05-13
+status: blocked
+trigger: validation_gap
+scope:
+  paths:
+    - .env
+    - server/src/routes/integration-auth.ts
+    - docs/routing-matrix.md
+authority:
+  observed:
+    - dotenv loaded local .env without exposing secret values
+    - GITHUB_APP_ID is set
+    - GITHUB_OAUTH_CLIENT_ID is set
+    - GITHUB_OAUTH_CLIENT_SECRET is set
+    - GITHUB_OAUTH_CALLBACK_URL is set
+    - GITHUB_AGENT_API_KEY is set
+    - MOSAIC_STACK_SESSION_SECRET was generated locally
+    - INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY was generated locally
+    - GITHUB_APP_SLUG is missing
+    - GITHUB_APP_PRIVATE_KEY is set but does not contain a PEM private-key header when parsed through dotenv
+  inferred:
+    - GitHub App Install and Authorize cannot be promoted until the App slug and parseable private key are present in local and production runtime env
+    - Vercel production deployment remains blocked in this agent environment by external-disclosure policy
+risk:
+  level: high
+  statement: deploying with incomplete GitHub App env would preserve a broken install and authorize flow in production
+decision_needed: operator supplies GITHUB_APP_SLUG and a parseable GITHUB_APP_PRIVATE_KEY, then deploys through an approved Vercel path
+review:
+  owner: human
+  state: pending
+verification:
+  proof:
+    - node -r dotenv/config env presence check
+    - GitHub App private key format metadata check
+links:
+  - ../server/src/routes/integration-auth.ts
+  - ../docs/routing-matrix.md
+  - ../02-wiki/log.md
+next_gate: blocked_until_github_app_env_valid_and_deploy_policy_approved
