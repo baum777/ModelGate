@@ -13,6 +13,7 @@ authority:
     - npm run build exited 0
     - npx vercel deploy --prod --yes was rejected by tenant risk policy
     - repeated explicit npx vercel deploy --prod --yes request was rejected by tenant risk policy
+    - repeated explicit npx vercel deploy --yes request on 2026-05-13 was rejected by tenant risk policy after user confirmed local env values were set
   inferred:
     - external production deploy is blocked in this environment until tenant policy permits uploading the local working tree and build metadata to Vercel
 risk:
@@ -28,6 +29,7 @@ verification:
     - npm run build
     - npx vercel deploy --prod --yes
     - repeated npx vercel deploy --prod --yes
+    - npx vercel deploy --yes
 links:
   - ../docs/vercel-deployment.md
   - ../02-wiki/log.md

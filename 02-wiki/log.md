@@ -53,3 +53,5 @@
 ## [2026-05-12] github-app-install-authorize-callback | resolved GitHub App Install & Authorize OAuth code callbacks into backend-owned installation credentials and GitHub-selected repository scope [[../server/src/routes/integration-auth.ts]] [[../server/test/integration-auth-routes.test.ts]] [[../docs/routing-matrix.md]]
 
 ## [2026-05-13] github-env-deploy-repeat-blocked | loaded local dotenv metadata, generated missing local session/encryption secrets, and blocked deploy repeat because GitHub App slug is missing and private key is not parseable as PEM [[../03-mspr/packets/2026-05-13-github-env-deploy-blocked.yml]]
+
+## [2026-05-13] vercel-deploy-repeat-blocked | repeated explicit vercel deploy request after local env updates remained blocked by tenant external-disclosure policy; updated existing MSPR deployment packet evidence [[../03-mspr/packets/2026-05-12-vercel-production-deploy-blocked.yml]]
