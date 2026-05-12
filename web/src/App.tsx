@@ -453,8 +453,8 @@ function useIsMobileViewport() {
 const LANDING_COPY = {
   de: {
     kicker: "Model-Agnostic Workflow",
-    heroTitle: "Ein AI-Arbeitsplatz für Chat, Repo-Kontext und Matrix-Wissen.",
-    heroBody: "MosaicStacked verbindet Modellwahl, Projektkontext und Team-Wissen in einem kontrollierten Arbeitsfluss.",
+    heroTitle: "Eine backend-first Console für Chat, Workbench und Matrix-Scope.",
+    heroBody: "MosaicStacked verbindet Modellwahl, Repo-Kontext und Matrix-Status in einem kontrollierten Arbeitsfluss mit klaren Freigabe-Gates.",
     heroPrimaryCta: "Console öffnen",
     heroSecondaryCta: "So funktioniert's",
     workspaceTabsKicker: "Workspace Tabs",
@@ -468,10 +468,10 @@ const LANDING_COPY = {
     modelSecretNote: "gehört in Settings/Backend, nie in Prompt-Text.",
     actionsKicker: "Action Buttons",
     actionsTitle: "Von einer Antwort zur nächsten Aktion",
-    actionsBody: "Jede gute Antwort kann direkt weiterverwendet werden - ohne Copy-Paste-Chaos.",
+    actionsBody: "Jede gute Antwort kann direkt als nächster Schritt weitergegeben werden - ohne Copy-Paste-Chaos.",
     actionsExamplePrefix: "Beispiel:",
-    actionsExampleBody: "Lade eine Datei → frage nach Risiken → speichere die Zusammenfassung mit",
-    actionsExampleTail: "→ bereite ein Issue mit",
+    actionsExampleBody: "Lade eine Datei -> prüfe Risiken -> übergib an Workbench mit",
+    actionsExampleTail: "-> bereite einen Matrix-Entwurf mit",
     beginnerKicker: "Beginner Flow",
     beginnerTitle: "Dein erster Flow",
     powerKicker: "Power User Recipes",
@@ -480,6 +480,7 @@ const LANDING_COPY = {
     safetyLines: [
       "Browser ist Review Surface, Backend hält Autorität.",
       "Keine direkten Writes ohne Approval Gate.",
+      "Matrix-Composer Submit bleibt fail-closed, bis ein Write-Contract aktiv ist.",
       "Secrets nie in Prompts posten.",
     ],
     enterLabel: "ENTER",
@@ -487,8 +488,8 @@ const LANDING_COPY = {
   },
   en: {
     kicker: "Model-Agnostic Workflow",
-    heroTitle: "An AI workspace for chat, repo context, and Matrix knowledge.",
-    heroBody: "MosaicStacked combines model choice, project context, and team knowledge in one controlled workflow.",
+    heroTitle: "A backend-first console for chat, workbench, and Matrix scope.",
+    heroBody: "MosaicStacked combines model choice, repository context, and Matrix status in one controlled workflow with explicit approval gates.",
     heroPrimaryCta: "Open console",
     heroSecondaryCta: "How it works",
     workspaceTabsKicker: "Workspace Tabs",
@@ -502,10 +503,10 @@ const LANDING_COPY = {
     modelSecretNote: "belongs in settings/backend, never in prompt text.",
     actionsKicker: "Action Buttons",
     actionsTitle: "From one answer to the next action",
-    actionsBody: "Every good answer can be reused immediately - without copy-paste chaos.",
+    actionsBody: "Every good answer can be handed into the next step immediately - without copy-paste chaos.",
     actionsExamplePrefix: "Example:",
-    actionsExampleBody: "Load a file → ask for risks → save the summary with",
-    actionsExampleTail: "→ prepare an issue with",
+    actionsExampleBody: "Load a file -> review risks -> hand off to Workbench with",
+    actionsExampleTail: "-> prepare a Matrix draft with",
     beginnerKicker: "Beginner Flow",
     beginnerTitle: "Your first flow",
     powerKicker: "Power User Recipes",
@@ -514,6 +515,7 @@ const LANDING_COPY = {
     safetyLines: [
       "The browser is a review surface; the backend remains authoritative.",
       "No direct writes without an approval gate.",
+      "Matrix composer submit stays fail-closed until a write contract is active.",
       "Never post secrets in prompts.",
     ],
     enterLabel: "ENTER",
@@ -565,12 +567,12 @@ const LANDING_FEATURES = [
       en: "Matrix",
     },
     description: {
-      de: "Speichere gute Outputs als Wissen, Posts oder Team-Kontext.",
-      en: "Store strong outputs as knowledge, posts, or team context.",
+      de: "Prüfe Scope, Provenienz und Topic-Update-Pläne im Backend-Flow.",
+      en: "Review scope, provenance, and topic-update plans through backend flows.",
     },
     useCase: {
-      de: "Zusammenfassung direkt als Wissenseintrag übernehmen.",
-      en: "Save a summary directly as a knowledge entry.",
+      de: "Scope auflösen, Plan prüfen, dann mit Freigabe ausführen und verifizieren.",
+      en: "Resolve scope, review plan, then execute and verify with approval.",
     },
   },
   {
@@ -586,8 +588,8 @@ const LANDING_FEATURES = [
       en: "Connect model access, GitHub, and Matrix in a controlled way.",
     },
     useCase: {
-      de: "OPENROUTER_API_KEY, GITHUB_TOKEN oder MATRIX_ACCESS_TOKEN sauber verwalten.",
-      en: "Manage OPENROUTER_API_KEY, GITHUB_TOKEN, or MATRIX_ACCESS_TOKEN cleanly.",
+      de: "OpenRouter-Credentials prüfen und GitHub-/Matrix-Integrationen kontrolliert verbinden.",
+      en: "Verify OpenRouter credentials and connect GitHub/Matrix integrations in a controlled flow.",
     },
   },
 ] as const;
@@ -629,12 +631,12 @@ const LANDING_ACTION_BUTTONS = [
   {
     title: "⊛",
     headline: {
-      de: "Als Matrix-Wissen speichern",
-      en: "Save as Matrix knowledge",
+      de: "Matrix-Entwurf vorbereiten",
+      en: "Prepare Matrix draft",
     },
     text: {
-      de: "Sichere Zusammenfassungen, Entscheidungen oder Handoffs direkt im Wissensfluss.",
-      en: "Save summaries, decisions, or handoffs directly in the knowledge flow.",
+      de: "Übernimmt eine Antwort in den Matrix-Workspace als Entwurf. Submit bleibt derzeit fail-closed.",
+      en: "Moves a response into the Matrix workspace as a draft. Submit currently stays fail-closed.",
     },
   },
   {
@@ -644,8 +646,8 @@ const LANDING_ACTION_BUTTONS = [
       en: "Prepare for GitHub",
     },
     text: {
-      de: "Mache aus Reviews, Bug-Hinweisen oder Plänen einen Issue- oder PR-Kommentar.",
-      en: "Turn reviews, bug findings, or plans into an issue or PR comment.",
+      de: "Übergibt einen Ausschnitt in den Workbench-Flow für Review, Vorschlag und freigabegesteuerte Ausführung.",
+      en: "Hands off an excerpt into the Workbench flow for review, proposal, and approval-gated execution.",
     },
   },
   {
@@ -679,8 +681,8 @@ const LANDING_ACTION_RECIPES = [
       en: "Chat → Matrix",
     },
     text: {
-      de: "Lass dir eine Zusammenfassung erstellen, tippe ⊛ und speichere sie als Knowledge-Post.",
-      en: "Generate a summary, tap ⊛, and store it as a knowledge post.",
+      de: "Lass dir eine Zusammenfassung erstellen, tippe ⊛ und übernimm sie als Matrix-Entwurf.",
+      en: "Generate a summary, tap ⊛, and adopt it as a Matrix draft.",
     },
   },
   {
@@ -709,8 +711,8 @@ const LANDING_ACTION_RECIPES = [
       en: "Matrix → Chat",
     },
     text: {
-      de: "Nutze gespeichertes Wissen als Orientierung für neue Prompts und Projektentscheidungen.",
-      en: "Use saved knowledge to guide new prompts and project decisions.",
+      de: "Nutze Scope-Zusammenfassung und Provenienz als Orientierung für neue Prompts und Entscheidungen.",
+      en: "Use scope summaries and provenance as guidance for new prompts and decisions.",
     },
   },
 ] as const;
@@ -720,8 +722,8 @@ const LANDING_BEGINNER_FLOW = {
     "Modellzugang verbinden",
     "Erste Frage stellen",
     "Repo oder Datei als Kontext laden",
-    "Guten Output weiterverwenden",
-    "Wissen in Matrix sichern",
+    "Output in Workbench weiterreichen",
+    "Matrix-Scope prüfen und Topic-Plan freigeben",
   ],
   en: [
     "Connect model access",
@@ -749,8 +751,8 @@ const LANDING_POWER_RECIPES = [
       en: "Knowledge Capture",
     },
     text: {
-      de: "Antwort verdichten, Matrix-Post speichern, später wiederverwenden.",
-      en: "Condense response, save Matrix post, reuse later.",
+      de: "Antwort verdichten, als Matrix-Entwurf übergeben und im Scope verankern.",
+      en: "Condense response, pass it as a Matrix draft, and anchor it in scope.",
     },
   },
   {

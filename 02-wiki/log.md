@@ -55,3 +55,5 @@
 ## [2026-05-13] github-env-deploy-repeat-blocked | loaded local dotenv metadata, generated missing local session/encryption secrets, and blocked deploy repeat because GitHub App slug is missing and private key is not parseable as PEM [[../03-mspr/packets/2026-05-13-github-env-deploy-blocked.yml]]
 
 ## [2026-05-13] vercel-deploy-repeat-blocked | repeated explicit vercel deploy request after local env updates remained blocked by tenant external-disclosure policy; updated existing MSPR deployment packet evidence [[../03-mspr/packets/2026-05-12-vercel-production-deploy-blocked.yml]]
+
+## [2026-05-13] landingpage-istzustand-refresh | aligned landing copy with current backend-owned workbench flow, matrix scope/topic posture, and fail-closed matrix composer semantics [[../web/src/App.tsx]]
