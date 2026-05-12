@@ -91,7 +91,7 @@ Read-only Matrix routes and several planning surfaces exist in this repo. Matrix
 - Matrix Analyze, Review, Execute, Verify, and Matrix write flows remain external-backend or contract-bound until verified against a real Matrix origin.
 - Matrix hierarchy preview is browser-side advisory only unless a backend implementation verifies it.
 - Undo, cross-device sync, bulk review queue, and advanced observability are deferred.
-- `GITHUB_APP_*` fields are reserved placeholders and are not wired into the current runtime path.
+- GitHub App installation login is wired for repo access; repository scope comes from the user's GitHub App installation selection.
 
 ## Trust Boundaries
 
@@ -131,7 +131,7 @@ Set `USER_CREDENTIALS_ENCRYPTION_KEY` in `.env`, then enter your OpenRouter API 
 
 Optional integrations:
 
-- GitHub routes require `GITHUB_TOKEN` and `GITHUB_ALLOWED_REPOS`.
+- GitHub routes require GitHub App auth config for login/install flow: `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_SLUG`, `MOSAIC_STACK_SESSION_SECRET`, and integration-auth encryption config. For the GitHub "Install & Authorize" flow, enable "Request user authorization (OAuth) during installation" on the GitHub App and set the app's OAuth client id/secret in `GITHUB_OAUTH_CLIENT_ID` and `GITHUB_OAUTH_CLIENT_SECRET`.
 - Approval-gated GitHub execute also requires `GITHUB_AGENT_API_KEY`, sent only as `X-MosaicStacked-Admin-Key` from trusted server-side callers.
 - Matrix routes require `MATRIX_ENABLED=true`, `MATRIX_BASE_URL`, and `MATRIX_ACCESS_TOKEN`.
 

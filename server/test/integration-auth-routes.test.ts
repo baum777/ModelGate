@@ -67,17 +67,59 @@ function createGitHubAppIntegrationFetch(options: {
   readInstallationStatus?: number;
   accessTokenStatus?: number;
   repositoriesStatus?: number;
+  userAccessToken?: string;
+  userInstallationsStatus?: number;
   accessTokenPayload?: Record<string, unknown> | null;
   installationPayload?: Record<string, unknown> | null;
   repositoriesPayload?: Record<string, unknown> | null;
+  userTokenPayload?: Record<string, unknown> | null;
+  userInstallationsPayload?: Record<string, unknown> | null;
 } = {}) {
   const installationId = options.installationId ?? TEST_GITHUB_INSTALLATION_ID;
   const accountLogin = options.accountLogin ?? "octocat";
   const repos = options.repos ?? ["octo/demo", "acme/widget"];
+  const userAccessToken = options.userAccessToken ?? "ghu_test_user_access_token";
 
   return async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     const method = init?.method ?? "GET";
+
+    if (url.pathname === "/login/oauth/access_token" && method === "POST") {
+      return new Response(JSON.stringify(options.userTokenPayload ?? {
+        access_token: userAccessToken,
+        token_type: "bearer",
+        scope: "read:user,user:email"
+      }), {
+        status: options.accessTokenStatus ?? 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    if (url.pathname === "/user/installations" && method === "GET") {
+      const authorization = new Headers(init?.headers).get("authorization");
+
+      if (authorization !== `Bearer ${userAccessToken}`) {
+        return new Response(JSON.stringify({ message: "Bad credentials" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      return new Response(JSON.stringify(options.userInstallationsPayload ?? {
+        total_count: 1,
+        installations: [{
+          id: Number.parseInt(installationId, 10),
+          account: {
+            login: accountLogin,
+            type: "Organization",
+            id: 1
+          }
+        }]
+      }), {
+        status: options.userInstallationsStatus ?? 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
 
     if (url.pathname === `/app/installations/${installationId}` && method === "GET") {
       return new Response(JSON.stringify(options.installationPayload ?? {
@@ -336,7 +378,7 @@ test("github start fails closed when app config is not configured instead of usi
   assert.equal(payload.github.lastVerifiedAt, null);
 });
 
-test("integrations status reports workspace requirements when GitHub App is ready but workspace config is missing", async (t) => {
+test("integrations status allows GitHub App connection before repository selection", async (t) => {
   const app = createApp({
     env: createTestEnv({
       ...TEST_GITHUB_APP_ENV
@@ -360,8 +402,8 @@ test("integrations status reports workspace requirements when GitHub App is read
     };
   };
 
-  assert.equal(payload.github.status, "missing_server_config");
-  assert.deepEqual(payload.github.requirements, ["GITHUB_APP_INSTALLATION_ID", "GITHUB_ALLOWED_REPOS"]);
+  assert.equal(payload.github.status, "connect_available");
+  assert.deepEqual(payload.github.requirements, []);
 });
 
 test("github auth status endpoint only exposes safe metadata", async (t) => {
@@ -711,6 +753,143 @@ test("real GitHub App callback stores a user-connected credential source", async
 
   assert.equal(payload.github.credentialSource, "user_connected");
   assert.equal(payload.github.labels.identity, `octocat (installation ${TEST_GITHUB_INSTALLATION_ID})`);
+});
+
+test("GitHub App install and authorize callback resolves user installation from OAuth code", async (t) => {
+  const env = createTestEnv({
+    ...TEST_GITHUB_APP_ENV,
+    ...TEST_GITHUB_OAUTH_ENV,
+    MOSAIC_STACK_SESSION_SECRET: "github-app-install-authorize-session-secret",
+    ...TEST_ENCRYPTION_KEY
+  });
+
+  const app = createApp({
+    env,
+    openRouter: createMockOpenRouterClient(),
+    integrationFetch: createGitHubAppIntegrationFetch({
+      repos: ["baum777/mosaicStack"]
+    }),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const start = await app.inject({
+    method: "GET",
+    url: "/api/auth/github/start"
+  });
+
+  assert.equal(start.statusCode, 302);
+  const startLocation = new URL(String(start.headers.location ?? ""));
+  const browserCookie = joinCookiesForRequest(readSetCookies(start));
+  const state = startLocation.searchParams.get("state");
+
+  assert.equal(startLocation.origin + startLocation.pathname, `https://github.com/apps/${TEST_GITHUB_APP_SLUG}/installations/new`);
+  assert.ok(state);
+  assert.ok(browserCookie);
+
+  const callback = await app.inject({
+    method: "GET",
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=github-app-user-code`,
+    headers: {
+      cookie: browserCookie
+    }
+  });
+
+  assert.equal(callback.statusCode, 302);
+  assert.equal(callback.headers.location, "/console?mode=settings");
+
+  const status = await app.inject({
+    method: "GET",
+    url: "/api/integrations/status",
+    headers: {
+      cookie: browserCookie
+    }
+  });
+
+  const payload = JSON.parse(status.body) as {
+    github: {
+      credentialSource: string;
+      labels: {
+        identity: string | null;
+        scope: string | null;
+      };
+    };
+  };
+
+  assert.equal(payload.github.credentialSource, "user_connected");
+  assert.equal(payload.github.labels.identity, `octocat (installation ${TEST_GITHUB_INSTALLATION_ID})`);
+  assert.equal(payload.github.labels.scope, "GitHub App installation controls repository access.");
+});
+
+test("GitHub App install and authorize callback fails closed for ambiguous user installations", async (t) => {
+  const env = createTestEnv({
+    ...TEST_GITHUB_APP_ENV,
+    ...TEST_GITHUB_OAUTH_ENV,
+    MOSAIC_STACK_SESSION_SECRET: "github-app-ambiguous-install-session-secret",
+    ...TEST_ENCRYPTION_KEY
+  });
+
+  const app = createApp({
+    env,
+    openRouter: createMockOpenRouterClient(),
+    integrationFetch: createGitHubAppIntegrationFetch({
+      userInstallationsPayload: {
+        total_count: 2,
+        installations: [
+          {
+            id: Number.parseInt(TEST_GITHUB_INSTALLATION_ID, 10),
+            account: {
+              login: "octocat",
+              type: "User",
+              id: 1
+            }
+          },
+          {
+            id: 67890,
+            account: {
+              login: "acme",
+              type: "Organization",
+              id: 2
+            }
+          }
+        ]
+      }
+    }),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const start = await app.inject({
+    method: "GET",
+    url: "/api/auth/github/start"
+  });
+  const state = readGitHubStateFromAuthorizeLocation(String(start.headers.location ?? ""));
+  const browserCookie = joinCookiesForRequest(readSetCookies(start));
+
+  assert.ok(state);
+  assert.ok(browserCookie);
+
+  const callback = await app.inject({
+    method: "GET",
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=github-app-user-code`,
+    headers: {
+      cookie: browserCookie
+    }
+  });
+
+  assert.equal(callback.statusCode, 403);
+  const callbackPayload = JSON.parse(callback.body) as {
+    error: {
+      code: string;
+    };
+  };
+  assert.equal(callbackPayload.error.code, "scope_denied");
 });
 
 test("GitHub OAuth app start uses configured OAuth authorize flow when GitHub App config is absent", async (t) => {
@@ -1438,15 +1617,14 @@ test("github callback fails closed when app installation token exchange is inval
   assert.equal(payload.error.code, "token_exchange_failed");
 });
 
-test("github callback fails closed when installation has no allowed repositories", async (t) => {
+test("github callback fails closed when installation has no repositories", async (t) => {
   const app = createApp({
     env: createTestEnv({
-      ...TEST_GITHUB_APP_ENV,
-      GITHUB_ALLOWED_REPOS: ["acme/private-repo-only"]
+      ...TEST_GITHUB_APP_ENV
     }),
     openRouter: createMockOpenRouterClient(),
     integrationFetch: createGitHubAppIntegrationFetch({
-      repos: ["octo/demo"]
+      repos: []
     }),
     logger: false
   });

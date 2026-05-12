@@ -28,9 +28,15 @@ Legacy/dev-only OpenRouter env slots:
 
 GitHub remote flow required when enabled:
 
-- `GITHUB_TOKEN` - required GitHub token for the backend-owned remote flow
-- `GITHUB_ALLOWED_REPOS` - required comma-separated allowlist of `owner/repo` values; the GitHub remote flow stays fail-closed until at least one repository is allowed
+- `GITHUB_APP_ID` - GitHub App id for backend-owned installation auth
+- `GITHUB_APP_PRIVATE_KEY` - GitHub App private key; keep server-side only
+- `GITHUB_APP_SLUG` - GitHub App slug used to build the install URL
+- `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` - GitHub App OAuth credentials used when the app has "Request user authorization (OAuth) during installation" enabled
+- `GITHUB_OAUTH_CALLBACK_URL` - callback URL registered on the GitHub App, ending in `/api/auth/github/callback`
+- `MOSAIC_STACK_SESSION_SECRET` - signs the short-lived install/login callback state
+- `INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY` - encrypts session-bound GitHub credentials
 - `GITHUB_AGENT_API_KEY` - required to approve execute requests; send it only from trusted server-side callers via `X-MosaicStacked-Admin-Key`
+- `GITHUB_ALLOWED_REPOS` - optional instance-level narrowing for configured instance installations; user-connected installations use the repositories selected on GitHub's App installation page
 
 Optional environment variables:
 
@@ -101,9 +107,7 @@ Optional environment variables:
 - `GITHUB_SMOKE_BASE_BRANCH` - optional base branch for the manual GitHub smoke path
 - `GITHUB_SMOKE_TARGET_BRANCH` - optional target branch for the manual GitHub smoke path
 - `GITHUB_SMOKE_ENABLED` - optional boolean flag for the manual GitHub smoke path
-- `GITHUB_APP_ID` - currently schema-only and not wired into the GitHub runtime path
-- `GITHUB_APP_PRIVATE_KEY` - currently schema-only and not wired into the GitHub runtime path
-- `GITHUB_APP_INSTALLATION_ID` - currently schema-only and not wired into the GitHub runtime path
+- `GITHUB_APP_INSTALLATION_ID` - optional instance installation id for non-session smoke or server-side instance mode
 - `MOSAIC_STACK_SESSION_TTL_SECONDS` - defaults to `86400`
 
 ## Local Run
@@ -233,7 +237,7 @@ data: {"ok":false,"error":{"code":"upstream_error","message":"Chat provider requ
 
 ## GitHub Workspace Contract
 
-These routes are backend-owned and review-first. The browser may read allowed repositories, build read context, prepare a proposal plan, and submit approval intent only. GitHub account authority comes from the backend-owned `GITHUB_TOKEN` and `GITHUB_ALLOWED_REPOS` configuration. Execution stays server-side and fails closed until `GITHUB_AGENT_API_KEY` is configured for trusted callers.
+These routes are backend-owned and review-first. The browser may start GitHub login/install, read allowed repositories, build read context, prepare a proposal plan, and submit approval intent only. GitHub account authority comes from session-bound GitHub App installation credentials; repository scope comes from the repositories the user allowed on GitHub's Install & Authorize page. When GitHub returns an OAuth `code` after installation, the backend exchanges it server-side, resolves the user's accessible GitHub App installation, and stores only the installation credential envelope. `GITHUB_ALLOWED_REPOS` is only an optional instance-mode narrowing control. Execution stays server-side and fails closed until `GITHUB_AGENT_API_KEY` is configured for trusted callers.
 
 GitHub read and proposal routes do not require the legacy global admin session. The browser never sees the GitHub token, provider key, or execute key.
 
@@ -547,9 +551,11 @@ browser.
 Required live smoke environment:
 
 - `GITHUB_SMOKE_ENABLED=true`
-- `GITHUB_TOKEN`
-- `GITHUB_ALLOWED_REPOS`
 - `GITHUB_AGENT_API_KEY`
+- `GITHUB_APP_ID`
+- `GITHUB_APP_PRIVATE_KEY`
+- `GITHUB_APP_SLUG`
+- `GITHUB_APP_INSTALLATION_ID`
 - `GITHUB_SMOKE_REPO`
 - `GITHUB_SMOKE_BASE_BRANCH`
 - `GITHUB_SMOKE_TARGET_BRANCH`

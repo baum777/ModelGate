@@ -1,0 +1,46 @@
+id: MSPR-20260511-002
+date: 2026-05-11
+status: blocked
+trigger: validation_gap
+scope:
+  paths:
+    - scripts/github-smoke.mjs
+    - server/src/routes/chat.ts
+    - server/src/lib/chat-contract.ts
+    - docs/model-routing.md
+authority:
+  observed:
+    - npm run dev:server started http://127.0.0.1:8787
+    - npm run dev:web started http://127.0.0.1:5173
+    - in-app browser opened http://127.0.0.1:5173/console
+    - GET /health returned 200
+    - GET /models returned default alias available
+    - GET /settings/openrouter/status returned configured false
+    - POST /chat with modelAlias default returned 401 upstream_error
+    - npm run smoke:github returned skipped for GITHUB_SMOKE_ENABLED=true and GITHUB_AGENT_API_KEY
+    - GITHUB_SMOKE_ENABLED=true npm run smoke:github returned skipped for GITHUB_AGENT_API_KEY
+  inferred:
+    - GitHub live write smoke is blocked until GITHUB_AGENT_API_KEY is configured
+    - OpenRouter live chat smoke reached backend routing but upstream credentials are rejected or missing for the active credential path
+risk:
+  level: medium
+  statement: live integration readiness cannot be promoted while GitHub execution credentials are absent and OpenRouter upstream auth returns 401
+decision_needed: operator supplies valid GitHub admin smoke key and valid OpenRouter credential path before rerun
+review:
+  owner: human
+  state: pending
+verification:
+  proof:
+    - npm run dev:server
+    - npm run dev:web
+    - GET http://127.0.0.1:8787/health
+    - GET http://127.0.0.1:8787/models
+    - GET http://127.0.0.1:8787/settings/openrouter/status
+    - POST http://127.0.0.1:8787/chat
+    - npm run smoke:github
+    - GITHUB_SMOKE_ENABLED=true npm run smoke:github
+links:
+  - ../scripts/github-smoke.mjs
+  - ../docs/model-routing.md
+  - ../02-wiki/log.md
+next_gate: blocked_until_credentials_rerun

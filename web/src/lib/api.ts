@@ -250,6 +250,8 @@ export type ChatStreamHandlers = {
 const importMetaEnv = (import.meta as {
   env?: {
     VITE_API_BASE_URL?: string;
+    VITE_GITHUB_API_BASE_URL?: string;
+    VITE_MATRIX_API_BASE_URL?: string;
     PROD?: boolean;
   };
 }).env ?? {};
@@ -258,10 +260,26 @@ const API_BASE_URL = (
   importMetaEnv.VITE_API_BASE_URL
   ?? (importMetaEnv.PROD ? "" : "http://127.0.0.1:8787")
 ).replace(/\/+$/, "");
+const GITHUB_AUTH_API_BASE_URL = (
+  importMetaEnv.VITE_GITHUB_API_BASE_URL
+  ?? API_BASE_URL
+).replace(/\/+$/, "");
+const MATRIX_AUTH_API_BASE_URL = (
+  importMetaEnv.VITE_MATRIX_API_BASE_URL
+  ?? API_BASE_URL
+).replace(/\/+$/, "");
 const CHAT_STREAM_IDLE_TIMEOUT_MS = 45_000;
 
-function resolveApiUrl(path: string) {
-  return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
+function resolveApiUrl(path: string, baseUrl = API_BASE_URL) {
+  return baseUrl ? `${baseUrl}${path}` : path;
+}
+
+function resolveIntegrationApiUrl(provider: "github" | "matrix", path: string) {
+  const baseUrl = provider === "github"
+    ? GITHUB_AUTH_API_BASE_URL
+    : MATRIX_AUTH_API_BASE_URL;
+
+  return resolveApiUrl(path, baseUrl);
 }
 
 async function readErrorMessage(response: Response) {
@@ -521,8 +539,9 @@ export async function testSettingsConnection(target: SettingsConnectionTestTarge
     };
   }
 
-  const path = target === "github" ? "/api/github/repos" : "/api/matrix/whoami";
-  const response = await fetch(resolveApiUrl(path), {
+  const provider = target === "github" ? "github" : "matrix";
+  const path = provider === "github" ? "/api/github/repos" : "/api/matrix/whoami";
+  const response = await fetch(resolveIntegrationApiUrl(provider, path), {
     credentials: "include"
   });
 
@@ -564,7 +583,7 @@ export async function testSettingsConnection(target: SettingsConnectionTestTarge
 }
 
 export async function postIntegrationControlAction(provider: "github" | "matrix", action: "disconnect" | "reverify") {
-  const response = await fetch(resolveApiUrl(`/api/auth/${provider}/${action}`), {
+  const response = await fetch(resolveIntegrationApiUrl(provider, `/api/auth/${provider}/${action}`), {
     method: "POST",
     credentials: "include"
   });
@@ -582,7 +601,7 @@ export async function postIntegrationControlAction(provider: "github" | "matrix"
 export function buildIntegrationConnectStartUrl(provider: "github" | "matrix", returnTo = "/console?mode=settings") {
   const params = new URLSearchParams();
   params.set("returnTo", returnTo);
-  return resolveApiUrl(`/api/auth/${provider}/start?${params.toString()}`);
+  return resolveIntegrationApiUrl(provider, `/api/auth/${provider}/start?${params.toString()}`);
 }
 
 export async function streamChatCompletion(

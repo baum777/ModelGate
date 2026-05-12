@@ -17,11 +17,11 @@ Security copy:
 
 | Browser Path | Vercel Destination | Adapter | Server Route | Owner | Secrets | Write? |
 |---|---|---|---|---|---|---|
-| `/api/github/repos` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/github.ts` | backend | `GITHUB_TOKEN` | no |
-| `/api/github/context` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/github.ts` | backend | `GITHUB_TOKEN` | no |
-| `/api/github/actions/propose` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/github.ts` | backend | `GITHUB_TOKEN`, model provider key | no external write; creates review plan |
-| `/api/github/actions/:planId/execute` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/github.ts` | backend | `GITHUB_TOKEN` | yes; approval-gated |
-| `/api/github/actions/:planId/verify` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/github.ts` | backend | `GITHUB_TOKEN` | no external write; verifies receipt |
+| `/api/github/repos` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/github.ts` | backend | GitHub App installation token | no |
+| `/api/github/context` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/github.ts` | backend | GitHub App installation token | no |
+| `/api/github/actions/propose` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/github.ts` | backend | GitHub App installation token, model provider key | no external write; creates review plan |
+| `/api/github/actions/:planId/execute` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/github.ts` | backend | GitHub App installation token, backend admin key | yes; approval-gated |
+| `/api/github/actions/:planId/verify` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/github.ts` | backend | GitHub App installation token | no external write; verifies receipt |
 | `/api/integrations/status` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/integrations.ts` | backend | none returned to browser | no |
 | `/api/auth/github/start` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/integration-auth.ts` | backend | session cookie + short-lived state | no external write; connect intent only |
 | `/api/auth/github/callback` | `/api/[...path]?path=:path*` | `api/[...path].ts` | `server/src/routes/integration-auth.ts` | backend | callback state + server-side token exchange | no browser write; backend-owned credential handling |
@@ -63,8 +63,8 @@ Browser must not receive or store GitHub/Matrix tokens. Backend owns auth state,
 
 - `/api/github/*` is session-credential-aware.
 - Route order is fail-closed and deterministic:
-  1. Use session-bound GitHub OAuth credential from integration auth store when available (`credentialSource: user_connected`).
-  2. Otherwise use instance credential (`GITHUB_TOKEN`) only when instance GitHub config is ready (`credentialSource: instance_config`).
+  1. Use session-bound GitHub App installation credential from integration auth store when available (`credentialSource: user_connected`).
+  2. Otherwise use instance GitHub App installation config only when ready (`credentialSource: instance_config`).
   3. If neither source is available, return `github_not_configured`.
-- `GITHUB_ALLOWED_REPOS` policy remains enforced for both credential sources.
-- Execute and verify write posture remains approval-gated; session OAuth does not bypass `GITHUB_AGENT_API_KEY` requirements.
+- User-connected repository scope is read from GitHub's App installation repositories selected on the Install & Authorize page. If GitHub returns only an OAuth `code`, the backend exchanges it server-side, resolves `/user/installations`, and stores a GitHub App installation credential instead of treating the user OAuth token as repo authority. `GITHUB_ALLOWED_REPOS` only narrows instance-mode installations when configured.
+- Execute and verify write posture remains approval-gated; session installation auth does not bypass `GITHUB_AGENT_API_KEY` requirements.

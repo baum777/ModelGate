@@ -205,7 +205,11 @@ function buildCapabilities(configReady: boolean, executionMode: IntegrationExecu
   };
 }
 
-function deriveAllowedReposStatus(config: GitHubConfig): "configured" | "restricted" | "missing" {
+function deriveAllowedReposStatus(config: GitHubConfig, connection: IntegrationConnectionRecord | null): "configured" | "restricted" | "missing" {
+  if (connection?.connected === true && connection.source === "user_connected") {
+    return "configured";
+  }
+
   if (config.allowedRepos.length === 0) {
     return "missing";
   }
@@ -217,9 +221,15 @@ function deriveAllowedReposStatus(config: GitHubConfig): "configured" | "restric
   return "configured";
 }
 
-function buildGithubScopeLabel(config: GitHubConfig) {
+function buildGithubScopeLabel(config: GitHubConfig, connection: IntegrationConnectionRecord | null) {
+  if (connection?.connected === true && connection.source === "user_connected") {
+    return "GitHub App installation controls repository access.";
+  }
+
   if (config.allowedRepos.length === 0) {
-    return "No allowed repositories configured.";
+    return config.installationId
+      ? "GitHub App installation controls repository access."
+      : "No GitHub App installation configured.";
   }
 
   return `${config.allowedRepos.length} allowed repos`;
@@ -230,10 +240,6 @@ function getGitHubWorkspaceRequirements(config: GitHubConfig) {
 
   if (!config.installationId) {
     requirements.push("GITHUB_APP_INSTALLATION_ID");
-  }
-
-  if (config.allowedRepos.length === 0) {
-    requirements.push("GITHUB_ALLOWED_REPOS");
   }
 
   return requirements;
@@ -282,7 +288,7 @@ function buildGithubStatus(env: AppEnv, config: GitHubConfig, connection: Integr
   const hasUserCredential = connection?.connected === true && connection.source === "user_connected";
   const githubOperationalReady = hasUserCredential || config.instanceReady;
   const authConfigConfigured = appConfig.configured || oauthConfig.configured;
-  const authConfigReady = oauthConfig.enabled;
+  const authConfigReady = appConfig.enabled || oauthConfig.enabled;
   const authState = getAuthState({
     configReady: githubOperationalReady || authConfigReady,
     connection,
@@ -304,8 +310,8 @@ function buildGithubStatus(env: AppEnv, config: GitHubConfig, connection: Integr
     executionMode,
     labels: {
       identity: connection?.safeIdentityLabel ?? providerIdentityFallback("github", credentialSource),
-      scope: buildGithubScopeLabel(config),
-      allowedReposStatus: deriveAllowedReposStatus(config)
+      scope: buildGithubScopeLabel(config, connection),
+      allowedReposStatus: deriveAllowedReposStatus(config, connection)
     },
     lastVerifiedAt: connection?.lastVerifiedAt ?? null,
     lastErrorCode,

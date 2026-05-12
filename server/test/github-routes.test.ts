@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createApp } from "../src/app.js";
 import { createGitHubClient } from "../src/lib/github-client.js";
+import { createIntegrationAuthStore } from "../src/lib/integration-auth-store.js";
 import { createTestEnv, createMockOpenRouterClient, createTestGitHubConfig, createTestSessionCookie } from "../test-support/helpers.js";
 
 const TEST_GITHUB_APP_PRIVATE_KEY = [
@@ -125,6 +126,111 @@ test("github routes return not configured when the feature is disabled", async (
       message: "GitHub backend is not configured"
     }
   });
+});
+
+test("github routes derive user-connected repository scope from GitHub App installation", async (t) => {
+  const githubConfig = createTestGitHubConfig({
+    appPrivateKey: TEST_GITHUB_APP_PRIVATE_KEY,
+    appSlug: TEST_GITHUB_APP_SLUG,
+    allowedRepos: [],
+    allowedRepoSet: new Set(),
+    instanceReady: false,
+    installationId: null,
+    installationTokenOverride: null
+  });
+  const authStore = createIntegrationAuthStore({
+    mode: "memory",
+    currentEncryptionKey: {
+      keyId: "test-key",
+      keyVersion: 1,
+      keyMaterial: "test-integration-key"
+    }
+  });
+  const session = authStore.ensureSession(null);
+
+  assert.equal(authStore.storeCredential(session.sessionId, "github", {
+    kind: "github_app_installation",
+    installationId: String(TEST_USER_INSTALLATION_ID),
+    accountLogin: "octocat",
+    connectedAt: "2026-05-12T00:00:00.000Z"
+  }), true);
+  authStore.markConnected({
+    provider: "github",
+    sessionId: session.sessionId,
+    safeIdentityLabel: "octocat",
+    source: "user_connected"
+  });
+
+  const githubClient = createGitHubClient({
+    config: githubConfig,
+    fetchImpl: async (input, init) => {
+      const url = new URL(String(input));
+      assert.equal(new Headers(init?.headers).get("Authorization"), "Bearer ghs_user_installation_token");
+
+      if (url.pathname === "/repos/acme/widget") {
+        return makeJsonResponse({
+          full_name: "acme/widget",
+          name: "widget",
+          default_branch: "main",
+          description: "Widget repo",
+          private: false,
+          archived: false,
+          disabled: false,
+          permissions: {
+            push: true
+          },
+          owner: {
+            login: "acme"
+          }
+        });
+      }
+
+      if (url.pathname === "/repos/acme/widget/commits/main") {
+        return makeJsonResponse({
+          sha: "commit-sha",
+          commit: {
+            tree: {
+              sha: "tree-sha"
+            }
+          }
+        });
+      }
+
+      throw new Error(`unexpected path: ${url.pathname}${url.search}`);
+    }
+  });
+
+  const app = createApp({
+    env: createTestEnv(),
+    openRouter: createMockOpenRouterClient(),
+    githubConfig,
+    githubClient,
+    integrationAuthStore: authStore,
+    integrationFetch: createGitHubAppIntegrationFetch(),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/github/repos",
+    headers: {
+      cookie: `mosaicstacked_integration_session=${encodeURIComponent(session.sessionId)}`
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  const payload = JSON.parse(response.body) as {
+    ok: true;
+    repos: Array<{ fullName: string }>;
+    credentialSource: string;
+  };
+
+  assert.equal(payload.credentialSource, "user_connected");
+  assert.deepEqual(payload.repos.map((repo) => repo.fullName), ["acme/widget"]);
 });
 
 test("github routes return repository summaries and file context from the backend client", async (t) => {

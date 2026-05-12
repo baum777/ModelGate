@@ -39,3 +39,15 @@
 ## [2026-05-11] workbench-4-tab-authority-semantics | reduced shell navigation to four tabs, normalized legacy mode URLs to workbench, added Chat Read only/Read & Write guardrails, and converted GitHub workspace into summary-first authority-safe Workbench actions [[../web/src/App.tsx]] [[../web/src/components/ChatWorkspace.tsx]] [[../web/src/components/GitHubWorkspace.tsx]] [[../web/src/lib/localization.tsx]] [[../web/test/mobile-redesign.test.ts]] [[../web/test/app-localization.test.ts]] [[../web/test/github-workspace.test.ts]]
 
 ## [2026-05-11] workbench-chat-authority-browser-verification | aligned browser flows with 4-tab Workbench navigation, explicit RW branch-selector gating, local-only mark/remove semantics, and backend-capability-gated PR execution wording [[../web/src/components/GitHubWorkspace.tsx]] [[../web/src/components/ChatWorkspace.tsx]] [[../tests/browser/mosaicstacked.spec.ts]] [[../web/test/chat-workflow.test.ts]] [[../web/test/github-workspace.test.ts]]
+
+## [2026-05-11] vercel-external-deploy-blocked | external deploy attempt remained blocked by tenant disclosure policy after explicit user approval; routed to MSPR for human policy review [[../03-mspr/packets/2026-05-11-vercel-external-deploy-blocked.yml]]
+
+## [2026-05-11] live-smoke-github-openrouter-blocked | opened live app browser and routed blocked GitHub/OpenRouter smoke validation to MSPR due missing GitHub admin key and OpenRouter upstream 401 [[../03-mspr/packets/2026-05-11-live-smoke-github-openrouter-blocked.yml]]
+
+## [2026-05-12] github-app-installation-repo-scope | changed GitHub repo authority from env allowlist-first to GitHub App installation repository selection for user-connected sessions, with optional instance-mode narrowing [[../server/src/routes/github.ts]] [[../server/src/routes/integration-auth.ts]] [[../server/src/lib/github-app-auth.ts]] [[../docs/routing-matrix.md]]
+
+## [2026-05-12] vercel-production-deploy-blocked | production deploy was explicitly approved but blocked by tenant external-disclosure policy after typecheck and build passed [[../03-mspr/packets/2026-05-12-vercel-production-deploy-blocked.yml]]
+
+## [2026-05-12] vercel-production-deploy-repeat-blocked | repeated explicit production deploy command was blocked again by tenant external-disclosure policy; existing MSPR evidence updated [[../03-mspr/packets/2026-05-12-vercel-production-deploy-blocked.yml]]
+
+## [2026-05-12] github-app-install-authorize-callback | resolved GitHub App Install & Authorize OAuth code callbacks into backend-owned installation credentials and GitHub-selected repository scope [[../server/src/routes/integration-auth.ts]] [[../server/test/integration-auth-routes.test.ts]] [[../docs/routing-matrix.md]]

@@ -1,0 +1,34 @@
+id: MSPR-20260512-001
+date: 2026-05-12
+status: blocked
+trigger: side_effect_risk
+scope:
+  paths:
+    - vercel.json
+    - docs/vercel-deployment.md
+authority:
+  observed:
+    - user explicitly approved Vercel production deploy on 2026-05-12
+    - npm run typecheck exited 0
+    - npm run build exited 0
+    - npx vercel deploy --prod --yes was rejected by tenant risk policy
+    - repeated explicit npx vercel deploy --prod --yes request was rejected by tenant risk policy
+  inferred:
+    - external production deploy is blocked in this environment until tenant policy permits uploading the local working tree and build metadata to Vercel
+risk:
+  level: high
+  statement: production deploy uploads current local source and build metadata to an external third-party service while the workspace contains private project and config surfaces
+decision_needed: human or tenant policy approval path for external Vercel production deployment
+review:
+  owner: human
+  state: pending
+verification:
+  proof:
+    - npm run typecheck
+    - npm run build
+    - npx vercel deploy --prod --yes
+    - repeated npx vercel deploy --prod --yes
+links:
+  - ../docs/vercel-deployment.md
+  - ../02-wiki/log.md
+next_gate: blocked_until_policy_override

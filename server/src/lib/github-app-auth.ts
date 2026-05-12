@@ -26,6 +26,10 @@ export type GitHubAppInstallationContext = {
   accountId: number | null;
 };
 
+export type GitHubAppInstallationRepository = {
+  fullName: string;
+};
+
 function base64UrlEncode(input: string | Buffer) {
   return Buffer.from(input).toString("base64url");
 }
@@ -304,6 +308,10 @@ export function createGitHubAppAuthClient(options: {
       });
     }
 
+    if (config.installationTokenOverride) {
+      return config.installationTokenOverride;
+    }
+
     const now = Date.now();
     const cached = tokenCache.get(installationId);
 
@@ -402,13 +410,8 @@ export function createGitHubAppAuthClient(options: {
     });
   }
 
-  async function installationHasAnyAllowedRepo(installationIdRaw: number | string, allowedRepos: string[]) {
+  async function listInstallationRepositories(installationIdRaw: number | string): Promise<GitHubAppInstallationRepository[]> {
     const installationToken = await getInstallationToken(installationIdRaw);
-    const allowedRepoSet = new Set(allowedRepos.map((repo) => repo.toLowerCase()));
-
-    if (allowedRepoSet.size === 0) {
-      return false;
-    }
 
     const headers = new Headers({
       Accept: "application/vnd.github+json",
@@ -417,6 +420,7 @@ export function createGitHubAppAuthClient(options: {
     });
 
     let page = 1;
+    const parsedRepositories: GitHubAppInstallationRepository[] = [];
 
     while (page <= 10) {
       const controller = new AbortController();
@@ -504,27 +508,42 @@ export function createGitHubAppAuthClient(options: {
         }
 
         const fullName = typeof (repository as { full_name?: unknown }).full_name === "string"
-          ? (repository as { full_name: string }).full_name.toLowerCase()
+          ? (repository as { full_name: string }).full_name.trim()
           : "";
 
-        if (fullName && allowedRepoSet.has(fullName)) {
-          return true;
+        if (fullName.length > 0) {
+          parsedRepositories.push({
+            fullName
+          });
         }
       }
 
       if (repositories.length < 100) {
-        return false;
+        return parsedRepositories;
       }
 
       page += 1;
     }
 
-    return false;
+    return [];
+  }
+
+  async function installationHasAnyAllowedRepo(installationIdRaw: number | string, allowedRepos: string[]) {
+    const allowedRepoSet = new Set(allowedRepos.map((repo) => repo.toLowerCase()));
+
+    if (allowedRepoSet.size === 0) {
+      return false;
+    }
+
+    const repositories = await listInstallationRepositories(installationIdRaw);
+
+    return repositories.some((repository) => allowedRepoSet.has(repository.fullName.toLowerCase()));
   }
 
   return {
     getInstallationToken,
     readInstallation,
+    listInstallationRepositories,
     installationHasAnyAllowedRepo
   };
 }
