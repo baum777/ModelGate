@@ -2008,6 +2008,9 @@ function ConsoleShell() {
       rateLimitEnabled: runtimeDiagnostics
         ? (runtimeDiagnostics.rateLimit.enabled ? ui.common.active : ui.common.inactive)
         : ui.settings.unavailable,
+      rateLimitDefaults: runtimeDiagnostics
+        ? `chat:${runtimeDiagnostics.rateLimit.limits.chat}, auth:${runtimeDiagnostics.rateLimit.limits.auth_login}, gh-propose:${runtimeDiagnostics.rateLimit.limits.github_propose}, gh-exec:${runtimeDiagnostics.rateLimit.limits.github_execute}, matrix-exec:${runtimeDiagnostics.rateLimit.limits.matrix_execute}`
+        : "chat:30, auth:8, gh-propose:10, gh-exec:6, matrix-exec:6",
       actionStoreMode: runtimeDiagnostics?.actionStore.mode ?? ui.settings.unavailable,
       githubConfigured: runtimeDiagnostics
         ? (runtimeDiagnostics.github.configured ? ui.settings.configured : ui.settings.notConfigured)

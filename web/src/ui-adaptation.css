@@ -1779,6 +1779,7 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
 /* Public landing page: dark-first, token-only surfaces. */
 .landing-shell {
   min-height: 100vh;
+  overflow-x: clip;
   padding: 0 0 var(--sp-16);
   background:
     radial-gradient(circle at 50% -12%, color-mix(in srgb, var(--ms-accent) 18%, transparent) 0%, transparent 55%),
@@ -1841,6 +1842,7 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
   margin: 0;
   font-size: clamp(34px, 5.3vw, 62px);
   line-height: 1.08;
+  overflow-wrap: anywhere;
 }
 
 .landing-hero-copy {
@@ -1849,10 +1851,13 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
   color: var(--ms-text2);
   font-size: clamp(16px, 2.1vw, 22px);
   line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .landing-hero-actions {
-  display: inline-flex;
+  display: flex;
+  width: 100%;
+  max-width: 540px;
   align-items: center;
   gap: var(--sp-2);
   flex-wrap: wrap;
@@ -1971,6 +1976,7 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
   margin: 0;
   color: var(--ms-text2);
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .landing-card-note {
@@ -2010,6 +2016,7 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
   margin: 0;
   color: var(--ms-text2);
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .landing-inline-note code {
@@ -2047,6 +2054,7 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
   padding: 10px 12px 10px 44px;
   position: relative;
   color: var(--ms-text);
+  overflow-wrap: anywhere;
 }
 
 .landing-stepper li::before {
@@ -2290,11 +2298,18 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
   }
 
   .landing-hero-top {
-    align-items: stretch;
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .landing-language-toggle {
     margin-left: 0;
+    width: fit-content;
+  }
+
+  .landing-hero-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .landing-feature-grid,
@@ -3195,7 +3210,8 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
   text-transform: uppercase;
 }
 
-.app-shell-mobile .settings-mobile-openrouter-form input {
+.app-shell-mobile .settings-mobile-openrouter-form input,
+.app-shell-mobile .settings-mobile-openrouter-form .settings-manual-config-input {
   box-sizing: border-box;
   min-width: 0;
   width: 100%;
@@ -3207,6 +3223,11 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
   font-size: 16px;
   line-height: 1.4;
   padding: 10px 12px;
+}
+
+.app-shell-mobile .settings-mobile-openrouter-form .settings-manual-config-input {
+  min-height: 88px;
+  resize: vertical;
 }
 
 .app-shell-mobile .settings-mobile-openrouter-form button {

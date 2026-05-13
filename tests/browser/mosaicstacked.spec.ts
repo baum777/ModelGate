@@ -595,6 +595,33 @@ test("root route renders public preview without console internals", async ({ pag
   await expect(page.getByTestId("truth-rail-health")).toHaveCount(0);
 });
 
+test("mobile root route loads landing styles immediately", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  await expect(page.getByTestId("readme-landing")).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator(".landing-hero")).toBeVisible();
+  await expect(page.locator(".landing-feature-grid")).toBeVisible();
+
+  const landingLayout = await page.evaluate(() => {
+    const hero = document.querySelector(".landing-hero") as HTMLElement | null;
+    const featureGrid = document.querySelector(".landing-feature-grid") as HTMLElement | null;
+    const gridColumns = featureGrid ? window.getComputedStyle(featureGrid).gridTemplateColumns : null;
+
+    return {
+      heroDisplay: hero ? window.getComputedStyle(hero).display : null,
+      featureGridDisplay: featureGrid ? window.getComputedStyle(featureGrid).display : null,
+      featureGridColumns: gridColumns,
+      featureGridColumnCount: gridColumns ? gridColumns.split(" ").filter((token) => token.trim().length > 0).length : 0,
+    };
+  });
+
+  expect(landingLayout.heroDisplay).toBe("grid");
+  expect(landingLayout.featureGridDisplay).toBe("grid");
+  expect(landingLayout.featureGridColumnCount).toBe(1);
+});
+
 test("console route normalizes legacy query entry and keeps active workspace in the URL", async ({ page }) => {
   await installBaseMocks(page, { matrixStatus: "ok" });
   await page.goto("/?console=1", { waitUntil: "domcontentloaded" });
@@ -851,11 +878,13 @@ test("mobile settings renders authority control center and opens detail sheet", 
   await expect(page.getByTestId("settings-mobile-sheet-body")).toContainText("backend-owned");
   await expect(page.getByTestId("mobile-openrouter-api-key-input")).toBeVisible();
   await expect(page.getByTestId("mobile-openrouter-model-input")).toBeVisible();
+  await expect(page.getByTestId("mobile-openrouter-manual-config-input")).toBeVisible();
   await expect(page.getByTestId("mobile-openrouter-credentials-save")).toBeDisabled();
   await page.getByTestId("mobile-openrouter-api-key-input").fill("sk-or-v1-test");
   await page.getByTestId("mobile-openrouter-model-input").fill("anthropic/claude-3.5-sonnet");
   await expect(page.getByTestId("mobile-openrouter-credentials-save")).toBeDisabled();
   await expect(page.getByTestId("mobile-openrouter-credentials-test")).toBeDisabled();
+  await expect(page.getByTestId("mobile-openrouter-manual-config-help")).toContainText("chat:30");
   await expect(page.getByTestId("settings-mobile-sheet-body")).toContainText("provider/model");
   await page.getByTestId("mobile-openrouter-api-key-input").fill("sk-or-v1-test-key-with-valid-length");
   await expect(page.getByTestId("mobile-openrouter-credentials-save")).toBeEnabled();

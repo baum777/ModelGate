@@ -108,6 +108,7 @@ function createSettingsTruthSnapshotFixture(): SettingsTruthSnapshot {
       fallbackEnabled: "Active",
       failClosed: "Active",
       rateLimitEnabled: "Active",
+      rateLimitDefaults: "chat:30, auth:8, gh-propose:10, gh-exec:6, matrix-exec:6",
       actionStoreMode: "memory",
       githubConfigured: "Configured",
       matrixConfigured: "Configured",
@@ -213,6 +214,7 @@ test("Settings workspace renders integration cards and keeps secrets out of the 
       fallbackEnabled: "Active",
       failClosed: "Active",
       rateLimitEnabled: "Active",
+      rateLimitDefaults: "chat:30, auth:8, gh-propose:10, gh-exec:6, matrix-exec:6",
       actionStoreMode: "memory",
       githubConfigured: "Configured",
       matrixConfigured: "Not configured",
@@ -335,6 +337,8 @@ test("Settings workspace renders integration cards and keeps secrets out of the 
   assert.match(markup, /OpenRouter model 1/);
   assert.match(markup, /data-testid="openrouter-api-key-input"/);
   assert.match(markup, /data-testid="openrouter-model-input"/);
+  assert.match(markup, /data-testid="openrouter-manual-config-input"/);
+  assert.match(markup, /data-testid="openrouter-manual-config-help"/);
   assert.match(markup, /data-testid="openrouter-credentials-save"/);
   assert.match(markup, /data-testid="openrouter-credentials-test"/);
   assert.match(markup, /data-testid="settings-verification-backend"/);
@@ -472,6 +476,7 @@ test("Settings workspace shows GitHub connect CTA when GitHub is not connected",
           fallbackEnabled: "Active",
           failClosed: "Active",
           rateLimitEnabled: "Active",
+          rateLimitDefaults: "chat:30, auth:8, gh-propose:10, gh-exec:6, matrix-exec:6",
           actionStoreMode: "memory",
           githubConfigured: "Configured",
           matrixConfigured: "Configured",

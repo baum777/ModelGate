@@ -1409,7 +1409,8 @@ button:disabled {
   text-transform: uppercase;
 }
 
-.app-shell-mobile .settings-mobile-openrouter-form input {
+.app-shell-mobile .settings-mobile-openrouter-form input,
+.app-shell-mobile .settings-mobile-openrouter-form .settings-manual-config-input {
   box-sizing: border-box;
   min-width: 0;
   width: 100%;
@@ -1421,6 +1422,11 @@ button:disabled {
   font-size: 16px;
   line-height: 1.4;
   padding: 10px 12px;
+}
+
+.app-shell-mobile .settings-mobile-openrouter-form .settings-manual-config-input {
+  min-height: 88px;
+  resize: vertical;
 }
 
 .app-shell-mobile .settings-mobile-openrouter-form button {

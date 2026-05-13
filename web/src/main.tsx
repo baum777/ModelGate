@@ -35,6 +35,14 @@ function loadDeferredCssForViewport() {
     return;
   }
 
+  // Non-console surfaces (landing/readme) need deferred styles immediately, also on mobile.
+  const currentUrl = new URL(window.location.href);
+  const isConsoleSurface = currentUrl.pathname === "/console" || currentUrl.searchParams.get("console") === "1";
+  if (!isConsoleSurface) {
+    loadDeferredCssOnce();
+    return;
+  }
+
   const desktopQuery = window.matchMedia(DESKTOP_DEFERRED_CSS_QUERY);
   if (desktopQuery.matches) {
     loadDeferredCssOnce();

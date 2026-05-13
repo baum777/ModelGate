@@ -5810,6 +5810,19 @@ textarea:focus {
   font: inherit;
 }
 
+.settings-manual-config-input {
+  width: 100%;
+  min-height: 88px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-strong);
+  color: var(--text-primary);
+  padding: 12px;
+  font: inherit;
+  resize: vertical;
+}
+
 .settings-openrouter-validation {
   margin: 0;
   color: var(--text-secondary);
@@ -6030,6 +6043,10 @@ textarea:focus {
 
   .settings-inline-controls {
     grid-template-columns: 1fr;
+  }
+
+  .settings-manual-config-input {
+    font-size: 16px;
   }
 
   .chat-toolbar,

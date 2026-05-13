@@ -57,3 +57,7 @@
 ## [2026-05-13] vercel-deploy-repeat-blocked | repeated explicit vercel deploy request after local env updates remained blocked by tenant external-disclosure policy; updated existing MSPR deployment packet evidence [[../03-mspr/packets/2026-05-12-vercel-production-deploy-blocked.yml]]
 
 ## [2026-05-13] landingpage-istzustand-refresh | aligned landing copy with current backend-owned workbench flow, matrix scope/topic posture, and fail-closed matrix composer semantics [[../web/src/App.tsx]]
+
+## [2026-05-13] favicon-transparent-latest-switch | switched web head favicon to bundled transparent `.ico` variant and aligned head contract test expectation [[../web/index.html]] [[../web/test/pwa.test.ts]]
+
+## [2026-05-13] mobile-landing-overflow-guards | hardened mobile landing hero/action layout against horizontal overflow and long-copy wrap regressions, plus added css guard assertions [[../web/src/ui-adaptation.css]] [[../web/test/mobile-redesign.test.ts]]

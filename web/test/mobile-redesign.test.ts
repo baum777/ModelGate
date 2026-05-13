@@ -133,6 +133,17 @@ test("mobile composer and nav meet touch and keyboard requirements", () => {
   assert.match(css, /overscroll-behavior:\s*contain/);
 });
 
+test("mobile landing layout guards against overflow and keeps CTAs stackable", () => {
+  const css = styles();
+
+  assert.match(css, /\.landing-shell[\s\S]*overflow-x:\s*clip/);
+  assert.match(css, /\.landing-hero-actions[\s\S]*display:\s*flex[\s\S]*width:\s*100%[\s\S]*max-width:\s*540px/);
+  assert.match(css, /\.landing-hero h1[\s\S]*overflow-wrap:\s*anywhere/);
+  assert.match(css, /\.landing-hero-copy[\s\S]*overflow-wrap:\s*anywhere/);
+  assert.match(css, /@media \(max-width:\s*680px\)[\s\S]*\.landing-hero-top\s*{[\s\S]*flex-direction:\s*column[\s\S]*align-items:\s*flex-start/);
+  assert.match(css, /@media \(max-width:\s*680px\)[\s\S]*\.landing-hero-actions\s*{[\s\S]*flex-direction:\s*column[\s\S]*align-items:\s*stretch/);
+});
+
 test("mobile chat slice uses bounded composer and inline diff primitives", () => {
   const source = mobileChatSource();
   const css = styles();
@@ -235,6 +246,8 @@ test("mobile viewport does not import deferred desktop CSS after idle timeout", 
 
   assert.match(source, /DESKTOP_DEFERRED_CSS_QUERY = "\(min-width: 761px\)"/);
   assert.match(source, /function loadDeferredCssForViewport\(\)/);
+  assert.match(source, /const isConsoleSurface = currentUrl\.pathname === "\/console" \|\| currentUrl\.searchParams\.get\("console"\) === "1"/);
+  assert.match(source, /if \(!isConsoleSurface\) \{[\s\S]*loadDeferredCssOnce\(\)/);
   assert.match(source, /window\.matchMedia\(DESKTOP_DEFERRED_CSS_QUERY\)/);
   assert.match(source, /if \(desktopQuery\.matches\) \{[\s\S]*loadDeferredCssOnce\(\)/);
   assert.match(source, /loadStylesheetOnce\("mosaicstacked-local-fonts", "\/local-fonts\.css"\);\s*loadDeferredCssForViewport\(\);\s*scheduleNonCriticalWork/);
