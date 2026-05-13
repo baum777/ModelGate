@@ -1,5 +1,5 @@
-import React, { useEffect, useId, useState } from "react";
-import type { PointerEvent } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
+import type { PointerEvent, WheelEvent } from "react";
 import type { Locale } from "../lib/localization.js";
 
 type GuideKey = "chat" | "github" | "matrix" | "review" | "settings";
@@ -507,6 +507,8 @@ export function GuideOverlay({ content, testId, ctaClassName }: GuideOverlayProp
   const [open, setOpen] = useState(false);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [pointerStartX, setPointerStartX] = useState<number | null>(null);
+  const wheelLockRef = useRef(false);
+  const wheelLockTimerRef = useRef<number | null>(null);
   const titleId = useId();
   const activeCard = content.cards[activeCardIndex] ?? content.cards[0];
   const hasPrevious = activeCardIndex > 0;
@@ -540,6 +542,16 @@ export function GuideOverlay({ content, testId, ctaClassName }: GuideOverlayProp
     }
   }, [open]);
 
+  useEffect(() => () => {
+    if (wheelLockTimerRef.current !== null) {
+      window.clearTimeout(wheelLockTimerRef.current);
+    }
+  }, []);
+
+  function moveCard(delta: -1 | 1) {
+    setActiveCardIndex((current) => clampCardIndex(current + delta, content.cards.length));
+  }
+
   function handlePointerUp(event: PointerEvent<HTMLElement>) {
     if (pointerStartX === null) {
       return;
@@ -552,9 +564,31 @@ export function GuideOverlay({ content, testId, ctaClassName }: GuideOverlayProp
       return;
     }
 
-    setActiveCardIndex((current) =>
-      clampCardIndex(current + (delta < 0 ? 1 : -1), content.cards.length),
-    );
+    moveCard(delta < 0 ? 1 : -1);
+  }
+
+  function handleWheelNavigation(event: WheelEvent<HTMLElement>) {
+    const axisDelta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+    if (Math.abs(axisDelta) < 16) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (wheelLockRef.current) {
+      return;
+    }
+
+    wheelLockRef.current = true;
+    if (wheelLockTimerRef.current !== null) {
+      window.clearTimeout(wheelLockTimerRef.current);
+    }
+    wheelLockTimerRef.current = window.setTimeout(() => {
+      wheelLockRef.current = false;
+      wheelLockTimerRef.current = null;
+    }, 180);
+
+    moveCard(axisDelta > 0 ? 1 : -1);
   }
 
   return (
@@ -570,13 +604,14 @@ export function GuideOverlay({ content, testId, ctaClassName }: GuideOverlayProp
         {content.ctaLabel}
       </button>
       {open ? (
-        <div className="guide-overlay-backdrop" onMouseDown={() => setOpen(false)}>
+        <div className="guide-overlay-backdrop" onPointerDown={() => setOpen(false)}>
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
             className="guide-overlay"
-            onMouseDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+            onWheel={handleWheelNavigation}
           >
             <header className="guide-overlay-header">
               <div>
@@ -611,7 +646,7 @@ export function GuideOverlay({ content, testId, ctaClassName }: GuideOverlayProp
               <button
                 type="button"
                 className="secondary-button"
-                onClick={() => setActiveCardIndex((current) => clampCardIndex(current - 1, content.cards.length))}
+                onClick={() => moveCard(-1)}
                 disabled={!hasPrevious}
               >
                 {content.previousLabel}
@@ -631,7 +666,7 @@ export function GuideOverlay({ content, testId, ctaClassName }: GuideOverlayProp
               <button
                 type="button"
                 className="secondary-button"
-                onClick={() => setActiveCardIndex((current) => clampCardIndex(current + 1, content.cards.length))}
+                onClick={() => moveCard(1)}
                 disabled={!hasNext}
               >
                 {content.nextLabel}

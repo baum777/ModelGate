@@ -160,7 +160,8 @@ test("mobile chat slice uses bounded composer and inline diff primitives", () =>
   assert.match(css, /\.mobile-compose-submit[\s\S]*position:\s*absolute/);
   assert.match(css, /\.governed-composer textarea[\s\S]*scrollbar-width:\s*none/);
   assert.match(css, /\.mobile-chat-input-stack[\s\S]*flex:\s*0 0 auto/);
-  assert.match(css, /\.mobile-chat-tip-rail[\s\S]*animation:\s*mobile-tip-cycle/);
+  assert.match(css, /\.mobile-chat-tip-rail-item[\s\S]*animation:\s*mobile-tip-fade/);
+  assert.match(css, /\.mobile-chat-tip-rail-progress/);
   assert.match(css, /\.governed-chat-card[\s\S]*display:\s*flex/);
   assert.match(css, /\.governed-thread[\s\S]*overflow-y:\s*auto/);
   assert.match(css, /\.mobile-inline-diff/);

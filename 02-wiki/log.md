@@ -61,3 +61,5 @@
 ## [2026-05-13] favicon-transparent-latest-switch | switched web head favicon to bundled transparent `.ico` variant and aligned head contract test expectation [[../web/index.html]] [[../web/test/pwa.test.ts]]
 
 ## [2026-05-13] mobile-landing-overflow-guards | hardened mobile landing hero/action layout against horizontal overflow and long-copy wrap regressions, plus added css guard assertions [[../web/src/ui-adaptation.css]] [[../web/test/mobile-redesign.test.ts]]
+
+## [2026-05-13] mobile-workspace-guide-overhaul | compressed chat functional copy, expanded cross-workspace mobile tip loop, upgraded guide overlay to fullscreen blurred swipe/wheel navigation, redesigned Workbench mobile flow cards, and added Matrix server-interaction action sheets [[../web/src/components/ChatWorkspace.tsx]] [[../web/src/components/GuideOverlay.tsx]] [[../web/src/components/GitHubWorkspace.tsx]] [[../web/src/components/MatrixWorkspace.tsx]] [[../web/src/critical.css]] [[../web/src/styles.css]] [[../web/src/ui-adaptation.css]] [[../web/test/chat-workflow.test.ts]] [[../web/test/mobile-redesign.test.ts]] [[../tests/browser/mosaicstacked.spec.ts]]

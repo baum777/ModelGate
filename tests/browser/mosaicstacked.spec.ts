@@ -822,6 +822,7 @@ test("mobile viewport renders functional chat workspace instead of reference-onl
       composeInput: rectFor(".mobile-compose-input"),
       composeSubmit: rectFor(".mobile-compose-submit"),
       tipCount: document.querySelectorAll(".mobile-chat-tip-rail span").length,
+      tipProgress: document.querySelector(".mobile-chat-tip-rail .mobile-chat-tip-rail-progress")?.textContent?.trim() ?? null,
       textareaScrollbarWidth: window.getComputedStyle(document.querySelector(".mobile-compose-input") as HTMLElement).scrollbarWidth,
       goldenRatio: window.getComputedStyle(document.querySelector(".governed-chat-card") as HTMLElement).getPropertyValue("--mobile-chat-golden-ratio").trim(),
     };
@@ -834,7 +835,8 @@ test("mobile viewport renders functional chat workspace instead of reference-onl
   expect(mobileChatLayout.composeField).not.toBeNull();
   expect(mobileChatLayout.composeInput).not.toBeNull();
   expect(mobileChatLayout.composeSubmit).not.toBeNull();
-  expect(mobileChatLayout.tipCount).toBe(3);
+  expect(mobileChatLayout.tipCount).toBeGreaterThanOrEqual(1);
+  expect(mobileChatLayout.tipProgress).toMatch(/^\d+\/\d+$/);
   expect(mobileChatLayout.themeText).toMatch(/^[☀☾]$/);
   expect(mobileChatLayout.localeToggleClass).toContain("shell-language-toggle");
   expect(mobileChatLayout.textareaScrollbarWidth).toBe("none");

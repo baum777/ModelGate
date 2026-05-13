@@ -25,7 +25,7 @@ const COPY: Record<Locale, Record<WorkMode, WorkModeCopy>> = {
       shortLabel: "Beginner",
       description: "Guided and quiet. Read first, preview changes, approve deliberately.",
       riskHint: "Safe default: writes stay blocked until preview and approval.",
-      controlHint: "Use the main action and guided next step.",
+      controlHint: "Run the next primary action.",
     },
     expert: {
       label: "Expert mode",
@@ -41,7 +41,7 @@ const COPY: Record<Locale, Record<WorkMode, WorkModeCopy>> = {
       shortLabel: "Basis",
       description: "Geführt und ruhig. Erst lesen, Änderungen vorab prüfen, bewusst freigeben.",
       riskHint: "Sicherer Standard: Writes bleiben bis Vorschau und Freigabe gesperrt.",
-      controlHint: "Nutze die Hauptaktion und den geführten nächsten Schritt.",
+      controlHint: "Führe die nächste Hauptaktion aus.",
     },
     expert: {
       label: "Expertenmodus",

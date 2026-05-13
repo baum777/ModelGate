@@ -2532,47 +2532,41 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
 
 .app-shell-mobile .mobile-chat-tip-rail {
   position: relative;
-  min-height: 18px;
-  overflow: hidden;
+  min-height: 26px;
+  display: grid;
+  gap: 2px;
+  align-content: center;
   color: #82899a;
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 10px;
-  line-height: 18px;
+  line-height: 1.35;
   text-align: center;
 }
 
-.app-shell-mobile .mobile-chat-tip-rail span {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
+.app-shell-mobile .mobile-chat-tip-rail-item {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  animation: mobile-tip-cycle 12s ease-in-out infinite;
+  animation: mobile-tip-fade 4200ms ease;
 }
 
-.app-shell-mobile .mobile-chat-tip-rail span:nth-child(2) {
-  animation-delay: 4s;
+.app-shell-mobile .mobile-chat-tip-rail-progress {
+  color: rgba(130, 137, 154, 0.75);
+  font-size: 9px;
+  letter-spacing: 0.04em;
 }
 
-.app-shell-mobile .mobile-chat-tip-rail span:nth-child(3) {
-  animation-delay: 8s;
-}
-
-@keyframes mobile-tip-cycle {
-  0%, 8% { opacity: 0; transform: translateY(4px); }
-  12%, 30% { opacity: 1; transform: translateY(0); }
-  34%, 100% { opacity: 0; transform: translateY(-4px); }
+@keyframes mobile-tip-fade {
+  0% { opacity: 0.2; transform: translateY(3px); }
+  12% { opacity: 1; transform: translateY(0); }
+  88% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0.2; transform: translateY(-2px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .app-shell-mobile .mobile-chat-tip-rail span {
+  .app-shell-mobile .mobile-chat-tip-rail-item {
     animation: none;
-  }
-
-  .app-shell-mobile .mobile-chat-tip-rail span:first-child {
-    opacity: 1;
-    transform: none;
   }
 }
 
@@ -2976,10 +2970,10 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
 
 .app-shell-mobile .github-mobile-panel {
   height: 100%;
-  padding: 18px 12px calc(74px + env(safe-area-inset-bottom));
+  padding: 14px 12px calc(74px + env(safe-area-inset-bottom));
   display: grid;
   align-content: start;
-  gap: 14px;
+  gap: 10px;
 }
 
 .app-shell-mobile .github-workspace > :not(.github-mobile-panel) {
@@ -2999,8 +2993,76 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
 .app-shell-mobile .github-mobile-activity {
   display: grid;
   gap: 8px;
-  border-bottom: 1px solid rgba(158, 168, 190, 0.12);
-  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(158, 168, 190, 0.14);
+  padding-bottom: 10px;
+}
+
+.app-shell-mobile .github-mobile-summary-elevated,
+.app-shell-mobile .matrix-mobile-summary-elevated {
+  border: 1px solid rgba(98, 201, 255, 0.24);
+  border-radius: 12px;
+  background: rgba(12, 22, 38, 0.62);
+  padding: 10px;
+}
+
+.app-shell-mobile .github-mobile-truth-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.app-shell-mobile .github-mobile-truth-item {
+  min-height: 58px;
+  padding: 9px 10px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  border: 1px solid rgba(158, 168, 190, 0.16);
+  border-radius: 10px;
+  background: rgba(18, 27, 44, 0.58);
+}
+
+.app-shell-mobile .github-mobile-truth-item span {
+  color: var(--mid);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+}
+
+.app-shell-mobile .github-mobile-truth-item strong {
+  color: var(--hi);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.app-shell-mobile .github-mobile-stage-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(98, 201, 255, 0.2);
+  border-radius: 12px;
+  background: rgba(11, 20, 34, 0.56);
+  padding: 10px;
+}
+
+.app-shell-mobile .github-mobile-stage-card p,
+.app-shell-mobile .github-mobile-stage-card label {
+  margin: 0;
+  color: var(--mid);
+  font-size: 11px;
+}
+
+.app-shell-mobile .github-mobile-stage-card select {
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1px solid rgba(158, 168, 190, 0.2);
+  background: rgba(9, 15, 26, 0.74);
+  color: var(--hi);
+}
+
+.app-shell-mobile .github-mobile-stage-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .app-shell-mobile .github-mobile-action-list {
@@ -3011,6 +3073,7 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
 .app-shell-mobile .github-mobile-action-list button {
   min-height: 44px;
   justify-content: flex-start;
+  border-radius: 10px;
 }
 
 .app-shell-mobile .mobile-activity-row {
@@ -3053,10 +3116,10 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
 .app-shell-mobile .matrix-mobile-panel,
 .app-shell-mobile .settings-mobile-panel {
   height: 100%;
-  padding: 18px 12px calc(74px + env(safe-area-inset-bottom));
+  padding: 14px 12px calc(74px + env(safe-area-inset-bottom));
   display: grid;
   align-content: start;
-  gap: 14px;
+  gap: 10px;
 }
 
 .app-shell-mobile .matrix-workspace > :not(.matrix-mobile-panel),
@@ -3070,10 +3133,65 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
 .app-shell-mobile .settings-mobile-row-list {
   display: grid;
   gap: 8px;
+  border-bottom: 1px solid rgba(158, 168, 190, 0.14);
+  padding-bottom: 10px;
 }
 
 .app-shell-mobile .settings-mobile-summary {
   padding-bottom: 14px;
+}
+
+.app-shell-mobile .matrix-mobile-action-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.app-shell-mobile .matrix-mobile-action-row .secondary-button {
+  min-height: 42px;
+  padding: 8px 6px;
+  font-size: 11px;
+}
+
+.app-shell-mobile .matrix-mobile-sheet {
+  border-top: 1px solid rgba(98, 201, 255, 0.3);
+  border-radius: 16px 16px 0 0;
+  background: rgba(8, 13, 23, 0.98);
+  color: var(--hi);
+}
+
+.app-shell-mobile .matrix-mobile-sheet-body {
+  padding: 0 14px calc(14px + env(safe-area-inset-bottom));
+  display: grid;
+  gap: 9px;
+}
+
+.app-shell-mobile .matrix-mobile-sheet-body strong {
+  color: var(--hi);
+  font-size: 14px;
+}
+
+.app-shell-mobile .matrix-mobile-sheet-body p {
+  margin: 0;
+  color: var(--mid);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.app-shell-mobile .matrix-mobile-sheet-body input,
+.app-shell-mobile .matrix-mobile-sheet-body textarea {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid rgba(158, 168, 190, 0.22);
+  border-radius: 10px;
+  background: rgba(9, 15, 26, 0.78);
+  color: var(--hi);
+  padding: 9px 11px;
+}
+
+.app-shell-mobile .matrix-mobile-topic-textarea {
+  min-height: 96px;
+  resize: vertical;
 }
 
 .app-shell-mobile .settings-mobile-truth-grid {

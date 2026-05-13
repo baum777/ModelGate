@@ -128,29 +128,86 @@ const GUIDE_KEY_GITHUB_CTA = "github-cta-shown";
 const GUIDE_KEY_CONTEXT_CTA = "context-cta-shown";
 const GUIDE_KEY_COPY_CTA = "copy-cta-shown";
 const CONTEXT_FILENAME_PATTERN = /\b[\w./-]+\.(?:ts|tsx|js|jsx|md|yml|yaml|json)\b/i;
-const CHAT_EXAMPLE_PROMPTS = [
-  "Überprüfe server/src/routes/matrix.ts auf Fehler.",
-  "Erstelle einen Plan für die Matrix-Execute-Route.",
-  "Fasse den aktuellen Repo-Zustand als Matrix-Post zusammen.",
-  "Dokumentiere die SSE-Lifecycle-Strategie als Knowledge-Entry.",
-  "Was ist der aktuelle Stand des Projekts?",
-  "Erkläre die Trust Boundaries aus AGENTS.md.",
-] as const;
+const CHAT_STARTER_PROMPTS = {
+  de: [
+    "Gib mir einen klaren 3-Schritt-Plan für das aktuelle Hauptziel.",
+    "Welche nächste sichere Aktion ist jetzt am sinnvollsten?",
+    "Fasse den Ist-Zustand in fünf präzisen Punkten zusammen.",
+    "Nenne Risiken, offene Punkte und den kleinsten nächsten Schritt.",
+    "Formuliere eine kurze Umsetzungs-Checkliste für heute.",
+    "Erstelle eine Entscheidungsbasis mit Option A/B und Trade-offs.",
+    "Schreibe eine knappe Übergabe für den nächsten Arbeitsschritt.",
+  ],
+  en: [
+    "Give me a clear 3-step plan for the current main goal.",
+    "What is the safest next action right now?",
+    "Summarize the current state in five precise points.",
+    "List risks, open items, and the smallest next step.",
+    "Create a short execution checklist for today.",
+    "Build a decision brief with option A/B and trade-offs.",
+    "Write a concise handoff for the next work step.",
+  ],
+} as const;
 const MOBILE_CHAT_TIPS = {
   en: [
-    "Enter prepares the next step · Shift+Enter inserts a line break.",
-    "Pick repo context before asking about specific files.",
-    "GitHub and Matrix actions stay backend-owned and approval-gated.",
+    "Chat: Enter sends · Shift+Enter line break.",
+    "Chat: start with one explicit goal.",
+    "Chat: add repo context before file questions.",
+    "Chat: use Read only for analysis and planning.",
+    "Chat: use Read & Write only with active branch.",
+    "Guide: swipe left/right to switch cards.",
+    "Guide: tap outside to close overlay.",
+    "Workbench: choose repository first.",
+    "Workbench: analysis before proposal.",
+    "Workbench: inspect proposal before approval.",
+    "Workbench: diff is evidence, not execution.",
+    "Matrix: scope first, then topic update.",
+    "Matrix: room target must be explicit.",
+    "Matrix: submit remains fail-closed without write contract.",
+    "Matrix: verify after execution intent.",
+    "Settings: backend health before retries.",
+    "Settings: aliases visible, credentials hidden.",
+    "Review: reject unclear proposals.",
   ],
   de: [
-    "Enter bereitet den nächsten Schritt vor · Shift+Enter setzt eine neue Zeile.",
-    "Wähle Repo-Kontext, bevor du konkrete Dateien referenzierst.",
-    "GitHub- und Matrix-Aktionen bleiben backend-owned und freigabegesteuert.",
+    "Chat: Enter sendet · Shift+Enter Zeilenumbruch.",
+    "Chat: starte mit einem klaren Ziel.",
+    "Chat: vor Datei-Fragen Repo-Kontext laden.",
+    "Chat: Read only für Analyse und Planung.",
+    "Chat: Read & Write nur mit aktiver Branch.",
+    "Guide: links/rechts wischen für Kartenwechsel.",
+    "Guide: Tipp außerhalb schließt das Overlay.",
+    "Workbench: zuerst Repository wählen.",
+    "Workbench: Analyse vor Vorschlag.",
+    "Workbench: Vorschlag vor Freigabe prüfen.",
+    "Workbench: Diff ist Beleg, keine Ausführung.",
+    "Matrix: zuerst Scope, dann Topic-Update.",
+    "Matrix: Raumziel explizit setzen.",
+    "Matrix: Senden bleibt ohne Write-Contract fail-closed.",
+    "Matrix: nach Ausführungsabsicht verifizieren.",
+    "Settings: vor Retry Backend-Status prüfen.",
+    "Settings: Aliase sichtbar, Credentials verborgen.",
+    "Review: unklare Vorschläge ablehnen.",
   ],
 } as const;
 
 function MobileChatTipRail({ locale }: { locale: "en" | "de" }) {
   const tips = MOBILE_CHAT_TIPS[locale];
+  const [tipIndex, setTipIndex] = useState(0);
+
+  useEffect(() => {
+    setTipIndex(0);
+  }, [locale]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setTipIndex((current) => (current + 1) % tips.length);
+    }, 4200);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [tips.length]);
 
   return (
     <div
@@ -158,9 +215,12 @@ function MobileChatTipRail({ locale }: { locale: "en" | "de" }) {
       aria-label={locale === "de" ? "Chat-Hinweis" : "Chat hint"}
       data-testid="mobile-chat-tip-rail"
     >
-      {tips.map((tip) => (
-        <span key={tip} aria-hidden="true">{tip}</span>
-      ))}
+      <span className="mobile-chat-tip-rail-item" key={`${locale}-${tipIndex}`} aria-hidden="true">
+        {tips[tipIndex]}
+      </span>
+      <small className="mobile-chat-tip-rail-progress" aria-hidden="true">
+        {tipIndex + 1}/{tips.length}
+      </small>
     </div>
   );
 }
@@ -581,6 +641,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     action: "github" | "matrix";
   } | null>(null);
   const [openRouterSetupState, setOpenRouterSetupState] = useState(() => readGuideSetupState(GUIDE_KEY_SETUP_OPENROUTER));
+  const [emptyStatePromptIndex, setEmptyStatePromptIndex] = useState(0);
 
   const matrixRoomOptions = useMemo(() => {
     const order = [props.matrixDraftDefaultRoomId, ...props.matrixDraftRoomOptions];
@@ -1270,6 +1331,8 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     && !pendingProposal;
   const showInlineGuideCta = !showSetupBlockingCta && !showChatEmptyCta && Boolean(contextTipPending || activeInlineGuide);
   const showCopyDiscoveryChip = !showSetupBlockingCta && !showChatEmptyCta && !showInlineGuideCta && copyDiscoveryPending;
+  const starterPrompts = CHAT_STARTER_PROMPTS[locale];
+  const activeStarterPrompt = starterPrompts[emptyStatePromptIndex % starterPrompts.length] ?? starterPrompts[0];
 
   useEffect(() => {
     if (workbenchBranch && branchSelectorOpen) {
@@ -1423,7 +1486,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
         {beginnerMode ? (
           <ShellCard variant="muted" className="work-mode-guidance-card">
             <SectionLabel>{workModeCopy.label}</SectionLabel>
-            <p>{locale === "de" ? "Schreibe dein Ziel. MosaicStacked erstellt im geführten Modus zuerst einen Vorschlag, danach entscheidest du." : "Write the goal. In guided mode MosaicStacked prepares a proposal first, then you decide."}</p>
+            <p>{locale === "de" ? "Ziel eingeben → Vorschlag prüfen → freigeben oder ablehnen." : "Enter goal -> review proposal -> approve or reject."}</p>
           </ShellCard>
         ) : null}
         {expertMode && chatState.activeRoute ? (
@@ -1485,20 +1548,21 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             <EmptyStateCTA
               icon="M"
               title="Bereit für deinen ersten Prompt"
-              description="Verbinde ein Repo und frag den Agenten oder starte einfach mit einer Frage."
+              description="Repo binden oder direkt eine klare Frage senden."
               primaryLabel="▶ Beispiel-Prompt einfügen"
               primaryAction={() => {
-                dispatch({ type: "set_input", input: CHAT_EXAMPLE_PROMPTS[0] });
+                dispatch({ type: "set_input", input: activeStarterPrompt });
+                setEmptyStatePromptIndex((current) => (current + 1) % starterPrompts.length);
                 composerRef.current?.focus();
               }}
               secondaryLabel="⊟ Repo verbinden"
               secondaryAction={() => {
                 props.onOpenGitHubFromChatAction({
                   sourceMessageId: "chat-empty-state",
-                  content: CHAT_EXAMPLE_PROMPTS[0],
+                  content: activeStarterPrompt,
                 });
               }}
-              footnote="oder einfach unten eintippen ↓"
+              footnote="Eingabe unten im Composer."
             />
           ) : null}
 
