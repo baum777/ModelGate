@@ -8247,8 +8247,10 @@ button:disabled,
 .app-shell-mobile .matrix-mobile-summary strong,
 .app-shell-mobile .settings-mobile-summary strong {
   color: var(--mobile-redesign-text);
-  font-size: 17px;
-  line-height: 1.2;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  font-weight: 400;
 }
 
 .app-shell-mobile .matrix-mobile-summary p,
@@ -8257,8 +8259,10 @@ button:disabled,
 .app-shell-mobile .settings-mobile-sheet-body p {
   margin: 0;
   color: var(--mobile-redesign-muted);
-  font-size: 12px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
   line-height: 1.45;
+  font-weight: 400;
 }
 
 .app-shell-mobile .settings-mobile-summary {
@@ -8438,8 +8442,10 @@ button:disabled,
   min-height: 44px;
   display: grid;
   grid-template-columns: minmax(0, 116px) minmax(0, 1fr);
-  align-items: start;
+  align-items: center;
+  align-content: center;
   gap: 10px;
+  padding: 7px 0;
   border: 0;
   border-bottom: 1px solid rgba(158, 168, 190, 0.1);
   background: transparent;
@@ -8452,8 +8458,11 @@ button:disabled,
 .app-shell-mobile .matrix-mobile-row span {
   min-width: 0;
   overflow-wrap: anywhere;
-  color: var(--mobile-redesign-muted);
+  color: var(--mobile-redesign-text);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 11px;
+  font-weight: 400;
+  line-height: 1.35;
 }
 
 .app-shell-mobile .matrix-mobile-status-grid strong,
@@ -8461,9 +8470,11 @@ button:disabled,
 .app-shell-mobile .settings-mobile-sheet-body strong {
   min-width: 0;
   overflow-wrap: anywhere;
-  color: var(--mobile-redesign-primary);
+  color: var(--mobile-redesign-text);
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 11px;
+  font-weight: 400;
+  line-height: 1.35;
 }
 
 .app-shell-mobile .settings-mobile-row-list {
