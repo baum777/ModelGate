@@ -23,8 +23,11 @@
   --ms-border: rgba(255, 255, 255, 0.07);
   --ms-border2: rgba(255, 255, 255, 0.12);
 
-  --ms-sans: "DM Sans", system-ui, sans-serif;
-  --ms-mono: "JetBrains Mono", "Courier New", monospace;
+  --ms-font-display: "Geist", "Inter", system-ui, sans-serif;
+  --ms-font-sans: "Geist", "Inter", system-ui, sans-serif;
+  --ms-font-mono: "Geist Mono", "JetBrains Mono", monospace;
+  --ms-sans: var(--ms-font-sans);
+  --ms-mono: var(--ms-font-mono);
 
   --sp-1: 4px;
   --sp-2: 8px;

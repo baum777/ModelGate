@@ -1,5 +1,10 @@
 :root {
   color-scheme: dark;
+  --ms-font-display: "Geist", "Inter", system-ui, sans-serif;
+  --ms-font-sans: "Geist", "Inter", system-ui, sans-serif;
+  --ms-font-mono: "Geist Mono", "JetBrains Mono", monospace;
+  --ms-sans: var(--ms-font-sans);
+  --ms-mono: var(--ms-font-mono);
   --bg: #07111f;
   --bg-glow: rgba(255, 180, 102, 0.12);
   --panel: rgba(11, 18, 33, 0.82);
@@ -12,7 +17,7 @@
   --success: #65d6a4;
   --danger: #ff7e88;
   --shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
-  font-family: "Segoe UI", "Aptos", "Trebuchet MS", sans-serif;
+  font-family: var(--ms-font-sans);
   line-height: 1.5;
   font-weight: 400;
   color: var(--text);
