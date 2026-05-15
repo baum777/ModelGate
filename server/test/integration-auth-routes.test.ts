@@ -1617,6 +1617,120 @@ test("github callback fails closed when app installation token exchange is inval
   assert.equal(payload.error.code, "token_exchange_failed");
 });
 
+test("github callback exposes sanitized oauth token exchange detail when available", async (t) => {
+  const env = createTestEnv({
+    ...TEST_GITHUB_APP_ENV,
+    ...TEST_GITHUB_OAUTH_ENV,
+    MOSAIC_STACK_SESSION_SECRET: "github-app-install-authorize-token-detail-secret",
+    ...TEST_ENCRYPTION_KEY
+  });
+
+  const app = createApp({
+    env,
+    openRouter: createMockOpenRouterClient(),
+    integrationFetch: createGitHubAppIntegrationFetch({
+      accessTokenStatus: 400,
+      userTokenPayload: {
+        error: "redirect_uri_mismatch",
+        error_description: "Bad Request"
+      }
+    }),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const start = await app.inject({
+    method: "GET",
+    url: "/api/auth/github/start"
+  });
+  const browserCookie = joinCookiesForRequest(readSetCookies(start));
+  const state = readGitHubStateFromAuthorizeLocation(String(start.headers.location ?? ""));
+
+  assert.ok(browserCookie);
+  assert.ok(state);
+
+  const callback = await app.inject({
+    method: "GET",
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=github-app-user-code`,
+    headers: {
+      cookie: browserCookie
+    }
+  });
+
+  assert.equal(callback.statusCode, 502);
+  const payload = JSON.parse(callback.body) as {
+    error: {
+      code: string;
+      details: string | null;
+    };
+  };
+  assert.equal(payload.error.code, "token_exchange_failed");
+  assert.equal(payload.error.details, "redirect_uri_mismatch");
+});
+
+test("github callback exposes sanitized oauth token exchange detail from urlencoded upstream body", async (t) => {
+  const env = createTestEnv({
+    ...TEST_GITHUB_APP_ENV,
+    ...TEST_GITHUB_OAUTH_ENV,
+    MOSAIC_STACK_SESSION_SECRET: "github-app-install-authorize-urlencoded-detail-secret",
+    ...TEST_ENCRYPTION_KEY
+  });
+
+  const app = createApp({
+    env,
+    openRouter: createMockOpenRouterClient(),
+    integrationFetch: async (input, init) => {
+      const url = new URL(String(input));
+      const method = init?.method ?? "GET";
+
+      if (url.pathname === "/login/oauth/access_token" && method === "POST") {
+        return new Response("error=bad_verification_code&error_description=The+code+passed+is+incorrect+or+expired.", {
+          status: 400,
+          headers: { "Content-Type": "application/x-www-form-urlencoded" }
+        });
+      }
+
+      return new Response(null, { status: 404 });
+    },
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const start = await app.inject({
+    method: "GET",
+    url: "/api/auth/github/start"
+  });
+  const browserCookie = joinCookiesForRequest(readSetCookies(start));
+  const state = readGitHubStateFromAuthorizeLocation(String(start.headers.location ?? ""));
+
+  assert.ok(browserCookie);
+  assert.ok(state);
+
+  const callback = await app.inject({
+    method: "GET",
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=github-app-user-code`,
+    headers: {
+      cookie: browserCookie
+    }
+  });
+
+  assert.equal(callback.statusCode, 502);
+  const payload = JSON.parse(callback.body) as {
+    error: {
+      code: string;
+      details: string | null;
+    };
+  };
+  assert.equal(payload.error.code, "token_exchange_failed");
+  assert.equal(payload.error.details, "bad_verification_code");
+});
+
 test("github callback fails closed when installation has no repositories", async (t) => {
   const app = createApp({
     env: createTestEnv({

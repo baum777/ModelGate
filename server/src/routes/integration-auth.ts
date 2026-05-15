@@ -70,6 +70,26 @@ type IntegrationAuthErrorCode =
   | "expected_user_mismatch"
   | "auth_expired";
 
+class IntegrationAuthRouteError extends Error {
+  readonly code: IntegrationAuthErrorCode;
+
+  readonly details: string | null;
+
+  constructor(code: IntegrationAuthErrorCode, details?: string | null) {
+    super(code);
+    this.name = "IntegrationAuthRouteError";
+    this.code = code;
+    this.details = details ?? null;
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
+const GITHUB_OAUTH_TOKEN_EXCHANGE_DETAIL_ALLOWLIST = new Set([
+  "incorrect_client_credentials",
+  "redirect_uri_mismatch",
+  "bad_verification_code"
+]);
+
 function isProductionDeployment() {
   return process.env.NODE_ENV === "production";
 }
@@ -403,18 +423,29 @@ async function requestJson(
     throw new Error(`${operation}:upstream_unreachable`);
   }
 
-  let payload: unknown = null;
+  let rawText = "";
 
   try {
-    payload = await response.json();
+    rawText = await response.text();
   } catch {
-    payload = null;
+    rawText = "";
+  }
+
+  let payload: unknown = null;
+
+  if (rawText.trim().length > 0) {
+    try {
+      payload = JSON.parse(rawText);
+    } catch {
+      payload = null;
+    }
   }
 
   return {
     ok: response.ok,
     status: response.status,
-    payload
+    payload,
+    rawText
   };
 }
 
@@ -448,6 +479,81 @@ function mapGitHubAppAuthErrorToIntegrationCode(error: GitHubAppAuthError): Inte
   }
 
   return "token_exchange_failed";
+}
+
+function parseGitHubOAuthTokenExchangeDetails(payload: unknown, rawText?: string) {
+  const raw = (rawText ?? "").trim();
+
+  if (raw.length > 0) {
+    const params = new URLSearchParams(raw);
+    const paramValues = [
+      params.get("error") ?? "",
+      params.get("error_description") ?? "",
+      params.get("message") ?? ""
+    ];
+
+    for (const value of paramValues) {
+      const normalized = value.trim().toLowerCase();
+
+      if (!normalized) {
+        continue;
+      }
+
+      if (GITHUB_OAUTH_TOKEN_EXCHANGE_DETAIL_ALLOWLIST.has(normalized)) {
+        return normalized;
+      }
+
+      if (/incorrect[_-]client[_-]credentials/.test(normalized)) {
+        return "incorrect_client_credentials";
+      }
+
+      if (/redirect[_-]uri[_-]mismatch/.test(normalized)) {
+        return "redirect_uri_mismatch";
+      }
+
+      if (/bad[_-]verification[_-]code/.test(normalized)) {
+        return "bad_verification_code";
+      }
+    }
+  }
+
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+  const rawValues = [
+    typeof record.error === "string" ? record.error : "",
+    typeof record.error_description === "string" ? record.error_description : "",
+    typeof record.message === "string" ? record.message : "",
+    typeof record.error_uri === "string" ? record.error_uri : ""
+  ];
+
+  for (const value of rawValues) {
+    const normalized = value.trim().toLowerCase();
+
+    if (!normalized) {
+      continue;
+    }
+
+    if (GITHUB_OAUTH_TOKEN_EXCHANGE_DETAIL_ALLOWLIST.has(normalized)) {
+      return normalized;
+    }
+
+    if (/incorrect[_-]client[_-]credentials/.test(normalized)) {
+      return "incorrect_client_credentials";
+    }
+
+    if (/redirect[_-]uri[_-]mismatch/.test(normalized)) {
+      return "redirect_uri_mismatch";
+    }
+
+    if (/bad[_-]verification[_-]code/.test(normalized)) {
+      return "bad_verification_code";
+    }
+  }
+
+  return null;
 }
 
 async function exchangeGitHubInstallation(
@@ -529,7 +635,10 @@ async function exchangeGitHubOAuthCode(
   const accessToken = typeof tokenPayload?.access_token === "string" ? tokenPayload.access_token.trim() : "";
 
   if (!tokenResponse.ok || !tokenPayload || accessToken.length === 0) {
-    throw new Error("token_exchange_failed");
+    throw new IntegrationAuthRouteError(
+      "token_exchange_failed",
+      parseGitHubOAuthTokenExchangeDetails(tokenPayload, tokenResponse.rawText)
+    );
   }
 
   const userResponse = await requestJson(
@@ -620,7 +729,10 @@ async function exchangeGitHubOAuthCodeForAccessToken(
   const accessToken = typeof tokenPayload?.access_token === "string" ? tokenPayload.access_token.trim() : "";
 
   if (!tokenResponse.ok || !tokenPayload || accessToken.length === 0) {
-    throw new Error("token_exchange_failed");
+    throw new IntegrationAuthRouteError(
+      "token_exchange_failed",
+      parseGitHubOAuthTokenExchangeDetails(tokenPayload, tokenResponse.rawText)
+    );
   }
 
   return accessToken;
@@ -1303,6 +1415,7 @@ function registerProviderCallbackRoute(
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "callback_failed";
+      const details = error instanceof IntegrationAuthRouteError ? error.details : null;
       const code = (
         [
           "scope_denied",
@@ -1319,7 +1432,7 @@ function registerProviderCallbackRoute(
           : "callback_failed"
       ) as IntegrationAuthErrorCode;
       deps.authStore.setErrorCode(intent.sessionId, provider, code);
-      return sendIntegrationAuthError(reply, code, statusForErrorCode(code));
+      return sendIntegrationAuthError(reply, code, statusForErrorCode(code), details ?? undefined);
     }
   });
 }

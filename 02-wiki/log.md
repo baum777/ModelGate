@@ -65,3 +65,9 @@
 ## [2026-05-13] mobile-workspace-guide-overhaul | compressed chat functional copy, expanded cross-workspace mobile tip loop, upgraded guide overlay to fullscreen blurred swipe/wheel navigation, redesigned Workbench mobile flow cards, and added Matrix server-interaction action sheets [[../web/src/components/ChatWorkspace.tsx]] [[../web/src/components/GuideOverlay.tsx]] [[../web/src/components/GitHubWorkspace.tsx]] [[../web/src/components/MatrixWorkspace.tsx]] [[../web/src/critical.css]] [[../web/src/styles.css]] [[../web/src/ui-adaptation.css]] [[../web/test/chat-workflow.test.ts]] [[../web/test/mobile-redesign.test.ts]] [[../tests/browser/mosaicstacked.spec.ts]]
 
 ## [2026-05-14] geist-system-console-font-tokens | introduced global Geist-oriented font tokens and mapped legacy console sans/mono aliases to them across critical and deferred CSS surfaces [[../web/src/critical.css]] [[../web/src/styles.css]] [[../web/src/ui-adaptation.css]]
+
+## [2026-05-15] local-env-vercel-callback-removal | replaced GitHub OAuth callback from vercel app URL to local backend callback and verified fresh full build success [[../.env]]
+
+## [2026-05-15] github-oauth-token-exchange-detail-sanitization | exposed sanitized GitHub OAuth token exchange failure reasons in callback error details and covered redirect_uri_mismatch with route tests [[../server/src/routes/integration-auth.ts]] [[../server/test/integration-auth-routes.test.ts]]
+
+## [2026-05-15] github-oauth-urlencoded-error-detail-sanitization | extended GitHub OAuth token exchange detail parsing to handle urlencoded upstream bodies and covered bad_verification_code mapping with auth route tests [[../server/src/routes/integration-auth.ts]] [[../server/test/integration-auth-routes.test.ts]]
