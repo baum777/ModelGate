@@ -103,12 +103,27 @@ test("all workspace guides provide detailed operational walkthroughs in both loc
 
 test("chat visual review styles expose active mode color and subtle hidden guide scrolling", () => {
   const styles = readFileSync("web/src/styles.css", "utf8");
+  const guideSource = readFileSync("web/src/components/GuideOverlay.tsx", "utf8");
 
   assert.match(styles, /\.chat-toolbar-controls\s+\.mode-toggle-button-active/);
   assert.match(styles, /\.chat-toolbar-controls\s+\.mode-toggle-button-active[\s\S]*linear-gradient/);
+  assert.match(styles, /\.guide-overlay-backdrop[\s\S]*backdrop-filter:\s*blur/);
   assert.match(styles, /\.guide-card[\s\S]*overflow-y:\s*auto/);
   assert.match(styles, /\.guide-card[\s\S]*scrollbar-width:\s*none/);
   assert.match(styles, /\.guide-card::-webkit-scrollbar[\s\S]*display:\s*none/);
+  assert.match(guideSource, /onWheel=\{handleWheelNavigation\}/);
+  assert.match(guideSource, /onPointerDown=\{\(\) => setOpen\(false\)\}/);
+});
+
+test("chat Read & Write mode opens branch selector when no branch is bound", () => {
+  const source = readFileSync("web/src/components/ChatWorkspace.tsx", "utf8");
+
+  assert.match(source, /branchSelectorOpen/);
+  assert.match(source, /data-testid="chat-branch-selector"/);
+  assert.match(source, /setBranchSelectorOpen\(true\)/);
+  assert.match(source, /onClick=\{\(\) => \{[\s\S]*if \(!workbenchBranch\) \{[\s\S]*setBranchSelectorOpen\(true\)/);
+  assert.match(source, /Direct main branch work is not allowed/);
+  assert.match(source, /direkte Main-Arbeit ist nicht erlaubt/i);
 });
 
 test("console shell styles hide native scrollbars and clip page-level horizontal overflow", () => {

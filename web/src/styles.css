@@ -1,5 +1,10 @@
 :root {
   color-scheme: dark;
+  --ms-font-display: "Geist", "Inter", system-ui, sans-serif;
+  --ms-font-sans: "Geist", "Inter", system-ui, sans-serif;
+  --ms-font-mono: "Geist Mono", "JetBrains Mono", monospace;
+  --ms-sans: var(--ms-font-sans);
+  --ms-mono: var(--ms-font-mono);
   --bg: #07111f;
   --bg-glow: rgba(255, 180, 102, 0.12);
   --panel: rgba(11, 18, 33, 0.82);
@@ -12,7 +17,7 @@
   --success: #65d6a4;
   --danger: #ff7e88;
   --shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
-  font-family: "Segoe UI", "Aptos", "Trebuchet MS", sans-serif;
+  font-family: var(--ms-font-sans);
   line-height: 1.5;
   font-weight: 400;
   color: var(--text);
@@ -3346,25 +3351,26 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 .guide-overlay-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 120;
   display: grid;
   place-items: center;
-  padding: 20px;
-  background: rgba(3, 7, 14, 0.72);
+  padding: 16px;
+  background: rgba(3, 6, 12, 0.76);
+  backdrop-filter: blur(10px) saturate(0.8);
 }
 
 .guide-overlay {
-  width: min(620px, 100%);
-  max-height: min(720px, calc(100vh - 40px));
+  width: min(960px, 100%);
+  max-height: calc(100dvh - 32px);
   overflow: hidden;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 16px;
-  padding: 20px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #0d1424;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.42);
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(98, 201, 255, 0.28);
+  border-radius: 14px;
+  background: rgba(9, 13, 24, 0.95);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.56);
 }
 
 .guide-overlay-header {
@@ -3407,10 +3413,11 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
 }
 
 .guide-card {
-  max-height: clamp(220px, calc(100vh - 264px), 390px);
+  max-height: clamp(240px, calc(100dvh - 248px), 560px);
   overflow-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  touch-action: pan-x;
 }
 
 .guide-card::-webkit-scrollbar {
@@ -3446,6 +3453,26 @@ pre, code, .message-meta, .detail-grid span, .scope-summary-meta, .runtime-note,
   grid-template-columns: minmax(86px, auto) minmax(0, 1fr) minmax(86px, auto);
   align-items: center;
   gap: 10px;
+}
+
+@media (max-width: 760px) {
+  .guide-overlay-backdrop {
+    padding: 0;
+  }
+
+  .guide-overlay {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    padding: 14px 12px calc(14px + env(safe-area-inset-bottom));
+  }
+
+  .guide-card {
+    max-height: calc(100dvh - 230px);
+  }
 }
 
 .guide-carousel-controls .secondary-button {
@@ -5810,6 +5837,19 @@ textarea:focus {
   font: inherit;
 }
 
+.settings-manual-config-input {
+  width: 100%;
+  min-height: 88px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-strong);
+  color: var(--text-primary);
+  padding: 12px;
+  font: inherit;
+  resize: vertical;
+}
+
 .settings-openrouter-validation {
   margin: 0;
   color: var(--text-secondary);
@@ -6030,6 +6070,10 @@ textarea:focus {
 
   .settings-inline-controls {
     grid-template-columns: 1fr;
+  }
+
+  .settings-manual-config-input {
+    font-size: 16px;
   }
 
   .chat-toolbar,
@@ -8208,8 +8252,10 @@ button:disabled,
 .app-shell-mobile .matrix-mobile-summary strong,
 .app-shell-mobile .settings-mobile-summary strong {
   color: var(--mobile-redesign-text);
-  font-size: 17px;
-  line-height: 1.2;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  font-weight: 400;
 }
 
 .app-shell-mobile .matrix-mobile-summary p,
@@ -8218,8 +8264,10 @@ button:disabled,
 .app-shell-mobile .settings-mobile-sheet-body p {
   margin: 0;
   color: var(--mobile-redesign-muted);
-  font-size: 12px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
   line-height: 1.45;
+  font-weight: 400;
 }
 
 .app-shell-mobile .settings-mobile-summary {
@@ -8399,8 +8447,10 @@ button:disabled,
   min-height: 44px;
   display: grid;
   grid-template-columns: minmax(0, 116px) minmax(0, 1fr);
-  align-items: start;
+  align-items: center;
+  align-content: center;
   gap: 10px;
+  padding: 7px 0;
   border: 0;
   border-bottom: 1px solid rgba(158, 168, 190, 0.1);
   background: transparent;
@@ -8413,8 +8463,11 @@ button:disabled,
 .app-shell-mobile .matrix-mobile-row span {
   min-width: 0;
   overflow-wrap: anywhere;
-  color: var(--mobile-redesign-muted);
+  color: var(--mobile-redesign-text);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 11px;
+  font-weight: 400;
+  line-height: 1.35;
 }
 
 .app-shell-mobile .matrix-mobile-status-grid strong,
@@ -8422,9 +8475,11 @@ button:disabled,
 .app-shell-mobile .settings-mobile-sheet-body strong {
   min-width: 0;
   overflow-wrap: anywhere;
-  color: var(--mobile-redesign-primary);
+  color: var(--mobile-redesign-text);
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 11px;
+  font-weight: 400;
+  line-height: 1.35;
 }
 
 .app-shell-mobile .settings-mobile-row-list {

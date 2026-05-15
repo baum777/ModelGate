@@ -59,6 +59,7 @@ export type SettingsTruthSnapshot = {
     fallbackEnabled: string;
     failClosed: string;
     rateLimitEnabled: string;
+    rateLimitDefaults: string;
     actionStoreMode: string;
     githubConfigured: string;
     matrixConfigured: string;
@@ -186,6 +187,81 @@ type MobileSettingsRowModel = {
   detail: string;
   tone: MobileSettingsTone;
 };
+
+type RateLimitScope = "chat" | "auth_login" | "github_propose" | "github_execute" | "matrix_execute";
+
+const DEFAULT_RATE_LIMITS: Record<RateLimitScope, number> = {
+  chat: 30,
+  auth_login: 8,
+  github_propose: 10,
+  github_execute: 6,
+  matrix_execute: 6,
+};
+
+function formatRateLimits(limits: Record<RateLimitScope, number>) {
+  return `chat:${limits.chat}, auth:${limits.auth_login}, gh-propose:${limits.github_propose}, gh-exec:${limits.github_execute}, matrix-exec:${limits.matrix_execute}`;
+}
+
+function parseManualRateLimitConfig(raw: string) {
+  const trimmed = raw.trim();
+
+  if (trimmed.length === 0) {
+    return {
+      overrides: {} as Partial<Record<RateLimitScope, number>>,
+      error: null as string | null,
+    };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    return {
+      overrides: {} as Partial<Record<RateLimitScope, number>>,
+      error: "invalid_json",
+    };
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return {
+      overrides: {} as Partial<Record<RateLimitScope, number>>,
+      error: "invalid_shape",
+    };
+  }
+
+  const allowedKeys: RateLimitScope[] = ["chat", "auth_login", "github_propose", "github_execute", "matrix_execute"];
+  const parsedObject = parsed as Record<string, unknown>;
+  const unknownKey = Object.keys(parsedObject).find((key) => !allowedKeys.includes(key as RateLimitScope));
+
+  if (unknownKey) {
+    return {
+      overrides: {} as Partial<Record<RateLimitScope, number>>,
+      error: "unknown_key",
+    };
+  }
+
+  const overrides: Partial<Record<RateLimitScope, number>> = {};
+  for (const key of allowedKeys) {
+    if (parsedObject[key] === undefined) {
+      continue;
+    }
+
+    const value = parsedObject[key];
+    if (typeof value !== "number" || !Number.isFinite(value) || value <= 0 || !Number.isInteger(value)) {
+      return {
+        overrides: {} as Partial<Record<RateLimitScope, number>>,
+        error: "invalid_value",
+      };
+    }
+
+    overrides[key] = value;
+  }
+
+  return {
+    overrides,
+    error: null as string | null,
+  };
+}
 
 function toneFromStatusText(value: string): MobileSettingsTone {
   const normalized = value.toLowerCase();
@@ -338,6 +414,12 @@ export function SettingsWorkspace({
         saving: "Speichert",
         test: "Verbindung testen",
         testing: "Test läuft",
+        manualConfigLabel: "Manuelle Limits-Config (JSON, optional)",
+        manualConfigPlaceholder: "{\"chat\":30,\"auth_login\":8,\"github_propose\":10,\"github_execute\":6,\"matrix_execute\":6}",
+        defaultLimitsLabel: "Default-Limits",
+        appliedLimitsLabel: "Aktive Limits",
+        manualConfigHint: "Nur lokale UI-Konfiguration; wird nicht an das Backend gesendet.",
+        manualConfigError: "Ungültige JSON-Config. Erlaubte Keys: chat, auth_login, github_propose, github_execute, matrix_execute. Werte müssen positive Ganzzahlen sein.",
         configured: "OpenRouter key configured",
         empty: "Noch kein OpenRouter-Key für dieses lokale Profil gespeichert.",
       }
@@ -353,6 +435,12 @@ export function SettingsWorkspace({
         saving: "Saving",
         test: "Test connection",
         testing: "Testing",
+        manualConfigLabel: "Manual limit config (JSON, optional)",
+        manualConfigPlaceholder: "{\"chat\":30,\"auth_login\":8,\"github_propose\":10,\"github_execute\":6,\"matrix_execute\":6}",
+        defaultLimitsLabel: "Default limits",
+        appliedLimitsLabel: "Applied limits",
+        manualConfigHint: "Local UI config only; it is not sent to the backend.",
+        manualConfigError: "Invalid JSON config. Allowed keys: chat, auth_login, github_propose, github_execute, matrix_execute. Values must be positive integers.",
         configured: "OpenRouter key configured",
         empty: "No OpenRouter key is configured for this local profile yet.",
       };
@@ -507,6 +595,19 @@ export function SettingsWorkspace({
     expert: "settings-mobile-section-expert",
   };
   const selectedMobileSettingsRow = mobileSettingsRows.find((row) => row.id === mobileSettingsSheet) ?? null;
+  const [manualRateLimitConfigInput, setManualRateLimitConfigInput] = React.useState(() => JSON.stringify(DEFAULT_RATE_LIMITS));
+  const manualRateLimitConfig = React.useMemo(
+    () => parseManualRateLimitConfig(manualRateLimitConfigInput),
+    [manualRateLimitConfigInput],
+  );
+  const appliedRateLimits = React.useMemo(
+    () => ({ ...DEFAULT_RATE_LIMITS, ...manualRateLimitConfig.overrides }),
+    [manualRateLimitConfig.overrides],
+  );
+  const appliedRateLimitsSummary = React.useMemo(
+    () => formatRateLimits(appliedRateLimits),
+    [appliedRateLimits],
+  );
 
   function getVerificationStatusLabel(status: SettingsVerificationState["status"]) {
     return verificationCopy[status];
@@ -588,6 +689,30 @@ export function SettingsWorkspace({
             {isTestingOpenRouterCredentials ? openRouterCopy.testing : openRouterCopy.test}
           </button>
         </div>
+        <label htmlFor={`${prefix}-manual-config-input`}>{openRouterCopy.manualConfigLabel}</label>
+        <textarea
+          id={`${prefix}-manual-config-input`}
+          data-testid={`${prefix}-manual-config-input`}
+          className="settings-manual-config-input"
+          rows={4}
+          value={manualRateLimitConfigInput}
+          onChange={(event) => setManualRateLimitConfigInput(event.target.value)}
+          placeholder={openRouterCopy.manualConfigPlaceholder}
+          spellCheck={false}
+          aria-describedby={`${validationId} ${prefix}-manual-config-help`}
+        />
+        <p id={`${prefix}-manual-config-help`} className="settings-openrouter-validation" data-testid={`${prefix}-manual-config-help`}>
+          <strong>{openRouterCopy.defaultLimitsLabel}:</strong> {truthSnapshot.diagnostics.rateLimitDefaults}
+          <br />
+          <strong>{openRouterCopy.appliedLimitsLabel}:</strong> {appliedRateLimitsSummary}
+          <br />
+          {openRouterCopy.manualConfigHint}
+        </p>
+        {manualRateLimitConfig.error ? (
+          <p className="status-pill status-error" data-testid={`${prefix}-manual-config-error`}>
+            {openRouterCopy.manualConfigError}
+          </p>
+        ) : null}
         <p id={validationId} className="settings-openrouter-validation" data-testid={`${prefix}-validation`}>
           {openRouterCopy.validation}
         </p>
@@ -1037,6 +1162,10 @@ export function SettingsWorkspace({
             <div>
               <span>{ui.settings.rateLimitLabel}</span>
               <strong>{truthSnapshot.diagnostics.rateLimitEnabled}</strong>
+            </div>
+            <div>
+              <span>{openRouterCopy.defaultLimitsLabel}</span>
+              <strong>{truthSnapshot.diagnostics.rateLimitDefaults}</strong>
             </div>
             <div>
               <span>{ui.settings.actionStoreLabel}</span>

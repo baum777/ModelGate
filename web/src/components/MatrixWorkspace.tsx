@@ -366,6 +366,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
   const [topicPlanRefreshError, setTopicPlanRefreshError] = useState<
     string | null
   >(persisted.topicPlanRefreshError);
+  const [mobileActionSheet, setMobileActionSheet] = useState<"scope" | "topic" | "verify" | null>(null);
   const [roomId, setRoomId] = useState<string | null>(persisted.roomId);
   const [roomName, setRoomName] = useState<string | null>(persisted.roomName);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(persisted.selectedEventId);
@@ -1119,7 +1120,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       aria-busy={status !== "ready" || scopeResolveLoading || spaceHierarchyLoading || provenanceLoading || topicPrepareLoading || topicExecuteLoading || topicVerifyLoading}
     >
       <section className="matrix-mobile-panel mobile-panel-scroll" aria-label={locale === "de" ? "Matrix mobile Arbeitsfläche" : "Matrix mobile workspace"}>
-        <header className="matrix-mobile-summary">
+        <header className="matrix-mobile-summary matrix-mobile-summary-elevated">
           <span className="mobile-mono">MATRIX KNOWLEDGE</span>
           <strong>{connectionLabel}</strong>
           <p>{identityLabel} · {homeserverLabel}</p>
@@ -1142,6 +1143,30 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             <span>{ui.matrix.submit}</span>
             <strong>{ui.matrix.submitFailClosed}</strong>
           </div>
+        </div>
+
+        <div className="matrix-mobile-action-row" aria-label={locale === "de" ? "Matrix Aktionen" : "Matrix actions"}>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => setMobileActionSheet("scope")}
+          >
+            {locale === "de" ? "Scope öffnen" : "Open scope"}
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => setMobileActionSheet("topic")}
+          >
+            {locale === "de" ? "Topic planen" : "Plan topic"}
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => setMobileActionSheet("verify")}
+          >
+            {locale === "de" ? "Prüfen" : "Verify"}
+          </button>
         </div>
 
         <section className="matrix-mobile-list">
@@ -1180,6 +1205,156 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             <p>{scopeSummaryStatus === "loading" ? ui.matrix.scopeSummaryLoading : ui.matrix.scopeSummaryUnavailable}</p>
           )}
         </section>
+
+        {mobileActionSheet ? (
+          <>
+            <button
+              type="button"
+              className="mobile-bottom-sheet-backdrop"
+              aria-label={locale === "de" ? "Overlay schließen" : "Close overlay"}
+              onClick={() => setMobileActionSheet(null)}
+            />
+            <section
+              className="mobile-bottom-sheet matrix-mobile-sheet"
+              aria-label={
+                mobileActionSheet === "scope"
+                  ? (locale === "de" ? "Scope Overlay" : "Scope overlay")
+                  : mobileActionSheet === "topic"
+                    ? (locale === "de" ? "Topic Overlay" : "Topic overlay")
+                    : (locale === "de" ? "Verify Overlay" : "Verify overlay")
+              }
+            >
+              <span className="mobile-bottom-sheet-handle" aria-hidden="true" />
+              <div className="matrix-mobile-sheet-body">
+                {mobileActionSheet === "scope" ? (
+                  <>
+                    <strong>{locale === "de" ? "Scope mit Backend auflösen" : "Resolve scope via backend"}</strong>
+                    <p>{locale === "de" ? "Wähle einen Raum, setze ihn in den Scope und löse dann die Zusammenfassung auf." : "Select a room, add it to scope, then resolve the summary."}</p>
+                    <label className="mobile-mono" htmlFor="matrix-room-id-mobile">
+                      {ui.matrix.roomId}
+                    </label>
+                    <input
+                      id="matrix-room-id-mobile"
+                      value={roomId ?? ""}
+                      onChange={(event) => setRoomId(event.target.value.trim().length > 0 ? event.target.value : null)}
+                      placeholder={ui.matrix.roomPickerRoom}
+                    />
+                    <div className="mobile-sheet-actions">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => {
+                          const nextRoomId = (roomId ?? "").trim();
+                          if (!nextRoomId) {
+                            return;
+                          }
+                          setSelectedRoomIds((current) => current.includes(nextRoomId) ? current : [...current, nextRoomId]);
+                        }}
+                      >
+                        {locale === "de" ? "In Scope übernehmen" : "Add to scope"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void handleResolveScope();
+                          setMobileActionSheet(null);
+                        }}
+                        disabled={scopeResolveLoading || (selectedRoomIds.length === 0 && selectedSpaces.length === 0)}
+                      >
+                        {scopeResolveLoading ? ui.matrix.resolvingScope : ui.matrix.resolveScope}
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+
+                {mobileActionSheet === "topic" ? (
+                  <>
+                    <strong>{locale === "de" ? "Topic-Plan vorbereiten" : "Prepare topic plan"}</strong>
+                    <p>{locale === "de" ? "Raum-ID und Zieltext eingeben, dann Analyse starten." : "Enter room id and target text, then run analysis."}</p>
+                    <label className="mobile-mono" htmlFor="matrix-topic-room-mobile">
+                      {ui.matrix.roomId}
+                    </label>
+                    <input
+                      id="matrix-topic-room-mobile"
+                      value={topicRoomId}
+                      onChange={(event) => setTopicRoomId(event.target.value)}
+                      placeholder={ui.matrix.roomPickerRoom}
+                    />
+                    <label className="mobile-mono" htmlFor="matrix-topic-text-mobile">
+                      {ui.matrix.topicTitle}
+                    </label>
+                    <textarea
+                      id="matrix-topic-text-mobile"
+                      className="matrix-mobile-topic-textarea"
+                      value={topicText}
+                      onChange={(event) => setTopicText(event.target.value)}
+                      placeholder={ui.matrix.draftPlaceholder}
+                    />
+                    <div className="mobile-sheet-actions">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void prepareTopicUpdate();
+                          setMobileActionSheet(null);
+                        }}
+                        disabled={topicPrepareLoading}
+                      >
+                        {topicPrepareLoading ? ui.matrix.topicStatusLoading : ui.matrix.topicStatusPending}
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+
+                {mobileActionSheet === "verify" ? (
+                  <>
+                    <strong>{locale === "de" ? "Ausführung und Prüfung" : "Execution and verification"}</strong>
+                    <p>
+                      {topicPlan
+                        ? `${locale === "de" ? "Plan" : "Plan"} ${topicPlan.planId} · ${topicPlan.status}`
+                        : (locale === "de" ? "Kein Topic-Plan vorhanden." : "No topic plan available.")}
+                    </p>
+                    <div className="mobile-sheet-actions">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => {
+                          void refreshTopicUpdatePlan();
+                        }}
+                        disabled={!topicPlan || topicPlanRefreshLoading}
+                      >
+                        {topicPlanRefreshLoading ? ui.matrix.topicStatusLoading : ui.matrix.topicStatusPending}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void executeTopicUpdate(true);
+                          setMobileActionSheet(null);
+                        }}
+                        disabled={!topicPlan || topicPlan.status !== "pending_review" || topicExecuteLoading}
+                      >
+                        {topicExecuteLoading ? ui.approval.running : ui.approval.approve}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => {
+                          if (!topicPlan) {
+                            return;
+                          }
+                          void verifyTopicUpdate(topicPlan.planId);
+                          setMobileActionSheet(null);
+                        }}
+                        disabled={!topicPlan || topicVerifyLoading}
+                      >
+                        {topicVerifyLoading ? ui.matrix.topicStatusLoading : ui.github.verifyResult}
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            </section>
+          </>
+        ) : null}
       </section>
 
       {" "}

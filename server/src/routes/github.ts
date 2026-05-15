@@ -26,7 +26,7 @@ import { createGitHubActionStore, type GitHubActionStore, type GitHubActionStore
 import { createGitHubProposalPlanner } from "../lib/github-plan-builder.js";
 import { createGitHubActionExecutionService } from "../lib/github-execution.js";
 import type { GitHubConfig } from "../lib/github-env.js";
-import { isGitHubRepoAllowed, normalizeGitHubRepoFullName } from "../lib/github-env.js";
+import { normalizeGitHubRepoFullName } from "../lib/github-env.js";
 import { createGitHubAppAuthClient, GitHubAppAuthError } from "../lib/github-app-auth.js";
 import type { IntegrationAuthStore } from "../lib/integration-auth-store.js";
 import { normalizeGitHubRelativePath } from "../lib/github-paths.js";
@@ -59,6 +59,8 @@ type GitHubCredentialSource = "user_connected" | "instance_config";
 type GitHubResolvedClient = {
   client: GitHubClient;
   credentialSource: GitHubCredentialSource;
+  allowedRepos: string[];
+  allowedRepoSet: Set<string>;
 };
 
 function sendGitHubError(reply: FastifyReply, code: GitHubErrorCode, message?: string, retryAfterSeconds?: number | null) {
@@ -203,10 +205,10 @@ function normalizeRepoParams(requestParams: unknown) {
   };
 }
 
-async function listAllowedRepos(config: GitHubConfig, client: GitHubClient): Promise<GitHubRepoSummary[]> {
+async function listAllowedRepos(allowedRepos: string[], client: GitHubClient): Promise<GitHubRepoSummary[]> {
   const summaries: GitHubRepoSummary[] = [];
 
-  for (const repo of config.allowedRepos) {
+  for (const repo of allowedRepos) {
     const [owner, name] = repo.split("/");
 
     if (!owner || !name) {
@@ -499,10 +501,10 @@ async function verifyRecoveredRoutePlan(plan: GitHubActionStoreEntry, client: Gi
 async function recoverPlanForVerification(
   planId: string,
   config: GitHubConfig,
-  client: GitHubClient,
+  resolvedClient: GitHubResolvedClient,
   actionStore: GitHubActionStore
 ) {
-  const repos = await listAllowedRepos(config, client);
+  const repos = await listAllowedRepos(resolvedClient.allowedRepos, resolvedClient.client);
   const branchPrefixes = buildVerificationBranchPrefixes(config);
 
   for (const repo of repos) {
@@ -515,7 +517,7 @@ async function recoverPlanForVerification(
         let pullRequestUrl = "";
 
         try {
-          const branchReference = await client.readRepositoryReference(repo.owner, repo.repo, `heads/${branchName}`);
+          const branchReference = await resolvedClient.client.readRepositoryReference(repo.owner, repo.repo, `heads/${branchName}`);
 
           branchSha = branchReference.sha;
         } catch (error) {
@@ -524,7 +526,7 @@ async function recoverPlanForVerification(
           }
         }
 
-        const pullRequests = await client.listPullRequests(repo.owner, repo.repo, {
+        const pullRequests = await resolvedClient.client.listPullRequests(repo.owner, repo.repo, {
           state: "all",
           head: `${repo.owner}:${branchName}`,
           base: repo.defaultBranch,
@@ -629,6 +631,45 @@ function parseInstallationId(raw: unknown) {
   return parsed;
 }
 
+function normalizeAllowedRepoNames(repos: string[]) {
+  return [...new Set(
+    repos
+      .map((repo) => {
+        const [owner, name, extra] = repo.split("/");
+
+        if (!owner || !name || extra) {
+          return null;
+        }
+
+        return normalizeGitHubRepoFullName(owner, name);
+      })
+      .filter((repo): repo is string => repo !== null)
+  )];
+}
+
+async function resolveInstallationAllowedRepos(
+  appAuth: ReturnType<typeof createGitHubAppAuthClient>,
+  config: GitHubConfig,
+  installationId: number,
+  credentialSource: GitHubCredentialSource
+) {
+  if (credentialSource === "instance_config" && config.allowedRepos.length > 0) {
+    return config.allowedRepos;
+  }
+
+  const installationRepos = normalizeAllowedRepoNames(
+    (await appAuth.listInstallationRepositories(installationId)).map((repo) => repo.fullName)
+  );
+
+  return installationRepos;
+}
+
+function isResolvedRepoAllowed(resolvedClient: GitHubResolvedClient, owner: string, repo: string) {
+  const normalized = normalizeGitHubRepoFullName(owner, repo);
+
+  return normalized ? resolvedClient.allowedRepoSet.has(normalized) : false;
+}
+
 async function resolveRequestGitHubClient(
   request: FastifyRequest,
   deps: GitHubRouteDependencies,
@@ -645,9 +686,13 @@ async function resolveRequestGitHubClient(
       const accessToken = deps.config.installationTokenOverride
         ? deps.config.installationTokenOverride
         : await appAuth.getInstallationToken(installationId);
+      const allowedRepos = await resolveInstallationAllowedRepos(appAuth, deps.config, installationId, "user_connected");
+
       return {
         client: deps.client.withAccessToken(accessToken),
-        credentialSource: "user_connected"
+        credentialSource: "user_connected",
+        allowedRepos,
+        allowedRepoSet: new Set(allowedRepos)
       };
     }
   }
@@ -656,9 +701,13 @@ async function resolveRequestGitHubClient(
     const accessToken = deps.config.installationTokenOverride
       ? deps.config.installationTokenOverride
       : await appAuth.getInstallationToken(deps.config.installationId);
+    const allowedRepos = await resolveInstallationAllowedRepos(appAuth, deps.config, deps.config.installationId, "instance_config");
+
     return {
       client: deps.client.withAccessToken(accessToken),
-      credentialSource: "instance_config"
+      credentialSource: "instance_config",
+      allowedRepos,
+      allowedRepoSet: new Set(allowedRepos)
     };
   }
 
@@ -730,7 +779,7 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
       }
 
       const checkedAt = new Date().toISOString();
-      const repos = await listAllowedRepos(deps.config, resolvedClient.client);
+      const repos = await listAllowedRepos(resolvedClient.allowedRepos, resolvedClient.client);
 
       return reply.status(200).send({
         ok: true,
@@ -756,15 +805,15 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
       return sendGitHubError(reply, "invalid_request");
     }
 
-    if (!isGitHubRepoAllowed(deps.config, repoParams.owner, repoParams.repo)) {
-      return sendGitHubError(reply, "github_repo_not_allowed");
-    }
-
     try {
       const resolvedClient = await resolveRequestGitHubClient(request, deps, appAuth);
 
       if (!resolvedClient) {
         return sendGitHubError(reply, "github_not_configured");
+      }
+
+      if (!isResolvedRepoAllowed(resolvedClient, repoParams.owner, repoParams.repo)) {
+        return sendGitHubError(reply, "github_repo_not_allowed");
       }
 
       const contextBuilder = createGitHubContextBuilder({
@@ -808,10 +857,6 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
       return sendGitHubError(reply, "invalid_request");
     }
 
-    if (!isGitHubRepoAllowed(deps.config, repoParams.owner, repoParams.repo)) {
-      return sendGitHubError(reply, "github_repo_not_allowed");
-    }
-
     const limit = deps.rateLimiter.check("github_propose", request, deps.authConfig);
 
     if (!limit.allowed) {
@@ -823,6 +868,10 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
 
       if (!resolvedClient) {
         return sendGitHubError(reply, "github_not_configured");
+      }
+
+      if (!isResolvedRepoAllowed(resolvedClient, repoParams.owner, repoParams.repo)) {
+        return sendGitHubError(reply, "github_repo_not_allowed");
       }
 
       const proposalPlanner = createGitHubProposalPlanner({
@@ -1008,6 +1057,10 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
         return sendGitHubError(reply, "github_not_configured");
       }
 
+      if (!isResolvedRepoAllowed(resolvedClient, lookup.plan.repo.owner, lookup.plan.repo.repo)) {
+        return sendGitHubError(reply, "github_repo_not_allowed");
+      }
+
       const currentSummary = await resolvedClient.client.readRepositorySummary(lookup.plan.repo.owner, lookup.plan.repo.repo);
 
       if (!isFreshGitHubPlan(currentSummary, lookup.plan)) {
@@ -1075,6 +1128,10 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
 
     if (lookup.state === "expired") {
       return sendGitHubError(reply, "github_plan_expired");
+    }
+
+    if (!isResolvedRepoAllowed(resolvedClient, lookup.plan.repo.owner, lookup.plan.repo.repo)) {
+      return sendGitHubError(reply, "github_repo_not_allowed");
     }
 
     try {
@@ -1158,7 +1215,7 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
     let recoveredFromGitHub = false;
 
     if (lookup.state === "missing") {
-      const recoveredPlan = await recoverPlanForVerification(parsedPlanId.data, deps.config, resolvedClient.client, actionStore);
+      const recoveredPlan = await recoverPlanForVerification(parsedPlanId.data, deps.config, resolvedClient, actionStore);
 
       if (recoveredPlan) {
         recoveredFromGitHub = true;
@@ -1172,6 +1229,10 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
 
     if (lookup.state === "expired") {
       return sendGitHubError(reply, "github_plan_expired");
+    }
+
+    if (!isResolvedRepoAllowed(resolvedClient, lookup.plan.repo.owner, lookup.plan.repo.repo)) {
+      return sendGitHubError(reply, "github_repo_not_allowed");
     }
 
     if (recoveredFromGitHub) {
@@ -1252,7 +1313,7 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
       return sendGitHubError(reply, "invalid_request");
     }
 
-    if (!isGitHubRepoAllowed(deps.config, repoParams.owner, repoParams.repo)) {
+    if (!isResolvedRepoAllowed(resolvedClient, repoParams.owner, repoParams.repo)) {
       return sendGitHubError(reply, "github_repo_not_allowed");
     }
 
@@ -1302,7 +1363,7 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
       return sendGitHubError(reply, "invalid_request");
     }
 
-    if (!isGitHubRepoAllowed(deps.config, repoParams.owner, repoParams.repo)) {
+    if (!isResolvedRepoAllowed(resolvedClient, repoParams.owner, repoParams.repo)) {
       return sendGitHubError(reply, "github_repo_not_allowed");
     }
 

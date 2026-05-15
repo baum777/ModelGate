@@ -29,7 +29,7 @@ test("HTML head uses lightweight bundled favicon and theme-aware manifests", asy
   const markup = await readFile(new URL("../index.html", import.meta.url), "utf8");
 
   assert.match(markup, /<meta name="theme-color" content="#050c14"/);
-  assert.match(markup, /\/icons\/favicon\.svg/);
+  assert.match(markup, /\/favicon\/favicon-transparent\.ico/);
   assert.match(markup, /\/favicon\/favicon-transparent-32\.png/);
   assert.match(markup, /\/manifest-light\.webmanifest/);
   assert.match(markup, /\/manifest-dark\.webmanifest/);

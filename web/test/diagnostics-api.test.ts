@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { fetchDiagnostics, fetchJournalRecent } from "../src/lib/api.js";
 
@@ -175,4 +176,16 @@ test("fetchJournalRecent parses bounded safe entries", async () => {
   } finally {
     restoreFetch();
   }
+});
+
+test("integration auth actions and connect URL use provider-specific API base resolution", () => {
+  const source = readFileSync("web/src/lib/api.ts", "utf8");
+
+  assert.match(source, /VITE_GITHUB_API_BASE_URL\?: string;/);
+  assert.match(source, /VITE_MATRIX_API_BASE_URL\?: string;/);
+  assert.match(source, /const GITHUB_AUTH_API_BASE_URL = \(/);
+  assert.match(source, /const MATRIX_AUTH_API_BASE_URL = \(/);
+  assert.match(source, /function resolveIntegrationApiUrl\(provider: "github" \| "matrix", path: string\)/);
+  assert.match(source, /resolveIntegrationApiUrl\(provider, `\/api\/auth\/\$\{provider\}\/\$\{action\}`\)/);
+  assert.match(source, /resolveIntegrationApiUrl\(provider, `\/api\/auth\/\$\{provider\}\/start\?\$\{params\.toString\(\)\}`\)/);
 });

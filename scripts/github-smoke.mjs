@@ -91,8 +91,6 @@ function readGitHubSmokeConfig(sourceEnv = process.env, options = {}) {
   const repo = parseRepo(env.GITHUB_SMOKE_REPO);
   const baseBranch = String(env.GITHUB_SMOKE_BASE_BRANCH ?? "").trim();
   const targetBranch = String(env.GITHUB_SMOKE_TARGET_BRANCH ?? "").trim();
-  const token = String(env.GITHUB_TOKEN ?? "").trim();
-  const allowedRepos = String(env.GITHUB_ALLOWED_REPOS ?? "").trim();
   const agentApiKey = String(env.GITHUB_AGENT_API_KEY ?? "").trim();
 
   if (!enabled) {
@@ -106,12 +104,6 @@ function readGitHubSmokeConfig(sourceEnv = process.env, options = {}) {
   }
   if (!targetBranch) {
     missing.push("GITHUB_SMOKE_TARGET_BRANCH");
-  }
-  if (!token) {
-    missing.push("GITHUB_TOKEN");
-  }
-  if (!allowedRepos) {
-    missing.push("GITHUB_ALLOWED_REPOS");
   }
   if (!agentApiKey) {
     missing.push("GITHUB_AGENT_API_KEY");

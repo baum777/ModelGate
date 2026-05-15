@@ -15,4 +15,11 @@ Format: `[[link]] | summary | #tags | YYYY-MM-DD`
 [[../docs/vercel-deployment.md]] | Vercel-Deployment-Topologie und Ops-Referenz | #docs #deployment #derived | 2026-05-10
 [[../03-mspr/packets/2026-05-10-governance-bootstrap.yml]] | Review-Packet fuer neu gebootstrappte Governance-Surfaces | #mspr #governance #proposed | 2026-05-10
 [[../03-mspr/packets/2026-05-10-mobile-redesign-browser-suite.yml]] | Superseded Browser-Suite-Validierungsluecke nach Mobile Redesign | #mspr #verification #superseded | 2026-05-10
+[[../03-mspr/packets/2026-05-11-vercel-external-deploy-blocked.yml]] | Blocked external Vercel deployment due tenant disclosure policy despite explicit user approval | #mspr #deployment #blocked | 2026-05-11
+[[../03-mspr/packets/2026-05-11-live-smoke-github-openrouter-blocked.yml]] | Blocked live GitHub/OpenRouter smoke due missing GitHub admin key and OpenRouter upstream 401 | #mspr #smoke #blocked | 2026-05-11
+[[../03-mspr/packets/2026-05-12-vercel-production-deploy-blocked.yml]] | Blocked Vercel production deployment due tenant disclosure policy after explicit approval | #mspr #deployment #blocked | 2026-05-12
+[[../03-mspr/packets/2026-05-13-github-env-deploy-blocked.yml]] | Blocked GitHub Install and Authorize deploy repeat due missing app slug and invalid private-key env parse | #mspr #github #deployment #blocked | 2026-05-13
 [[../docs/superpowers/plans/2026-05-10-settings-authority-control-center.md]] | Implementation plan for Settings authority control center redesign | #docs #plan #settings | 2026-05-10
+[[../web/src/App.tsx]] | 4-Tab shell (`chat`, `workbench`, `matrix`, `settings`) with legacy mode normalization to `workbench` | #workbench #navigation #authority | 2026-05-11
+[[../web/src/components/GitHubWorkspace.tsx]] | Summary-first Workbench review center with explicit local/backend action effect semantics | #workbench #review #authority | 2026-05-11
+[[../tests/browser/mosaicstacked.spec.ts]] | Browser verification for 4-tab navigation, RW branch gating, authority-safe Workbench actions, and backend-capability-gated PR execution | #workbench #chat #verification | 2026-05-11

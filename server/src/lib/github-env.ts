@@ -154,10 +154,6 @@ export function createGitHubConfig(env: AppEnv): GitHubConfig {
     issues.push("GITHUB_APP_SLUG is required");
   }
 
-  if (env.GITHUB_ALLOWED_REPOS.length === 0) {
-    issues.push("GITHUB_ALLOWED_REPOS must contain at least one repository");
-  }
-
   for (const rawRepo of env.GITHUB_ALLOWED_REPOS) {
     if (!normalizeRepoName(rawRepo)) {
       issues.push(`GITHUB_ALLOWED_REPOS entry is invalid: ${rawRepo}`);
@@ -185,7 +181,7 @@ export function createGitHubConfig(env: AppEnv): GitHubConfig {
   }
 
   const appAuthReady = Boolean(appId && appPrivateKey && appSlug && issues.findIndex((issue) => issue.startsWith("GITHUB_APP_")) === -1);
-  const instanceReady = Boolean(appAuthReady && installationId && allowedRepos.length > 0);
+  const instanceReady = Boolean(appAuthReady && installationId);
   const enabled = Boolean(
     appId
     || appPrivateKey
@@ -194,7 +190,7 @@ export function createGitHubConfig(env: AppEnv): GitHubConfig {
     || env.GITHUB_ALLOWED_REPOS.length > 0
     || issues.length > 0
   );
-  const ready = Boolean(appAuthReady && allowedRepos.length > 0);
+  const ready = Boolean(appAuthReady);
 
   return {
     enabled,

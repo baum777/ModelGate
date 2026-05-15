@@ -1,10 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ApprovalTransitionCard,
-  DecisionZone,
-  ExecutionReceiptCard,
-  ProposalCard,
-} from "./ApprovalPrimitives.js";
 import { ExpertDetails } from "./ExpertDetails.js";
 import {
   executeGitHubPlan,
@@ -32,8 +26,6 @@ import {
   mergeMetadataRows,
 } from "../lib/governance-metadata.js";
 import { useLocalization, type Locale } from "../lib/localization.js";
-import { GuideOverlay, getWorkspaceGuide } from "./GuideOverlay.js";
-import { EmptyStateCTA } from "./EmptyStateCTA.js";
 import { isExpertMode, type WorkMode } from "../lib/work-mode.js";
 import { ActivityRow } from "./mobile/github/ActivityRow.js";
 import { DiffSheet, type DiffSheetFile } from "./mobile/github/DiffSheet.js";
@@ -78,6 +70,28 @@ type GitHubWorkspaceProps = {
     action: "connect" | "reconnect" | "disconnect" | "reverify"
   ) => void;
 };
+
+export type WorkbenchActionEffectType =
+  | "local_review_state"
+  | "backend_prepare"
+  | "backend_execute_pr";
+
+export type WorkbenchActionEffect = WorkbenchActionEffectType;
+
+export type WorkbenchActionState =
+  | "unmarked"
+  | "marked"
+  | "removed"
+  | "pr_prepared"
+  | "pr_ready";
+
+export type WorkbenchActionId =
+  | "mark_for_stage"
+  | "remove_from_review"
+  | "open_diff"
+  | "prepare_pr"
+  | "create_pr"
+  | "copy_summary";
 
 const ANALYSIS_QUESTION =
   "Beschreibe die Projektstruktur und nenne die sichere nächste Aktion.";
@@ -266,6 +280,72 @@ function formatGitHubRiskLevel(riskLevel: GitHubChangePlan["riskLevel"]) {
   }
 }
 
+function formatWorkbenchActionState(state: WorkbenchActionState, locale: Locale) {
+  if (locale === "de") {
+    switch (state) {
+      case "marked":
+        return "vorgemerkt";
+      case "removed":
+        return "entfernt";
+      case "pr_prepared":
+        return "PR vorbereitet";
+      case "pr_ready":
+        return "PR bereit";
+      default:
+        return "nicht vorgemerkt";
+    }
+  }
+
+  switch (state) {
+    case "unmarked":
+      return "unmarked";
+    case "marked":
+      return "marked";
+    case "removed":
+      return "removed";
+    case "pr_prepared":
+      return "PR prepared";
+    case "pr_ready":
+      return "PR-ready";
+    default:
+      return state;
+  }
+}
+
+export function deriveWorkbenchActionLabel(options: {
+  effectType: WorkbenchActionEffectType;
+  actionState: WorkbenchActionState;
+  action: WorkbenchActionId;
+  backendCapability: boolean;
+  locale: Locale;
+}) {
+  const de = options.locale === "de";
+
+  if (
+    options.action === "create_pr"
+    && (options.effectType !== "backend_execute_pr" || !options.backendCapability || options.actionState !== "pr_prepared")
+  ) {
+    return de ? "PR vorbereiten" : "Prepare PR";
+  }
+
+  switch (options.action) {
+    case "mark_for_stage":
+      return de ? "Zur Übergabe vormerken" : "Mark for stage";
+    case "remove_from_review":
+      return de ? "Aus Review entfernen" : "Remove from review";
+    case "open_diff":
+      return de ? "Diff öffnen ↗" : "Open diff ↗";
+    case "prepare_pr":
+      return de ? "PR vorbereiten" : "Prepare PR";
+    case "create_pr":
+      return de ? "PR erstellen" : "Create PR";
+    case "copy_summary":
+      return de ? "Zusammenfassung kopieren" : "Copy summary";
+    default:
+      return de ? "Aktion" : "Action";
+  }
+}
+
 function buildRawDiffPreview(plan: GitHubChangePlan | null) {
   if (!plan) {
     return null;
@@ -390,18 +470,6 @@ function resultStatusCopy(
   };
 }
 
-function friendlyTargetBranchLabel(targetBranch: string | null, repo: GitHubRepoSummary | null, locale: Locale) {
-  if (!targetBranch) {
-    return locale === "de" ? "Hauptzweig" : "Default branch";
-  }
-
-  if (repo && targetBranch === repo.defaultBranch) {
-    return locale === "de" ? "Hauptzweig" : "Default branch";
-  }
-
-  return locale === "de" ? "Zielzweig" : "Target branch";
-}
-
 function formatActivityAge(timestamp: string | null | undefined, locale: Locale) {
   if (!timestamp) {
     return locale === "de" ? "lokal" : "local";
@@ -520,6 +588,10 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
   const [verificationError, setVerificationError] = useState<string | null>(
     props.session.metadata.verificationError,
   );
+  const [workbenchActionState, setWorkbenchActionState] = useState<WorkbenchActionState>(() =>
+    props.session.metadata.executionResult ? "pr_ready" : "unmarked",
+  );
+  const [rawDiffExpanded, setRawDiffExpanded] = useState(false);
   const repoSelectRef = useRef<HTMLSelectElement | null>(null);
   const sessionSyncHandleRef = useRef<number | null>(null);
   const latestSessionRef = useRef<GitHubSession | null>(null);
@@ -533,19 +605,11 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       props.onSessionChange(latestSessionRef.current);
     }
   }, [props.onSessionChange]);
-  const githubIdentityLabel = props.githubIntegration?.labels.identity ?? (locale === "de" ? "Nicht verbunden" : "Not connected");
   const githubConnected = props.githubIntegration?.credentialSource === "user_connected";
   const githubConnectAction = props.githubIntegration?.status && props.githubIntegration.status !== "connect_available" && props.githubIntegration.status !== "not_connected"
     ? "reconnect"
     : "connect";
   const githubConnectLabel = locale === "de" ? "GitHub verbinden" : "Connect your GitHub";
-  const openGuideSheet = useCallback(() => {
-    if (typeof document === "undefined") {
-      return;
-    }
-    const guideButton = document.querySelector<HTMLButtonElement>("[data-testid='guide-github']");
-    guideButton?.click();
-  }, []);
 
   useEffect(() => {
     const snapshotMetadata = {
@@ -673,6 +737,13 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     : analysisBundle
       ? ui.shell.statusReady
       : ui.github.proposalEmpty;
+  const mobileNextStepLabel = !selectedRepo
+    ? ui.github.nextStepChooseRepo
+    : !analysisBundle
+      ? ui.github.nextStepAnalysis
+      : !proposalPlan
+        ? ui.github.nextStepProposal
+        : (locale === "de" ? "Diff prüfen" : "Review diff");
   const approvalLabel = proposalPlan
     ? proposalPlan.stale
       ? ui.review.warning
@@ -703,20 +774,47 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       || verificationError?.toLowerCase().includes("stale"),
   );
   const executionConsumed = Boolean(executionResult);
-  const approvalLocked =
+  const backendCapabilities = {
+    preparePr: Boolean(proposalPlan && selectedRepo && props.backendHealthy !== false),
+    executePr: Boolean(
+      proposalPlan
+      && selectedRepo?.permissions.canWrite
+      && props.backendHealthy === true
+      && !proposalPlan.stale
+    ),
+  };
+  const markForStageDisabled =
     !proposalPlan
     || executing
     || verifying
     || stalePlanBlocked
     || executionConsumed
-    || proposalLoading;
+    || proposalLoading
+    || workbenchActionState === "marked"
+    || workbenchActionState === "pr_prepared"
+    || workbenchActionState === "pr_ready";
+  const removeFromReviewDisabled =
+    !proposalPlan
+    || executing
+    || verifying
+    || workbenchActionState === "removed";
+  const preparePrDisabled =
+    !proposalPlan
+    || !backendCapabilities.preparePr
+    || executing
+    || verifying
+    || stalePlanBlocked
+    || executionConsumed
+    || workbenchActionState !== "marked";
   const executeDisabled =
     !proposalPlan
+    || !backendCapabilities.executePr
     || executing
     || verifying
     || stalePlanBlocked
     || executionConsumed
-    || proposalLoading;
+    || proposalLoading
+    || workbenchActionState !== "pr_prepared";
   const verifyDisabled = !executionResult || executing || verifying;
   const reviewDirty = isGitHubReviewDirty({
     proposalPlan,
@@ -781,6 +879,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       setVerificationResult(null);
       setExecutionError(null);
       setVerificationError(null);
+      setWorkbenchActionState("unmarked");
     }
   }, [proposalPlan?.planId, proposalPlan?.stale, selectedRepoFullName]);
 
@@ -798,6 +897,8 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     setVerificationResult(null);
     setExecutionError(null);
     setVerificationError(null);
+    setWorkbenchActionState("unmarked");
+    setRawDiffExpanded(false);
   }
 
   function handleRepoChange(nextFullName: string) {
@@ -886,6 +987,8 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       });
 
       setProposalPlan(response.plan);
+      setWorkbenchActionState("unmarked");
+      setRawDiffExpanded(false);
       setEventTrail((current) => [...current, `${ui.github.reviewTitle} · ${response.plan.planId}`].slice(-4));
       props.onTelemetry("info", localText.telemetryProposalReady, localText.telemetryProposalReadyDetail(response.plan.planId));
     } catch (error) {
@@ -918,6 +1021,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
         status: "executed",
         execution: executionResponse.result,
       } : current));
+      setWorkbenchActionState("pr_ready");
       setApprovalChecked(false);
       setEventTrail((current) => [...current, localText.eventPullRequestCreated(executionResponse.result.prNumber)].slice(-4));
       props.onTelemetry(
@@ -990,7 +1094,6 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     }
   }
 
-  const hasSelection = Boolean(selectedRepo);
   const analysisFiles = analysisBundle?.files ?? [];
   const proposalFiles = proposalPlan?.diff ?? [];
   const mobileDiffFiles: DiffSheetFile[] = proposalFiles.map((file) => ({
@@ -1042,21 +1145,93 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     age: string;
     onPress: () => void;
   } => Boolean(row));
-  const proposalReady = Boolean(proposalPlan);
-  const proposalHeadline = proposalPlan
-    ? executionResult
-      ? resultCopy.label
-      : ui.review.approvalNeeded
+  const workbenchStatus = executionResult
+    ? "PR-ready"
+    : stalePlanBlocked || executionError || verificationError
+      ? "needs review"
+      : workbenchActionState === "marked" || workbenchActionState === "pr_prepared"
+        ? "marked"
+      : proposalPlan
+        ? "pending"
+        : "clean";
+  const workbenchModeLabel =
+    proposalPlan || analysisBundle
+      ? "Read & Write"
+      : "Read Only";
+  const workbenchSummaryTitle = proposalPlan?.summary
+    ?? analysisBundle?.question
+    ?? (locale === "de" ? "Noch keine aktive Arbeit." : "No active work yet.");
+  const workbenchSummaryBody = proposalPlan
+    ? proposalPlan.rationale
     : analysisBundle
-      ? ui.github.analysisTitle
-      : ui.github.nextStepAnalysis;
-  const proposalBadge = proposalPlan
-    ? executionResult
-      ? resultCopy.label
-      : ui.review.approvalNeeded
-    : analysisBundle
-      ? ui.github.readOnly
-      : ui.github.nextStepAnalysis;
+      ? (locale === "de" ? "Analyse liegt vor, Proposal kann vorbereitet werden." : "Analysis is available and a proposal can be prepared.")
+      : (locale === "de" ? "Wähle ein Repository und starte mit Analyse." : "Select a repository and start with analysis.");
+  const rawDiffForView = buildRawDiffPreview(proposalPlan);
+  const actionStateLabel = formatWorkbenchActionState(workbenchActionState, locale);
+  const changeLogValidation = verificationResult
+    ? `verify:${verificationResult.status}`
+    : executionResult
+      ? (locale === "de" ? "execute: erstellt, verify ausstehend" : "execute: created, verify pending")
+      : proposalPlan
+        ? (locale === "de" ? "analyse/proposal geprüft, kein Execute-Call" : "analysis/proposal checked, no execute call")
+        : (locale === "de" ? "keine Checks" : "no checks");
+  const changeLogKeyElements = proposalFiles
+    .slice(0, 5)
+    .map((file) => `${file.changeType}:${file.path}`);
+  const canCopySummary = Boolean(proposalPlan || analysisBundle);
+  const canOpenRawDiff = Boolean(rawDiffForView);
+  const workbenchActionEffects = {
+    markForStage: "local_review_state" as WorkbenchActionEffectType,
+    removeReview: "local_review_state" as WorkbenchActionEffectType,
+    openDiff: "local_review_state" as WorkbenchActionEffectType,
+    preparePr: "backend_prepare" as WorkbenchActionEffectType,
+    createPr: "backend_execute_pr" as WorkbenchActionEffectType,
+    copySummary: "local_review_state" as WorkbenchActionEffectType,
+  };
+  const workbenchActionLabels = {
+    markForStage: deriveWorkbenchActionLabel({
+      effectType: workbenchActionEffects.markForStage,
+      actionState: workbenchActionState,
+      action: "mark_for_stage",
+      backendCapability: false,
+      locale,
+    }),
+    removeReview: deriveWorkbenchActionLabel({
+      effectType: workbenchActionEffects.removeReview,
+      actionState: workbenchActionState,
+      action: "remove_from_review",
+      backendCapability: false,
+      locale,
+    }),
+    openDiff: deriveWorkbenchActionLabel({
+      effectType: workbenchActionEffects.openDiff,
+      actionState: workbenchActionState,
+      action: "open_diff",
+      backendCapability: false,
+      locale,
+    }),
+    preparePr: deriveWorkbenchActionLabel({
+      effectType: workbenchActionEffects.preparePr,
+      actionState: workbenchActionState,
+      action: "prepare_pr",
+      backendCapability: backendCapabilities.preparePr,
+      locale,
+    }),
+    createPr: deriveWorkbenchActionLabel({
+      effectType: workbenchActionEffects.createPr,
+      actionState: workbenchActionState,
+      action: "create_pr",
+      backendCapability: backendCapabilities.executePr,
+      locale,
+    }),
+    copySummary: deriveWorkbenchActionLabel({
+      effectType: workbenchActionEffects.copySummary,
+      actionState: workbenchActionState,
+      action: "copy_summary",
+      backendCapability: false,
+      locale,
+    }),
+  };
   const pinnableChatContext = useMemo(
     () => buildGitHubPinnedChatContext({
       selectedRepo,
@@ -1065,28 +1240,60 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     }),
     [analysisBundle, proposalPlan, selectedRepo],
   );
-  const heroSteps = [
-    {
-      title: ui.github.nextStepChooseRepo,
-      description: locale === "de" ? "Wähle ein erlaubtes Repository aus der Liste." : "Pick an allowed repository from the list.",
-    },
-    {
-      title: githubConnectLabel,
-      description: locale === "de" ? "Verbinde GitHub, damit Vorschau und Analyse möglich sind." : "Connect GitHub so analysis and previews can run.",
-    },
-    {
-      title: ui.github.nextStepAnalysis,
-      description: ui.github.actionReadBody,
-    },
-    {
-      title: ui.github.nextStepProposal,
-      description: ui.github.actionProposalBody,
-    },
-    {
-      title: ui.review.approvalNeeded,
-      description: ui.github.approveHelper,
-    },
-  ];
+  function handleMarkForStage() {
+    if (markForStageDisabled) {
+      return;
+    }
+
+    setWorkbenchActionState("marked");
+    setApprovalChecked(true);
+    setEventTrail((current) => [...current, locale === "de" ? "Zur Übergabe vorgemerkt" : "Marked for stage"].slice(-4));
+  }
+
+  function handleRemoveFromReview() {
+    if (removeFromReviewDisabled) {
+      return;
+    }
+
+    setWorkbenchActionState("removed");
+    setApprovalChecked(false);
+    setEventTrail((current) => [...current, locale === "de" ? "Aus Review entfernt" : "Removed from review"].slice(-4));
+  }
+
+  function handlePreparePr() {
+    if (preparePrDisabled) {
+      return;
+    }
+
+    setWorkbenchActionState("pr_prepared");
+    setApprovalChecked(true);
+    setEventTrail((current) => [...current, workbenchActionLabels.preparePr].slice(-4));
+  }
+
+  async function handleCopySummary() {
+    if (!canCopySummary || typeof navigator === "undefined" || !navigator.clipboard) {
+      return;
+    }
+
+    const lines = [
+      `Intent: ${workbenchSummaryTitle}`,
+      `Why: ${workbenchSummaryBody}`,
+      `Files: ${proposalFiles.map((file) => file.path).join(", ") || "none"}`,
+      `Risk: ${proposalPlan ? formatGitHubRiskLevel(proposalPlan.riskLevel) : "n/a"}`,
+      `Validation: ${changeLogValidation}`,
+      `Action State: ${actionStateLabel}`,
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      props.onTelemetry("info", "Workbench summary copied");
+    } catch (error) {
+      props.onTelemetry(
+        "warning",
+        "Workbench summary copy failed",
+        error instanceof Error ? error.message : undefined,
+      );
+    }
+  }
 
   const workspaceNotice = proposalPlan && stalePlanBlocked
     ? ui.github.workspaceNoticeStale
@@ -1108,9 +1315,9 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       data-testid="github-workspace"
       aria-busy={reposLoading || analysisLoading || proposalLoading || executing || verifying}
     >
-      <section className="github-mobile-panel mobile-panel-scroll" aria-label={locale === "de" ? "GitHub mobile Arbeitsfläche" : "GitHub mobile workspace"}>
-        <header className="github-mobile-summary">
-          <span className="mobile-mono">GITHUB</span>
+      <section className="github-mobile-panel mobile-panel-scroll" aria-label={locale === "de" ? "Workbench mobile Arbeitsfläche" : "Workbench mobile workspace"}>
+        <header className="github-mobile-summary github-mobile-summary-elevated">
+          <span className="mobile-mono">WORKBENCH</span>
           <strong>{selectedRepo ? (expertMode ? selectedRepo.fullName : ui.github.repoSelected) : ui.github.nextStepChooseRepo}</strong>
           <p>
             {selectedRepo
@@ -1121,43 +1328,111 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
           </p>
         </header>
 
-        <div className="github-mobile-action-list" aria-label={locale === "de" ? "GitHub Aktionen" : "GitHub actions"}>
-          <button
-            type="button"
-            onClick={() => {
-              if (!selectedRepo && !githubConnected) {
-                props.onIntegrationAction("github", githubConnectAction);
-                return;
-              }
-              if (!selectedRepo) {
-                repoSelectRef.current?.focus();
-                return;
-              }
-              void runAnalysis();
-            }}
-            disabled={analysisLoading || reposLoading}
-          >
-            {analysisLoading ? ui.common.loading : ui.github.nextStepAnalysis}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              void createProposal();
-            }}
-            disabled={proposalLoading || !analysisBundle}
-          >
-            {proposalLoading ? ui.common.loading : ui.github.nextStepProposal}
-          </button>
-          <button
-            type="button"
-            onClick={() => setDiffSheetOpen(true)}
-            disabled={!proposalPlan}
-          >
-            {locale === "de" ? "Diff ansehen" : "View diff"}
-          </button>
-        </div>
+        <section className="github-mobile-truth-grid" aria-label={locale === "de" ? "Workbench Status" : "Workbench status"}>
+          <div className="github-mobile-truth-item">
+            <span>{locale === "de" ? "Repo" : "Repo"}</span>
+            <strong>{selectedRepo ? (expertMode ? selectedRepo.fullName : ui.github.repoSelected) : ui.github.noRepoSelected}</strong>
+          </div>
+          <div className="github-mobile-truth-item">
+            <span>{locale === "de" ? "Branch" : "Branch"}</span>
+            <strong>{proposalPlan?.branchName ?? selectedRepo?.defaultBranch ?? ui.common.na}</strong>
+          </div>
+          <div className="github-mobile-truth-item">
+            <span>{locale === "de" ? "Verbindung" : "Connection"}</span>
+            <strong>{connectionLabel}</strong>
+          </div>
+          <div className="github-mobile-truth-item">
+            <span>{locale === "de" ? "Nächster Schritt" : "Next step"}</span>
+            <strong>{mobileNextStepLabel}</strong>
+          </div>
+        </section>
 
-        <section className="github-mobile-activity" aria-label={locale === "de" ? "GitHub Aktivität" : "GitHub activity"}>
+        <section className="github-mobile-stage-card" aria-label={locale === "de" ? "Schritt 1 Kontext" : "Step 1 context"}>
+          <span className="mobile-mono">{locale === "de" ? "SCHRITT 1 · KONTEXT" : "STEP 1 · CONTEXT"}</span>
+          <label htmlFor="github-repo-select-mobile">{ui.github.repoSelectLabel}</label>
+          <select
+            id="github-repo-select-mobile"
+            aria-label={ui.github.repoSelectLabel}
+            ref={repoSelectRef}
+            value={selectedRepoFullName}
+            onChange={(event) => handleRepoChange(event.target.value)}
+            disabled={reposLoading || repos.length === 0}
+          >
+            <option value="">
+              {reposLoading ? ui.github.loadingRepos : ui.github.repoSelectLabel}
+            </option>
+            {repos.map((repo, index) => (
+              <option key={repo.fullName} value={repo.fullName}>
+                {friendlyRepoLabel(index, expertMode, repo.fullName, locale)}
+              </option>
+            ))}
+          </select>
+          <div className="github-mobile-stage-actions">
+            {githubConnected ? (
+              <>
+                <button type="button" className="secondary-button" onClick={() => props.onIntegrationAction("github", "reverify")}>
+                  {locale === "de" ? "Erneut prüfen" : "Reverify"}
+                </button>
+                <button type="button" className="secondary-button" onClick={() => props.onIntegrationAction("github", "disconnect")}>
+                  {locale === "de" ? "Trennen" : "Disconnect"}
+                </button>
+              </>
+            ) : (
+              <button type="button" onClick={() => props.onIntegrationAction("github", githubConnectAction)}>
+                {githubConnectLabel}
+              </button>
+            )}
+          </div>
+        </section>
+
+        <section className="github-mobile-stage-card" aria-label={locale === "de" ? "Schritt 2 Analyse und Vorschlag" : "Step 2 analysis and proposal"}>
+          <span className="mobile-mono">{locale === "de" ? "SCHRITT 2 · ANALYSE" : "STEP 2 · ANALYZE"}</span>
+          <p>{locale === "de" ? "Starte erst die Analyse, dann den Vorschlag." : "Run analysis first, then proposal."}</p>
+          <div className="github-mobile-action-list">
+            <button
+              type="button"
+              onClick={() => {
+                if (!selectedRepo && !githubConnected) {
+                  props.onIntegrationAction("github", githubConnectAction);
+                  return;
+                }
+                if (!selectedRepo) {
+                  repoSelectRef.current?.focus();
+                  return;
+                }
+                void runAnalysis();
+              }}
+              disabled={analysisLoading || reposLoading}
+            >
+              {analysisLoading ? ui.common.loading : ui.github.nextStepAnalysis}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void createProposal();
+              }}
+              disabled={proposalLoading || !analysisBundle}
+            >
+              {proposalLoading ? ui.common.loading : ui.github.nextStepProposal}
+            </button>
+          </div>
+        </section>
+
+        <section className="github-mobile-stage-card" aria-label={locale === "de" ? "Schritt 3 Diff und Übergabe" : "Step 3 diff and handoff"}>
+          <span className="mobile-mono">{locale === "de" ? "SCHRITT 3 · DIFF" : "STEP 3 · DIFF"}</span>
+          <p>{locale === "de" ? "Öffne den Diff und prüfe Änderungen vor Freigabe." : "Open diff and review changes before approval."}</p>
+          <div className="github-mobile-action-list">
+            <button
+              type="button"
+              onClick={() => setDiffSheetOpen(true)}
+              disabled={!proposalPlan}
+            >
+              {workbenchActionLabels.openDiff}
+            </button>
+          </div>
+        </section>
+
+        <section className="github-mobile-activity" aria-label={locale === "de" ? "Workbench Aktivität" : "Workbench activity"}>
           <span className="mobile-mono">{locale === "de" ? "AKTIVITÄT" : "ACTIVITY"}</span>
           {mobileActivityRows.length > 0 ? mobileActivityRows.map((row) => (
             <ActivityRow
@@ -1175,7 +1450,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
 
         <DiffSheet
           open={diffSheetOpen}
-          title={locale === "de" ? "GitHub Diff" : "GitHub diff"}
+          title={locale === "de" ? "Workbench Diff" : "Workbench diff"}
           summary={proposalPlan?.summary ?? analysisBundle?.question ?? ui.github.diffAppearsLater}
           emptyLabel={ui.github.diffAppearsLater}
           files={mobileDiffFiles}
@@ -1183,56 +1458,70 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
         />
       </section>
 
-      <section className="workspace-hero github-hero">
-        <div>
-          <p className={`status-pill ${hasSelection ? "status-ready" : "status-partial"}`}>
-            {hasSelection ? ui.github.readOnlyActive : ui.github.nextStepChooseRepo}
-          </p>
-          <h1>{ui.github.title}</h1>
-          <ol className="github-hero-steps">
-            {heroSteps.map((step) => (
-              <li className="github-hero-step" key={step.title}>
-                <strong>{step.title}</strong>
-                <p>{step.description}</p>
-              </li>
-            ))}
-          </ol>
-          <div className="workspace-hero-actions">
-            <GuideOverlay content={getWorkspaceGuide(locale, "github")} testId="guide-github" />
+      <article className="workspace-card github-review-card">
+        <header className="card-header">
+          <div>
+            <span>{locale === "de" ? "Workspace Header" : "Workspace Header"}</span>
+            <strong>{locale === "de" ? "Workbench Review Center" : "Workbench Review Center"}</strong>
+          </div>
+          <div className="plan-badges">
+            <span className="workflow-chip workflow-chip-active" aria-label={`repo:${selectedRepo?.fullName ?? ui.github.noRepoSelected}`}>
+              {selectedRepo?.fullName ?? ui.github.noRepoSelected}
+            </span>
+            <span className="workflow-chip workflow-chip-idle" aria-label={`branch:${proposalPlan?.branchName ?? selectedRepo?.defaultBranch ?? ui.common.na}`}>
+              {proposalPlan?.branchName ?? selectedRepo?.defaultBranch ?? ui.common.na}
+            </span>
+            <span className={`workflow-chip ${workbenchStatus === "clean" ? "workflow-chip-idle" : "workflow-chip-active"}`} aria-label={`mode:${workbenchModeLabel}`}>
+              {`mode:${workbenchModeLabel}`}
+            </span>
+            <span className={`workflow-chip ${workbenchStatus === "clean" ? "workflow-chip-idle" : "workflow-chip-active"}`} aria-label={`status:${workbenchStatus}`}>
+              {`status:${workbenchStatus}`}
+            </span>
+            <span className="workflow-chip workflow-chip-idle" aria-label={`scope:${proposalFiles[0]?.path ?? analysisFiles[0]?.path ?? ui.common.na}`}>
+              {`scope:${proposalFiles[0]?.path ?? analysisFiles[0]?.path ?? ui.common.na}`}
+            </span>
+          </div>
+        </header>
+      </article>
+
+      <article className="workspace-card github-review-card">
+        <header className="card-header">
+          <div>
+            <span>{locale === "de" ? "Active Context" : "Active Context"}</span>
+            <strong>{selectedRepo?.fullName ?? ui.github.noRepoSelected}</strong>
+          </div>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => repoSelectRef.current?.focus()}
+            disabled={reposLoading}
+          >
+            {locale === "de" ? "Kontext ändern" : "Change context"}
+          </button>
+        </header>
+        <div className="truth-rail-pairs">
+          <div>
+            <span>Repo</span>
+            <strong>{selectedRepo?.fullName ?? ui.common.na}</strong>
+          </div>
+          <div>
+            <span>Branch</span>
+            <strong>{proposalPlan?.branchName ?? selectedRepo?.defaultBranch ?? ui.common.na}</strong>
+          </div>
+          <div>
+            <span>Scope</span>
+            <strong>{proposalFiles[0]?.path ?? analysisFiles[0]?.path ?? ui.common.na}</strong>
+          </div>
+          <div>
+            <span>{locale === "de" ? "Verbindung" : "Connection"}</span>
+            <strong>{connectionLabel}</strong>
+          </div>
+          <div>
+            <span>{locale === "de" ? "Schreibstatus" : "Write status"}</span>
+            <strong>{workbenchModeLabel}</strong>
           </div>
         </div>
-
-        <aside className="mini-panel github-mini-panel">
-          <article className="github-repo-card" data-testid="github-integration-card">
-            <div className="github-repo-card-header">
-              <div>
-                <span>GitHub App</span>
-                {githubConnected ? <strong>{githubIdentityLabel}</strong> : null}
-              </div>
-              {githubConnected ? (
-                <span className="status-pill status-ready">
-                  {locale === "de" ? "Verbunden" : "Connected"}
-                </span>
-              ) : null}
-            </div>
-            <div className="action-row">
-              {githubConnected ? (
-                <>
-                  <button type="button" onClick={() => props.onIntegrationAction("github", "reverify")}>
-                    {locale === "de" ? "Erneut prüfen" : "Reverify"}
-                  </button>
-                  <button type="button" className="secondary-button" onClick={() => props.onIntegrationAction("github", "disconnect")}>
-                    {locale === "de" ? "Trennen" : "Disconnect"}
-                  </button>
-                </>
-              ) : (
-                <button type="button" onClick={() => props.onIntegrationAction("github", githubConnectAction)}>
-                  {githubConnectLabel}
-                </button>
-              )}
-            </div>
-          </article>
-
+        <div className="action-row">
           <select
             id="github-repo-select"
             aria-label={ui.github.repoSelectLabel}
@@ -1250,358 +1539,244 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
               </option>
             ))}
           </select>
-
-          {selectedRepo ? (
-            <article className="github-repo-card">
-              <div className="github-repo-card-header">
-                <div>
-                  <span>{ui.github.connectedRepo}</span>
-                  <strong>{expertMode ? selectedRepo.fullName : ui.github.repoSelected}</strong>
-                </div>
-                <span className="status-pill status-ready">{accessLabel}</span>
-              </div>
-              <div className="github-repo-meta">
-                <span>{formatRepoVisibility(selectedRepo.isPrivate, locale)}</span>
-                <span>•</span>
-                <span>{expertMode ? `${ui.github.defaultBranch}: ${selectedRepo.defaultBranch}` : ui.github.readOnly}</span>
-                <span>•</span>
-                <span>{ui.github.repositoryStatus}: {formatRepoStatus(selectedRepo.status, locale)}</span>
-              </div>
-              <p>{selectedRepo.description ?? ui.common.none}</p>
-            </article>
+          {githubConnected ? (
+            <>
+              <button type="button" className="secondary-button" onClick={() => props.onIntegrationAction("github", "reverify")}>
+                {locale === "de" ? "Erneut prüfen" : "Reverify"}
+              </button>
+              <button type="button" className="secondary-button" onClick={() => props.onIntegrationAction("github", "disconnect")}>
+                {locale === "de" ? "Trennen" : "Disconnect"}
+              </button>
+            </>
           ) : (
-            <p>{reposLoading ? ui.github.loadingRepos : ui.github.noRepos}</p>
+            <button type="button" onClick={() => props.onIntegrationAction("github", githubConnectAction)}>
+              {githubConnectLabel}
+            </button>
           )}
-
-          {workspaceNotice ? (
-            <p
-              className={proposalPlan && stalePlanBlocked ? "warning-banner" : "error-banner"}
-              role={proposalPlan && stalePlanBlocked ? "status" : "alert"}
-              data-testid="github-workspace-notice"
-            >
-              {workspaceNotice}
-            </p>
-          ) : null}
-        </aside>
-      </section>
-
-      {!hasSelection ? (
-        <div className="empty-state-card">
-          <EmptyStateCTA
-            icon="⊟"
-            title={locale === "de" ? "Noch kein Repo verbunden" : "No repository connected yet"}
-            description={locale === "de"
-              ? "Verbinde dein GitHub-Repo, um Reviews, Diffs und Kontext direkt im Chat zu nutzen."
-              : "Connect your GitHub repository to use reviews, diffs, and context directly in chat."}
-            primaryLabel={locale === "de" ? "⊟ GitHub verbinden" : "⊟ Connect GitHub"}
-            primaryVariant="github"
-            primaryAction={() => {
-              if (githubConnected) {
-                repoSelectRef.current?.focus();
-                return;
-              }
-              props.onIntegrationAction("github", githubConnectAction);
-            }}
-            secondaryLabel={locale === "de" ? "↗ Wie funktioniert das?" : "↗ How does this work?"}
-            secondaryAction={openGuideSheet}
-            footnote={reposLoading ? ui.github.loadingRepos : ui.github.noRepos}
-          />
-
-          {expertMode ? (
-            <ol className="guided-steps">
-              <li>{ui.github.nextStepChooseRepo}</li>
-              <li>{ui.github.nextStepAnalysis}</li>
-              <li>{ui.github.nextStepProposal}</li>
-              <li>{ui.review.approvalNeeded}</li>
-            </ol>
-          ) : null}
         </div>
-      ) : (
-        <>
-          <div className="github-action-grid">
-            <article className="workspace-card github-action-card">
-              <header className="card-header">
-                <div>
-                  <span>{ui.github.actionReadTitle}</span>
-                  <strong>{ui.github.nextStepAnalysis}</strong>
-                </div>
-                <span className="status-pill status-ready">{ui.github.readOnly}</span>
-              </header>
-              <p>{ui.github.actionReadBody}</p>
-              <div className="action-row">
-                <button
-                  type="button"
-                  onClick={() => {
-                    void runAnalysis();
-                  }}
-                  disabled={analysisLoading}
-                >
-                  {analysisLoading ? ui.common.loading : ui.github.nextStepAnalysis}
-                </button>
-                <span className="muted-copy">{ui.github.readOnlyActive}</span>
-              </div>
-            </article>
+        {selectedRepo ? (
+          <p className="muted-copy">
+            {`${formatRepoVisibility(selectedRepo.isPrivate, locale)} · ${ui.github.repositoryStatus}: ${formatRepoStatus(selectedRepo.status, locale)} · ${selectedRepo.description ?? ui.common.none}`}
+          </p>
+        ) : null}
+      </article>
 
-            <article className="workspace-card github-action-card">
-              <header className="card-header">
-                <div>
-                  <span>{ui.github.actionProposalTitle}</span>
-                  <strong>{ui.github.nextStepProposal}</strong>
-                </div>
-                <span className="status-pill status-partial">{ui.review.approvalNeeded}</span>
-              </header>
-              <p>{ui.github.actionProposalBody}</p>
-              <div className="action-row">
-                <button
-                  type="button"
-                  onClick={() => {
-                    void createProposal();
-                  }}
-                  disabled={proposalLoading || !analysisBundle}
-                >
-                  {proposalLoading ? ui.common.loading : ui.github.nextStepProposal}
-                </button>
-                <span className="muted-copy">{ui.review.approvalNeeded}</span>
-              </div>
-            </article>
+      {workspaceNotice ? (
+        <p
+          className={proposalPlan && stalePlanBlocked ? "warning-banner" : "error-banner"}
+          role={proposalPlan && stalePlanBlocked ? "status" : "alert"}
+          data-testid="github-workspace-notice"
+        >
+          {workspaceNotice}
+        </p>
+      ) : null}
+
+      <article className="workspace-card github-review-card">
+        <header className="card-header">
+          <div>
+            <span>{locale === "de" ? "Current Work Summary" : "Current Work Summary"}</span>
+            <strong>{workbenchSummaryTitle}</strong>
           </div>
+          <div className="action-row">
+            <button type="button" onClick={() => { void runAnalysis(); }} disabled={analysisLoading || !selectedRepo}>
+              {analysisLoading ? ui.common.loading : ui.github.nextStepAnalysis}
+            </button>
+            <button type="button" onClick={() => { void createProposal(); }} disabled={proposalLoading || !analysisBundle}>
+              {proposalLoading ? ui.common.loading : ui.github.nextStepProposal}
+            </button>
+          </div>
+        </header>
+        <p>{workbenchSummaryBody}</p>
+        {props.onPinChatContext ? (
+          <div className="action-row github-pin-context-row">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                if (!pinnableChatContext) {
+                  return;
+                }
 
-          {reviewDirty ? (
-            <p className="warning-banner" role="status" data-testid="github-review-dirty-warning">
-              {ui.github.reviewDirtyWarning}
-            </p>
-          ) : null}
-
-          <article className="workspace-card github-review-card">
-            <header className="card-header">
-              <div>
-                <span>{ui.github.reviewTitle}</span>
-                <strong>{proposalHeadline}</strong>
-              </div>
-              <div className="plan-badges">
-                <span className={`workflow-chip ${proposalReady ? "workflow-chip-active" : "workflow-chip-idle"}`}>
-                  {proposalBadge}
-                </span>
-              </div>
-            </header>
-
-            {analysisBundle ? (
-              <div className="github-review-body">
-              <div className="github-review-summary">
-                <p className="info-label">{ui.github.analysisTitle}</p>
-                <strong>{analysisBundle.question}</strong>
-                <p className="muted-copy">
-                  {analysisBundle.files.length} · {analysisBundle.tokenBudget.truncated ? ui.shell.statusPartial : ui.shell.statusReady}
-                </p>
-                {props.onPinChatContext ? (
-                  <div className="action-row github-pin-context-row">
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => {
-                        if (!pinnableChatContext) {
-                          return;
-                        }
-
-                        props.onPinChatContext?.(pinnableChatContext);
-                      }}
-                      disabled={!pinnableChatContext}
-                    >
-                      {ui.github.pinToChatContext}
-                    </button>
-                    <span className="muted-copy">{ui.github.pinToChatContextHint}</span>
-                  </div>
-                ) : null}
-              </div>
-
-                <div className="github-file-chip-row">
-                  {analysisFiles.map((file) => (
-                    <span key={file.path} className="reference-chip">
-                      {file.path}
-                    </span>
-                  ))}
-                </div>
-
-                {analysisBundle.warnings.length > 0 ? (
-                  <div className="github-warning-list">
-                    {analysisBundle.warnings.map((warning) => (
-                      <span key={warning} className="workflow-chip workflow-chip-idle">
-                        {warning}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-
-                {proposalPlan ? (
-                  <ProposalCard
-                    testId="github-approval-surface"
-                    title={proposalPlan.summary}
-                    summary={proposalPlan.rationale}
-                    consequence={
-                      executionResult
-                        ? ui.github.verifyResult
-                        : ui.github.approveHelper
-                    }
-                    statusLabel={
-                      proposalPlan.stale
-                        ? ui.github.staleProposal
-                        : executionResult
-                          ? verificationResult?.status === "verified"
-                            ? ui.matrix.topicStatusVerified
-                            : ui.matrix.topicStatusOpen
-                          : ui.review.approvalNeeded
-                    }
-                    statusTone={
-                      proposalPlan.stale
-                        ? "error"
-                        : executionResult
-                          ? verificationResult?.status === "verified"
-                            ? "ready"
-                            : "partial"
-                          : "partial"
-                    }
-                    metadata={mergeMetadataRows(
-                      buildGovernanceMetadataRows({
-                        actingIdentity: BACKEND_TRUTH_UNAVAILABLE,
-                        activeScope: `${selectedRepo?.fullName ?? selectedRepoFullName ?? ui.common.na}@${proposalPlan.baseRef}`,
-                        authorityDomain: localText.authorityDomain,
-                        targetScope: `${selectedRepo?.fullName ?? selectedRepoFullName ?? ui.common.na}@${proposalPlan.targetBranch}`,
-                        executionDomain: localText.executionDomain,
-                        executionTarget: `${proposalPlan.branchName} -> ${proposalPlan.targetBranch}`,
-                        provenanceSummary: localText.planSummary(proposalPlan.planId),
-                        receiptSummary: executionResult
-                          ? verificationResult?.status ?? localText.reviewReceiptExecutionPending
-                          : localText.reviewReceiptPending,
-                      }),
-                      [{ label: localText.riskLabel, value: proposalPlan.riskLevel }]
-                    )}
-                  >
-                    <div className="github-plan-file-grid">
-                      {proposalFiles.map((file) => (
-                        <article key={file.path} className="github-plan-file-card">
-                          <strong>{file.path}</strong>
-                          <p>{file.changeType === "modified" ? ui.github.planFileModified : ui.github.planFileChanged}</p>
-                        </article>
-                      ))}
-                    </div>
-
-                    {proposalPlan.stale ? (
-                      <p className="warning-banner" role="status" data-testid="github-stale-proposal">
-                        {ui.github.staleProposal}
-                      </p>
-                    ) : null}
-
-                    {!executionResult ? (
-                      <>
-                        {executing || verifying ? (
-                          <ApprovalTransitionCard
-                            testId="github-approval-transition"
-                            title={ui.github.approving}
-                            detail={ui.github.approveHelper}
-                          />
-                        ) : null}
-                        <DecisionZone
-                          testId="github-decision-zone"
-                          approveLabel={executing ? ui.github.approving : ui.github.approveLabel}
-                          rejectLabel={ui.github.rejectLabel}
-                          onApprove={() => {
-                            void handleExecuteProposal();
-                          }}
-                          onReject={() => {
-                            setApprovalChecked(false);
-                            setEventTrail((current) => [...current, ui.github.rejectLabel].slice(-4));
-                            props.onTelemetry("warning", localText.telemetryProposalRejected, localText.telemetryProposalRejectedDetail);
-                          }}
-                          approveDisabled={approvalLocked}
-                          rejectDisabled={approvalLocked}
-                          busy={executing || verifying}
-                          helperText={ui.github.approveHelper}
-                        />
-                      </>
-                    ) : null}
-                  </ProposalCard>
-                ) : (
-                  <div className="github-plan-empty">
-                    <p className="muted-copy">
-                      {ui.github.proposalEmpty}
-                    </p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="github-review-empty">
-                <p className="empty-state">
-                  {ui.github.reviewEmpty}
-                </p>
-              </div>
-            )}
-          </article>
-
-          {proposalPlan && executionResult ? (
-                  <ExecutionReceiptCard
-              title={resultCopy.detail}
-              detail={ui.github.verifyResult}
-              outcome={
-                verificationResult?.status === "failed"
-                  ? "failed"
-                  : verificationResult?.status === "mismatch"
-                    ? "unverifiable"
-                    : verificationResult?.status === "verified"
-                      ? "executed"
-                      : "executed"
-              }
-              metadata={mergeMetadataRows(
-                buildGovernanceMetadataRows({
-                  actingIdentity: BACKEND_TRUTH_UNAVAILABLE,
-                  activeScope: `${selectedRepo?.fullName ?? selectedRepoFullName ?? ui.common.na}@${proposalPlan.baseRef}`,
-                  authorityDomain: localText.authorityDomain,
-                  targetScope: `${selectedRepo?.fullName ?? selectedRepoFullName ?? ui.common.na}@${executionResult.targetBranch}`,
-                  executionDomain: localText.executionDomain,
-                  executionTarget: `PR #${executionResult.prNumber}`,
-                  provenanceSummary: localText.planSummary(executionResult.planId),
-                  receiptSummary: verificationResult?.status ?? localText.verificationPending,
-                }),
-                [
-                  {
-                    label: ui.github.targetBranch,
-                    value: expertMode ? executionResult.targetBranch : friendlyTargetBranchLabel(executionResult.targetBranch, selectedRepo, locale),
-                  },
-                  { label: localText.commitLabel, value: executionResult.commitSha },
-                  { label: ui.github.verifyResult, value: verificationResult?.status ?? ui.common.loading },
-                ]
-              )}
-              testId="github-pr-result"
+                props.onPinChatContext?.(pinnableChatContext);
+              }}
+              disabled={!pinnableChatContext}
             >
-              {executionResult.prUrl ? (
-                <p>
-                  <a
-                    href={executionResult.prUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="secondary-button github-pr-link"
-                  >
-                    {ui.github.openInGitHub}
-                  </a>
-                </p>
-              ) : null}
+              {ui.github.pinToChatContext}
+            </button>
+            <span className="muted-copy">{ui.github.pinToChatContextHint}</span>
+          </div>
+        ) : null}
+      </article>
 
-              <div className="action-row">
-                <span className="muted-copy">
-                  {verificationResult ? verificationResult.status : ui.github.verifyResult}
-                </span>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => {
-                    void handleVerifyProposal();
-                  }}
-                  disabled={verifyDisabled}
-                >
-                  {verifying ? ui.github.verifyBusy : ui.github.verifyResult}
-                </button>
-              </div>
-            </ExecutionReceiptCard>
-          ) : null}
+      <article className="workspace-card github-review-card" data-testid="workbench-change-log">
+        <header className="card-header">
+          <div>
+            <span>{locale === "de" ? "Guardrail Change Log" : "Guardrail Change Log"}</span>
+            <strong>{proposalPlan?.planId ?? ui.common.na}</strong>
+          </div>
+          <span className="status-pill status-partial">{`Action: ${actionStateLabel}`}</span>
+        </header>
+        <div className="truth-rail-pairs">
+          <div>
+            <span>Intent</span>
+            <strong>{workbenchSummaryTitle}</strong>
+          </div>
+          <div>
+            <span>Files</span>
+            <strong>{proposalFiles.map((file) => file.path).join(", ") || ui.common.none}</strong>
+          </div>
+          <div>
+            <span>Key Elements</span>
+            <strong>{changeLogKeyElements.join(" · ") || ui.common.none}</strong>
+          </div>
+          <div>
+            <span>Risk</span>
+            <strong>{proposalPlan ? formatGitHubRiskLevel(proposalPlan.riskLevel) : ui.common.na}</strong>
+          </div>
+          <div>
+            <span>Validation</span>
+            <strong>{changeLogValidation}</strong>
+          </div>
+          <div>
+            <span>Action State</span>
+            <strong>{actionStateLabel}</strong>
+          </div>
+        </div>
+      </article>
+
+      <article className="workspace-card github-review-card" data-testid="workbench-review-actions">
+        <header className="card-header">
+          <div>
+            <span>{locale === "de" ? "Review Actions" : "Review Actions"}</span>
+            <strong>{locale === "de" ? "Semantik folgt technischer Wirkung" : "Action semantics follow technical effect"}</strong>
+          </div>
+        </header>
+        <div className="action-row">
+          <button
+            type="button"
+            onClick={handleMarkForStage}
+            disabled={markForStageDisabled}
+            data-testid="workbench-action-mark-for-stage"
+            data-effect-type={workbenchActionEffects.markForStage}
+          >
+            {workbenchActionLabels.markForStage}
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={handleRemoveFromReview}
+            disabled={removeFromReviewDisabled}
+            data-testid="workbench-action-remove-review"
+            data-effect-type={workbenchActionEffects.removeReview}
+          >
+            {workbenchActionLabels.removeReview}
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => setRawDiffExpanded((current) => !current)}
+            disabled={!canOpenRawDiff}
+            data-testid="workbench-action-open-diff"
+            data-effect-type={workbenchActionEffects.openDiff}
+          >
+            {workbenchActionLabels.openDiff}
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={handlePreparePr}
+            disabled={preparePrDisabled}
+            data-testid="workbench-action-prepare-pr"
+            data-effect-type={workbenchActionEffects.preparePr}
+          >
+            {workbenchActionLabels.preparePr}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void handleExecuteProposal();
+            }}
+            disabled={executeDisabled}
+            data-testid="workbench-action-create-pr"
+            data-effect-type={workbenchActionEffects.createPr}
+            data-backend-capability={String(backendCapabilities.executePr)}
+          >
+            {workbenchActionLabels.createPr}
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => {
+              void handleCopySummary();
+            }}
+            disabled={!canCopySummary}
+            data-testid="workbench-action-copy-summary"
+            data-effect-type={workbenchActionEffects.copySummary}
+          >
+            {workbenchActionLabels.copySummary}
+          </button>
+        </div>
+        <p className="muted-copy">
+          {locale === "de"
+            ? "Mark for stage und Aus Review entfernen ändern nur lokalen Workbench-Review-State."
+            : "Mark for stage and Remove from review only change local workbench review state."}
+        </p>
+      </article>
+
+      <article className="workspace-card github-review-card">
+        <header className="card-header">
+          <div>
+            <span>{locale === "de" ? "Raw Diff" : "Raw Diff"}</span>
+            <strong>{locale === "de" ? "Optionaler Detailblick" : "Optional detail view"}</strong>
+          </div>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => setRawDiffExpanded((current) => !current)}
+            disabled={!canOpenRawDiff}
+          >
+            {rawDiffExpanded ? (locale === "de" ? "Diff schließen" : "Close diff") : workbenchActionLabels.openDiff}
+          </button>
+        </header>
+        {rawDiffExpanded && rawDiffForView ? (
+          <pre className="github-diff-preview">{rawDiffForView}</pre>
+        ) : (
+          <p className="muted-copy">{ui.github.diffAppearsLater}</p>
+        )}
+      </article>
+
+      {proposalPlan && executionResult ? (
+        <article className="workspace-card github-review-card" data-testid="github-pr-result">
+          <header className="card-header">
+            <div>
+              <span>{locale === "de" ? "PR Status" : "PR status"}</span>
+              <strong>{resultCopy.detail}</strong>
+            </div>
+          </header>
+          <div className="action-row">
+            {executionResult.prUrl ? (
+              <a
+                href={executionResult.prUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="secondary-button github-pr-link"
+              >
+                {ui.github.openInGitHub}
+              </a>
+            ) : null}
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                void handleVerifyProposal();
+              }}
+              disabled={verifyDisabled}
+            >
+              {verifying ? ui.github.verifyBusy : ui.github.verifyResult}
+            </button>
+          </div>
+        </article>
+      ) : null}
 
           <ExpertDetails
             expertMode={expertMode}
@@ -1631,7 +1806,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                 {verificationResult.mismatchReasons.join(" · ")}
               </p>
             ) : null}
-            {rawDiffPreview ? (
+          {rawDiffPreview ? (
               <pre className="github-diff-preview">{rawDiffPreview}</pre>
             ) : (
               <p className="muted-copy">
@@ -1639,8 +1814,6 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
               </p>
             )}
           </ExpertDetails>
-        </>
-      )}
     </section>
   );
 }

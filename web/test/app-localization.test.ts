@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -43,16 +44,16 @@ test("app route resolver separates preview, README landing, and console", () => 
   assert.equal(resolveAppSurface("https://example.test/?console=1"), "console");
 });
 
-test("GitHub tab navigation guard only triggers when leaving GitHub with local dirty review state", () => {
+test("Workbench navigation guard only triggers when leaving Workbench with local dirty review state", () => {
   assert.equal(shouldConfirmGitHubReviewNavigation({
-    currentMode: "github",
+    currentMode: "workbench",
     nextMode: "chat",
     githubReviewDirty: true,
   }), true);
 
   assert.equal(shouldConfirmGitHubReviewNavigation({
-    currentMode: "github",
-    nextMode: "github",
+    currentMode: "workbench",
+    nextMode: "workbench",
     githubReviewDirty: true,
   }), false);
 
@@ -63,8 +64,16 @@ test("GitHub tab navigation guard only triggers when leaving GitHub with local d
   }), false);
 
   assert.equal(shouldConfirmGitHubReviewNavigation({
-    currentMode: "github",
-    nextMode: "review",
+    currentMode: "workbench",
+    nextMode: "settings",
     githubReviewDirty: false,
   }), false);
+});
+
+test("legacy workspace URL modes normalize to workbench and shell tabs are four-only", () => {
+  const source = readFileSync("web/src/App.tsx", "utf8");
+
+  assert.match(source, /if \(value === "github" \|\| value === "review" \|\| value === "context"\) \{\s*return "workbench";\s*\}/);
+  assert.match(source, /const WORKSPACE_MODES: WorkspaceMode\[\] = \["chat", "workbench", "matrix", "settings"\]/);
+  assert.match(source, /const MOBILE_NAV_MODES: WorkspaceMode\[\] = \["chat", "workbench", "matrix", "settings"\]/);
 });

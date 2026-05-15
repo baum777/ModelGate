@@ -461,9 +461,9 @@ async function exchangeGitHubInstallation(
 
   try {
     const installation = await appAuth.readInstallation(installationIdRaw);
-    const hasAllowedRepo = await appAuth.installationHasAnyAllowedRepo(installation.installationId, deps.githubConfig.allowedRepos);
+    const repositories = await appAuth.listInstallationRepositories(installation.installationId);
 
-    if (!hasAllowedRepo) {
+    if (repositories.length === 0) {
       throw new Error("scope_denied");
     }
 
@@ -476,6 +476,7 @@ async function exchangeGitHubInstallation(
         installationId: String(installation.installationId),
         accountLogin: installation.accountLogin,
         accountType: installation.accountType,
+        repositoryCount: repositories.length,
         connectedAt: new Date().toISOString()
       }
     };
@@ -568,6 +569,203 @@ async function exchangeGitHubOAuthCode(
       connectedAt: new Date().toISOString()
     }
   };
+}
+
+function parseGitHubInstallationId(raw: string | number | null | undefined) {
+  if (typeof raw === "number" && Number.isInteger(raw) && raw > 0) {
+    return raw;
+  }
+
+  if (typeof raw !== "string") {
+    return null;
+  }
+
+  const parsed = Number.parseInt(raw.trim(), 10);
+
+  return Number.isFinite(parsed) && !Number.isNaN(parsed) && parsed > 0 ? parsed : null;
+}
+
+async function exchangeGitHubOAuthCodeForAccessToken(
+  deps: IntegrationAuthRouteDependencies,
+  code: string
+) {
+  const oauthConfig = resolveGitHubOAuthConfig(deps.env);
+
+  if (!oauthConfig.enabled) {
+    throw new Error("missing_server_config");
+  }
+
+  const tokenBody = new URLSearchParams({
+    client_id: oauthConfig.clientId,
+    client_secret: oauthConfig.clientSecret,
+    code,
+    redirect_uri: oauthConfig.callbackUrl
+  });
+  const tokenResponse = await requestJson(
+    deps.fetchImpl ?? fetch,
+    oauthConfig.tokenUrl,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: tokenBody.toString()
+    },
+    "github_app_user_token_exchange"
+  );
+  const tokenPayload = tokenResponse.payload && typeof tokenResponse.payload === "object"
+    ? tokenResponse.payload as Record<string, unknown>
+    : null;
+  const accessToken = typeof tokenPayload?.access_token === "string" ? tokenPayload.access_token.trim() : "";
+
+  if (!tokenResponse.ok || !tokenPayload || accessToken.length === 0) {
+    throw new Error("token_exchange_failed");
+  }
+
+  return accessToken;
+}
+
+function parseGitHubUserInstallation(entry: unknown) {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    return null;
+  }
+
+  const record = entry as Record<string, unknown>;
+  const installationId = parseGitHubInstallationId(record.id as string | number | null | undefined);
+  const account = record.account && typeof record.account === "object" && !Array.isArray(record.account)
+    ? record.account as Record<string, unknown>
+    : null;
+
+  if (!installationId) {
+    return null;
+  }
+
+  return {
+    installationId,
+    accountLogin: typeof account?.login === "string" ? account.login : null,
+    accountType: typeof account?.type === "string" ? account.type : null,
+    accountId: typeof account?.id === "number" && Number.isFinite(account.id) ? account.id : null
+  };
+}
+
+async function listGitHubAppUserInstallations(
+  deps: IntegrationAuthRouteDependencies,
+  accessToken: string
+) {
+  const installations: Array<{
+    installationId: number;
+    accountLogin: string | null;
+    accountType: string | null;
+    accountId: number | null;
+  }> = [];
+  let page = 1;
+
+  while (page <= 10) {
+    const response = await requestJson(
+      deps.fetchImpl ?? fetch,
+      `${normalizeBaseUrl(deps.githubConfig.baseUrl)}/user/installations?per_page=100&page=${page}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${accessToken}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": "mosaicstacked"
+        }
+      },
+      "github_app_user_installations"
+    );
+
+    if (!response.ok || !response.payload || typeof response.payload !== "object") {
+      throw new Error(response.status === 401 || response.status === 403 ? "auth_expired" : "upstream_unreachable");
+    }
+
+    const rawInstallations = (response.payload as { installations?: unknown }).installations;
+
+    if (!Array.isArray(rawInstallations)) {
+      throw new Error("callback_failed");
+    }
+
+    for (const entry of rawInstallations) {
+      const parsed = parseGitHubUserInstallation(entry);
+
+      if (parsed) {
+        installations.push(parsed);
+      }
+    }
+
+    if (rawInstallations.length < 100) {
+      return installations;
+    }
+
+    page += 1;
+  }
+
+  return installations;
+}
+
+async function exchangeGitHubAppUserInstallationCode(
+  deps: IntegrationAuthRouteDependencies,
+  code: string,
+  installationIdRaw: string | undefined
+) {
+  const accessToken = await exchangeGitHubOAuthCodeForAccessToken(deps, code);
+  const userInstallations = await listGitHubAppUserInstallations(deps, accessToken);
+  const requestedInstallationId = parseGitHubInstallationId(installationIdRaw);
+  const selectedInstallation = requestedInstallationId
+    ? userInstallations.find((installation) => installation.installationId === requestedInstallationId) ?? null
+    : userInstallations.length === 1
+      ? userInstallations[0] ?? null
+      : null;
+
+  if (!selectedInstallation) {
+    throw new Error("scope_denied");
+  }
+
+  const appAuth = createGitHubAppAuthClient({
+    config: deps.githubConfig,
+    fetchImpl: deps.fetchImpl
+  });
+
+  try {
+    const installation = await appAuth.readInstallation(selectedInstallation.installationId);
+    const repositories = await appAuth.listInstallationRepositories(installation.installationId);
+
+    if (repositories.length === 0) {
+      throw new Error("scope_denied");
+    }
+
+    const accountLogin = installation.accountLogin ?? selectedInstallation.accountLogin;
+    const accountType = installation.accountType ?? selectedInstallation.accountType;
+    const accountId = installation.accountId ?? selectedInstallation.accountId;
+
+    return {
+      safeIdentityLabel: accountLogin
+        ? `${accountLogin} (installation ${installation.installationId})`
+        : `installation ${installation.installationId}`,
+      credential: {
+        kind: "github_app_installation",
+        installationId: String(installation.installationId),
+        accountLogin,
+        accountType,
+        accountId,
+        repositoryCount: repositories.length,
+        authorizedAt: new Date().toISOString(),
+        connectedAt: new Date().toISOString()
+      }
+    };
+  } catch (error) {
+    if (error instanceof GitHubAppAuthError) {
+      throw new Error(mapGitHubAppAuthErrorToIntegrationCode(error));
+    }
+
+    if (error instanceof Error && error.message === "scope_denied") {
+      throw error;
+    }
+
+    throw new Error("callback_failed");
+  }
 }
 
 async function fetchMatrixLoginFlows(
@@ -733,9 +931,9 @@ async function reverifyGitHubCredential(
 
   try {
     const installation = await appAuth.readInstallation(installationIdRaw);
-    const hasAllowedRepo = await appAuth.installationHasAnyAllowedRepo(installation.installationId, deps.githubConfig.allowedRepos);
+    const repositories = await appAuth.listInstallationRepositories(installation.installationId);
 
-    if (!hasAllowedRepo) {
+    if (repositories.length === 0) {
       throw new Error("scope_denied");
     }
 
@@ -1035,9 +1233,11 @@ function registerProviderCallbackRoute(
           return sendIntegrationAuthError(reply, "invalid_request", statusForErrorCode("invalid_request"));
         }
 
-        const exchange = query.installation_id && query.installation_id.trim().length > 0
-          ? await exchangeGitHubInstallation(deps, query.installation_id)
-          : await exchangeGitHubOAuthCode(deps, query.code ?? "");
+        const exchange = appConfig.enabled && query.code && query.code.trim().length > 0
+          ? await exchangeGitHubAppUserInstallationCode(deps, query.code, query.installation_id)
+          : query.installation_id && query.installation_id.trim().length > 0
+            ? await exchangeGitHubInstallation(deps, query.installation_id)
+            : await exchangeGitHubOAuthCode(deps, query.code ?? "");
 
         const stored = deps.authStore.storeCredential(intent.sessionId, provider, exchange.credential);
 

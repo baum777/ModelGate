@@ -81,6 +81,11 @@ type ChatWorkspaceProps = {
   onClearPinnedContext: () => void;
   matrixDraftDefaultRoomId: string | null;
   matrixDraftRoomOptions: string[];
+  workbenchBinding: {
+    repo: string | null;
+    branch: string | null;
+    scope: string | null;
+  };
   onQueueMatrixDraft: (payload: {
     sourceMessageId: string;
     roomId: string;
@@ -123,29 +128,86 @@ const GUIDE_KEY_GITHUB_CTA = "github-cta-shown";
 const GUIDE_KEY_CONTEXT_CTA = "context-cta-shown";
 const GUIDE_KEY_COPY_CTA = "copy-cta-shown";
 const CONTEXT_FILENAME_PATTERN = /\b[\w./-]+\.(?:ts|tsx|js|jsx|md|yml|yaml|json)\b/i;
-const CHAT_EXAMPLE_PROMPTS = [
-  "Überprüfe server/src/routes/matrix.ts auf Fehler.",
-  "Erstelle einen Plan für die Matrix-Execute-Route.",
-  "Fasse den aktuellen Repo-Zustand als Matrix-Post zusammen.",
-  "Dokumentiere die SSE-Lifecycle-Strategie als Knowledge-Entry.",
-  "Was ist der aktuelle Stand des Projekts?",
-  "Erkläre die Trust Boundaries aus AGENTS.md.",
-] as const;
+const CHAT_STARTER_PROMPTS = {
+  de: [
+    "Gib mir einen klaren 3-Schritt-Plan für das aktuelle Hauptziel.",
+    "Welche nächste sichere Aktion ist jetzt am sinnvollsten?",
+    "Fasse den Ist-Zustand in fünf präzisen Punkten zusammen.",
+    "Nenne Risiken, offene Punkte und den kleinsten nächsten Schritt.",
+    "Formuliere eine kurze Umsetzungs-Checkliste für heute.",
+    "Erstelle eine Entscheidungsbasis mit Option A/B und Trade-offs.",
+    "Schreibe eine knappe Übergabe für den nächsten Arbeitsschritt.",
+  ],
+  en: [
+    "Give me a clear 3-step plan for the current main goal.",
+    "What is the safest next action right now?",
+    "Summarize the current state in five precise points.",
+    "List risks, open items, and the smallest next step.",
+    "Create a short execution checklist for today.",
+    "Build a decision brief with option A/B and trade-offs.",
+    "Write a concise handoff for the next work step.",
+  ],
+} as const;
 const MOBILE_CHAT_TIPS = {
   en: [
-    "Enter prepares the next step · Shift+Enter inserts a line break.",
-    "Pick repo context before asking about specific files.",
-    "GitHub and Matrix actions stay backend-owned and approval-gated.",
+    "Chat: Enter sends · Shift+Enter line break.",
+    "Chat: start with one explicit goal.",
+    "Chat: add repo context before file questions.",
+    "Chat: use Read only for analysis and planning.",
+    "Chat: use Read & Write only with active branch.",
+    "Guide: swipe left/right to switch cards.",
+    "Guide: tap outside to close overlay.",
+    "Workbench: choose repository first.",
+    "Workbench: analysis before proposal.",
+    "Workbench: inspect proposal before approval.",
+    "Workbench: diff is evidence, not execution.",
+    "Matrix: scope first, then topic update.",
+    "Matrix: room target must be explicit.",
+    "Matrix: submit remains fail-closed without write contract.",
+    "Matrix: verify after execution intent.",
+    "Settings: backend health before retries.",
+    "Settings: aliases visible, credentials hidden.",
+    "Review: reject unclear proposals.",
   ],
   de: [
-    "Enter bereitet den nächsten Schritt vor · Shift+Enter setzt eine neue Zeile.",
-    "Wähle Repo-Kontext, bevor du konkrete Dateien referenzierst.",
-    "GitHub- und Matrix-Aktionen bleiben backend-owned und freigabegesteuert.",
+    "Chat: Enter sendet · Shift+Enter Zeilenumbruch.",
+    "Chat: starte mit einem klaren Ziel.",
+    "Chat: vor Datei-Fragen Repo-Kontext laden.",
+    "Chat: Read only für Analyse und Planung.",
+    "Chat: Read & Write nur mit aktiver Branch.",
+    "Guide: links/rechts wischen für Kartenwechsel.",
+    "Guide: Tipp außerhalb schließt das Overlay.",
+    "Workbench: zuerst Repository wählen.",
+    "Workbench: Analyse vor Vorschlag.",
+    "Workbench: Vorschlag vor Freigabe prüfen.",
+    "Workbench: Diff ist Beleg, keine Ausführung.",
+    "Matrix: zuerst Scope, dann Topic-Update.",
+    "Matrix: Raumziel explizit setzen.",
+    "Matrix: Senden bleibt ohne Write-Contract fail-closed.",
+    "Matrix: nach Ausführungsabsicht verifizieren.",
+    "Settings: vor Retry Backend-Status prüfen.",
+    "Settings: Aliase sichtbar, Credentials verborgen.",
+    "Review: unklare Vorschläge ablehnen.",
   ],
 } as const;
 
 function MobileChatTipRail({ locale }: { locale: "en" | "de" }) {
   const tips = MOBILE_CHAT_TIPS[locale];
+  const [tipIndex, setTipIndex] = useState(0);
+
+  useEffect(() => {
+    setTipIndex(0);
+  }, [locale]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setTipIndex((current) => (current + 1) % tips.length);
+    }, 4200);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [tips.length]);
 
   return (
     <div
@@ -153,9 +215,12 @@ function MobileChatTipRail({ locale }: { locale: "en" | "de" }) {
       aria-label={locale === "de" ? "Chat-Hinweis" : "Chat hint"}
       data-testid="mobile-chat-tip-rail"
     >
-      {tips.map((tip) => (
-        <span key={tip} aria-hidden="true">{tip}</span>
-      ))}
+      <span className="mobile-chat-tip-rail-item" key={`${locale}-${tipIndex}`} aria-hidden="true">
+        {tips[tipIndex]}
+      </span>
+      <small className="mobile-chat-tip-rail-progress" aria-hidden="true">
+        {tipIndex + 1}/{tips.length}
+      </small>
     </div>
   );
 }
@@ -522,6 +587,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const [executionMode, setExecutionMode] = useState<ChatExecutionMode>(
     props.session.metadata.executionMode
   );
+  const [branchSelectorOpen, setBranchSelectorOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const malformedAbortRef = useRef(false);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
@@ -575,6 +641,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     action: "github" | "matrix";
   } | null>(null);
   const [openRouterSetupState, setOpenRouterSetupState] = useState(() => readGuideSetupState(GUIDE_KEY_SETUP_OPENROUTER));
+  const [emptyStatePromptIndex, setEmptyStatePromptIndex] = useState(0);
 
   const matrixRoomOptions = useMemo(() => {
     const order = [props.matrixDraftDefaultRoomId, ...props.matrixDraftRoomOptions];
@@ -1156,6 +1223,22 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       return;
     }
 
+    if (executionMode === "governed" && readWriteGuardrailBlocked) {
+      const message = !workbenchBranch
+        ? (locale === "de"
+          ? "Read & Write ist blockiert: aktive Branch in der Workbench auswählen."
+          : "Read & Write is blocked: select an active branch in Workbench.")
+        : (locale === "de"
+          ? "Read & Write ist blockiert: direkte Main-Arbeit ist nicht erlaubt."
+          : "Read & Write is blocked: direct main branch work is not allowed.");
+      dispatch({
+        type: "stream_error",
+        message,
+      });
+      props.onTelemetry("warning", "Read & Write blocked", message);
+      return;
+    }
+
     const prompt = buildPinnedChatContextPrompt(trimmed, props.pinnedContext, locale);
     const contextFilename = extractFilenameCandidate(trimmed);
     const shouldOfferContextTip = Boolean(
@@ -1176,6 +1259,14 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const warning = chatState.lastStreamWarning;
   const error = chatState.lastError;
   const draft = chatState.currentAssistantDraft;
+  const workbenchRepo = props.workbenchBinding.repo?.trim() || null;
+  const workbenchBranch = props.workbenchBinding.branch?.trim() || null;
+  const workbenchScope = props.workbenchBinding.scope?.trim() || null;
+  const directMainBranch = workbenchBranch === "main" || workbenchBranch === "master";
+  const readWriteGuardrailBlocked = executionMode === "governed" && (!workbenchBranch || directMainBranch);
+  const composerPlaceholder = executionMode === "direct"
+    ? (locale === "de" ? "Frage stellen — Repo ist schreibgeschützt" : "Ask anything — repo is read-only")
+    : (locale === "de" ? "Nächste Änderung planen" : "Plan the next change");
   const awaitingApproval = executionMode === "governed" && pendingProposal?.status === "pending";
   const executionRunning =
     pendingProposal?.status === "executing"
@@ -1240,6 +1331,14 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     && !pendingProposal;
   const showInlineGuideCta = !showSetupBlockingCta && !showChatEmptyCta && Boolean(contextTipPending || activeInlineGuide);
   const showCopyDiscoveryChip = !showSetupBlockingCta && !showChatEmptyCta && !showInlineGuideCta && copyDiscoveryPending;
+  const starterPrompts = CHAT_STARTER_PROMPTS[locale];
+  const activeStarterPrompt = starterPrompts[emptyStatePromptIndex % starterPrompts.length] ?? starterPrompts[0];
+
+  useEffect(() => {
+    if (workbenchBranch && branchSelectorOpen) {
+      setBranchSelectorOpen(false);
+    }
+  }, [branchSelectorOpen, workbenchBranch]);
 
   useEffect(() => {
     if (assistantMessageCount > 0 && !hasSeenGuideKey(GUIDE_KEY_FIRST_AI_RESPONSE)) {
@@ -1316,6 +1415,12 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
                 aria-pressed={executionMode === "governed"}
                 disabled={executionRunning}
                 onClick={() => {
+                  if (!workbenchBranch) {
+                    setBranchSelectorOpen(true);
+                    props.onTelemetry("warning", "Read & Write branch required", "Read & Write mode requires a Workbench branch.");
+                    return;
+                  }
+
                   setExecutionMode("governed");
                   props.onTelemetry("info", "Chat mode changed", "Governed execution mode enabled.");
                 }}
@@ -1324,6 +1429,30 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               </button>
             </div>
           </div>
+          {executionMode === "governed" ? (
+            <div className="chat-toolbar-control-group chat-work-mode-guardrail" data-testid="chat-work-mode-guardrail">
+              <>
+                <strong>{locale === "de" ? "Read & Write" : "Read & Write"}</strong>
+                <p>
+                  {locale === "de"
+                    ? `Aktive Branch: ${workbenchBranch ?? "nicht gesetzt"} · Scope: ${workbenchScope ?? "nicht gesetzt"}`
+                    : `Active branch: ${workbenchBranch ?? "not set"} · Scope: ${workbenchScope ?? "not set"}`}
+                </p>
+                <p>
+                  {locale === "de"
+                    ? `Repo: ${workbenchRepo ?? "nicht gesetzt"} · Main bleibt geschützt, Änderungen werden erst in Workbench reviewbar.`
+                    : `Repository: ${workbenchRepo ?? "not set"} · Main stays protected and changes become reviewable in Workbench first.`}
+                </p>
+                {readWriteGuardrailBlocked ? (
+                  <p className="warning-banner" role="status">
+                    {locale === "de"
+                      ? (workbenchBranch ? "Direkte Main-Arbeit ist nicht erlaubt." : "Aktive Branch erforderlich.")
+                      : (workbenchBranch ? "Direct main branch work is not allowed." : "An active branch is required.")}
+                  </p>
+                ) : null}
+              </>
+            </div>
+          ) : null}
           {expertMode ? (
           <div className="chat-toolbar-control-group chat-toolbar-model-group">
             <label htmlFor="model-select">{ui.chat.modelSelectLabel}</label>
@@ -1357,7 +1486,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
         {beginnerMode ? (
           <ShellCard variant="muted" className="work-mode-guidance-card">
             <SectionLabel>{workModeCopy.label}</SectionLabel>
-            <p>{locale === "de" ? "Schreibe dein Ziel. MosaicStacked erstellt im geführten Modus zuerst einen Vorschlag, danach entscheidest du." : "Write the goal. In guided mode MosaicStacked prepares a proposal first, then you decide."}</p>
+            <p>{locale === "de" ? "Ziel eingeben → Vorschlag prüfen → freigeben oder ablehnen." : "Enter goal -> review proposal -> approve or reject."}</p>
           </ShellCard>
         ) : null}
         {expertMode && chatState.activeRoute ? (
@@ -1419,20 +1548,21 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             <EmptyStateCTA
               icon="M"
               title="Bereit für deinen ersten Prompt"
-              description="Verbinde ein Repo und frag den Agenten oder starte einfach mit einer Frage."
+              description="Repo binden oder direkt eine klare Frage senden."
               primaryLabel="▶ Beispiel-Prompt einfügen"
               primaryAction={() => {
-                dispatch({ type: "set_input", input: CHAT_EXAMPLE_PROMPTS[0] });
+                dispatch({ type: "set_input", input: activeStarterPrompt });
+                setEmptyStatePromptIndex((current) => (current + 1) % starterPrompts.length);
                 composerRef.current?.focus();
               }}
               secondaryLabel="⊟ Repo verbinden"
               secondaryAction={() => {
                 props.onOpenGitHubFromChatAction({
                   sourceMessageId: "chat-empty-state",
-                  content: CHAT_EXAMPLE_PROMPTS[0],
+                  content: activeStarterPrompt,
                 });
               }}
-              footnote="oder einfach unten eintippen ↓"
+              footnote="Eingabe unten im Composer."
             />
           ) : null}
 
@@ -1627,6 +1757,56 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           <div ref={messageEndRef} />
         </div>
 
+        {branchSelectorOpen ? (
+          <>
+            <button
+              type="button"
+              className="chat-action-sheet-backdrop"
+              aria-label={locale === "de" ? "Branch-Auswahl schließen" : "Close branch selector"}
+              onClick={() => setBranchSelectorOpen(false)}
+            />
+            <section
+              className="chat-action-sheet branch-selector-sheet"
+              aria-label={locale === "de" ? "Branch für Read & Write auswählen" : "Select branch for Read & Write"}
+              data-testid="chat-branch-selector"
+            >
+              <header className="chat-action-sheet-header">
+                <SectionLabel>{locale === "de" ? "Branch erforderlich" : "Branch required"}</SectionLabel>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setBranchSelectorOpen(false)}
+                >
+                  {locale === "de" ? "Abbrechen" : "Cancel"}
+                </button>
+              </header>
+
+              <div className="chat-action-sheet-body">
+                <p className="muted-copy">
+                  {locale === "de"
+                    ? "Read & Write startet erst, wenn die Workbench eine Branch außerhalb von main gebunden hat."
+                    : "Read & Write starts only after Workbench has a non-main branch bound."}
+                </p>
+                <div className="chat-action-sheet-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => {
+                      setBranchSelectorOpen(false);
+                      props.onOpenGitHubFromChatAction({
+                        sourceMessageId: "chat-rw-branch-selector",
+                        content: chatState.input,
+                      });
+                    }}
+                  >
+                    {locale === "de" ? "Workbench öffnen" : "Open Workbench"}
+                  </button>
+                </div>
+              </div>
+            </section>
+          </>
+        ) : null}
+
         {matrixComposeOpen ? (
           <>
             <button
@@ -1766,7 +1946,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           <ShellCard variant="muted" className="chat-pinned-context" data-testid="chat-pinned-context">
             <header className="chat-pinned-context-header">
               <SectionLabel>{ui.chat.pinnedContext.title}</SectionLabel>
-              <StatusBadge tone="partial">{ui.shell.workspaceTabs.github.label}</StatusBadge>
+              <StatusBadge tone="partial">{ui.shell.workspaceTabs.workbench.label}</StatusBadge>
             </header>
             <p className="chat-pinned-context-summary">{props.pinnedContext.summary}</p>
             <p className="chat-pinned-context-meta">
@@ -1800,11 +1980,11 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             />
           ) : null}
 
-          <ComposeZone
-            value={chatState.input}
-            placeholder={ui.chat.composerPlaceholder}
-            disabled={Boolean(composerBlockReason)}
-            submitDisabled={Boolean(composerBlockReason) || chatState.input.trim().length === 0}
+              <ComposeZone
+                value={chatState.input}
+                placeholder={composerPlaceholder}
+                disabled={Boolean(composerBlockReason) || readWriteGuardrailBlocked}
+            submitDisabled={Boolean(composerBlockReason) || readWriteGuardrailBlocked || chatState.input.trim().length === 0}
             submitLabel={executionMode === "direct" ? ui.chat.sendDirect : ui.chat.prepareProposal}
             ariaLabel={ui.chat.title}
             textareaRef={composerRef}

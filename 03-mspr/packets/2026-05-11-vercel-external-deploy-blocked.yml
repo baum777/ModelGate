@@ -1,0 +1,29 @@
+id: MSPR-20260511-001
+date: 2026-05-11
+status: blocked
+trigger: side_effect_risk
+scope:
+  paths:
+    - docs/vercel-deployment.md
+authority:
+  observed:
+    - vercel deploy exited 127 with command not found
+    - npx vercel deploy --yes was rejected by tenant risk policy for external data disclosure
+    - user explicitly approved external build and deploy on 2026-05-11
+  inferred:
+    - external Vercel deployment is blocked in this environment until tenant policy override exists
+risk:
+  level: high
+  statement: deployment uploads repository build artifacts and metadata to an external service under unresolved private-data disclosure constraints
+decision_needed: human policy decision for external deployment path
+review:
+  owner: human
+  state: pending
+verification:
+  proof:
+    - vercel deploy
+    - npx vercel deploy --yes
+links:
+  - ../docs/vercel-deployment.md
+  - ../02-wiki/log.md
+next_gate: blocked_until_policy_override
