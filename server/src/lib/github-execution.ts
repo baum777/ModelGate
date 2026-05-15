@@ -37,7 +37,7 @@ function splitContentLines(value: string) {
 
   const lines = normalized.split("\n");
 
-  if (lines.at(-1) === "") {
+  if (lines[lines.length - 1] === "") {
     lines.pop();
   }
 

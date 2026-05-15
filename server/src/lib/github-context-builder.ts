@@ -37,7 +37,8 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function getFileName(filePath: string) {
-  return filePath.split("/").filter(Boolean).at(-1) ?? filePath;
+  const segments = filePath.split("/").filter(Boolean);
+  return segments.length > 0 ? segments[segments.length - 1] : filePath;
 }
 
 function isAnchorFile(filePath: string) {
@@ -123,7 +124,7 @@ function sortCandidates(left: RankedFileCandidate, right: RankedFileCandidate) {
 
 function buildExcerpt(content: string, questionTokens: string[], maxChars: number) {
   const lines = content.split(/\r\n|\r|\n/);
-  if (lines.at(-1) === "") {
+  if (lines[lines.length - 1] === "") {
     lines.pop();
   }
 

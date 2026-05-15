@@ -71,3 +71,5 @@
 ## [2026-05-15] github-oauth-token-exchange-detail-sanitization | exposed sanitized GitHub OAuth token exchange failure reasons in callback error details and covered redirect_uri_mismatch with route tests [[../server/src/routes/integration-auth.ts]] [[../server/test/integration-auth-routes.test.ts]]
 
 ## [2026-05-15] github-oauth-urlencoded-error-detail-sanitization | extended GitHub OAuth token exchange detail parsing to handle urlencoded upstream bodies and covered bad_verification_code mapping with auth route tests [[../server/src/routes/integration-auth.ts]] [[../server/test/integration-auth-routes.test.ts]]
+
+## [2026-05-15] github-lib-compat-without-array-at | replaced Array.prototype.at usage in GitHub plan/context/execution helpers with index-safe lookups for older TypeScript lib targets [[../server/src/lib/github-plan-builder.ts]] [[../server/src/lib/github-context-builder.ts]] [[../server/src/lib/github-execution.ts]]
