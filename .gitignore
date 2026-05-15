@@ -16,3 +16,4 @@ web/node_modules/
 web/dist/
 
 .vercel
+update-vercel-env.sh

@@ -73,3 +73,5 @@
 ## [2026-05-15] github-oauth-urlencoded-error-detail-sanitization | extended GitHub OAuth token exchange detail parsing to handle urlencoded upstream bodies and covered bad_verification_code mapping with auth route tests [[../server/src/routes/integration-auth.ts]] [[../server/test/integration-auth-routes.test.ts]]
 
 ## [2026-05-15] github-lib-compat-without-array-at | replaced Array.prototype.at usage in GitHub plan/context/execution helpers with index-safe lookups for older TypeScript lib targets [[../server/src/lib/github-plan-builder.ts]] [[../server/src/lib/github-context-builder.ts]] [[../server/src/lib/github-execution.ts]]
+
+## [2026-05-15] floating-companion-helpdesk-entry | added a fixed bottom-right Floating Companion with hover/contact feedback, compact helpdesk panel, local placeholder submit flow, accessibility keyboard controls, and source-level tests for UI/state contracts [[../web/src/components/FloatingCompanion.tsx]] [[../web/src/App.tsx]] [[../web/src/critical.css]] [[../web/src/ui-adaptation.css]] [[../web/test/floating-companion.test.ts]] [[../package.json]]

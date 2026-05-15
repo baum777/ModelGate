@@ -24,6 +24,7 @@ import {
   StatusBadge,
   TruthRailSection,
 } from "./components/ShellPrimitives.js";
+import { FloatingCompanion } from "./components/FloatingCompanion.js";
 import {
   getShellHealthCopy,
   getSessionStatusLabel,
@@ -2416,6 +2417,7 @@ function ConsoleShell() {
   })();
   const showRouteOwnershipContext = mode === "workbench" || mode === "matrix";
   const mobileWorkspaceSurface = workspaceSurface;
+  const floatingCompanion = <FloatingCompanion locale={locale} />;
 
   if (isMobileViewport) {
     return (
@@ -2540,6 +2542,7 @@ function ConsoleShell() {
             testId: `tab-${workspaceMode}`,
           }))}
         />
+        {floatingCompanion}
       </main>
     );
   }
@@ -2742,6 +2745,7 @@ function ConsoleShell() {
 
         </aside>
       </section>
+      {floatingCompanion}
     </main>
   );
 }

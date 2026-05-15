@@ -1666,7 +1666,7 @@ select:disabled {
   line-height: 1.2 !important;
 }
 
-button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.shell-language-button):not(.workspace-tab):not(.session-list-item):not(.mode-toggle-button):not(.mobile-brand-button):not(.mobile-context-strip):not(.mobile-context-chip-action):not(.matrix-mobile-room):not(.matrix-mobile-ask-button),
+button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.shell-language-button):not(.workspace-tab):not(.session-list-item):not(.mode-toggle-button):not(.mobile-brand-button):not(.mobile-context-strip):not(.mobile-context-chip-action):not(.matrix-mobile-room):not(.matrix-mobile-ask-button):not(.floating-companion-control),
 .primary-link-button {
   background: var(--ms-accent) !important;
   border-color: var(--ms-accent) !important;
@@ -1674,14 +1674,14 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
   box-shadow: none !important;
 }
 
-button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.shell-language-button):not(.workspace-tab):not(.session-list-item):not(.mode-toggle-button):not(.mobile-brand-button):not(.mobile-context-strip):not(.mobile-context-chip-action):not(.matrix-mobile-room):not(.matrix-mobile-ask-button):hover:not(:disabled),
+button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.shell-language-button):not(.workspace-tab):not(.session-list-item):not(.mode-toggle-button):not(.mobile-brand-button):not(.mobile-context-strip):not(.mobile-context-chip-action):not(.matrix-mobile-room):not(.matrix-mobile-ask-button):not(.floating-companion-control):hover:not(:disabled),
 .primary-link-button:hover:not(.is-disabled) {
   background: #7d6df0 !important;
   border-color: #7d6df0 !important;
   box-shadow: none !important;
 }
 
-button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.shell-language-button):not(.workspace-tab):not(.session-list-item):not(.mode-toggle-button):not(.mobile-brand-button):not(.mobile-context-strip):not(.mobile-context-chip-action):not(.matrix-mobile-room):not(.matrix-mobile-ask-button):active:not(:disabled),
+button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.shell-language-button):not(.workspace-tab):not(.session-list-item):not(.mode-toggle-button):not(.mobile-brand-button):not(.mobile-context-strip):not(.mobile-context-chip-action):not(.matrix-mobile-room):not(.matrix-mobile-ask-button):not(.floating-companion-control):active:not(:disabled),
 .primary-link-button:active:not(.is-disabled) {
   background: #5a4bd1 !important;
   border-color: #5a4bd1 !important;

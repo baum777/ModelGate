@@ -1775,3 +1775,243 @@ button:disabled {
     max-height: calc(100dvh - 230px);
   }
 }
+
+/* Floating helpdesk companion stays available across workspaces without blocking primary navigation. */
+.floating-companion {
+  position: fixed;
+  right: 14px;
+  bottom: 16px;
+  z-index: 94;
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.floating-companion > * {
+  pointer-events: auto;
+}
+
+.floating-companion-trigger {
+  position: relative;
+}
+
+.floating-companion-button {
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid rgba(98, 201, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(13, 27, 42, 0.92);
+  color: var(--hi);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.floating-companion-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(98, 201, 255, 0.18);
+  color: #9be4ff;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.floating-companion-button-label {
+  font-family: var(--ms-mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.floating-companion-trigger:hover .floating-companion-button,
+.floating-companion-trigger:focus-within .floating-companion-button {
+  transform: translateY(-1px) scale(1.03);
+  border-color: rgba(98, 201, 255, 0.58);
+  background: rgba(19, 33, 49, 0.95);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.48), 0 0 0 1px rgba(98, 201, 255, 0.24);
+}
+
+.floating-companion-tooltip {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid rgba(98, 201, 255, 0.26);
+  border-radius: 8px;
+  background: rgba(8, 16, 28, 0.98);
+  color: var(--hi);
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 180ms ease, transform 180ms ease;
+  pointer-events: none;
+}
+
+.floating-companion-trigger:hover .floating-companion-tooltip,
+.floating-companion-trigger:focus-within .floating-companion-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.floating-companion-panel {
+  width: min(360px, calc(100vw - 24px));
+  padding: 12px;
+  border: 1px solid rgba(98, 201, 255, 0.22);
+  border-radius: 14px;
+  background: rgba(8, 16, 29, 0.97);
+  box-shadow: 0 22px 64px rgba(0, 0, 0, 0.54);
+  display: grid;
+  gap: 10px;
+  animation: floating-companion-panel-enter 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.floating-companion-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.floating-companion-title {
+  color: var(--hi);
+  font-size: 13px;
+  font-family: var(--ms-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.floating-companion-close {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 1px solid var(--ms-border2);
+  border-radius: 999px;
+  background: var(--ms-bg3);
+  color: var(--hi);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.floating-companion-copy {
+  margin: 0;
+  color: var(--ms-text2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.floating-companion-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.floating-companion-quick-action {
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid rgba(98, 201, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(98, 201, 255, 0.08);
+  color: var(--ms-text);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.floating-companion-form {
+  display: grid;
+  gap: 6px;
+}
+
+.floating-companion-input-label {
+  color: var(--ms-text2);
+  font-size: 11px;
+  font-family: var(--ms-mono);
+}
+
+.floating-companion-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.floating-companion-input-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--ms-border2);
+  border-radius: 10px;
+  background: rgba(4, 10, 20, 0.88);
+  color: var(--hi);
+  font-size: 13px;
+}
+
+.floating-companion-input-row input::placeholder {
+  color: rgba(158, 168, 190, 0.86);
+}
+
+.floating-companion-submit {
+  min-width: 88px;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid rgba(98, 201, 255, 0.2);
+  border-radius: 10px;
+  background: rgba(98, 201, 255, 0.16);
+  color: var(--hi);
+  font-size: 12px;
+}
+
+.floating-companion-feedback {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(85, 239, 196, 0.2);
+  background: rgba(85, 239, 196, 0.09);
+  color: var(--hi);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.floating-companion-control:focus-visible,
+.floating-companion-input-row input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(98, 201, 255, 0.2);
+}
+
+@keyframes floating-companion-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-companion-button,
+  .floating-companion-tooltip {
+    transition: none;
+  }
+
+  .floating-companion-panel {
+    animation: none;
+  }
+}
+
+.app-shell-mobile .floating-companion {
+  right: 10px;
+  bottom: calc(68px + env(safe-area-inset-bottom));
+}
+
+.app-shell-mobile .floating-companion-panel {
+  width: min(330px, calc(100vw - 20px));
+}
