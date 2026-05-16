@@ -144,6 +144,18 @@ test("mobile landing layout guards against overflow and keeps CTAs stackable", (
   assert.match(css, /@media \(max-width:\s*680px\)[\s\S]*\.landing-hero-actions\s*{[\s\S]*flex-direction:\s*column[\s\S]*align-items:\s*stretch/);
 });
 
+test("mobile landing entry gate uses a full-screen modal and stacked actions", () => {
+  const css = styles();
+
+  assert.match(css, /\.landing-entry-backdrop[\s\S]*position:\s*fixed/);
+  assert.match(css, /\.landing-entry-dialog[\s\S]*width:\s*min\(560px,\s*100%\)/);
+  assert.match(css, /\.landing-entry-dialog-body[\s\S]*font-size:\s*15px/);
+  assert.match(css, /\.landing-entry-path[\s\S]*width:\s*fit-content/);
+  assert.match(css, /\.landing-entry-actions[\s\S]*flex-wrap:\s*wrap/);
+  assert.match(css, /@media \(max-width:\s*680px\)[\s\S]*\.landing-entry-actions\s*{[\s\S]*align-items:\s*stretch/);
+  assert.match(css, /@media \(max-width:\s*680px\)[\s\S]*\.landing-entry-actions \.landing-cta-primary,[\s\S]*\.landing-entry-actions \.landing-cta-secondary\s*{[\s\S]*width:\s*100%/);
+});
+
 test("mobile chat slice uses bounded composer and inline diff primitives", () => {
   const source = mobileChatSource();
   const css = styles();

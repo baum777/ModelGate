@@ -76,4 +76,6 @@ test("legacy workspace URL modes normalize to workbench and shell tabs are four-
   assert.match(source, /if \(value === "github" \|\| value === "review" \|\| value === "context"\) \{\s*return "workbench";\s*\}/);
   assert.match(source, /const WORKSPACE_MODES: WorkspaceMode\[\] = \["chat", "workbench", "matrix", "settings"\]/);
   assert.match(source, /const MOBILE_NAV_MODES: WorkspaceMode\[\] = \["chat", "workbench", "matrix", "settings"\]/);
+  assert.match(source, /LANDING_ENTRY_GUIDE_KEY = "landing-entry"/);
+  assert.match(source, /window\.location\.replace\(["']\/console["']\)/);
 });

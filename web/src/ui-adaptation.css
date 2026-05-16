@@ -2107,6 +2107,92 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
   text-transform: uppercase;
 }
 
+.landing-entry-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(3, 6, 12, 0.72);
+  backdrop-filter: blur(14px);
+}
+
+.landing-entry-dialog {
+  width: min(560px, 100%);
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ms-bg3) 86%, transparent), color-mix(in srgb, var(--ms-bg2) 94%, transparent));
+}
+
+.landing-entry-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.landing-entry-dialog-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.landing-entry-dialog-kicker {
+  margin: 0;
+  color: var(--ms-text3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.landing-entry-dialog h2 {
+  margin: 0;
+  color: var(--ms-text);
+  font-size: 24px;
+  line-height: 1.15;
+}
+
+.landing-entry-dismiss {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+}
+
+.landing-entry-dialog-body {
+  margin: 0;
+  color: var(--ms-text2);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.landing-entry-path {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  padding: 8px 12px;
+  border: 1px solid var(--ms-border);
+  border-radius: var(--r);
+  background: var(--ms-bg3);
+  color: var(--ms-text2);
+  font-size: 13px;
+}
+
+.landing-entry-path code {
+  font-family: var(--ms-mono);
+  color: var(--ms-text);
+  font-size: 12px;
+}
+
+.landing-entry-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 /* Guide CTA primitives */
 .guide-cta-inline {
   border: 1px solid var(--guide-default-border, color-mix(in srgb, var(--ms-accent) 45%, transparent));
@@ -2328,6 +2414,27 @@ button:not(.secondary-button):not(.ghost-button):not(.theme-toggle-button):not(.
     width: 100%;
     justify-content: center;
     display: inline-flex;
+  }
+
+  .landing-entry-backdrop {
+    padding: 14px;
+  }
+
+  .landing-entry-dialog {
+    padding: 16px;
+  }
+
+  .landing-entry-dialog h2 {
+    font-size: 21px;
+  }
+
+  .landing-entry-actions {
+    align-items: stretch;
+  }
+
+  .landing-entry-actions .landing-cta-primary,
+  .landing-entry-actions .landing-cta-secondary {
+    width: 100%;
   }
 }
 

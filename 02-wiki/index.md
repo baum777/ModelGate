@@ -24,7 +24,7 @@ Format: `[[link]] | summary | #tags | YYYY-MM-DD`
 [[../docs/superpowers/plans/2026-05-10-settings-authority-control-center.md]] | Implementation plan for Settings authority control center redesign | #docs #plan #settings | 2026-05-10
 [[../docs/superpowers/specs/2026-05-16-agentic-helpdesk-companion-design.md]] | Proposed Design für agentischen Helpdesk Companion mit UI-Hilfe, Allowlist-Intents und Guardrails | #docs #chat #ux #authority | 2026-05-16
 [[../docs/superpowers/plans/2026-05-16-agentic-helpdesk-companion.md]] | Implementation plan for guarded agentic Helpdesk Companion UI-help slice | #docs #plan #chat #ux | 2026-05-16
-[[../web/src/App.tsx]] | 4-Tab shell (`chat`, `workbench`, `matrix`, `settings`) with legacy mode normalization to `workbench` | #workbench #navigation #authority | 2026-05-11
+[[../web/src/App.tsx]] | 4-Tab shell (`chat`, `workbench`, `matrix`, `settings`) with legacy mode normalization to `workbench` and first-run landing gate into `/console` | #workbench #navigation #authority #landing | 2026-05-11
 [[../web/src/components/GitHubWorkspace.tsx]] | Summary-first Workbench review center with explicit local/backend action effect semantics | #workbench #review #authority | 2026-05-11
 [[../tests/browser/mosaicstacked.spec.ts]] | Browser verification for keyboard-first shell navigation, truth-rail authority signals, guarded Companion UI-help smoke, fail-closed Matrix composer posture, and backend-capability-gated workbench execution | #workbench #chat #matrix #verification | 2026-05-16
 [[../web/src/components/FloatingCompanion.tsx]] | Permanenter Floating Helpdesk Companion mit echter backend-verdrahteter Chat-Interaktion, minimiertem Button, expandierbarem Panel und A11y-Keyboard-Gates | #chat #ux #authority | 2026-05-16

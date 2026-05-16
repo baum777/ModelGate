@@ -33,6 +33,7 @@ import {
   getSessionStatusLabel,
   useLocalization,
 } from "./lib/localization.js";
+import { hasSeenGuideKey, markGuideKeySeen } from "./lib/guide-state.js";
 import {
   deriveSettingsLoginAdapters,
 } from "./lib/settings-login-adapters.js";
@@ -83,6 +84,7 @@ type PersistedShellState = {
 };
 
 const SHELL_STORAGE_KEY = "mosaicstacked.console.shell.v2";
+const LANDING_ENTRY_GUIDE_KEY = "landing-entry";
 const DEFAULT_FREE_MODEL_ALIAS = "default-free";
 
 function isWorkspaceMode(value: string | null): value is WorkspaceMode {
@@ -362,30 +364,30 @@ function useIsMobileViewport() {
 
 const LANDING_COPY = {
   de: {
-    kicker: "Model-Agnostic Workflow",
-    heroTitle: "Eine backend-first Console für Chat, Workbench und Matrix-Scope.",
-    heroBody: "MosaicStacked verbindet Modellwahl, Repo-Kontext und Matrix-Status in einem kontrollierten Arbeitsfluss mit klaren Freigabe-Gates.",
-    heroPrimaryCta: "Console öffnen",
-    heroSecondaryCta: "So funktioniert's",
-    workspaceTabsKicker: "Workspace Tabs",
-    workspaceTabsTitle: "Was du hier machen kannst",
+    kicker: "Backend-owned Console",
+    heroTitle: "MosaicStacked Konsole",
+    heroBody: "Chat, Workbench, Matrix und Settings liegen in einem kontrollierten Interface mit klarer Backend-Autorität.",
+    heroPrimaryCta: "Konsole öffnen",
+    heroSecondaryCta: "Interface sehen",
+    workspaceTabsKicker: "Arbeitsflächen",
+    workspaceTabsTitle: "Vier klare Eintrittspunkte",
     openSuffix: "öffnen",
     modelKicker: "Modell verbinden",
-    modelTitle: "Verbinde dein Modell in drei Schritten",
-    modelBody: "MosaicStacked bleibt model-agnostisch: Du bringst deinen Modellzugang mit, die App macht daraus einen kontrollierten Arbeitsfluss.",
+    modelTitle: "Modellzugang in drei Schritten",
+    modelBody: "Du bringst den Zugang mit, die App hält Routing, Status und Freigaben serverseitig zusammen.",
     modelHintLabel: "Hinweis:",
     modelHintBody: "Die UI zeigt Modell-Aliase. Provider-Details bleiben Backend-/Config-Sache.",
     modelSecretNote: "gehört in Settings/Backend, nie in Prompt-Text.",
-    actionsKicker: "Action Buttons",
+    actionsKicker: "Aktionen",
     actionsTitle: "Von einer Antwort zur nächsten Aktion",
-    actionsBody: "Jede gute Antwort kann direkt als nächster Schritt weitergegeben werden - ohne Copy-Paste-Chaos.",
+    actionsBody: "Die Oberfläche ist auf Weitergabe, Review und Freigabe gebaut - nicht auf Copy-Paste.",
     actionsExamplePrefix: "Beispiel:",
     actionsExampleBody: "Lade eine Datei -> prüfe Risiken -> übergib an Workbench mit",
     actionsExampleTail: "-> bereite einen Matrix-Entwurf mit",
-    beginnerKicker: "Beginner Flow",
-    beginnerTitle: "Dein erster Flow",
+    beginnerKicker: "Erste Sitzung",
+    beginnerTitle: "Dein erster Ablauf",
     powerKicker: "Power User Recipes",
-    powerTitle: "Workflows für echte Projektarbeit",
+    powerTitle: "Abläufe für echte Projektarbeit",
     safetyLabel: "Safety-Hinweis",
     safetyLines: [
       "Browser ist Review Surface, Backend hält Autorität.",
@@ -395,32 +397,37 @@ const LANDING_COPY = {
     ],
     enterLabel: "ENTER",
     enterHint: "Zur App wechseln",
+    entryGateTitle: "Einmal bestätigen, dann direkt zur Konsole",
+    entryGateBody: "Akzeptiere diesen Pfad einmal. Danach öffnet MosaicStacked die Konsole direkt und lässt die Landingpage aus.",
+    entryGatePrimary: "Akzeptieren und öffnen",
+    entryGateSecondary: "Später",
+    entryGatePathLabel: "Pfad",
   },
   en: {
-    kicker: "Model-Agnostic Workflow",
-    heroTitle: "A backend-first console for chat, workbench, and Matrix scope.",
-    heroBody: "MosaicStacked combines model choice, repository context, and Matrix status in one controlled workflow with explicit approval gates.",
+    kicker: "Backend-owned Console",
+    heroTitle: "MosaicStacked Console",
+    heroBody: "Chat, Workbench, Matrix, and Settings live in one controlled interface with backend authority.",
     heroPrimaryCta: "Open console",
-    heroSecondaryCta: "How it works",
-    workspaceTabsKicker: "Workspace Tabs",
-    workspaceTabsTitle: "What you can do here",
+    heroSecondaryCta: "See the interface",
+    workspaceTabsKicker: "Workspaces",
+    workspaceTabsTitle: "Four clear entry points",
     openSuffix: "open",
     modelKicker: "Connect Models",
-    modelTitle: "Connect your model in three steps",
-    modelBody: "MosaicStacked stays model-agnostic: you bring your model access, the app turns it into a controlled workflow.",
+    modelTitle: "Connect model access in three steps",
+    modelBody: "You bring the access; the app keeps routing, status, and approvals server-owned.",
     modelHintLabel: "Note:",
     modelHintBody: "The UI shows model aliases. Provider details stay a backend/config concern.",
     modelSecretNote: "belongs in settings/backend, never in prompt text.",
-    actionsKicker: "Action Buttons",
+    actionsKicker: "Actions",
     actionsTitle: "From one answer to the next action",
-    actionsBody: "Every good answer can be handed into the next step immediately - without copy-paste chaos.",
+    actionsBody: "The surface is built for handoff, review, and approval - not for copy-paste.",
     actionsExamplePrefix: "Example:",
     actionsExampleBody: "Load a file -> review risks -> hand off to Workbench with",
     actionsExampleTail: "-> prepare a Matrix draft with",
-    beginnerKicker: "Beginner Flow",
+    beginnerKicker: "First session",
     beginnerTitle: "Your first flow",
     powerKicker: "Power User Recipes",
-    powerTitle: "Workflows for real project work",
+    powerTitle: "Flows for real project work",
     safetyLabel: "Safety Note",
     safetyLines: [
       "The browser is a review surface; the backend remains authoritative.",
@@ -430,6 +437,11 @@ const LANDING_COPY = {
     ],
     enterLabel: "ENTER",
     enterHint: "Open the app",
+    entryGateTitle: "Confirm once, then open the console directly",
+    entryGateBody: "Accept this path once. After that, MosaicStacked opens the console directly and skips the landing page.",
+    entryGatePrimary: "Accept and open",
+    entryGateSecondary: "Later",
+    entryGatePathLabel: "Path",
   },
 } as const;
 
@@ -687,6 +699,111 @@ const LANDING_POWER_RECIPES = [
   },
 ] as const;
 
+function LandingEntryGate({
+  locale,
+  open,
+  onAccept,
+  onDismiss,
+}: {
+  locale: "de" | "en";
+  open: boolean;
+  onAccept: () => void;
+  onDismiss: () => void;
+}) {
+  if (!open) {
+    return null;
+  }
+
+  const copy = LANDING_COPY[locale];
+
+  return (
+    <div className="landing-entry-backdrop" role="presentation" onPointerDown={onDismiss}>
+      <section
+        className="landing-entry-dialog shell-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="landing-entry-title"
+        aria-describedby="landing-entry-body"
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <header className="landing-entry-dialog-header">
+          <div className="landing-entry-dialog-copy">
+            <p className="landing-entry-dialog-kicker">{copy.kicker}</p>
+            <h2 id="landing-entry-title">{copy.entryGateTitle}</h2>
+          </div>
+          <button
+            type="button"
+            className="ghost-button landing-entry-dismiss"
+            aria-label={locale === "de" ? "Dialog schließen" : "Close dialog"}
+            onClick={onDismiss}
+          >
+            ×
+          </button>
+        </header>
+        <p id="landing-entry-body" className="landing-entry-dialog-body">
+          {copy.entryGateBody}
+        </p>
+        <div className="landing-entry-path">
+          <span>{copy.entryGatePathLabel}</span>
+          <code>/console</code>
+        </div>
+        <div className="landing-entry-actions">
+          <button type="button" className="landing-cta-primary" onClick={onAccept}>
+            {copy.entryGatePrimary}
+          </button>
+          <button type="button" className="landing-cta-secondary" onClick={onDismiss}>
+            {copy.entryGateSecondary}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function useLandingEntryGate() {
+  const [open, setOpen] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return !hasSeenGuideKey(LANDING_ENTRY_GUIDE_KEY);
+  });
+  const [redirecting, setRedirecting] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return hasSeenGuideKey(LANDING_ENTRY_GUIDE_KEY);
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (hasSeenGuideKey(LANDING_ENTRY_GUIDE_KEY)) {
+      setRedirecting(true);
+      window.location.replace("/console");
+      return;
+    }
+
+    setOpen(true);
+  }, []);
+
+  const accept = useCallback(() => {
+    setRedirecting(true);
+    markGuideKeySeen(LANDING_ENTRY_GUIDE_KEY);
+    window.location.replace("/console");
+  }, []);
+
+  return {
+    open,
+    setOpen,
+    accept,
+    redirecting,
+  };
+}
+
 function LandingPage() {
   const { locale, setLocale, copy: ui } = useLocalization();
   const landingCopy = LANDING_COPY[locale];
@@ -854,7 +971,24 @@ function LandingPage() {
 }
 
 function PublicPreview() {
-  return <LandingPage />;
+  const { locale } = useLocalization();
+  const { open, setOpen, accept, redirecting } = useLandingEntryGate();
+
+  if (redirecting) {
+    return null;
+  }
+
+  return (
+    <>
+      <LandingPage />
+      <LandingEntryGate
+        locale={locale}
+        open={open}
+        onAccept={accept}
+        onDismiss={() => setOpen(false)}
+      />
+    </>
+  );
 }
 
 function ReadmeLandingPage() {
