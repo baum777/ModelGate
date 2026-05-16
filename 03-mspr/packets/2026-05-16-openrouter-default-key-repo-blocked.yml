@@ -1,0 +1,35 @@
+id: MSPR-20260516-002
+date: 2026-05-16
+status: blocked
+trigger: side_effect_risk
+scope:
+  paths:
+    - .env.example
+    - README.md
+    - server/src/lib/env.ts
+    - server/src/lib/default-free-model.ts
+authority:
+  observed:
+    - user_requested_default_openrouter_key_in_repo
+    - .gitignore_ignores_local_env_files
+    - docs_state_openrouter_api_key_as_server_side_env_only
+    - repo_contract_requires_backend_owned_credentials
+  inferred:
+    - committing_a_live_api_key_would_expose_secret_material
+    - default_key_in_repo_would_create_secret_rotation_and_abuse_risk
+risk:
+  level: high
+  statement: live_api_key_must_not_be_committed_or_documented_as_default_repo_material
+decision_needed: use_env_or_secret_store_instead_of_repo_default
+review:
+  owner: human
+  state: blocked
+verification:
+  proof:
+    - rg_OPENROUTER_and_gitignore_review_without_secret_persistence
+    - git_check_ignore_confirms_local_env_files_are_ignored
+links:
+  - .gitignore
+  - .env.example
+  - docs/model-routing.md
+next_gate: rotate_exposed_key_and_configure_local_or_host_secret

@@ -93,3 +93,5 @@
 ## [2026-05-16] agentic-helpdesk-companion-smoke | added Playwright smoke coverage for Companion UI-help suggestions, Workbench navigation, and blocked GitHub/Matrix execute routes [[../tests/browser/mosaicstacked.spec.ts]]
 
 ## [2026-05-16] readme-repo-istzustand-refresh | aktualisierte README-Frontdoor mit aktuellem Console-Ist-Zustand, Mermaid-Architektur-/Approval-/Deployment-Diagrammen, Backend-Routen, Env-Flächen und Grenzen [[../README.md]]
+
+## [2026-05-16] openrouter-default-key-repo-blocked | blocked live OpenRouter key persistence into repo material and routed secret exposure risk to MSPR without storing the key [[../03-mspr/packets/2026-05-16-openrouter-default-key-repo-blocked.yml]]

@@ -20,6 +20,7 @@ Format: `[[link]] | summary | #tags | YYYY-MM-DD`
 [[../03-mspr/packets/2026-05-12-vercel-production-deploy-blocked.yml]] | Blocked Vercel production deployment due tenant disclosure policy after explicit approval | #mspr #deployment #blocked | 2026-05-12
 [[../03-mspr/packets/2026-05-13-github-env-deploy-blocked.yml]] | Blocked GitHub Install and Authorize deploy repeat due missing app slug and invalid private-key env parse | #mspr #github #deployment #blocked | 2026-05-13
 [[../03-mspr/packets/2026-05-16-local-auth-github-key-blocked.yml]] | Accepted local auth review after valid GitHub App PEM restored repo verification; Matrix SSO browser session connected | #mspr #github #matrix #accepted | 2026-05-16
+[[../03-mspr/packets/2026-05-16-openrouter-default-key-repo-blocked.yml]] | Blocked request to commit a live OpenRouter default key into repo material; use env or secret store instead | #mspr #security #blocked | 2026-05-16
 [[../docs/superpowers/plans/2026-05-10-settings-authority-control-center.md]] | Implementation plan for Settings authority control center redesign | #docs #plan #settings | 2026-05-10
 [[../docs/superpowers/specs/2026-05-16-agentic-helpdesk-companion-design.md]] | Proposed Design für agentischen Helpdesk Companion mit UI-Hilfe, Allowlist-Intents und Guardrails | #docs #chat #ux #authority | 2026-05-16
 [[../docs/superpowers/plans/2026-05-16-agentic-helpdesk-companion.md]] | Implementation plan for guarded agentic Helpdesk Companion UI-help slice | #docs #plan #chat #ux | 2026-05-16
