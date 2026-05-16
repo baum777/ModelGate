@@ -7,9 +7,12 @@ type FloatingCompanionCopy = {
   tooltipLabel: string;
   panelTitle: string;
   panelDescription: string;
+  assistantModeLabel: string;
+  localGuideModeLabel: string;
   inputLabel: string;
   inputPlaceholder: string;
   submitLabel: string;
+  submittingLabel: string;
   closeLabel: string;
   quickActionsTitle: string;
   quickActions: string[];
@@ -22,9 +25,12 @@ const FLOATING_COMPANION_COPY: Record<Locale, FloatingCompanionCopy> = {
     tooltipLabel: "Brauchst du Hilfe?",
     panelTitle: "Helpdesk Companion",
     panelDescription: "Frag mich etwas zur App, zu Funktionen oder nächsten Schritten.",
+    assistantModeLabel: "Assistant mode",
+    localGuideModeLabel: "Local guide mode",
     inputLabel: "Deine Frage",
     inputPlaceholder: "Frage zu Navigation, Funktion oder Problem …",
     submitLabel: "Senden",
+    submittingLabel: "Sende …",
     closeLabel: "Minimieren",
     quickActionsTitle: "Schnellaktionen",
     quickActions: [
@@ -39,9 +45,12 @@ const FLOATING_COMPANION_COPY: Record<Locale, FloatingCompanionCopy> = {
     tooltipLabel: "Need help?",
     panelTitle: "Helpdesk Companion",
     panelDescription: "Ask me about app features, navigation, or your next step.",
+    assistantModeLabel: "Assistant mode",
+    localGuideModeLabel: "Local guide mode",
     inputLabel: "Your question",
     inputPlaceholder: "Ask about navigation, features, or an issue …",
     submitLabel: "Send",
+    submittingLabel: "Sending …",
     closeLabel: "Minimize",
     quickActionsTitle: "Quick actions",
     quickActions: [
@@ -105,8 +114,10 @@ type FloatingCompanionPanelProps = {
   panelId: string;
   inputId: string;
   copy: FloatingCompanionCopy;
+  modeLabel: string;
   inputValue: string;
   lastMessage: string | null;
+  isSubmitting: boolean;
   inputRef: React.RefObject<HTMLInputElement | null>;
   onClose: () => void;
   onInputChange: (value: string) => void;
@@ -118,8 +129,10 @@ export function FloatingCompanionPanel({
   panelId,
   inputId,
   copy,
+  modeLabel,
   inputValue,
   lastMessage,
+  isSubmitting,
   inputRef,
   onClose,
   onInputChange,
@@ -141,6 +154,7 @@ export function FloatingCompanionPanel({
       </header>
 
       <p className="floating-companion-copy">{copy.panelDescription}</p>
+      <p className="floating-companion-mode" data-testid="floating-companion-mode">{modeLabel}</p>
 
       <div className="floating-companion-quick-actions" aria-label={copy.quickActionsTitle}>
         {copy.quickActions.map((quickAction) => (
@@ -169,9 +183,9 @@ export function FloatingCompanionPanel({
           <button
             type="submit"
             className="floating-companion-control floating-companion-submit"
-            disabled={!canSubmitCompanionInput(inputValue)}
+            disabled={!canSubmitCompanionInput(inputValue) || isSubmitting}
           >
-            {copy.submitLabel}
+            {isSubmitting ? copy.submittingLabel : copy.submitLabel}
           </button>
         </div>
       </form>
@@ -187,7 +201,7 @@ export function FloatingCompanionPanel({
 
 type FloatingCompanionProps = {
   locale: Locale;
-  onSubmitQuestion?: (question: string) => string | undefined;
+  onSubmitQuestion?: (question: string) => Promise<string>;
 };
 
 export function FloatingCompanion({ locale, onSubmitQuestion }: FloatingCompanionProps) {
@@ -197,7 +211,9 @@ export function FloatingCompanion({ locale, onSubmitQuestion }: FloatingCompanio
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [lastMessage, setLastMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const companionCopy = FLOATING_COMPANION_COPY[locale];
+  const assistantModeEnabled = typeof onSubmitQuestion === "function";
 
   useEffect(() => {
     if (!isOpen) {
@@ -223,20 +239,33 @@ export function FloatingCompanion({ locale, onSubmitQuestion }: FloatingCompanio
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isOpen]);
 
-  const submitInput = (value: string) => {
+  const submitInput = async (value: string) => {
     const normalized = normalizeCompanionInput(value);
     if (normalized.length === 0) {
       return;
     }
 
-    const customResponse = onSubmitQuestion?.(normalized);
-    setLastMessage(customResponse ?? buildCompanionPlaceholderResponse(locale));
+    if (!assistantModeEnabled || !onSubmitQuestion) {
+      setLastMessage(buildCompanionPlaceholderResponse(locale));
+      setInputValue("");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const backendResponse = await onSubmitQuestion(normalized);
+      setLastMessage(backendResponse);
+    } catch {
+      setLastMessage(buildCompanionPlaceholderResponse(locale));
+    } finally {
+      setIsSubmitting(false);
+    }
     setInputValue("");
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    submitInput(inputValue);
+    await submitInput(inputValue);
   };
 
   const handleQuickAction = (value: string) => {
@@ -257,8 +286,10 @@ export function FloatingCompanion({ locale, onSubmitQuestion }: FloatingCompanio
           panelId={panelId}
           inputId={inputId}
           copy={companionCopy}
+          modeLabel={assistantModeEnabled ? companionCopy.assistantModeLabel : companionCopy.localGuideModeLabel}
           inputValue={inputValue}
           lastMessage={lastMessage}
+          isSubmitting={isSubmitting}
           inputRef={inputRef}
           onClose={() => setIsOpen(false)}
           onInputChange={setInputValue}

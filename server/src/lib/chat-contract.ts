@@ -43,7 +43,10 @@ export type ChatSuccessResponse = {
 
 export type ChatErrorCode =
   | "invalid_request"
-  | "upstream_error"
+  | "provider_unavailable"
+  | "missing_api_key"
+  | "missing_default_model"
+  | "model_not_available"
   | "internal_error"
   | "rate_limited"
   | "credentials_not_configured";

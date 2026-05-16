@@ -57,9 +57,18 @@ export type OpenRouterCredentialModel = {
   source: "user_configured";
 };
 
+export type DefaultFreeStatusResponse = {
+  alias: "default-free";
+  label: string;
+  source: "user_configured" | "env_configured" | "dev_fallback";
+  status: "configured" | "missing_key" | "missing_model";
+  modelId: string | null;
+};
+
 export type OpenRouterCredentialStatusResponse = {
   configured: boolean;
   models: OpenRouterCredentialModel[];
+  defaultFree: DefaultFreeStatusResponse;
 };
 
 export type SaveOpenRouterCredentialsResponse = {
@@ -245,6 +254,13 @@ export type ChatStreamHandlers = {
   onDone?: (payload: { ok: true; model: string; text: string; route: ChatRouteMetadata }) => void;
   onError?: (message: string) => void;
   onMalformed?: (message: string) => void;
+};
+
+export type ChatCompletionResponse = {
+  ok: true;
+  model: string;
+  text: string;
+  route: ChatRouteMetadata;
 };
 
 const importMetaEnv = (import.meta as {
@@ -611,6 +627,34 @@ export function buildIntegrationConnectStartUrl(provider: "github" | "matrix", r
   const params = new URLSearchParams();
   params.set("returnTo", returnTo);
   return resolveIntegrationApiUrl(provider, `/api/auth/${provider}/start?${params.toString()}`);
+}
+
+export async function requestChatCompletion(body: {
+  model?: string;
+  modelAlias?: string;
+  task?: "dialog" | "coding" | "analysis" | "review";
+  mode?: "balanced" | "fast" | "deep";
+  preference?: "latency" | "quality" | "cost";
+  temperature?: number;
+  messages: ChatMessage[];
+}): Promise<ChatCompletionResponse> {
+  const response = await fetch(resolveApiUrl("/chat"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    credentials: "include",
+    body: JSON.stringify({
+      ...body,
+      stream: false
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return response.json() as Promise<ChatCompletionResponse>;
 }
 
 export async function streamChatCompletion(

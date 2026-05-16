@@ -1,4 +1,5 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { requestChatCompletion } from "./lib/api.js";
 import {
   type GitHubWorkspaceStatus,
 } from "./components/GitHubWorkspace.js";
@@ -7,6 +8,7 @@ import {
 } from "./components/MatrixWorkspace.js";
 import {
   type DiagnosticEntry,
+  type SettingsTruthSnapshot,
 } from "./components/SettingsWorkspace.js";
 import { SessionList } from "./components/SessionList.js";
 import {
@@ -85,6 +87,7 @@ type PersistedShellState = {
 const SHELL_STORAGE_KEY = "mosaicstacked.console.shell.v2";
 const THEME_STORAGE_KEY = "ms-theme";
 const LEGACY_THEME_STORAGE_KEY = "mg-theme";
+const DEFAULT_FREE_MODEL_ALIAS = "default-free";
 
 type ThemeMode = "dark" | "light";
 
@@ -1381,7 +1384,11 @@ function ConsoleShell() {
         ]
       : [];
 
-  const settingsTruthSnapshot = {
+  const defaultFreeStatus: SettingsTruthSnapshot["models"]["defaultFreeStatus"] = backendHealthy === false
+    ? "unavailable"
+    : openRouterCredentialStatus.defaultFree.status;
+
+  const settingsTruthSnapshot: SettingsTruthSnapshot = {
     backend: {
       label:
         backendHealthy === false
@@ -1412,6 +1419,7 @@ function ConsoleShell() {
       activeAlias: activeModelAlias ?? ui.common.none,
       availableCount: availableModels.length,
       registrySourceLabel: modelRegistry.length > 0 ? "backend-policy" : ui.common.na,
+      defaultFreeStatus,
     },
     diagnostics: {
       runtimeMode: runtimeDiagnostics?.runtimeMode ?? ui.settings.unavailable,
@@ -1919,7 +1927,32 @@ function ConsoleShell() {
   })();
   const showRouteOwnershipContext = mode === "workbench" || mode === "matrix";
   const mobileWorkspaceSurface = workspaceSurface;
-  const floatingCompanion = <FloatingCompanion locale={locale} />;
+  const companionBackendSubmitEnabled = backendHealthy === true;
+  const handleCompanionQuestion = useCallback(async (question: string) => {
+    try {
+      const response = await requestChatCompletion({
+        modelAlias: DEFAULT_FREE_MODEL_ALIAS,
+        messages: [
+          {
+            role: "user",
+            content: question,
+          },
+        ],
+      });
+      recordTelemetry("info", "Helpdesk companion reply", `Alias ${response.model} returned a backend answer.`);
+      return response.text;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Companion backend request failed";
+      recordTelemetry("warning", "Helpdesk companion fallback", message);
+      throw error;
+    }
+  }, [recordTelemetry]);
+  const floatingCompanion = (
+    <FloatingCompanion
+      locale={locale}
+      onSubmitQuestion={companionBackendSubmitEnabled ? handleCompanionQuestion : undefined}
+    />
+  );
 
   if (isMobileViewport) {
     return (

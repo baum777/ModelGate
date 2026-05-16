@@ -15,6 +15,8 @@ export function createTestEnv(overrides: Partial<AppEnv> = {}): AppEnv {
     OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B: overrides.OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B ?? "test-openrouter-nemotron-key",
     OPENROUTER_BASE_URL: overrides.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1",
     OPENROUTER_MODEL: overrides.OPENROUTER_MODEL ?? "openrouter/auto",
+    OPENROUTER_DEFAULT_MODEL: overrides.OPENROUTER_DEFAULT_MODEL ?? overrides.OPENROUTER_MODEL ?? "openrouter/auto",
+    OPENROUTER_DEFAULT_LABEL: overrides.OPENROUTER_DEFAULT_LABEL ?? "Free default",
     OPENROUTER_MODELS: overrides.OPENROUTER_MODELS ?? ["openrouter/auto", "anthropic/claude-3.5-sonnet"],
     OPENROUTER_REQUEST_TIMEOUT_MS: overrides.OPENROUTER_REQUEST_TIMEOUT_MS ?? 15000,
     USER_CREDENTIALS_ENCRYPTION_KEY: overrides.USER_CREDENTIALS_ENCRYPTION_KEY ?? "",

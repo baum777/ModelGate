@@ -397,3 +397,27 @@ test("in-progress chat streams normalize to interrupted state after reload with 
   assert.equal(restored?.pendingProposal, null);
   assert.equal(restored?.notices.at(-1)?.level, "system");
 });
+
+test("workspace localStorage payload never stores OpenRouter API keys", () => {
+  const storage = new Map<string, string>();
+  const fakeWindow = {
+    localStorage: {
+      getItem(key: string) {
+        return storage.get(key) ?? null;
+      },
+      setItem(key: string, value: string) {
+        storage.set(key, value);
+      },
+      removeItem(key: string) {
+        storage.delete(key);
+      }
+    }
+  } as Partial<Window>;
+
+  const state = createDefaultWorkspaceState();
+  withWindow(fakeWindow, () => saveWorkspaceState(state));
+
+  const payload = storage.get("mosaicstacked.console.workspaces.v1") ?? "";
+  assert.doesNotMatch(payload, /apiKey/i);
+  assert.doesNotMatch(payload, /sk-or-v1-/);
+});

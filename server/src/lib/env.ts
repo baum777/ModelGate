@@ -14,6 +14,8 @@ export const EnvSchema = z.object({
   OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B: z.string().trim().default(""),
   OPENROUTER_BASE_URL: z.string().trim().default("https://openrouter.ai/api/v1"),
   OPENROUTER_MODEL: z.string().trim().min(1).default("openrouter/auto"),
+  OPENROUTER_DEFAULT_MODEL: z.string().trim().default(""),
+  OPENROUTER_DEFAULT_LABEL: z.string().trim().default("Free default"),
   OPENROUTER_MODELS: z.string().trim().default(""),
   OPENROUTER_REQUEST_TIMEOUT_MS: z.string().trim().default("15000"),
   USER_CREDENTIALS_ENCRYPTION_KEY: z.string().trim().default(""),
@@ -107,6 +109,8 @@ export type AppEnv = {
   OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B: string;
   OPENROUTER_BASE_URL: string;
   OPENROUTER_MODEL: string;
+  OPENROUTER_DEFAULT_MODEL: string;
+  OPENROUTER_DEFAULT_LABEL: string;
   OPENROUTER_MODELS: string[];
   OPENROUTER_REQUEST_TIMEOUT_MS: number;
   USER_CREDENTIALS_ENCRYPTION_KEY: string;
@@ -234,6 +238,8 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B: parsed.OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B.trim(),
     OPENROUTER_BASE_URL: parsed.OPENROUTER_BASE_URL.trim(),
     OPENROUTER_MODEL: parsed.OPENROUTER_MODEL.trim(),
+    OPENROUTER_DEFAULT_MODEL: parsed.OPENROUTER_DEFAULT_MODEL.trim(),
+    OPENROUTER_DEFAULT_LABEL: parsed.OPENROUTER_DEFAULT_LABEL.trim() || "Free default",
     OPENROUTER_MODELS: parseCsvList(parsed.OPENROUTER_MODELS),
     OPENROUTER_REQUEST_TIMEOUT_MS: Number.parseInt(parsed.OPENROUTER_REQUEST_TIMEOUT_MS.trim(), 10),
     USER_CREDENTIALS_ENCRYPTION_KEY: parsed.USER_CREDENTIALS_ENCRYPTION_KEY.trim(),

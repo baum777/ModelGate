@@ -1,6 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import type { AuthConfig } from "../lib/auth.js";
 import { ChatRequestSchema, type ChatErrorResponse } from "../lib/chat-contract.js";
+import {
+  DEFAULT_FREE_MODEL_ALIAS,
+  resolveDefaultFreeConfiguration,
+  type DefaultFreeConfiguration
+} from "../lib/default-free-model.js";
 import type { AppEnv } from "../lib/env.js";
 import { buildCorsHeaders, writeSseEvent } from "../lib/http.js";
 import type { LocalProfileSessionManager } from "../lib/local-profile-session.js";
@@ -39,33 +44,68 @@ function buildInvalidRequestResponse(): ChatErrorResponse {
   };
 }
 
-function buildUpstreamErrorResponse(): ChatErrorResponse {
+function buildModelNotAvailableResponse(message = "Requested model alias is not available"): ChatErrorResponse {
   return {
     ok: false,
     error: {
-      code: "upstream_error",
-      message: "Chat provider request failed"
+      code: "model_not_available",
+      message
+    }
+  };
+}
+
+function buildConfigErrorResponse(
+  code: "missing_api_key" | "missing_default_model",
+  message: string
+): ChatErrorResponse {
+  return {
+    ok: false,
+    error: {
+      code,
+      message
+    }
+  };
+}
+
+function buildProviderUnavailableResponse(message = "Chat provider request failed"): ChatErrorResponse {
+  return {
+    ok: false,
+    error: {
+      code: "provider_unavailable",
+      message
     }
   };
 }
 
 function buildUpstreamErrorResponseFromError(error: unknown): { status: number; body: ChatErrorResponse } {
   if (error instanceof OpenRouterError) {
+    const normalizedMessage = error.message.toLowerCase();
+    const isMissingApiKey = normalizedMessage.includes("api key") && normalizedMessage.includes("not configured");
+    const isMissingModel = normalizedMessage.includes("default model") && normalizedMessage.includes("not configured");
+
+    if (isMissingApiKey) {
+      return {
+        status: 503,
+        body: buildConfigErrorResponse("missing_api_key", "OpenRouter API key is not configured")
+      };
+    }
+
+    if (isMissingModel) {
+      return {
+        status: 503,
+        body: buildConfigErrorResponse("missing_default_model", "Default free model is not configured")
+      };
+    }
+
     return {
       status: error.status,
-      body: {
-        ok: false,
-        error: {
-          code: "upstream_error",
-          message: error.message
-        }
-      }
+      body: buildProviderUnavailableResponse(error.message)
     };
   }
 
   return {
     status: 502,
-    body: buildUpstreamErrorResponse()
+    body: buildProviderUnavailableResponse()
   };
 }
 
@@ -99,6 +139,52 @@ function buildCredentialsNotConfiguredResponse(): ChatErrorResponse {
   };
 }
 
+function buildDefaultFreeConfigurationError(configuration: DefaultFreeConfiguration): { status: number; body: ChatErrorResponse } {
+  if (configuration.status === "missing_key") {
+    return {
+      status: 503,
+      body: buildConfigErrorResponse("missing_api_key", "OpenRouter API key is not configured")
+    };
+  }
+
+  if (configuration.status === "missing_model") {
+    return {
+      status: 503,
+      body: buildConfigErrorResponse("missing_default_model", "Default free model is not configured")
+    };
+  }
+
+  return {
+    status: 503,
+    body: buildInternalErrorResponse("Default free model configuration unavailable")
+  };
+}
+
+function resolveRequestedAlias(modelAlias: string | undefined, model: string | undefined) {
+  const alias = modelAlias?.trim();
+
+  if (alias) {
+    return alias;
+  }
+
+  const legacy = model?.trim();
+
+  if (legacy) {
+    return legacy;
+  }
+
+  return null;
+}
+
+function shouldResolveDefaultFreeConfiguration(requestedAlias: string | null, defaultAlias: string) {
+  return requestedAlias === DEFAULT_FREE_MODEL_ALIAS
+    || (requestedAlias === null && defaultAlias === DEFAULT_FREE_MODEL_ALIAS);
+}
+
+function isModelNotAvailableResolutionError(message: string) {
+  return message.includes("unsupported_model") || message.includes("no_eligible_provider_targets");
+}
+
 function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
 }
@@ -126,8 +212,9 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
     }
 
     const body = parsed.data;
+    const requestedAlias = resolveRequestedAlias(body.modelAlias, body.model);
     let routeDecision: ReturnType<typeof resolveChatRouteDecision>;
-    let userOpenRouterApiKey: string | null = null;
+    let requestApiKey: string | null = null;
 
     if (body.modelAlias === USER_OPENROUTER_ALIAS || body.model === USER_OPENROUTER_ALIAS) {
       const profile = deps.profileSessions.resolve(request, reply);
@@ -137,7 +224,7 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
         return reply.status(403).send(buildCredentialsNotConfiguredResponse());
       }
 
-      userOpenRouterApiKey = credential.apiKey;
+      requestApiKey = credential.apiKey;
       routeDecision = {
         selection: {
           publicModelId: USER_OPENROUTER_ALIAS,
@@ -158,6 +245,19 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
         providerTargets: [credential.modelId]
       };
     } else {
+      const shouldResolveDefaultFree = shouldResolveDefaultFreeConfiguration(requestedAlias, deps.modelRegistry.defaultModelAlias);
+      let defaultFreeConfiguration: DefaultFreeConfiguration | null = null;
+
+      if (shouldResolveDefaultFree) {
+        const profile = deps.profileSessions.resolve(request, reply);
+        const userCredential = deps.openRouterCredentialStore.read(profile.profileId);
+        defaultFreeConfiguration = resolveDefaultFreeConfiguration(deps.env, userCredential);
+
+        if (defaultFreeConfiguration.status !== "configured") {
+          const configurationError = buildDefaultFreeConfigurationError(defaultFreeConfiguration);
+          return reply.status(configurationError.status).send(configurationError.body);
+        }
+      }
 
       try {
         routeDecision = resolveChatRouteDecision({
@@ -168,14 +268,31 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : "unknown";
-        if (message.includes("unsupported_model")) {
-          return reply.status(400).send(buildInvalidRequestResponse());
+        if (isModelNotAvailableResolutionError(message)) {
+          return reply.status(400).send(buildModelNotAvailableResponse());
         }
 
         request.log.error({
           error: message
         }, "chat route resolution failed");
         return reply.status(500).send(buildInternalErrorResponse());
+      }
+
+      if (routeDecision.route.selectedAlias === DEFAULT_FREE_MODEL_ALIAS) {
+        const profile = deps.profileSessions.resolve(request, reply);
+        const userCredential = deps.openRouterCredentialStore.read(profile.profileId);
+        const resolvedDefaultFree = defaultFreeConfiguration ?? resolveDefaultFreeConfiguration(deps.env, userCredential);
+
+        if (resolvedDefaultFree.status !== "configured" || !resolvedDefaultFree.modelId || !resolvedDefaultFree.apiKey) {
+          const configurationError = buildDefaultFreeConfigurationError(resolvedDefaultFree);
+          return reply.status(configurationError.status).send(configurationError.body);
+        }
+
+        routeDecision.selection.providerTargets = [...resolvedDefaultFree.providerTargets];
+        routeDecision.providerTargets = [...resolvedDefaultFree.providerTargets];
+        routeDecision.route.retryCount = Math.max(0, resolvedDefaultFree.providerTargets.length - 1);
+        routeDecision.route.decisionReason = `source=${resolvedDefaultFree.source}`;
+        requestApiKey = resolvedDefaultFree.apiKey;
       }
     }
 
@@ -257,7 +374,7 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
       try {
         const result = await deps.openRouter.relayChatCompletionStream(body, routeDecision.selection, {
           signal: abortController.signal,
-          apiKey: userOpenRouterApiKey ?? undefined,
+          apiKey: requestApiKey ?? undefined,
           onToken: (delta) => {
             writeSseEvent(reply.raw, "token", { delta });
           }
@@ -329,7 +446,7 @@ export function chatRoutes(app: FastifyInstance, deps: ChatRouteDependencies) {
 
     try {
       const result = await deps.openRouter.createChatCompletion(body, routeDecision.selection, {
-        apiKey: userOpenRouterApiKey ?? undefined
+        apiKey: requestApiKey ?? undefined
       });
 
       return reply.status(200).send({

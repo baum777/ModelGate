@@ -86,6 +86,146 @@ test("chat routing resolves one public alias and never leaks provider targets", 
   assert.doesNotMatch(response.body, /google\/gemma|anthropic\/claude/);
 });
 
+test("default-free alias maps to the server-configured default model with backend-only fallback targets", async (t) => {
+  const env = createTestEnv({
+    OPENROUTER_DEFAULT_MODEL: "deepseek/deepseek-v4-flash:free",
+    DIALOG_FALLBACK_MODEL: "openai/gpt-oss-120b:free",
+    FAST_FALLBACK_MODEL: "",
+    OPENROUTER_MODELS: []
+  });
+  const app = createApp({
+    env,
+    openRouter: createMockOpenRouterClient({
+      createChatCompletion: async (_request, selection) => {
+        assert.equal(selection.publicModelAlias, "default-free");
+        assert.deepEqual(selection.providerTargets, [
+          "deepseek/deepseek-v4-flash:free",
+          "openai/gpt-oss-120b:free"
+        ]);
+        return {
+          model: selection.publicModelAlias,
+          text: "ok"
+        };
+      }
+    }),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/chat",
+    payload: {
+      modelAlias: "default-free",
+      messages: [
+        {
+          role: "user",
+          content: "hello"
+        }
+      ]
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  const payload = JSON.parse(response.body) as {
+    ok: boolean;
+    model: string;
+    route: {
+      selectedAlias: string;
+    };
+  };
+  assert.equal(payload.ok, true);
+  assert.equal(payload.model, "default-free");
+  assert.equal(payload.route.selectedAlias, "default-free");
+});
+
+test("default-free alias fails closed with missing_api_key when no server key exists", async (t) => {
+  const env = createTestEnv({
+    OPENROUTER_API_KEY: "",
+    OPENROUTER_DEFAULT_MODEL: "deepseek/deepseek-v4-flash:free"
+  });
+  const app = createApp({
+    env,
+    openRouter: createMockOpenRouterClient(),
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/chat",
+    payload: {
+      modelAlias: "default-free",
+      messages: [
+        {
+          role: "user",
+          content: "hello"
+        }
+      ]
+    }
+  });
+
+  assert.equal(response.statusCode, 503);
+  assert.deepEqual(JSON.parse(response.body), {
+    ok: false,
+    error: {
+      code: "missing_api_key",
+      message: "OpenRouter API key is not configured"
+    }
+  });
+});
+
+test("default-free alias fails closed with missing_default_model when no model is configured", async (t) => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+
+  const env = createTestEnv({
+    OPENROUTER_DEFAULT_MODEL: "",
+    OPENROUTER_API_KEY: "test-openrouter-key"
+  });
+  const app = createApp({
+    env,
+    openRouter: createMockOpenRouterClient(),
+    logger: false
+  });
+
+  t.after(async () => {
+    process.env.NODE_ENV = previousNodeEnv;
+  });
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/chat",
+    payload: {
+      modelAlias: "default-free",
+      messages: [
+        {
+          role: "user",
+          content: "hello"
+        }
+      ]
+    }
+  });
+
+  assert.equal(response.statusCode, 503);
+  assert.deepEqual(JSON.parse(response.body), {
+    ok: false,
+    error: {
+      code: "missing_default_model",
+      message: "Default free model is not configured"
+    }
+  });
+});
+
 test("settings-added OpenRouter models become selectable backend-owned aliases", async (t) => {
   const env = createTestEnv();
   const app = createApp({
@@ -133,8 +273,8 @@ test("settings-added OpenRouter models become selectable backend-owned aliases",
     models: string[];
     registry: Array<{ alias: string; label: string }>;
   };
-  assert.deepEqual(modelsPayload.models, ["default", "openrouter-1"]);
-  assert.equal(modelsPayload.registry[1]?.label, "OpenRouter model 1");
+  assert.deepEqual(modelsPayload.models, ["default", "default-free", "openrouter-1"]);
+  assert.equal(modelsPayload.registry[2]?.label, "OpenRouter model 1");
   assert.doesNotMatch(modelsResponse.body, /anthropic\/claude/);
 
   const chatResponse = await app.inject({
@@ -259,5 +399,5 @@ test("streaming preserves sanitized upstream failures", async (t) => {
     };
   };
   assert.equal(errorPayload.ok, false);
-  assert.equal(errorPayload.error.code, "upstream_error");
+  assert.equal(errorPayload.error.code, "provider_unavailable");
 });

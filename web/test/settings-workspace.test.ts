@@ -99,6 +99,7 @@ function createSettingsTruthSnapshotFixture(): SettingsTruthSnapshot {
       activeAlias: "default",
       availableCount: 1,
       registrySourceLabel: "backend-policy",
+      defaultFreeStatus: "configured",
     },
     diagnostics: {
       runtimeMode: "local",
@@ -154,6 +155,13 @@ function renderSettingsWorkspaceMarkup(overrides: Partial<React.ComponentProps<t
       openRouterCredentialStatus: {
         configured: false,
         models: [],
+        defaultFree: {
+          alias: "default-free",
+          label: "Free default",
+          source: "env_configured",
+          status: "configured",
+          modelId: "deepseek/deepseek-v4-flash:free",
+        },
       },
       openRouterApiKeyInput: "",
       openRouterModelInput: "",
@@ -183,6 +191,21 @@ test("Settings workspace keeps OpenRouter credential actions disabled until back
   assert.match(markup, /data-testid="openrouter-credentials-test" disabled=""/);
 });
 
+test("Settings workspace surfaces default-free model status", () => {
+  const markup = renderSettingsWorkspaceMarkup({
+    truthSnapshot: {
+      ...createSettingsTruthSnapshotFixture(),
+      models: {
+        ...createSettingsTruthSnapshotFixture().models,
+        defaultFreeStatus: "missing_key",
+      },
+    },
+  });
+
+  assert.match(markup, /settings-default-free-status/);
+  assert.match(markup, /missing key/);
+});
+
 test("Settings workspace renders integration cards and keeps secrets out of the DOM", () => {
   const truthSnapshot: SettingsTruthSnapshot = {
     backend: {
@@ -205,6 +228,7 @@ test("Settings workspace renders integration cards and keeps secrets out of the 
       activeAlias: "gpt-4.1",
       availableCount: 3,
       registrySourceLabel: "backend-policy",
+      defaultFreeStatus: "configured",
     },
     diagnostics: {
       runtimeMode: "local",
@@ -296,6 +320,13 @@ test("Settings workspace renders integration cards and keeps secrets out of the 
           label: model.label,
           source: "user_configured" as const,
         })),
+        defaultFree: {
+          alias: "default-free",
+          label: "Free default",
+          source: "env_configured",
+          status: "configured",
+          modelId: "deepseek/deepseek-v4-flash:free",
+        },
       },
       openRouterApiKeyInput: "",
       openRouterModelInput: "",
@@ -467,6 +498,7 @@ test("Settings workspace shows GitHub connect CTA when GitHub is not connected",
           activeAlias: "default",
           availableCount: 1,
           registrySourceLabel: "backend-policy",
+          defaultFreeStatus: "configured",
         },
         diagnostics: {
           runtimeMode: "local",
@@ -503,6 +535,13 @@ test("Settings workspace shows GitHub connect CTA when GitHub is not connected",
       openRouterCredentialStatus: {
         configured: false,
         models: [],
+        defaultFree: {
+          alias: "default-free",
+          label: "Free default",
+          source: "env_configured",
+          status: "configured",
+          modelId: "deepseek/deepseek-v4-flash:free",
+        },
       },
       openRouterApiKeyInput: "",
       openRouterModelInput: "",

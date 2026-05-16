@@ -140,6 +140,7 @@ export function createApp(deps: AppDependencies) {
   healthRoutes(app, deps.env, modelRegistry);
   modelRoutes(app, modelRegistry);
   settingsOpenRouterRoutes(app, {
+    env: deps.env,
     profileSessions: localProfileSessions,
     credentialStore: openRouterCredentialStore,
     openRouter: deps.openRouter

@@ -64,7 +64,14 @@ test("OpenRouter settings save creates a backend profile cookie and never return
         label: "anthropic/claude-3.5-sonnet",
         source: "user_configured"
       }
-    ]
+    ],
+    defaultFree: {
+      alias: "default-free",
+      label: "Free default",
+      source: "user_configured",
+      status: "configured",
+      modelId: "anthropic/claude-3.5-sonnet"
+    }
   });
   assert.doesNotMatch(statusResponse.body, /sk-or-v1-secret-user-openrouter-key/);
 });
@@ -165,7 +172,14 @@ test("OpenRouter test route validates a provided key and model without persistin
   assert.equal(statusResponse.statusCode, 200);
   assert.deepEqual(JSON.parse(statusResponse.body), {
     configured: false,
-    models: []
+    models: [],
+    defaultFree: {
+      alias: "default-free",
+      label: "Free default",
+      source: "env_configured",
+      status: "configured",
+      modelId: "openrouter/auto"
+    }
   });
 });
 

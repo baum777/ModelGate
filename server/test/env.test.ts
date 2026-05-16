@@ -12,6 +12,8 @@ test("env parsing allows Matrix-only startup without an OpenRouter key", () => {
     OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B: "nemotron-key",
     OPENROUTER_BASE_URL: "https://openrouter.ai/api/v1",
     OPENROUTER_MODEL: "openrouter/auto",
+    OPENROUTER_DEFAULT_MODEL: "deepseek/deepseek-v4-flash:free",
+    OPENROUTER_DEFAULT_LABEL: "Free default",
     OPENROUTER_MODELS: "",
     APP_NAME: "mosaicstacked-test",
     DEFAULT_SYSTEM_PROMPT: "prompt",
@@ -62,6 +64,8 @@ test("env parsing allows Matrix-only startup without an OpenRouter key", () => {
   assert.equal(env.OPENROUTER_API_KEY_QWEN3_CODER, "qwen-key");
   assert.equal(env.OPENROUTER_API_KEY_GPT_OSS_120B_PLANNER, "planner-key");
   assert.equal(env.OPENROUTER_API_KEY_NEMOTRON_3_SUPER_120B, "nemotron-key");
+  assert.equal(env.OPENROUTER_DEFAULT_MODEL, "deepseek/deepseek-v4-flash:free");
+  assert.equal(env.OPENROUTER_DEFAULT_LABEL, "Free default");
   assert.equal(env.PORT, 8787);
   assert.equal(env.HOST, "127.0.0.1");
   assert.equal(env.APP_NAME, "mosaicstacked-test");

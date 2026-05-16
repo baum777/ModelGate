@@ -23,7 +23,38 @@ import type { SettingsVerificationState, SettingsVerificationTarget } from "../c
 const OPENROUTER_CREDENTIAL_STATUS_EMPTY: OpenRouterCredentialStatusResponse = {
   configured: false,
   models: [],
+  defaultFree: {
+    alias: "default-free",
+    label: "Free default",
+    source: "env_configured",
+    status: "missing_model",
+    modelId: null,
+  },
 };
+
+function normalizeOpenRouterCredentialStatus(
+  status: Partial<OpenRouterCredentialStatusResponse> | null | undefined,
+): OpenRouterCredentialStatusResponse {
+  const defaultFree = status?.defaultFree;
+
+  return {
+    configured: status?.configured === true,
+    models: Array.isArray(status?.models) ? status.models : [],
+    defaultFree: {
+      alias: "default-free",
+      label: typeof defaultFree?.label === "string" && defaultFree.label.trim().length > 0
+        ? defaultFree.label
+        : "Free default",
+      source: defaultFree?.source === "user_configured" || defaultFree?.source === "dev_fallback"
+        ? defaultFree.source
+        : "env_configured",
+      status: defaultFree?.status === "configured" || defaultFree?.status === "missing_key"
+        ? defaultFree.status
+        : "missing_model",
+      modelId: typeof defaultFree?.modelId === "string" ? defaultFree.modelId : null,
+    },
+  };
+}
 
 const SETTINGS_VERIFICATION_INITIAL: Record<SettingsVerificationTarget, SettingsVerificationState> = {
   backend: {
@@ -171,7 +202,8 @@ export function useRuntimeStatus(options: {
   }, [fetchCachedStatus]);
 
   const refreshOpenRouterCredentialStatus = useCallback(async () => {
-    const status = await fetchOpenRouterCredentialStatus();
+    const fetchedStatus = await fetchOpenRouterCredentialStatus();
+    const status = normalizeOpenRouterCredentialStatus(fetchedStatus);
     setOpenRouterCredentialStatus(status);
 
     if (status.configured) {
@@ -237,7 +269,7 @@ export function useRuntimeStatus(options: {
     }
 
     const userOpenRouterStatus = openRouterStatusResult.status === "fulfilled"
-      ? openRouterStatusResult.value
+      ? normalizeOpenRouterCredentialStatus(openRouterStatusResult.value)
       : OPENROUTER_CREDENTIAL_STATUS_EMPTY;
     setOpenRouterCredentialStatus(userOpenRouterStatus);
 
@@ -245,7 +277,12 @@ export function useRuntimeStatus(options: {
       const userModelRegistry = mapOpenRouterRegistry(userOpenRouterStatus.models);
       const registry = [...(modelsResult.value.registry ?? []), ...userModelRegistry];
       const models = [...modelsResult.value.models, ...userOpenRouterStatus.models.map((model) => model.alias)];
-      const defaultAlias = userOpenRouterStatus.configured ? "user_openrouter_default" : modelsResult.value.defaultModel;
+      const hasDefaultFreeAlias = models.includes("default-free");
+      const defaultAlias = userOpenRouterStatus.configured
+        ? "user_openrouter_default"
+        : hasDefaultFreeAlias
+          ? "default-free"
+          : modelsResult.value.defaultModel;
 
       setAvailableModels(models);
       setActiveModelAlias(defaultAlias);

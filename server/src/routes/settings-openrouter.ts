@@ -1,5 +1,10 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
+import {
+  DEFAULT_FREE_MODEL_ALIAS,
+  resolveDefaultFreeConfiguration
+} from "../lib/default-free-model.js";
+import type { AppEnv } from "../lib/env.js";
 import type { LocalProfileSessionManager } from "../lib/local-profile-session.js";
 import {
   USER_OPENROUTER_ALIAS,
@@ -17,6 +22,7 @@ const CredentialRequestSchema = z.object({
 }).strict();
 
 type SettingsOpenRouterDependencies = {
+  env: AppEnv;
   profileSessions: LocalProfileSessionManager;
   credentialStore: UserOpenRouterCredentialStore;
   openRouter: OpenRouterClient;
@@ -106,8 +112,19 @@ function sendInvalidRequest(reply: FastifyReply) {
 export function settingsOpenRouterRoutes(app: FastifyInstance, deps: SettingsOpenRouterDependencies) {
   app.get("/settings/openrouter/status", async (request, reply) => {
     const profile = deps.profileSessions.resolve(request, reply);
+    const credential = deps.credentialStore.read(profile.profileId);
+    const defaultFree = resolveDefaultFreeConfiguration(deps.env, credential);
     reply.header("Cache-Control", "no-store");
-    return deps.credentialStore.status(profile.profileId);
+    return {
+      ...deps.credentialStore.status(profile.profileId),
+      defaultFree: {
+        alias: DEFAULT_FREE_MODEL_ALIAS,
+        label: defaultFree.label,
+        source: defaultFree.source,
+        status: defaultFree.status,
+        modelId: defaultFree.modelId
+      }
+    };
   });
 
   app.post("/settings/openrouter/credentials", async (request, reply) => {

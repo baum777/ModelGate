@@ -118,6 +118,7 @@ type ChatRoutingStatusCopy = {
 
 const CHAT_SESSION_SYNC_INTERVAL_MS = 220;
 const CHAT_STREAM_SESSION_SYNC_INTERVAL_MS = 1_000;
+const DEFAULT_FREE_MODEL_ALIAS = "default-free";
 const MESSAGE_ACTION_COPY_RESET_MS = 1600;
 const MATRIX_DRAFT_TAGS = ["release", "incident", "todo"] as const;
 const MESSAGE_ACTION_GUIDE_PULSE_MS = 1400;
@@ -224,6 +225,39 @@ function MobileChatTipRail({ locale }: { locale: "en" | "de" }) {
       </small>
     </div>
   );
+}
+
+function normalizeModelAlias(value: string | null | undefined) {
+  const normalized = value?.trim() ?? "";
+  return normalized.length > 0 ? normalized : null;
+}
+
+export function resolveInitialChatModelAlias(options: {
+  sessionSelectedModelAlias: string | null;
+  activeModelAlias: string | null;
+  availableModels: string[];
+  modelRegistry: Array<{ alias: string }>;
+}) {
+  const fromSession = normalizeModelAlias(options.sessionSelectedModelAlias);
+  if (fromSession) {
+    return fromSession;
+  }
+
+  const fromShell = normalizeModelAlias(options.activeModelAlias);
+  if (fromShell) {
+    return fromShell;
+  }
+
+  const fromServerDefault = options.availableModels.includes(DEFAULT_FREE_MODEL_ALIAS)
+    || options.modelRegistry.some((entry) => entry.alias === DEFAULT_FREE_MODEL_ALIAS)
+    ? DEFAULT_FREE_MODEL_ALIAS
+    : null;
+
+  if (fromServerDefault) {
+    return fromServerDefault;
+  }
+
+  return options.availableModels[0] ?? options.modelRegistry[0]?.alias ?? "";
 }
 
 export function buildChatRoutingStatusItems(options: {
@@ -593,8 +627,14 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     props.session.metadata.chatState,
     createInitialChatState,
   );
+  const persistedSessionModelAlias = normalizeModelAlias(props.session.metadata.selectedModelAlias);
   const [selectedModel, setSelectedModel] = useState(
-    props.session.metadata.selectedModelAlias ?? props.activeModelAlias ?? "",
+    resolveInitialChatModelAlias({
+      sessionSelectedModelAlias: persistedSessionModelAlias,
+      activeModelAlias: props.activeModelAlias,
+      availableModels: props.availableModels,
+      modelRegistry: props.modelRegistry,
+    }),
   );
   const [executionMode, setExecutionMode] = useState<ChatExecutionMode>(
     props.session.metadata.executionMode
@@ -669,18 +709,29 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   }, [props.matrixDraftDefaultRoomId, props.matrixDraftRoomOptions]);
 
   useEffect(() => {
-    if (props.activeModelAlias && props.activeModelAlias !== selectedModel) {
-      setSelectedModel(props.activeModelAlias);
+    if (selectedModel.trim().length > 0) {
+      return;
     }
-  }, [props.activeModelAlias, selectedModel]);
 
-  useEffect(() => {
-    if (props.availableModels.length > 0 && !selectedModel) {
-      const nextModel = props.availableModels[0];
+    const nextModel = resolveInitialChatModelAlias({
+      sessionSelectedModelAlias: persistedSessionModelAlias,
+      activeModelAlias: props.activeModelAlias,
+      availableModels: props.availableModels,
+      modelRegistry: props.modelRegistry,
+    });
+
+    if (nextModel.trim().length > 0) {
       setSelectedModel(nextModel);
       props.onActiveModelAliasChange(nextModel);
     }
-  }, [props.availableModels, props.onActiveModelAliasChange, selectedModel]);
+  }, [
+    persistedSessionModelAlias,
+    props.activeModelAlias,
+    props.availableModels,
+    props.modelRegistry,
+    props.onActiveModelAliasChange,
+    selectedModel,
+  ]);
 
   useEffect(() => {
     if (matrixComposeOpen || matrixComposeRoomId.trim().length > 0 || matrixRoomOptions.length === 0) {

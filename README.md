@@ -129,6 +129,14 @@ Set `USER_CREDENTIALS_ENCRYPTION_KEY` in `.env`, then enter your OpenRouter API 
 
 `OPENROUTER_API_KEY` is a legacy/dev compatibility slot only; it is not the normal shared runtime authority for user chat.
 
+Default-free routing is server-side:
+
+- configure `OPENROUTER_DEFAULT_MODEL` (alias `default-free`) and optional `OPENROUTER_DEFAULT_LABEL`,
+- keep `OPENROUTER_API_KEY` server-side only,
+- optionally add fallback targets via existing server routing envs (`DIALOG_FALLBACK_MODEL`, `FAST_FALLBACK_MODEL`, `OPENROUTER_MODELS`).
+
+`default-free` is exposed as a safe public alias from `GET /models`. Chat and the floating Helpdesk Companion both call the same backend `/chat` model router. No OpenRouter API key is stored in browser state or `localStorage`.
+
 Optional integrations:
 
 - GitHub routes require GitHub App auth config for login/install flow: `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_SLUG`, `MOSAIC_STACK_SESSION_SECRET`, and integration-auth encryption config. For the GitHub "Install & Authorize" flow, enable "Request user authorization (OAuth) during installation" on the GitHub App and set the app's OAuth client id/secret in `GITHUB_OAUTH_CLIENT_ID` and `GITHUB_OAUTH_CLIENT_SECRET`.

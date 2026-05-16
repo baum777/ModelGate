@@ -48,7 +48,7 @@ test("health and models return backend-owned metadata", async (t) => {
     mode: "local",
     upstream: "openrouter",
     defaultModel: "default",
-    allowedModelCount: 1,
+    allowedModelCount: 2,
     streaming: "sse"
   });
 
@@ -67,10 +67,34 @@ test("health and models return backend-owned metadata", async (t) => {
   };
   assert.equal(modelsPayload.ok, true);
   assert.equal(modelsPayload.defaultModel, "default");
-  assert.deepEqual(modelsPayload.models, ["default"]);
+  assert.deepEqual(modelsPayload.models, ["default", "default-free"]);
   assert.equal(modelsPayload.source, "backend-policy");
   assert.equal(modelsPayload.registry[0]?.alias, "default");
+  assert.equal(modelsPayload.registry[1]?.alias, "default-free");
   assert.equal(typeof modelsPayload.registry[0]?.label, "string");
+});
+
+test("/models never exposes OpenRouter API keys", async (t) => {
+  const env = createTestEnv({
+    OPENROUTER_API_KEY: "sk-or-v1-super-secret-server-key",
+  });
+  const app = createApp({
+    env,
+    openRouter: createMockOpenRouterClient(),
+    logger: false,
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/models",
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.doesNotMatch(response.body, /sk-or-v1-super-secret-server-key/);
 });
 
 test("diagnostics returns safe observability data without exposing secret env values", async (t) => {
@@ -150,7 +174,7 @@ test("diagnostics returns safe observability data without exposing secret env va
   assert.equal(payload.service, env.APP_NAME);
   assert.equal(payload.runtimeMode, "local");
   assert.equal(payload.models.defaultPublicAlias, "default");
-  assert.deepEqual(payload.models.publicAliases, ["default"]);
+  assert.deepEqual(payload.models.publicAliases, ["default", "default-free"]);
   assert.equal(payload.routing.mode, env.MODEL_ROUTING_MODE);
   assert.equal(payload.routing.allowFallback, env.ALLOW_MODEL_FALLBACK);
   assert.equal(payload.routing.failClosed, env.MODEL_ROUTING_FAIL_CLOSED);
@@ -404,7 +428,7 @@ test("server boots Matrix read-only routes without an OpenRouter key and chat fa
   assert.deepEqual(JSON.parse(chatResponse.body), {
     ok: false,
     error: {
-      code: "upstream_error",
+      code: "missing_api_key",
       message: "OpenRouter API key is not configured"
     }
   });
@@ -479,8 +503,8 @@ test("/chat rejects unsupported public model aliases with a sanitized 400", asyn
   assert.deepEqual(JSON.parse(response.body), {
     ok: false,
     error: {
-      code: "invalid_request",
-      message: "Invalid chat request"
+      code: "model_not_available",
+      message: "Requested model alias is not available"
     }
   });
 });
@@ -581,7 +605,7 @@ test("/chat returns the non-stream response shape and sanitizes provider failure
   assert.deepEqual(JSON.parse(failureResponse.body), {
     ok: false,
     error: {
-      code: "upstream_error",
+      code: "provider_unavailable",
       message: "Chat provider request failed"
     }
   });
@@ -737,7 +761,7 @@ test("/chat streams start, token, done, and sanitized error frames", async (t) =
   assert.deepEqual(JSON.parse(failureEvents[2].data), {
     ok: false,
     error: {
-      code: "upstream_error",
+      code: "provider_unavailable",
       message: "Chat provider request failed"
     }
   });
@@ -841,7 +865,7 @@ test("/chat stream over HTTP always ends with exactly one terminal event", async
   assert.deepEqual(JSON.parse(failureEvents[2].data), {
     ok: false,
     error: {
-      code: "upstream_error",
+      code: "provider_unavailable",
       message: "Chat provider request failed"
     }
   });

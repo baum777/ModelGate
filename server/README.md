@@ -151,6 +151,16 @@ Returns the local preview profile's safe OpenRouter credential status. The respo
 
 Stores `{ "apiKey": "...", "modelId": "provider/model[:variant]" }` for the backend-created signed/httpOnly local preview profile cookie. The route rejects body-supplied profile/user/tenant authority, encrypts stored credentials, and returns only masked configured status.
 
+### `GET /settings/openrouter/status`
+
+Returns masked profile credential status plus default-free routing status:
+
+- `defaultFree.alias` (`default-free`)
+- `defaultFree.label`
+- `defaultFree.source` (`user_configured`, `env_configured`, `dev_fallback`)
+- `defaultFree.status` (`configured`, `missing_key`, `missing_model`)
+- `defaultFree.modelId` (safe model identifier only)
+
 ### `POST /settings/openrouter/test`
 
 Tests a provided `{ "apiKey": "...", "modelId": "provider/model[:variant]" }` pair without saving it. Responses are sanitized and do not include request headers, API keys, or raw provider payloads.
@@ -172,6 +182,7 @@ The backend injects its own system prompt and rejects unknown top-level fields.
 The server-owned `DEFAULT_SYSTEM_PROMPT` is the sole system instruction used for a request.
 The backend maps the public alias to an internal logical model and provider target set before calling OpenRouter.
 For `user_openrouter_default`, the backend resolves signed profile cookie -> encrypted credential store -> API key + model ID. Missing credentials, unknown aliases, raw provider IDs, or decrypt/config failures fail closed before upstream calls.
+For `default-free`, the backend resolves server-side default-free routing (`OPENROUTER_DEFAULT_MODEL` + backend key), can include backend fallback targets, and never exposes API keys to browser payloads.
 
 Non-stream response:
 
@@ -195,14 +206,36 @@ Invalid request response:
 }
 ```
 
-Upstream/provider failure response:
+Provider unavailable response:
 
 ```json
 {
   "ok": false,
   "error": {
-    "code": "upstream_error",
+    "code": "provider_unavailable",
     "message": "Chat provider request failed"
+  }
+}
+```
+
+Default-free configuration errors:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "missing_api_key",
+    "message": "OpenRouter API key is not configured"
+  }
+}
+```
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "missing_default_model",
+    "message": "Default free model is not configured"
   }
 }
 ```
@@ -232,7 +265,7 @@ On provider failure after the stream has started, the backend emits a sanitized 
 
 ```text
 event: error
-data: {"ok":false,"error":{"code":"upstream_error","message":"Chat provider request failed"}}
+data: {"ok":false,"error":{"code":"provider_unavailable","message":"Chat provider request failed"}}
 ```
 
 ## GitHub Workspace Contract

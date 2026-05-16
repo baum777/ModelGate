@@ -1,8 +1,15 @@
 import type { AppEnv } from "./env.js";
+import {
+  DEFAULT_FREE_MODEL_ALIAS,
+  DEFAULT_FREE_MODEL_LOGICAL_ID,
+  resolveDefaultFreeConfiguration
+} from "./default-free-model.js";
 import { normalizeConfiguredModelId } from "./model-id.js";
 
 export const PUBLIC_MODEL_ALIAS = "default";
 export const INTERNAL_LOGICAL_MODEL_ID = "stable-free-default";
+export const LEGACY_PUBLIC_MODEL_ALIAS = DEFAULT_FREE_MODEL_ALIAS;
+const LEGACY_INTERNAL_LOGICAL_MODEL_ID = DEFAULT_FREE_MODEL_LOGICAL_ID;
 
 export type PublicModelTier = "core" | "specialized" | "fallback";
 
@@ -58,7 +65,7 @@ function buildProviderTargets(env: AppEnv) {
     normalizeConfiguredModelId(env.CHAT_MODEL) ?? null,
     normalizeConfiguredModelId(env.OPENROUTER_MODEL) ?? null,
     ...env.OPENROUTER_MODELS.map((value) => normalizeConfiguredModelId(value) ?? value)
-  ]).filter((value) => value.toLowerCase() !== "default");
+  ]).filter((value) => value.toLowerCase() !== LEGACY_PUBLIC_MODEL_ALIAS && value.toLowerCase() !== PUBLIC_MODEL_ALIAS);
 }
 
 function normalizeOpenRouterModelInput(input: string) {
@@ -104,8 +111,9 @@ function toPublicModelRegistryEntry(model: PublicModelDescriptor): PublicModelRe
 }
 
 export function buildModelRegistry(env: AppEnv): ModelRegistry {
-  const providerTargets = buildProviderTargets(env);
-  const isAvailable = providerTargets.length > 0;
+  const defaultFree = resolveDefaultFreeConfiguration(env, null);
+  const legacyProviderTargets = buildProviderTargets(env);
+  const legacyAvailable = legacyProviderTargets.length > 0;
   const configuredOpenRouterModelIds: string[] = [];
   const publicModel: PublicModelDescriptor = {
     alias: PUBLIC_MODEL_ALIAS,
@@ -116,17 +124,31 @@ export function buildModelRegistry(env: AppEnv): ModelRegistry {
     streaming: true,
     recommendedFor: ["general_chat", "summaries", "guided_assistance"],
     default: true,
-    available: isAvailable,
+    available: legacyAvailable,
     logicalModelId: INTERNAL_LOGICAL_MODEL_ID,
-    providerTargets,
+    providerTargets: legacyProviderTargets,
     selectable: true
   };
-  const publicModels = [publicModel];
+  const defaultFreeModel: PublicModelDescriptor = {
+    alias: LEGACY_PUBLIC_MODEL_ALIAS,
+    label: defaultFree.label,
+    description: "Backend-configured default-free chat route with server-only OpenRouter credentials.",
+    capabilities: ["chat", "streaming", "fallback-aware"],
+    tier: "specialized",
+    streaming: true,
+    recommendedFor: ["free_default_chat", "summaries", "guided_assistance"],
+    available: defaultFree.status === "configured" && defaultFree.providerTargets.length > 0,
+    logicalModelId: LEGACY_INTERNAL_LOGICAL_MODEL_ID,
+    providerTargets: defaultFree.providerTargets,
+    selectable: true
+  };
+  const publicModels = [publicModel, defaultFreeModel];
+  const fixedModelCount = publicModels.length;
 
   return {
     publicModels,
-    defaultModelId: PUBLIC_MODEL_ALIAS,
-    defaultModelAlias: PUBLIC_MODEL_ALIAS,
+    defaultModelId: publicModel.alias,
+    defaultModelAlias: publicModel.alias,
     addOpenRouterModel(modelId) {
       const normalizedModel = normalizeOpenRouterModelInput(modelId);
 
@@ -137,7 +159,7 @@ export function buildModelRegistry(env: AppEnv): ModelRegistry {
       const existingIndex = configuredOpenRouterModelIds.indexOf(normalizedModel);
 
       if (existingIndex !== -1) {
-        const existingModel = publicModels[existingIndex + 1];
+        const existingModel = publicModels[fixedModelCount + existingIndex];
 
         return existingModel ? toPublicModelRegistryEntry(existingModel) : null;
       }

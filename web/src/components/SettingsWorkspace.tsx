@@ -50,6 +50,7 @@ export type SettingsTruthSnapshot = {
     activeAlias: string;
     availableCount: number;
     registrySourceLabel: string;
+    defaultFreeStatus: "configured" | "missing_key" | "missing_model" | "unavailable";
   };
   diagnostics: {
     runtimeMode: string;
@@ -104,6 +105,13 @@ type SettingsWorkspaceProps = {
       label: string;
       source: "user_configured";
     }>;
+    defaultFree: {
+      alias: "default-free";
+      label: string;
+      source: "user_configured" | "env_configured" | "dev_fallback";
+      status: "configured" | "missing_key" | "missing_model";
+      modelId: string | null;
+    };
   };
   openRouterApiKeyInput: string;
   openRouterModelInput: string;
@@ -422,6 +430,11 @@ export function SettingsWorkspace({
         manualConfigError: "Ungültige JSON-Config. Erlaubte Keys: chat, auth_login, github_propose, github_execute, matrix_execute. Werte müssen positive Ganzzahlen sein.",
         configured: "OpenRouter key configured",
         empty: "Noch kein OpenRouter-Key für dieses lokale Profil gespeichert.",
+        defaultFreeStatusLabel: "Default-Free-Status",
+        statusConfigured: "configured",
+        statusMissingKey: "missing key",
+        statusMissingModel: "missing model",
+        statusUnavailable: "unavailable",
       }
     : {
         title: "OpenRouter models",
@@ -443,6 +456,11 @@ export function SettingsWorkspace({
         manualConfigError: "Invalid JSON config. Allowed keys: chat, auth_login, github_propose, github_execute, matrix_execute. Values must be positive integers.",
         configured: "OpenRouter key configured",
         empty: "No OpenRouter key is configured for this local profile yet.",
+        defaultFreeStatusLabel: "Default-free status",
+        statusConfigured: "configured",
+        statusMissingKey: "missing key",
+        statusMissingModel: "missing model",
+        statusUnavailable: "unavailable",
       };
   const openRouterCredentialInputsValid = areOpenRouterCredentialInputsValid(openRouterApiKeyInput, openRouterModelInput);
   const openRouterControlsDisabled = !openRouterCredentialInputsValid;
@@ -482,10 +500,21 @@ export function SettingsWorkspace({
     { id: "github", label: verificationCopy.github },
     { id: "matrix", label: verificationCopy.matrix },
   ];
+  const defaultFreeStatusCode = truthSnapshot.models.defaultFreeStatus;
+  const defaultFreeStatusValue = defaultFreeStatusCode === "configured"
+    ? openRouterCopy.statusConfigured
+    : defaultFreeStatusCode === "missing_key"
+      ? openRouterCopy.statusMissingKey
+      : defaultFreeStatusCode === "missing_model"
+        ? openRouterCopy.statusMissingModel
+        : openRouterCopy.statusUnavailable;
+  const defaultFreeStatusTone: MobileSettingsTone = defaultFreeStatusCode === "configured"
+    ? "ready"
+    : defaultFreeStatusCode === "unavailable"
+      ? "partial"
+      : "error";
   const [mobileSettingsSheet, setMobileSettingsSheet] = React.useState<string | null>(null);
-  const openRouterMobileStatusValue = openRouterCredentialStatus.configured
-    ? (locale === "de" ? "Konfiguriert" : "Configured")
-    : (locale === "de" ? "Fehlt" : "Missing");
+  const openRouterMobileStatusValue = defaultFreeStatusValue;
   const mobileTruthItems: MobileSettingsTruthItem[] = [
     {
       id: "backend",
@@ -496,8 +525,8 @@ export function SettingsWorkspace({
     {
       id: "model",
       label: locale === "de" ? "Modell" : "Model",
-      value: openRouterCredentialStatus.configured ? (locale === "de" ? "Konfiguriert" : "Configured") : (locale === "de" ? "Fehlt" : "Missing"),
-      tone: openRouterCredentialStatus.configured ? "ready" : "error",
+      value: defaultFreeStatusValue,
+      tone: defaultFreeStatusTone,
     },
     {
       id: "github",
@@ -520,7 +549,7 @@ export function SettingsWorkspace({
       label: openRouterCopy.title,
       value: openRouterMobileStatusValue,
       detail: openRouterCopy.subtitle,
-      tone: openRouterCredentialStatus.configured ? "ready" : "error",
+      tone: defaultFreeStatusTone,
     },
     {
       id: "github",
@@ -1090,7 +1119,7 @@ export function SettingsWorkspace({
 
         <SystemLayerFrame
           layer="execution"
-          active={openRouterCredentialStatus.configured}
+          active={defaultFreeStatusCode === "configured"}
           className="workspace-card openrouter-model-card"
         >
           <header className="card-header">
@@ -1102,11 +1131,21 @@ export function SettingsWorkspace({
           <SystemNode
             label="OpenRouter"
             kind="openrouter"
-            status={openRouterCredentialStatus.configured ? "connected" : "disconnected"}
+            status={defaultFreeStatusCode === "configured" ? "connected" : "disconnected"}
           >
-            {openRouterCredentialStatus.configured ? openRouterCopy.configured : truthSnapshot.models.registrySourceLabel}
+            {defaultFreeStatusValue}
           </SystemNode>
           <p className="muted-copy">{openRouterCopy.subtitle}</p>
+          <div className="detail-grid">
+            <div>
+              <span>{openRouterCopy.defaultFreeStatusLabel}</span>
+              <strong data-testid="settings-default-free-status">{defaultFreeStatusValue}</strong>
+            </div>
+            <div>
+              <span>{openRouterCredentialStatus.defaultFree.alias}</span>
+              <strong>{openRouterCredentialStatus.defaultFree.label}</strong>
+            </div>
+          </div>
           {openRouterCredentialMessage ? (
             <p className="status-pill status-ready">{openRouterCredentialMessage}</p>
           ) : null}

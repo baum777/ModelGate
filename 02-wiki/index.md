@@ -24,3 +24,5 @@ Format: `[[link]] | summary | #tags | YYYY-MM-DD`
 [[../web/src/components/GitHubWorkspace.tsx]] | Summary-first Workbench review center with explicit local/backend action effect semantics | #workbench #review #authority | 2026-05-11
 [[../tests/browser/mosaicstacked.spec.ts]] | Browser verification for 4-tab navigation, RW branch gating, authority-safe Workbench actions, and backend-capability-gated PR execution | #workbench #chat #verification | 2026-05-11
 [[../web/src/components/FloatingCompanion.tsx]] | Permanenter Floating Helpdesk Companion mit minimiertem Button, expandierbarem Panel, lokaler Placeholder-Antwort und A11y-Keyboard-Gates | #chat #ux #accessibility | 2026-05-15
+[[../server/src/lib/default-free-model.ts]] | Backend-Resolver für Alias `default-free` mit Priorität user-credential -> env -> lokaler Dev-Fallback (fail-closed bei fehlendem Key/Modell) | #chat #routing #authority | 2026-05-16
+[[../docs/model-routing.md]] | Routing-Contract inkl. `default-free` Alias, fail-closed Fehlercodes und serverseitiger Key/Model-Priorisierung | #docs #chat #authority | 2026-05-16

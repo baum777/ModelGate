@@ -22,7 +22,8 @@ test("console shell mounts floating companion with locale wiring", () => {
   const source = readFileSync("web/src/App.tsx", "utf8");
 
   assert.match(source, /import \{ FloatingCompanion \} from "\.\/components\/FloatingCompanion\.js"/);
-  assert.match(source, /const floatingCompanion = <FloatingCompanion locale=\{locale\} \/>/);
+  assert.match(source, /onSubmitQuestion=\{companionBackendSubmitEnabled \? handleCompanionQuestion : undefined\}/);
+  assert.doesNotMatch(source, /<FloatingCompanion[\s\S]*openRouterApiKeyInput=/);
   assert.match(source, /\{floatingCompanion\}/);
 });
 
@@ -43,8 +44,9 @@ test("floating companion closes on Escape and supports quick actions", () => {
   assert.match(source, /setIsOpen\(false\)/);
   assert.match(source, /quickActions/);
   assert.match(source, /onQuickAction/);
-  assert.match(source, /onSubmitQuestion\?: \(question: string\) => string \| undefined/);
-  assert.match(source, /const customResponse = onSubmitQuestion\?\.\(normalized\)/);
+  assert.match(source, /onSubmitQuestion\?: \(question: string\) => Promise<string>/);
+  assert.match(source, /assistantModeEnabled \? companionCopy\.assistantModeLabel : companionCopy\.localGuideModeLabel/);
+  assert.match(source, /data-testid="floating-companion-mode"/);
 });
 
 test("floating companion styles define fixed placement, hover/focus feedback, and mobile-safe offset", () => {
@@ -63,4 +65,19 @@ test("ui adaptation leaves floating companion controls out of the global button 
   const selectorHits = source.match(/not\(\.floating-companion-control\)/g) ?? [];
 
   assert.equal(selectorHits.length >= 3, true);
+});
+
+test("companion backend mode routes questions through /chat with default-free alias", () => {
+  const source = readFileSync("web/src/App.tsx", "utf8");
+
+  assert.match(source, /requestChatCompletion\(\{/);
+  assert.match(source, /modelAlias:\s*DEFAULT_FREE_MODEL_ALIAS/);
+  assert.match(source, /content:\s*question/);
+});
+
+test("companion falls back to local guide mode when no backend submit callback exists", () => {
+  const source = readFileSync("web/src/components/FloatingCompanion.tsx", "utf8");
+
+  assert.match(source, /if \(!assistantModeEnabled \|\| !onSubmitQuestion\)/);
+  assert.match(source, /buildCompanionPlaceholderResponse\(locale\)/);
 });
