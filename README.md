@@ -1,186 +1,192 @@
 # MosaicStacked
 
-MosaicStacked is a community-first, model-agnostic interface for working with your own repository, your own setup, and a shared Matrix-based knowledge space.
+MosaicStacked ist eine backend-first Console für Chat, Repository-Arbeit und Matrix-gestützte Wissensräume. Die Browseroberfläche zeigt Absicht, Status und Review-Flächen; die Runtime-Wahrheit liegt beim Backend.
 
-It is meant to be read first as a GitHub project viewer: what the project is for, what it connects, what is implemented, and what still remains contract-only.
+Der aktuelle Stand ist kein reines Demo-Frontend: Chat, GitHub-Workbench, Matrix-Workspace und Settings sind als vier Console-Flächen verdrahtet. Provider-IDs, GitHub-/Matrix-Credentials und Ausführungswahrheit bleiben serverseitig.
 
-## What It Is
+## Ist-Zustand
 
-MosaicStacked is an individualized multi-layer interface for people who want to use AI models without turning one provider, one UI, or one private workflow into the source of truth.
+| Fläche | Stand | Authority |
+| --- | --- | --- |
+| Chat | Backend-gerouteter OpenRouter-Chat mit non-stream und SSE, `default-free` Alias und optionalen lokalen Profil-Credentials | Backend |
+| Workbench | GitHub-App-basierte Repo-Auswahl, Context Reads, Vorschlagspläne, approval-gated Execute, Verify und Datei-/Tree-Reads | Backend |
+| Matrix | WhoAmI, Joined Rooms, Scope Resolve/Summary, Provenienz, Topic Analyze, Plan Refresh, approval-gated Topic Execute und Verify | Backend |
+| Settings | Integrationsstatus, OpenRouter-Credential-Status, Diagnostics, Journal, Work Mode und Verbindungstests | Backend + Browser-Intent |
+| Browser Shell | Vier Tabs, mobile-first Layout, Truth Rail, Keyboard-Navigation, lokale Session-Wiederherstellung als UI-State | Browser |
 
-The project connects three layers:
+Wichtig: Matrix Topic Write ist lokal über Routen und Tests vorhanden. Live-E2E gegen einen echten Matrix-Origin, Evidence-Room-Writes und erweiterte Hierarchieflächen bleiben opt-in bzw. begrenzt.
 
-- your repository as the local working and review surface,
-- model-agnostic chat and planning through backend-owned routing,
-- a Matrix server as an exchange and interaction space for concepts, ideas, setups, skills, decisions, and reusable knowledge.
+## Architektur
 
-The long-term direction is a community-first workspace where individuals can preserve their own operating context while making useful patterns understandable for other users.
+```mermaid
+flowchart LR
+  User["User"] --> Browser["Browser Console\nReact/Vite"]
+  Browser -->|"bounded intent\nmodelAlias, approvals, selections"| Backend["Fastify Backend\nruntime authority"]
+  Backend --> Models["OpenRouter\nprovider targets hidden"]
+  Backend --> GitHub["GitHub App\ninstallation-scoped repos"]
+  Backend --> Matrix["Matrix Homeserver\nserver-side token"]
+  Backend --> Journal["Runtime Journal\nsanitized events"]
+  Backend --> Browser
 
-## Why It Exists
+  Browser -. "local UI state only" .-> LocalStorage["localStorage\nrestored/stale state"]
+```
 
-Most AI tooling is either provider-first, chat-first, or too developer-centered. MosaicStacked starts from a different assumption:
+## Authority-Regeln
 
-- users should be able to connect their own repo and inspect work in GitHub terms,
-- model choice should stay behind a stable public interface instead of becoming UI truth,
-- shared knowledge should have a durable home outside one browser session,
-- community documentation should grow from real workflows, not from detached examples.
+- Backend besitzt Provider Calls, SSE-Framing, Modellrouting, GitHub-/Matrix-Credentials, Planung, Ausführung und Verifikation.
+- Browser besitzt Rendering, lokale UI-State-Wiederherstellung, Navigation und Approval-Intent.
+- Provider-IDs sind keine UI-Wahrheit.
+- Matrix-Credentials dürfen nicht im Browser liegen.
+- Wiederhergestellter Browserzustand ist nicht backend-frische Wahrheit.
+- Malformed SSE, GitHub- oder Matrix-Antworten werden fail-closed behandelt.
+- Browser Writes dürfen Backend-Approval-Gates nicht umgehen.
 
-## Current Product Shape
+## Console-Flächen
 
-MosaicStacked is currently a backend-first console overlay with a browser UI.
+```mermaid
+flowchart TB
+  Console["/console"] --> Chat["Chat"]
+  Console --> Workbench["Workbench"]
+  Console --> MatrixWs["Matrix"]
+  Console --> Settings["Settings"]
 
-The browser renders results, keeps local UI state, and sends approval intent. The backend owns provider calls, model routing, GitHub reads/writes, Matrix credentials, SSE framing, and execution truth.
+  Chat -->|"POST /chat"| ChatBackend["Chat Router"]
+  Workbench -->|"api/github/*"| GitHubBackend["GitHub Routes"]
+  MatrixWs -->|"api/matrix/*"| MatrixBackend["Matrix Routes"]
+  Settings -->|"diagnostics / status / credentials"| SettingsBackend["Runtime + Integration Routes"]
+```
 
-The current console UI is mobile-first and work-surface oriented:
+### Chat
 
-- a permanent Context Strip answers what the user is working on and exposes only `idle`, `streaming`, `pending`, or `error` state,
-- the Command Sheet shows current system/control state without replacing the chat screen,
-- the Kontext tab opens a context browser for selecting repo/branch/file context,
-- Chat responses render as work blocks with one visible primary action,
-- backend-owned actions use explicit approval handoff before execution,
-- GitHub, Matrix, and Settings use compact mobile panels backed by existing app/session state rather than demo data.
+- `POST /chat` akzeptiert bounded intent (`task`, `mode`, `preference`, `modelAlias`) und keine rohen Provider-Ziele.
+- Streaming nutzt die Lifecycle-Reihenfolge `start -> route -> token* -> done|error`.
+- `GET /models` liefert öffentliche Aliase, Labels, Capabilities und Verfügbarkeit, aber keine Provider-IDs.
+- `default-free` wird serverseitig aus Profil-Credentials, Env-Konfiguration oder lokalem Dev-Fallback aufgelöst.
+- `user_openrouter_default` nutzt backendseitig gespeicherte lokale Profil-Credentials.
 
-This UI is intentionally quiet and operational: it presents current browser-held state and backend-reported facts without turning provider IDs, credentials, or restored local state into product truth.
+### Workbench / GitHub
 
-### GitHub Viewer And Review Surface
+- GitHub-Verbindungen laufen über backend-owned Auth-Start/Callback und GitHub-App-Installation.
+- Repository-Scope kommt primär aus der GitHub-App-Installationsauswahl; `GITHUB_ALLOWED_REPOS` kann Instance-Mode einschränken.
+- Workbench liest Repo-Kontext, erzeugt Vorschlagspläne, zeigt Diffs und führt nur mit expliziter Freigabe aus.
+- Execute bleibt zusätzlich durch `GITHUB_AGENT_API_KEY` bzw. `X-MosaicStacked-Admin-Key` geschützt.
 
-The GitHub layer is the main viewer-facing path:
+### Matrix
 
-- browse allowed repositories,
-- read selected repo context,
-- ask for review or proposal plans,
-- inspect generated diffs before execution,
-- execute only through backend approval gates,
-- verify the result against GitHub state.
+- Read-Flächen: `whoami`, `joined-rooms`, Scope Resolve, Scope Summary, Room Provenance und Topic Access.
+- Action-Flächen: Analyze, Plan Fetch/Refresh, approval-gated Execute und Verify für unterstützte Topic-Änderungen.
+- Scope- und Planzustand ist backend-owned und TTL-/staleness-gebunden.
+- Browser Composer- und Queue-Aktionen bleiben fail-closed, wenn kein passender backendseitiger Write-Contract aktiv ist.
 
-This keeps the browser review-first and prevents direct browser writes from becoming the authority path.
+### Settings
 
-### Matrix Knowledge Space
+- Zeigt Backend Health, Modellstatus, GitHub-/Matrix-Verbindung, Rate Limits, Action Store, Journal und Routingstatus.
+- Speichert OpenRouter-Credentials backendseitig pro lokalem Profil.
+- Integration Connect/Reconnect/Disconnect/Reverify wird als backend-owned Intent gestartet.
 
-The Matrix layer is the planned exchange and interaction space for documenting:
+## Approval-Flow
 
-- concepts and project ideas,
-- setup notes and operating patterns,
-- reusable skills and workflows,
-- room/topic context,
-- provenance and review discussions.
+```mermaid
+sequenceDiagram
+  participant B as Browser
+  participant S as Backend
+  participant G as GitHub/Matrix
 
-Read-only Matrix routes and several planning surfaces exist in this repo. Matrix write, approval, provenance, hierarchy, and live end-to-end verification remain bounded by the status notes below.
-
-## Status
-
-### Locally Verified
-
-- `GET /health`
-- `GET /models`
-- `POST /chat`
-- SSE lifecycle: `start -> token* -> done|error`
-- Matrix malformed-200 fail-closed behavior
-- Matrix read-only `/api/matrix/*` routes
-
-### Implemented When Configured
-
-| Area | Surface |
-| --- | --- |
-| Chat | Health, public model aliases, non-stream chat, SSE chat |
-| GitHub | Allowed repo listing, context reads, proposal plans, approval-gated execute, verification, tree/file reads |
-| Matrix | Identity, joined rooms, scope summaries, room provenance, topic access, analyze/action plan routes |
-
-### Contract-Only Or Deferred
-
-- Matrix Analyze, Review, Execute, Verify, and Matrix write flows remain external-backend or contract-bound until verified against a real Matrix origin.
-- Matrix hierarchy preview is browser-side advisory only unless a backend implementation verifies it.
-- Undo, cross-device sync, bulk review queue, and advanced observability are deferred.
-- GitHub App installation login is wired for repo access; repository scope comes from the user's GitHub App installation selection.
-
-## Trust Boundaries
-
-- Provider IDs are not UI truth.
-- Matrix credentials never belong in the browser.
-- Restored browser state is local UI state, not backend-fresh truth.
-- Malformed SSE or Matrix responses fail closed instead of being silently repaired.
-- Browser writes cannot bypass backend approval gating.
+  B->>S: Read context / resolve scope
+  S-->>B: Sanitized context + authority metadata
+  B->>S: Propose / analyze intent
+  S-->>B: Plan ID + diff + requiresApproval
+  B->>S: Explicit approval intent
+  S->>G: Execute with server-side credentials
+  G-->>S: Receipt / upstream state
+  S-->>B: Execution result
+  B->>S: Verify
+  S->>G: Read back canonical state
+  S-->>B: Verified / pending / failed
+```
 
 ## Repository Map
 
-- `web/` - Vite + React browser interface.
-- `server/` - Fastify authority layer for chat, GitHub, Matrix, and shared serverless reuse.
-- `api/[...path].ts` - Vercel serverless entrypoint.
-- `config/model-capabilities.yml` - runtime-loaded workflow routing contract.
-- `docs/model-routing.md` - model routing behavior and policy notes.
-- `docs/integration-auth-rotation-live-smoke.md` - opt-in live smoke setup.
+| Pfad | Rolle |
+| --- | --- |
+| `web/` | Vite + React Console, UI-State, mobile Shell, Chat/Workbench/Matrix/Settings |
+| `server/` | Fastify Authority Layer für Chat, GitHub, Matrix, Auth, Diagnostics und Journal |
+| `api/[...path].ts` | Vercel Serverless Adapter für allgemeine Backend-Routen |
+| `api/matrix/[...path].ts` | Separater Vercel Adapter für Matrix-Routen |
+| `config/model-capabilities.yml` | Runtime-geladener Modellfähigkeits-Contract |
+| `config/llm-router.yml` | Legacy-/Kompatibilitäts-Routing-Konfiguration |
+| `docs/` | Vertiefende Contracts, Routing-, Deployment-, Test- und UX-Dokumente |
+| `02-wiki/` | Governance Index und Append-only Log |
+| `03-mspr/packets/` | Review-Packets für Risiken, Blocker und Authority-Lücken |
 
-## Running Locally
+## Backend-Routen
 
-Install dependencies:
+| Bereich | Routen |
+| --- | --- |
+| Health/Models | `GET /health`, `GET /models`, `POST /models/openrouter` |
+| Chat | `POST /chat` |
+| Settings/OpenRouter | `GET /settings/openrouter/status`, `POST /settings/openrouter/credentials`, `POST /settings/openrouter/test` |
+| Diagnostics/Journal | `GET /diagnostics`, `GET /journal/recent` |
+| Local Auth | `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout` |
+| Integrations | `GET /api/integrations/status`, `GET/POST /api/auth/{github,matrix}/*` |
+| GitHub | `GET /api/github/capabilities`, `GET /api/github/repos`, `POST /api/github/context`, `POST /api/github/actions/propose`, `GET/POST /api/github/actions/:planId/*`, repo tree/file reads |
+| Matrix | `GET /api/matrix/whoami`, `GET /api/matrix/joined-rooms`, `POST /api/matrix/scope/resolve`, `POST /api/matrix/analyze`, scope summary, provenance, topic access, action fetch/execute/verify |
+
+## Lokal starten
 
 ```bash
 npm install
-```
-
-Create local env files:
-
-```bash
 cp .env.example .env
-cp web/.env.example web/.env
-```
-
-Set `USER_CREDENTIALS_ENCRYPTION_KEY` in `.env`, then enter your OpenRouter API key and model ID in Settings. The Settings flow stores the key backend-side for the local preview profile and never returns the key to the browser.
-
-`OPENROUTER_API_KEY` is a legacy/dev compatibility slot only; it is not the normal shared runtime authority for user chat.
-
-Default-free routing is server-side:
-
-- configure `OPENROUTER_DEFAULT_MODEL` (alias `default-free`) and optional `OPENROUTER_DEFAULT_LABEL`,
-- keep `OPENROUTER_API_KEY` server-side only,
-- optionally add fallback targets via existing server routing envs (`DIALOG_FALLBACK_MODEL`, `FAST_FALLBACK_MODEL`, `OPENROUTER_MODELS`).
-
-`default-free` is exposed as a safe public alias from `GET /models`. Chat and the floating Helpdesk Companion both call the same backend `/chat` model router. No OpenRouter API key is stored in browser state or `localStorage`.
-
-Optional integrations:
-
-- GitHub routes require GitHub App auth config for login/install flow: `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_SLUG`, `MOSAIC_STACK_SESSION_SECRET`, and integration-auth encryption config. For the GitHub "Install & Authorize" flow, enable "Request user authorization (OAuth) during installation" on the GitHub App and set the app's OAuth client id/secret in `GITHUB_OAUTH_CLIENT_ID` and `GITHUB_OAUTH_CLIENT_SECRET`.
-- Approval-gated GitHub execute also requires `GITHUB_AGENT_API_KEY`, sent only as `X-MosaicStacked-Admin-Key` from trusted server-side callers.
-- Matrix routes require `MATRIX_ENABLED=true`, `MATRIX_BASE_URL`, and `MATRIX_ACCESS_TOKEN`.
-
-Run backend and browser:
-
-```bash
 npm run dev:server
 npm run dev:web
 ```
 
-Ubuntu-friendly local E2E alternative to Playwright (interactive browser runner):
+Standard-Ports:
 
-```bash
-npm run cypress:open
-```
+- Backend: `127.0.0.1:8787`
+- Vite Web: `127.0.0.1:5173`
 
-Headless CI-style run:
+Die Browser-App liest nur browserseitige Overrides. Secrets gehören in die repo-root `.env` und bleiben backendseitig.
 
-```bash
-npm run cypress:run
-```
+## Wichtige Env-Flächen
 
-`cypress.config.ts` defaults to `http://127.0.0.1:5173`. Override with `CYPRESS_BASE_URL` when needed.
-
-The backend reads the repo-root `.env`. The browser reads `web/.env` only for browser-side origin overrides.
+| Zweck | Variablen |
+| --- | --- |
+| OpenRouter Profil-Credentials | `USER_CREDENTIALS_ENCRYPTION_KEY`, `USER_CREDENTIALS_PROFILE_SECRET`, `USER_CREDENTIALS_STORE_MODE` |
+| Default-Free Routing | `OPENROUTER_API_KEY`, `OPENROUTER_DEFAULT_MODEL`, `OPENROUTER_DEFAULT_LABEL` |
+| Routing Policy | `MODEL_ROUTING_MODE`, `ALLOW_MODEL_FALLBACK`, `MODEL_ROUTING_FAIL_CLOSED` |
+| GitHub App | `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_SLUG`, `GITHUB_APP_INSTALLATION_ID` |
+| GitHub OAuth Install/Auth | `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `GITHUB_OAUTH_CALLBACK_URL` |
+| Approval-Gated GitHub Execute | `GITHUB_AGENT_API_KEY` |
+| Integration Auth Store | `MOSAIC_STACK_SESSION_SECRET`, `INTEGRATION_AUTH_ENCRYPTION_CURRENT_KEY`, `INTEGRATION_AUTH_STORE_MODE` |
+| Matrix | `MATRIX_ENABLED`, `MATRIX_BASE_URL`, `MATRIX_ACCESS_TOKEN`, `MATRIX_EXPECTED_USER_ID` |
+| Matrix Evidence Writes | `MATRIX_EVIDENCE_WRITES_ENABLED`, `MATRIX_EVIDENCE_*_ROOM_ID` |
 
 ## Deployment
 
-MosaicStacked is deployed as a Vite frontend plus a single Node serverless entrypoint.
+```mermaid
+flowchart LR
+  Repo["Repo Root"] --> Build["npm run build"]
+  Build --> WebDist["web/dist"]
+  Build --> ServerTs["server TypeScript build"]
+  Vercel["Vercel"] --> WebDist
+  Vercel --> ApiMain["api/[...path].ts"]
+  Vercel --> ApiMatrix["api/matrix/[...path].ts"]
+  ApiMain --> App["server/src/app.ts"]
+  ApiMatrix --> App
+```
 
-- Vercel project root: repository root
+Vercel-Shape:
+
+- Project root: Repo root
 - Build command: `npm run build`
 - Output directory: `web/dist`
-- API entrypoint: `api/[...path].ts`
-- Shared backend implementation: `server/src/app.ts`
+- API entrypoints: `api/[...path].ts` und `api/matrix/[...path].ts`
+- Secrets: ausschließlich serverseitige Vercel Environment Variables
 
-Keep secrets server-side in Vercel project env settings.
+## Verifikation
 
-## Verification
-
-Suggested local checks:
+Empfohlener lokaler Gate:
 
 ```bash
 npm run typecheck
@@ -188,7 +194,7 @@ npm test
 npm run build
 ```
 
-More focused checks:
+Fokussierte Checks:
 
 ```bash
 npm run typecheck:server
@@ -198,7 +204,7 @@ npm run test:web
 npm run test:browser
 ```
 
-Opt-in live checks:
+Opt-in Live-Smokes:
 
 ```bash
 npm run test:matrix-live
@@ -207,3 +213,11 @@ npm run test:integration-auth-rotation-live
 npm run test:integration-auth-rotation-live:matrix
 npm run test:integration-auth-rotation-live:both
 ```
+
+## Aktuelle Grenzen
+
+- Live Matrix E2E gegen einen echten Origin ist opt-in und nicht Teil des Standard-Gates.
+- Evidence-Room-Writes sind konfigurierbar, aber standardmäßig deaktiviert.
+- Matrix-Hierarchie ist als Browser-/Contract-Fläche getrennt zu behandeln, solange kein vollständiger Server-Contract verifiziert ist.
+- Undo, Cross-device Sync, Bulk Review Queue, langlebige serverless Action Stores und erweiterte Observability bleiben nachgelagert.
+- Lokale `memory`-/`file`-Stores sind Entwicklungs- und Preview-Hilfen, keine dauerhafte Produktionspersistenz.

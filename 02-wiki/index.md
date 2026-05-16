@@ -2,7 +2,7 @@
 
 Format: `[[link]] | summary | #tags | YYYY-MM-DD`
 
-[[../README.md]] | Repo-Frontdoor, Produktform, Status und Deployment-Shape | #frontdoor #canonical #product | 2026-05-10
+[[../README.md]] | Repo-Frontdoor mit aktuellem Console-Ist-Zustand, Authority-Diagrammen, Routen, Env-Flächen und Verifikation | #frontdoor #canonical #product | 2026-05-16
 [[../AGENTS.md]] | Operating Contract, Authority Boundary und Hard Rules | #governance #authority #canonical | 2026-05-10
 [[../WORKFLOW.md]] | Lineare Arbeitssequenz, Fail-Closed-Regeln und Logging-Route | #governance #workflow #canonical | 2026-05-10
 [[../00-schema/AGENTS.md]] | Workflow-Spec, Wahrheitsebenen, Statussprache, Tags und Frontmatter-Contract | #governance #schema #canonical | 2026-05-10

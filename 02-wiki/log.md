@@ -91,3 +91,5 @@
 ## [2026-05-16] agentic-helpdesk-companion-v1 | implemented guarded Companion context snapshots, default-deny intent validation, suggested UI actions, visible blocked-action feedback, and shell-owned safe intent execution [[../web/src/components/FloatingCompanion.tsx]] [[../web/src/lib/companion-intents.ts]] [[../web/src/lib/companion-context.ts]] [[../web/src/App.tsx]] [[../web/test/floating-companion.test.ts]]
 
 ## [2026-05-16] agentic-helpdesk-companion-smoke | added Playwright smoke coverage for Companion UI-help suggestions, Workbench navigation, and blocked GitHub/Matrix execute routes [[../tests/browser/mosaicstacked.spec.ts]]
+
+## [2026-05-16] readme-repo-istzustand-refresh | aktualisierte README-Frontdoor mit aktuellem Console-Ist-Zustand, Mermaid-Architektur-/Approval-/Deployment-Diagrammen, Backend-Routen, Env-Flächen und Grenzen [[../README.md]]
