@@ -1132,7 +1132,7 @@ test("GitHub execute stays disabled when server capabilities deny execution", as
   const createPrButton = page.getByTestId("workbench-action-create-pr");
   await expect(createPrButton).toBeDisabled();
   await expect(createPrButton).toHaveAttribute("data-backend-capability", "false");
-  await expect(page.getByTestId("workbench-review-actions")).toContainText("Admin-Key");
+  await expect(page.getByTestId("workbench-review-actions")).toContainText("admin key missing");
 });
 
 test("Matrix composer remains fail-closed without write contract", async ({ page }) => {
