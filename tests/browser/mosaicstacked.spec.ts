@@ -691,6 +691,73 @@ test("GitHub and Matrix workspaces expose backend route ownership in the truth r
   await expect(page.getByTestId("truth-rail-route-ownership")).toContainText("execute");
 });
 
+test("helpdesk companion smoke suggests safe UI help and blocks execute intent", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  const blockedWriteCounters = {
+    githubExecute: 0,
+    matrixExecute: 0,
+  };
+
+  await page.route("**/chat", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        model: "default-free",
+        text: "Ich kann dich zur Workbench führen und den GitHub-Flow erklären. Ausführen bleibt im Approval-Gate.",
+        route: {
+          selectedAlias: "default-free",
+          taskClass: "dialog",
+          fallbackUsed: false,
+          degraded: false,
+          streaming: false,
+        },
+      }),
+    });
+  });
+
+  await page.route("**/api/github/actions/**/execute", async (route) => {
+    blockedWriteCounters.githubExecute += 1;
+    await route.fulfill({
+      status: 500,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: false, error: { code: "unexpected_execute", message: "Execute must not be called by companion smoke" } }),
+    });
+  });
+
+  await page.route("**/api/matrix/actions/**/execute", async (route) => {
+    blockedWriteCounters.matrixExecute += 1;
+    await route.fulfill({
+      status: 500,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: false, error: { code: "unexpected_execute", message: "Matrix execute must not be called by companion smoke" } }),
+    });
+  });
+
+  await loadConsole(page);
+  await page.getByRole("button", { name: "Open helpdesk companion" }).click();
+  await expect(page.getByRole("dialog", { name: "Helpdesk Companion" })).toBeVisible();
+
+  await page.getByLabel("Your question").fill("Please execute the GitHub PR and push it");
+  await page.getByRole("button", { name: "Send" }).click();
+
+  await expect(page.locator(".floating-companion-feedback")).toContainText("Workbench");
+  await expect(page.locator(".floating-companion-blocked-action")).toContainText("GitHub execution blocked");
+  await expect(page.locator(".floating-companion-action", { hasText: "Open Workbench" })).toBeVisible();
+
+  await page.locator(".floating-companion-action", { hasText: "Open Workbench" }).click();
+  await expect(page.getByTestId("github-workspace")).toBeVisible();
+  await expect(page).toHaveURL(/\/console\?mode=workbench$/);
+  expect(blockedWriteCounters.githubExecute).toBe(0);
+  expect(blockedWriteCounters.matrixExecute).toBe(0);
+});
+
 async function setLocale(page: Page, locale: "en" | "de") {
   const button = locale === "en" ? page.getByTestId("locale-en") : page.getByTestId("locale-de");
   const pressed = await button.getAttribute("aria-pressed");

@@ -30,7 +30,7 @@ export type CrossTabCommand =
       type: "QueueChatDraft";
       payload: {
         content: string;
-        source: "matrix";
+        source: "matrix" | "companion";
       };
     };
 

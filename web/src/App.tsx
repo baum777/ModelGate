@@ -23,6 +23,11 @@ import {
   TruthRailSection,
 } from "./components/ShellPrimitives.js";
 import { FloatingCompanion } from "./components/FloatingCompanion.js";
+import { buildCompanionContext } from "./lib/companion-context.js";
+import {
+  validateCompanionIntent,
+  type CompanionAllowedIntent,
+} from "./lib/companion-intents.js";
 import {
   getShellHealthCopy,
   getSessionStatusLabel,
@@ -1038,6 +1043,8 @@ function ConsoleShell() {
     openRouterCredentialMessage,
     settingsVerificationResults,
     routingStatus,
+    refreshIntegrationsStatus,
+    refreshOpenRouterCredentialStatus,
     handleSaveOpenRouterCredentials,
     handleTestOpenRouterCredentials,
     handleSettingsVerifyConnection,
@@ -2039,6 +2046,32 @@ function ConsoleShell() {
   })();
   const showRouteOwnershipContext = mode === "workbench" || mode === "matrix";
   const mobileWorkspaceSurface = workspaceSurface;
+  const companionContext = useMemo(
+    () => buildCompanionContext({
+      workspace: mode,
+      workMode,
+      freshness,
+      backendHealthy,
+      activeModelAlias,
+      integrationsStatus,
+      runtimeJournalEntries,
+      chatSession,
+      githubSession,
+      matrixSession,
+    }),
+    [
+      activeModelAlias,
+      backendHealthy,
+      chatSession,
+      freshness,
+      githubSession,
+      integrationsStatus,
+      matrixSession,
+      mode,
+      runtimeJournalEntries,
+      workMode,
+    ],
+  );
   const handleCompanionQuestion = useCallback(async (question: string) => {
     if (backendHealthy !== true) {
       const unavailableCopy = locale === "de"
@@ -2068,9 +2101,77 @@ function ConsoleShell() {
         : "Companion could not load a response. Check backend and model access.";
     }
   }, [backendHealthy, locale, recordTelemetry]);
+  const handleCompanionIntent = useCallback((intent: CompanionAllowedIntent) => {
+    const validation = validateCompanionIntent(intent, locale);
+
+    if (validation.state === "blocked") {
+      recordTelemetry("warning", "Companion intent blocked", validation.intent.reason);
+      return;
+    }
+
+    const allowedIntent = validation.intent;
+
+    switch (allowedIntent.kind) {
+      case "navigate_tab":
+        handleWorkspaceTabSelect(allowedIntent.target);
+        recordTelemetry("info", "Companion navigation", allowedIntent.label);
+        return;
+      case "open_panel":
+        if (allowedIntent.panel === "command_palette") {
+          setPaletteOpen(true);
+        } else {
+          handleWorkspaceTabSelect("settings");
+        }
+        recordTelemetry("info", "Companion panel", allowedIntent.label);
+        return;
+      case "prefill_chat":
+        handleCrossTabCommand({
+          type: "QueueChatDraft",
+          payload: {
+            content: allowedIntent.text,
+            source: "companion",
+          },
+        });
+        return;
+      case "prefill_matrix_draft":
+        handleCrossTabCommand({
+          type: "QueueMatrixDraft",
+          payload: {
+            sourceMessageId: "floating-companion",
+            roomId: allowedIntent.roomId ?? matrixDraftDefaultRoomId ?? "",
+            content: allowedIntent.text,
+            tags: ["todo"],
+          },
+        });
+        return;
+      case "start_safe_check":
+        void Promise.allSettled([
+          refreshIntegrationsStatus(),
+          refreshOpenRouterCredentialStatus(),
+        ]);
+        recordTelemetry("info", "Companion safe check", allowedIntent.target);
+        return;
+      case "explain_status":
+      case "show_step_guide":
+        recordTelemetry("info", "Companion guide", allowedIntent.label);
+        return;
+      default:
+        return;
+    }
+  }, [
+    handleCrossTabCommand,
+    handleWorkspaceTabSelect,
+    locale,
+    matrixDraftDefaultRoomId,
+    recordTelemetry,
+    refreshIntegrationsStatus,
+    refreshOpenRouterCredentialStatus,
+  ]);
   const floatingCompanion = (
     <FloatingCompanion
       locale={locale}
+      context={companionContext}
+      onIntent={handleCompanionIntent}
       onSubmitQuestion={handleCompanionQuestion}
     />
   );

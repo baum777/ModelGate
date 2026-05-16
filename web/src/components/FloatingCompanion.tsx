@@ -1,5 +1,11 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import type { Locale } from "../lib/localization.js";
+import type { CompanionContext } from "../lib/companion-context.js";
+import {
+  buildCompanionSuggestions,
+  type CompanionAllowedIntent,
+  type CompanionBlockedIntent,
+} from "../lib/companion-intents.js";
 
 type FloatingCompanionCopy = {
   buttonShortLabel: string;
@@ -104,13 +110,21 @@ type FloatingCompanionPanelProps = {
   copy: FloatingCompanionCopy;
   modeLabel: string;
   inputValue: string;
-  lastMessage: string | null;
+  responseEntries: CompanionResponseEntry[];
   isSubmitting: boolean;
   inputRef: React.RefObject<HTMLInputElement | null>;
   onClose: () => void;
   onInputChange: (value: string) => void;
+  onIntent?: (intent: CompanionAllowedIntent) => void;
   onQuickAction: (value: string) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+};
+
+type CompanionResponseEntry = {
+  id: string;
+  answer: string;
+  suggestedIntents: CompanionAllowedIntent[];
+  blockedIntents: CompanionBlockedIntent[];
 };
 
 export function FloatingCompanionPanel({
@@ -119,11 +133,12 @@ export function FloatingCompanionPanel({
   copy,
   modeLabel,
   inputValue,
-  lastMessage,
+  responseEntries,
   isSubmitting,
   inputRef,
   onClose,
   onInputChange,
+  onIntent,
   onQuickAction,
   onSubmit,
 }: FloatingCompanionPanelProps) {
@@ -178,10 +193,39 @@ export function FloatingCompanionPanel({
         </div>
       </form>
 
-      {lastMessage ? (
-        <p className="floating-companion-feedback" role="status">
-          {lastMessage}
-        </p>
+      {responseEntries.length > 0 ? (
+        <div className="floating-companion-response-list" role="status">
+          {responseEntries.map((entry) => (
+            <article key={entry.id} className="floating-companion-feedback">
+              <p>{entry.answer}</p>
+              {entry.suggestedIntents.length > 0 ? (
+                <div className="floating-companion-action-list" aria-label={copy.quickActionsTitle}>
+                  {entry.suggestedIntents.map((intent) => (
+                    <button
+                      key={intent.id}
+                      type="button"
+                      className="floating-companion-control floating-companion-action"
+                      onClick={() => onIntent?.(intent)}
+                    >
+                      <span>{intent.label}</span>
+                      <small>{intent.description}</small>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {entry.blockedIntents.length > 0 ? (
+                <div className="floating-companion-blocked-list">
+                  {entry.blockedIntents.map((intent) => (
+                    <p key={intent.id} className="floating-companion-blocked-action">
+                      <strong>{intent.label}</strong>
+                      <span>{intent.reason}</span>
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+            </article>
+          ))}
+        </div>
       ) : null}
     </section>
   );
@@ -189,16 +233,26 @@ export function FloatingCompanionPanel({
 
 type FloatingCompanionProps = {
   locale: Locale;
+  context?: CompanionContext;
+  onIntent?: (intent: CompanionAllowedIntent) => void;
   onSubmitQuestion?: (question: string) => Promise<string>;
 };
 
-export function FloatingCompanion({ locale, onSubmitQuestion }: FloatingCompanionProps) {
+function createEntryId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `companion-${Date.now()}`;
+}
+
+export function FloatingCompanion({ locale, context, onIntent, onSubmitQuestion }: FloatingCompanionProps) {
   const panelId = useId();
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
-  const [lastMessage, setLastMessage] = useState<string | null>(null);
+  const [responseEntries, setResponseEntries] = useState<CompanionResponseEntry[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const companionCopy = FLOATING_COMPANION_COPY[locale];
   const assistantModeEnabled = typeof onSubmitQuestion === "function";
@@ -233,10 +287,20 @@ export function FloatingCompanion({ locale, onSubmitQuestion }: FloatingCompanio
       return;
     }
 
+    const suggestions = buildCompanionSuggestions({
+      question: normalized,
+      locale,
+      matrixRoomId: context?.sessions.matrix?.roomId ?? null,
+    });
+
     if (!assistantModeEnabled || !onSubmitQuestion) {
-      setLastMessage(locale === "de"
-        ? "Companion-Backend nicht verfügbar."
-        : "Companion backend unavailable.");
+      setResponseEntries((current) => [...current, {
+        id: createEntryId(),
+        answer: locale === "de"
+          ? "Companion-Backend nicht verfügbar."
+          : "Companion backend unavailable.",
+        ...suggestions,
+      }].slice(-3));
       setInputValue("");
       return;
     }
@@ -244,13 +308,21 @@ export function FloatingCompanion({ locale, onSubmitQuestion }: FloatingCompanio
     setIsSubmitting(true);
     try {
       const backendResponse = await onSubmitQuestion(normalized);
-      setLastMessage(backendResponse);
+      setResponseEntries((current) => [...current, {
+        id: createEntryId(),
+        answer: backendResponse,
+        ...suggestions,
+      }].slice(-3));
     } catch (error) {
-      setLastMessage(error instanceof Error ? error.message : (
+      setResponseEntries((current) => [...current, {
+        id: createEntryId(),
+        answer: error instanceof Error ? error.message : (
         locale === "de"
           ? "Companion-Backend nicht verfügbar."
           : "Companion backend unavailable."
-      ));
+        ),
+        ...suggestions,
+      }].slice(-3));
     } finally {
       setIsSubmitting(false);
     }
@@ -282,11 +354,12 @@ export function FloatingCompanion({ locale, onSubmitQuestion }: FloatingCompanio
           copy={companionCopy}
           modeLabel={companionCopy.assistantModeLabel}
           inputValue={inputValue}
-          lastMessage={lastMessage}
+          responseEntries={responseEntries}
           isSubmitting={isSubmitting}
           inputRef={inputRef}
           onClose={() => setIsOpen(false)}
           onInputChange={setInputValue}
+          onIntent={onIntent}
           onQuickAction={handleQuickAction}
           onSubmit={handleSubmit}
         />

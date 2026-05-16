@@ -83,3 +83,11 @@
 ## [2026-05-16] local-auth-matrix-connected-github-key-blocked | corrected local auth env routing for current repo, verified Matrix browser-session connection after SSO, and blocked GitHub repo verification on non-PEM GitHub App private key [[../.env]] [[../03-mspr/packets/2026-05-16-local-auth-github-key-blocked.yml]]
 
 ## [2026-05-16] local-github-pem-repo-connection | installed valid GitHub App PEM key from local download into `.env`, restarted backend, and verified `/api/github/repos` returns `baum777/mosaicStacked` ready via instance config [[../.env]] [[../03-mspr/packets/2026-05-16-local-auth-github-key-blocked.yml]]
+
+## [2026-05-16] agentic-helpdesk-companion-design | created proposed design for guarded agentic Helpdesk Companion with app manual behavior, UI-help intents, context redaction, and default-deny restrictions [[../docs/superpowers/specs/2026-05-16-agentic-helpdesk-companion-design.md]]
+
+## [2026-05-16] agentic-helpdesk-companion-plan | created implementation plan for guarded Companion context, intent allowlist, UI suggestions, and shell intent execution [[../docs/superpowers/plans/2026-05-16-agentic-helpdesk-companion.md]]
+
+## [2026-05-16] agentic-helpdesk-companion-v1 | implemented guarded Companion context snapshots, default-deny intent validation, suggested UI actions, visible blocked-action feedback, and shell-owned safe intent execution [[../web/src/components/FloatingCompanion.tsx]] [[../web/src/lib/companion-intents.ts]] [[../web/src/lib/companion-context.ts]] [[../web/src/App.tsx]] [[../web/test/floating-companion.test.ts]]
+
+## [2026-05-16] agentic-helpdesk-companion-smoke | added Playwright smoke coverage for Companion UI-help suggestions, Workbench navigation, and blocked GitHub/Matrix execute routes [[../tests/browser/mosaicstacked.spec.ts]]
