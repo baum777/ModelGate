@@ -71,9 +71,9 @@ test("Workbench navigation guard only triggers when leaving Workbench with local
 });
 
 test("legacy workspace URL modes normalize to workbench and shell tabs are four-only", () => {
-  const source = readFileSync("web/src/App.tsx", "utf8");
+  const source = readFileSync("web/src/lib/shell-routing.ts", "utf8");
 
   assert.match(source, /if \(value === "github" \|\| value === "review" \|\| value === "context"\) \{\s*return "workbench";\s*\}/);
-  assert.match(source, /const WORKSPACE_MODES: WorkspaceMode\[\] = \["chat", "workbench", "matrix", "settings"\]/);
-  assert.match(source, /const MOBILE_NAV_MODES: WorkspaceMode\[\] = \["chat", "workbench", "matrix", "settings"\]/);
+  assert.match(source, /export const WORKSPACE_MODES: WorkspaceMode\[\] = \["chat", "workbench", "matrix", "settings"\]/);
+  assert.match(source, /export const MOBILE_NAV_MODES: WorkspaceMode\[\] = \["chat", "workbench", "matrix", "settings"\]/);
 });

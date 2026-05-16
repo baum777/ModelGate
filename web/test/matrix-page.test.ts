@@ -4,6 +4,7 @@ import test from "node:test";
 
 test("mobile Matrix uses the original workspace instead of mock knowledge pages", () => {
   const appSource = readFileSync("web/src/App.tsx", "utf8");
+  const shellSource = readFileSync("web/src/components/shell/ConsoleShell.tsx", "utf8");
   const topLevelImports = appSource
     .split("\n")
     .filter((line) => line.startsWith("import "));
@@ -16,5 +17,5 @@ test("mobile Matrix uses the original workspace instead of mock knowledge pages"
   assert.doesNotMatch(appSource, /MobileMatrixPage/);
   assert.doesNotMatch(appSource, /import\("\.\/pages\/MatrixPage\.js"\)/);
   assert.doesNotMatch(appSource, /matrix-mobile\.css/);
-  assert.match(appSource, /mode === "matrix" \? \(\s*<MatrixWorkspace/);
+  assert.match(shellSource, /mode === "matrix" \? \(\s*<MatrixWorkspace/);
 });

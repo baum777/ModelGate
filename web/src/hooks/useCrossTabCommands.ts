@@ -10,32 +10,14 @@ import {
   applyQueueMatrixDraftCommand,
   type CrossTabCommand,
 } from "../lib/cross-tab-commands.js";
-
-export type WorkspaceMode = "chat" | "workbench" | "matrix" | "settings";
+import {
+  isSessionWorkspace,
+  shouldConfirmGitHubReviewNavigation,
+  toWorkspaceKind,
+  type WorkspaceMode,
+} from "../lib/shell-routing.js";
 
 type RecordTelemetry = (kind: "info" | "warning" | "error", label: string, detail?: string) => void;
-
-function isSessionWorkspace(mode: WorkspaceMode): mode is "chat" | "workbench" | "matrix" {
-  return mode === "chat" || mode === "workbench" || mode === "matrix";
-}
-
-function toWorkspaceKind(mode: "chat" | "workbench" | "matrix"): WorkspaceKind {
-  if (mode === "workbench") {
-    return "github";
-  }
-
-  return mode;
-}
-
-function shouldConfirmGitHubReviewNavigation(options: {
-  currentMode: WorkspaceMode;
-  nextMode: WorkspaceMode;
-  githubReviewDirty: boolean;
-}) {
-  return options.currentMode === "workbench"
-    && options.nextMode !== "workbench"
-    && options.githubReviewDirty;
-}
 
 export function createCrossTabCommandHandler(options: {
   locale: "de" | "en";

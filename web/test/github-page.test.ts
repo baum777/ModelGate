@@ -4,6 +4,7 @@ import test from "node:test";
 
 test("mobile GitHub uses the original workspace instead of mock review pages", () => {
   const appSource = readFileSync("web/src/App.tsx", "utf8");
+  const shellSource = readFileSync("web/src/components/shell/ConsoleShell.tsx", "utf8");
   const topLevelImports = appSource
     .split("\n")
     .filter((line) => line.startsWith("import "));
@@ -16,5 +17,5 @@ test("mobile GitHub uses the original workspace instead of mock review pages", (
   assert.doesNotMatch(appSource, /MobileGitHubPage/);
   assert.doesNotMatch(appSource, /import\("\.\/pages\/GitHubPage\.js"\)/);
   assert.doesNotMatch(appSource, /github-mobile\.css/);
-  assert.match(appSource, /mode === "workbench" \? \(\s*<GitHubWorkspace/);
+  assert.match(shellSource, /mode === "workbench" \? \(\s*<GitHubWorkspace/);
 });

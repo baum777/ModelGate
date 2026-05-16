@@ -148,9 +148,9 @@ test("companion context serializes only redacted app facts", () => {
 });
 
 test("console shell mounts floating companion with locale wiring", () => {
-  const source = readFileSync("web/src/App.tsx", "utf8");
+  const source = readFileSync("web/src/components/shell/ConsoleShell.tsx", "utf8");
 
-  assert.match(source, /import \{ FloatingCompanion \} from "\.\/components\/FloatingCompanion\.js"/);
+  assert.match(source, /import \{ FloatingCompanion \} from "..\/..\/components\/FloatingCompanion\.js"/);
   assert.match(source, /onSubmitQuestion=\{handleCompanionQuestion\}/);
   assert.doesNotMatch(source, /<FloatingCompanion[\s\S]*openRouterApiKeyInput=/);
   assert.match(source, /\{floatingCompanion\}/);
@@ -207,7 +207,7 @@ test("ui adaptation leaves floating companion controls out of the global button 
 });
 
 test("companion backend mode routes questions through /chat with default-free alias", () => {
-  const source = readFileSync("web/src/App.tsx", "utf8");
+  const source = readFileSync("web/src/components/shell/ConsoleShell.tsx", "utf8");
 
   assert.match(source, /requestChatCompletion\(\{/);
   assert.match(source, /modelAlias:\s*DEFAULT_FREE_MODEL_ALIAS/);
@@ -215,9 +215,9 @@ test("companion backend mode routes questions through /chat with default-free al
 });
 
 test("console shell passes redacted context and validated intents to companion", () => {
-  const source = readFileSync("web/src/App.tsx", "utf8");
+  const source = readFileSync("web/src/components/shell/ConsoleShell.tsx", "utf8");
 
-  assert.match(source, /import \{ buildCompanionContext \} from "\.\/lib\/companion-context\.js"/);
+  assert.match(source, /import \{ buildCompanionContext \} from "..\/..\/lib\/companion-context\.js"/);
   assert.match(source, /validateCompanionIntent/);
   assert.match(source, /const companionContext = useMemo/);
   assert.match(source, /context=\{companionContext\}/);

@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
-const appSource = () => readFileSync("web/src/App.tsx", "utf8");
 const mainSource = () => readFileSync("web/src/main.tsx", "utf8");
 const mobileLayoutSource = () => [
   readFileSync("web/src/App.tsx", "utf8"),
+  readFileSync("web/src/lib/shell-routing.ts", "utf8"),
+  readFileSync("web/src/components/shell/ConsoleShell.tsx", "utf8"),
   readFileSync("web/src/components/mobile/layout/TopContextBar.tsx", "utf8"),
   readFileSync("web/src/components/mobile/layout/ContextStrip.tsx", "utf8"),
 ].join("\n");
