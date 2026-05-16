@@ -19,10 +19,14 @@ Format: `[[link]] | summary | #tags | YYYY-MM-DD`
 [[../03-mspr/packets/2026-05-11-live-smoke-github-openrouter-blocked.yml]] | Blocked live GitHub/OpenRouter smoke due missing GitHub admin key and OpenRouter upstream 401 | #mspr #smoke #blocked | 2026-05-11
 [[../03-mspr/packets/2026-05-12-vercel-production-deploy-blocked.yml]] | Blocked Vercel production deployment due tenant disclosure policy after explicit approval | #mspr #deployment #blocked | 2026-05-12
 [[../03-mspr/packets/2026-05-13-github-env-deploy-blocked.yml]] | Blocked GitHub Install and Authorize deploy repeat due missing app slug and invalid private-key env parse | #mspr #github #deployment #blocked | 2026-05-13
+[[../03-mspr/packets/2026-05-16-local-auth-github-key-blocked.yml]] | Accepted local auth review after valid GitHub App PEM restored repo verification; Matrix SSO browser session connected | #mspr #github #matrix #accepted | 2026-05-16
 [[../docs/superpowers/plans/2026-05-10-settings-authority-control-center.md]] | Implementation plan for Settings authority control center redesign | #docs #plan #settings | 2026-05-10
 [[../web/src/App.tsx]] | 4-Tab shell (`chat`, `workbench`, `matrix`, `settings`) with legacy mode normalization to `workbench` | #workbench #navigation #authority | 2026-05-11
 [[../web/src/components/GitHubWorkspace.tsx]] | Summary-first Workbench review center with explicit local/backend action effect semantics | #workbench #review #authority | 2026-05-11
-[[../tests/browser/mosaicstacked.spec.ts]] | Browser verification for 4-tab navigation, RW branch gating, authority-safe Workbench actions, and backend-capability-gated PR execution | #workbench #chat #verification | 2026-05-11
-[[../web/src/components/FloatingCompanion.tsx]] | Permanenter Floating Helpdesk Companion mit minimiertem Button, expandierbarem Panel, lokaler Placeholder-Antwort und A11y-Keyboard-Gates | #chat #ux #accessibility | 2026-05-15
+[[../tests/browser/mosaicstacked.spec.ts]] | Browser verification for keyboard-first shell navigation, truth-rail authority signals, fail-closed Matrix composer posture, and backend-capability-gated workbench execution | #workbench #chat #matrix #verification | 2026-05-16
+[[../web/src/components/FloatingCompanion.tsx]] | Permanenter Floating Helpdesk Companion mit echter backend-verdrahteter Chat-Interaktion, minimiertem Button, expandierbarem Panel und A11y-Keyboard-Gates | #chat #ux #authority | 2026-05-16
 [[../server/src/lib/default-free-model.ts]] | Backend-Resolver für Alias `default-free` mit Priorität user-credential -> env -> lokaler Dev-Fallback (fail-closed bei fehlendem Key/Modell) | #chat #routing #authority | 2026-05-16
 [[../docs/model-routing.md]] | Routing-Contract inkl. `default-free` Alias, fail-closed Fehlercodes und serverseitiger Key/Model-Priorisierung | #docs #chat #authority | 2026-05-16
+[[../web/src/lib/shell-freshness.ts]] | Ableitung von `backend-fresh`, `local-restored` und `stale` für die persistente Truth Rail | #shell #truth #authority | 2026-05-16
+[[../web/src/lib/navigation-palette.ts]] | Typisierte Navigation-Palette-Einträge für Tabs und Session-Targets im Keyboard-Flow | #navigation #poweruser #contract | 2026-05-16
+[[../web/src/lib/button-gate.ts]] | Einheitliches UI-Gate-Contract-Mapping von Block-Gründen auf `aria-disabled` und Tooltip-Copy | #ux #gating #authority | 2026-05-16

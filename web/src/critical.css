@@ -2015,3 +2015,77 @@ button:disabled {
 .app-shell-mobile .floating-companion-panel {
   width: min(330px, calc(100vw - 20px));
 }
+
+/* P0/P1 mobile critical overrides */
+:root,
+:root[data-theme="light"],
+body.light-mode {
+  color-scheme: dark;
+  --ms-bg: #0c0c0d;
+  --ms-bg2: #141416;
+  --ms-bg3: #141416;
+  --ms-bg4: #171719;
+  --ms-text: #e8e8e6;
+  --ms-text2: #666664;
+  --ms-text3: #666664;
+  --ms-border: #222224;
+  --ms-border2: #222224;
+  --ms-accent: #d4ff57;
+  --ms-accent2: #d4ff57;
+  --ms-green: #3fcf8e;
+  --ms-amber: #e8a838;
+  --ms-red: #f05252;
+  --ms-teal: #4e9af1;
+}
+
+.theme-toggle-button {
+  display: none;
+}
+
+.shell-truth-top {
+  height: 32px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--ms-border);
+  background: var(--ms-bg2);
+}
+
+.shell-truth-top-left {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ms-text2);
+  font-size: 11px;
+}
+
+.shell-truth-top-left svg {
+  width: 14px;
+  height: 14px;
+}
+
+.freshness-badge {
+  padding: 2px 6px;
+  border: 1px solid var(--ms-border);
+  border-radius: 4px;
+}
+
+.freshness-badge-backend-fresh { color: #3fcf8e; }
+.freshness-badge-local-restored { color: #666664; }
+.freshness-badge-stale { color: #f05252; }
+
+.shell-truth-review-pill {
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  border: 1px solid var(--ms-border2);
+  background: transparent;
+  color: var(--ms-text);
+}
+
+.app-shell-mobile .workspace-tab-mobile span:empty {
+  display: none;
+}

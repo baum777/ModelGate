@@ -8992,3 +8992,336 @@ button:disabled,
   justify-content: flex-start;
   min-height: 38px;
 }
+
+/* P0+P1 shell overrides: dark-only, truth rail, keyboard-first navigation */
+:root,
+:root[data-theme="light"],
+body.light-mode {
+  color-scheme: dark;
+  --ms-font-display: "Geist", "Roc Grotesk", sans-serif;
+  --ms-font-sans: "Geist", "Roc Grotesk", sans-serif;
+  --ms-font-mono: "Berkeley Mono", "Monaspace Neon", "Geist Mono", monospace;
+  --ms-bg: #0c0c0d;
+  --ms-bg2: #141416;
+  --ms-bg3: #141416;
+  --ms-bg4: #171719;
+  --ms-text: #e8e8e6;
+  --ms-text2: #666664;
+  --ms-text3: #666664;
+  --ms-border: #222224;
+  --ms-border2: #222224;
+  --ms-accent: #d4ff57;
+  --ms-accent2: #d4ff57;
+  --ms-green: #3fcf8e;
+  --ms-amber: #e8a838;
+  --ms-red: #f05252;
+  --ms-teal: #4e9af1;
+}
+
+body.light-mode {
+  background: var(--ms-bg);
+  color: var(--ms-text);
+}
+
+button,
+.primary-link-button {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.secondary-button,
+.ghost-button {
+  border-radius: 0;
+}
+
+.shell-card,
+.workspace-frame-card,
+.workspace-card,
+.truth-rail-section {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.status-pill,
+.shell-badge,
+.reference-chip,
+.scope-chip,
+.workflow-chip {
+  border-radius: 4px;
+}
+
+.theme-toggle-button {
+  display: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.shell-truth-top {
+  height: 32px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--ms-border);
+  background: var(--ms-bg2);
+  margin-bottom: 8px;
+}
+
+.shell-truth-top-mobile {
+  border-inline: 0;
+  margin-bottom: 0;
+}
+
+.shell-truth-top-left,
+.shell-truth-top-right {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ms-text2);
+  font-family: var(--ms-font-mono);
+  font-size: 11px;
+}
+
+.shell-truth-top-left svg {
+  width: 14px;
+  height: 14px;
+}
+
+.freshness-badge {
+  padding: 2px 6px;
+  border: 1px solid var(--ms-border);
+  border-radius: 4px;
+  text-transform: lowercase;
+}
+
+.freshness-badge-backend-fresh {
+  color: #3fcf8e;
+}
+
+.freshness-badge-local-restored {
+  color: #666664;
+}
+
+.freshness-badge-stale {
+  color: #f05252;
+}
+
+.shell-health-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.shell-health-dot-ready {
+  background: #3fcf8e;
+}
+
+.shell-health-dot-partial {
+  background: #4e9af1;
+}
+
+.shell-health-dot-error {
+  background: #f05252;
+}
+
+.shell-truth-review-pill {
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  border: 1px solid var(--ms-border2);
+  background: transparent;
+  color: var(--ms-text);
+}
+
+.shell-expert-toggle {
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.workspace-sidebar {
+  width: 220px;
+  min-width: 220px;
+}
+
+.workspace-tab-icon-rail {
+  width: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  margin: 0 auto;
+  justify-content: center;
+}
+
+.workspace-tab-icon-rail svg {
+  width: 20px;
+  height: 20px;
+}
+
+.workspace-tab-icon-rail span {
+  display: none;
+}
+
+.app-shell-mobile .workspace-tab-mobile span:empty {
+  display: none;
+}
+
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  border: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.command-palette {
+  position: fixed;
+  z-index: 91;
+  top: min(14vh, 84px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(680px, calc(100vw - 24px));
+  border: 1px solid var(--ms-border);
+  background: var(--ms-bg2);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.command-palette-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.command-palette input {
+  width: 100%;
+  border: 1px solid var(--ms-border2);
+  background: transparent;
+  color: var(--ms-text);
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+.command-palette-results {
+  max-height: 46vh;
+  overflow: auto;
+  display: grid;
+  gap: 6px;
+}
+
+.command-palette-item {
+  width: 100%;
+  border: 1px solid var(--ms-border);
+  background: transparent;
+  color: var(--ms-text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+}
+
+.command-palette-item small {
+  color: var(--ms-text2);
+}
+
+.chat-input-mode-indicator,
+.chat-branch-badge,
+.chat-model-chip {
+  min-height: 28px;
+  font-size: 11px;
+  font-family: var(--ms-font-mono);
+}
+
+.chat-input-mode-indicator-governed {
+  border-color: #e8a838;
+  color: #e8a838;
+}
+
+.chat-compose-inline-meta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-branch-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid var(--ms-border2);
+}
+
+.chat-branch-badge-readonly {
+  color: #e8a838;
+}
+
+.chat-branch-badge-writable {
+  color: #3fcf8e;
+}
+
+.chat-model-picker {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  min-width: 180px;
+  border: 1px solid var(--ms-border);
+  background: var(--ms-bg2);
+  display: grid;
+  gap: 4px;
+  padding: 4px;
+  z-index: 6;
+}
+
+.chat-model-picker-item {
+  width: 100%;
+  justify-content: flex-start;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ms-text);
+}
+
+.chat-model-picker-item-active {
+  border-color: var(--ms-border2);
+  color: var(--ms-accent);
+}
+
+.proposal-card {
+  border-left: 3px solid #e8a838;
+  background: #181713;
+}
+
+.github-workflow-stepper .chip-list {
+  gap: 8px;
+}
+
+.matrix-preview-banner {
+  margin-bottom: 8px;
+}
+
+.matrix-preview-actions {
+  align-items: center;
+}
+
+.mobile-compose-field {
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.mobile-compose-input {
+  min-height: 40px;
+}

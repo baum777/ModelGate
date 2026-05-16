@@ -89,6 +89,8 @@ type MatrixWorkspaceProps = {
   restoredSession: boolean;
   workMode: WorkMode;
   expertMode: boolean;
+  matrixReadAvailable: boolean;
+  matrixHierarchyEnabled: boolean;
   onTelemetry: (
     kind: "info" | "warning" | "error",
     label: string,
@@ -97,6 +99,7 @@ type MatrixWorkspaceProps = {
   onContextChange: (status: MatrixWorkspaceStatus) => void;
   onReviewItemsChange?: (items: ReviewItem[]) => void;
   onSessionChange: (session: MatrixSession) => void;
+  onQueueChatDraft?: (content: string) => void;
 };
 const formatDate = (value: string) => {
   const date = new Date(value);
@@ -449,6 +452,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     () => spaceHierarchy?.rooms?.slice(0, MATRIX_VISIBLE_LIST_LIMIT) ?? [],
     [spaceHierarchy],
   );
+  const hierarchyEnabled = props.matrixHierarchyEnabled && props.matrixReadAvailable;
   const matrixReviewItems = useMemo<ReviewItem[]>(
     () => buildMatrixReviewItems(topicPlan, topicExecution, topicVerification, whoami?.userId ?? null, locale),
     [locale, topicExecution, topicPlan, topicVerification, whoami?.userId]
@@ -710,6 +714,12 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     }
   }
   async function loadHierarchy(roomId: string) {
+    if (!hierarchyEnabled) {
+      setSpaceHierarchy(null);
+      setSpaceHierarchyError(null);
+      setSpaceHierarchySpace(null);
+      return;
+    }
     setSpaceHierarchyLoading(true);
     setSpaceHierarchyError(null);
     setSpaceHierarchySpace(roomId);
@@ -942,32 +952,40 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     };
   }
 
-  function submitMatrixComposer() {
+  async function copyDraftToClipboard() {
     const payload = buildComposerPayload();
-    if (composerTarget.kind === "none") {
-      setLastActionResult(ui.matrix.submitBlocked);
-      return false;
-    }
-
-    if (!payload.roomId) {
-      setLastActionResult(ui.matrix.submitBlocked);
-      return false;
-    }
-
     if (!payload.draftContent) {
       setLastActionResult(ui.matrix.submitBlocked);
-      return false;
+      return;
     }
 
-    setLastActionResult(
-      `${ui.matrix.submitFailClosed} Payload: ${JSON.stringify(payload)}`,
-    );
+    if (typeof navigator === "undefined" || !navigator.clipboard) {
+      setLastActionResult(locale === "de" ? "Clipboard nicht verfügbar." : "Clipboard unavailable.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(payload.draftContent);
+      setLastActionResult(locale === "de" ? "Entwurf kopiert." : "Draft copied.");
+    } catch (error) {
+      setLastActionResult(error instanceof Error ? error.message : ui.matrix.submitBlocked);
+    }
+  }
+
+  function queueDraftInChat() {
+    const payload = buildComposerPayload();
+    if (!payload.draftContent) {
+      setLastActionResult(ui.matrix.submitBlocked);
+      return;
+    }
+
+    props.onQueueChatDraft?.(payload.draftContent);
+    setLastActionResult(locale === "de" ? "Entwurf an Chat übergeben." : "Draft queued in Chat.");
     props.onTelemetry(
-      "warning",
-      localText.telemetryComposerBlocked,
-      localText.telemetryComposerBlockedDetail(payload.composerMode),
+      "info",
+      locale === "de" ? "Matrix-Entwurf gequeued" : "Matrix draft queued",
+      payload.composerMode,
     );
-    return false;
   }
   async function loadSummary(scopeId: string, preferredRoomId?: string) {
     setScopeSummaryStatus("loading");
@@ -1916,7 +1934,9 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                       current.includes(next) ? current : [...current, next],
                     );
                     setSpaceInput("");
-                    void loadHierarchy(next);
+                    if (hierarchyEnabled) {
+                      void loadHierarchy(next);
+                    }
                   }}
                 >
                   {ui.matrix.scopeAddSpace}
@@ -1948,7 +1968,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 {selectedSpaces.map((spaceId, index) => (
                   <span key={spaceId} className="scope-chip">
                     <span>{props.expertMode ? `${ui.matrix.roomPickerSpace}: ${spaceId}` : `${ui.matrix.roomPickerSpace} ${index + 1}`}</span>
-                    {props.expertMode ? (
+                    {props.expertMode && hierarchyEnabled ? (
                       <button
                         type="button"
                         className="chip-action"
@@ -2048,7 +2068,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                 <p className="error-banner">{scopeSummaryError}</p>
               ) : null}{" "}
             </div>{" "}
-            {props.expertMode ? (
+            {props.expertMode && hierarchyEnabled ? (
               <div className="info-block">
                 {" "}
                 <p className="info-label">{ui.matrix.hierarchyTitle}</p>{" "}
@@ -2290,6 +2310,9 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
 
           <div className="info-block">
             <p className="info-label">{ui.matrix.draft}</p>
+            <p className="warning-banner matrix-preview-banner" data-testid="matrix-composer-preview-banner">
+              {locale === "de" ? "Preview only · no write access" : "Preview only · no write access"}
+            </p>
             <textarea
               className="matrix-textarea"
               rows={5}
@@ -2301,14 +2324,15 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
             />
           </div>
 
-          <div className="action-row">
-            <button type="button" onClick={submitMatrixComposer} data-testid="matrix-composer-submit">
-              {ui.matrix.submit}
+          <div className="action-row matrix-preview-actions">
+            <button type="button" className="secondary-button" onClick={() => { void copyDraftToClipboard(); }} data-testid="matrix-composer-copy-draft">
+              {locale === "de" ? "Copy draft" : "Copy draft"}
+            </button>
+            <button type="button" className="secondary-button" onClick={queueDraftInChat} data-testid="matrix-composer-queue-chat">
+              {locale === "de" ? "Queue in Chat" : "Queue in Chat"}
             </button>
             <span className="muted-copy">
-              {composerTarget.kind === "none"
-                ? ui.matrix.submitBlocked
-                : ui.matrix.submitFailClosed}
+              {ui.matrix.submitFailClosed}
             </span>
           </div>
 

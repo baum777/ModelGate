@@ -78,7 +78,7 @@ const SETTINGS_VERIFICATION_INITIAL: Record<SettingsVerificationTarget, Settings
   },
 };
 
-const STATUS_CACHE_TTL_MS = 4_000;
+const STATUS_CACHE_TTL_MS = 60_000;
 
 type RuntimeTelemetry = (kind: "info" | "warning" | "error", label: string, detail?: string) => void;
 
@@ -180,9 +180,11 @@ export function useRuntimeStatus(options: {
     signal?: AbortSignal;
     fetcher: (signal?: AbortSignal) => Promise<T>;
     ttlMs?: number;
+    staleWhileRevalidate?: boolean;
   }) => statusCacheRef.current.getOrFetch({
     key: options.key,
     ttlMs: options.ttlMs ?? STATUS_CACHE_TTL_MS,
+    staleWhileRevalidate: options.staleWhileRevalidate ?? true,
     signal: options.signal,
     fetcher: options.fetcher,
   }), []);

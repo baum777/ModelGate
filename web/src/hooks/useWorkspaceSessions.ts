@@ -18,7 +18,7 @@ import {
   type WorkspaceState,
 } from "../lib/workspace-state.js";
 
-const WORKSPACE_STATE_SAVE_INTERVAL_MS = 250;
+const WORKSPACE_STATE_SAVE_INTERVAL_MS = 300;
 
 function nowIso() {
   return new Date().toISOString();

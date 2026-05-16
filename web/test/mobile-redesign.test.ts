@@ -48,20 +48,20 @@ test("mobile context strip keeps canonical state labels and opens command sheet"
   assert.match(source, /mobile-context-sheet/);
 });
 
-test("mobile topbar exposes theme and locale controls", () => {
+test("mobile topbar is dark-only and keeps locale controls", () => {
   const source = mobileLayoutSource();
   const css = styles();
 
-  assert.match(source, /theme=\{theme\}/);
+  assert.doesNotMatch(source, /theme=\{theme\}/);
   assert.match(source, /locale=\{locale\}/);
-  assert.match(source, /className="theme-toggle-button"/);
-  assert.match(source, /\{theme === "dark" \? "☀" : "☾"\}/);
+  assert.doesNotMatch(source, /className="theme-toggle-button"/);
+  assert.doesNotMatch(source, /\{theme === "dark" \? "☀" : "☾"\}/);
   assert.match(source, /className="shell-language-toggle"/);
   assert.match(source, /data-testid="locale-en"/);
   assert.match(source, /data-testid="locale-de"/);
   assert.doesNotMatch(source, /mobile-theme-toggle/);
   assert.doesNotMatch(source, /mobile-locale-/);
-  assert.match(css, /\.app-shell-mobile \.theme-toggle-button/);
+  assert.match(css, /\.theme-toggle-button[\s\S]*display:\s*none/);
   assert.match(css, /\.app-shell-mobile \.shell-language-toggle/);
   assert.match(css, /\.app-shell-mobile \.shell-language-button-active/);
 });

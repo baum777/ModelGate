@@ -829,7 +829,7 @@ test("mobile viewport renders functional chat workspace instead of reference-onl
   await expect(page.getByTestId("chat-workspace")).toBeVisible();
   await expect(page.getByTestId("mobile-chat-page")).toHaveCount(0);
   await expect(page.getByTestId("mobile-chat-tip-rail")).toBeVisible();
-  await expect(page.locator(".mobile-topbar .theme-toggle-button")).toBeVisible();
+  await expect(page.locator(".mobile-topbar .theme-toggle-button")).toHaveCount(0);
   await expect(page.getByTestId("locale-en")).toBeVisible();
   await expect(page.getByTestId("locale-de")).toBeVisible();
 
@@ -874,7 +874,7 @@ test("mobile viewport renders functional chat workspace instead of reference-onl
   expect(mobileChatLayout.composeSubmit).not.toBeNull();
   expect(mobileChatLayout.tipCount).toBeGreaterThanOrEqual(1);
   expect(mobileChatLayout.tipProgress).toMatch(/^\d+\/\d+$/);
-  expect(mobileChatLayout.themeText).toMatch(/^[☀☾]$/);
+  expect(mobileChatLayout.themeText).toBeNull();
   expect(mobileChatLayout.localeToggleClass).toContain("shell-language-toggle");
   expect(mobileChatLayout.textareaScrollbarWidth).toBe("none");
   expect(mobileChatLayout.goldenRatio).toBe("1.618");
@@ -1144,10 +1144,12 @@ test("Matrix composer remains fail-closed without write contract", async ({ page
   await page.getByTestId("matrix-composer-room-id").fill("!room:matrix.example");
   await page.getByTestId("matrix-new-post").click();
   await page.getByTestId("matrix-composer-draft").fill("Hello Matrix");
-  await page.getByTestId("matrix-composer-submit").click();
-
-  await expect(page.getByTestId("matrix-composer-result")).toContainText("fail-closed");
-  await expect(page.getByTestId("matrix-composer-result")).toContainText("write contract");
+  await expect(page.getByTestId("matrix-composer-preview-banner")).toContainText("Preview only");
+  await expect(page.getByTestId("matrix-composer-copy-draft")).toBeVisible();
+  await expect(page.getByTestId("matrix-composer-queue-chat")).toBeVisible();
+  await expect(page.getByTestId("matrix-composer-submit")).toHaveCount(0);
+  await expect(page.locator(".matrix-preview-actions")).toContainText("fail-closed");
+  await expect(page.locator(".matrix-preview-actions")).toContainText("write contract");
 });
 
 test("Matrix topic update flows from plan to execute+verify receipt", async ({ page }) => {

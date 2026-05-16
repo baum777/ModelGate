@@ -1,0 +1,38 @@
+id: MSPR-20260516-001
+date: 2026-05-16
+status: accepted
+trigger: validation_gap
+scope:
+  paths:
+    - .env
+    - server/src/lib/github-app-auth.ts
+    - server/src/routes/integration-auth.ts
+authority:
+  observed:
+    - backend_diagnostics_github_ready_true
+    - backend_diagnostics_matrix_ready_true
+    - matrix_browser_session_status_connected
+    - github_repos_endpoint_github_internal_error
+    - github_app_private_key_not_pem
+    - github_repos_endpoint_ok_after_pem_update
+  inferred:
+    - github_app_private_key_requires_valid_pem_material
+    - matrix_backend_redirect_returns_backend_relative_console_path
+risk:
+  level: low
+  statement: prior local GitHub repository verification block was resolved with valid GitHub App PEM key material
+decision_needed: none
+review:
+  owner: human
+  state: accepted
+verification:
+  proof:
+    - curl http://127.0.0.1:8787/diagnostics
+    - curl http://127.0.0.1:8787/api/github/repos
+    - browser http://127.0.0.1:8787/api/integrations/status
+    - npx tsx direct GitHub App auth client check
+links:
+  - ../../.env
+  - ../../server/src/lib/github-app-auth.ts
+  - ../../server/src/routes/integration-auth.ts
+next_gate: none

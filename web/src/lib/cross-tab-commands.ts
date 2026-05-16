@@ -1,5 +1,5 @@
 import type { PinnedChatContext } from "./pinned-chat-context.js";
-import type { GitHubSession, MatrixSession, WorkspaceState } from "./workspace-state.js";
+import type { ChatSession, GitHubSession, MatrixSession, WorkspaceState } from "./workspace-state.js";
 import { selectSession, updateSession } from "./workspace-state.js";
 
 export type CrossTabCommand =
@@ -25,6 +25,13 @@ export type CrossTabCommand =
   | {
       type: "PinChatContext";
       payload: PinnedChatContext;
+    }
+  | {
+      type: "QueueChatDraft";
+      payload: {
+        content: string;
+        source: "matrix";
+      };
     };
 
 function nowIso() {
@@ -107,4 +114,38 @@ export function applyQueueMatrixDraftCommand(options: {
   );
 
   return selectSession(withDraft, "matrix", sessionId);
+}
+
+export function applyQueueChatDraftCommand(options: {
+  state: WorkspaceState;
+  payload: Extract<CrossTabCommand, { type: "QueueChatDraft" }>["payload"];
+  locale: "de" | "en";
+}) {
+  const content = options.payload.content.trim();
+  if (!content) {
+    return options.state;
+  }
+
+  const now = nowIso();
+  const sessionId = options.state.activeSessionIdByWorkspace.chat;
+  const withDraft = updateSession<ChatSession["metadata"]>(
+    options.state,
+    "chat",
+    sessionId,
+    (session) => ({
+      ...session,
+      updatedAt: now,
+      lastOpenedAt: now,
+      metadata: {
+        ...session.metadata,
+        chatState: {
+          ...session.metadata.chatState,
+          input: content,
+          connectionState: "idle",
+        },
+      },
+    }),
+  );
+
+  return selectSession(withDraft, "chat", sessionId);
 }

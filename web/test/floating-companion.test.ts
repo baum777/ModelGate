@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
-  buildCompanionPlaceholderResponse,
   canSubmitCompanionInput,
   normalizeCompanionInput,
 } from "../src/components/FloatingCompanion.js";
@@ -13,16 +12,11 @@ test("floating companion helpers trim input and block empty submissions", () => 
   assert.equal(canSubmitCompanionInput(" Frage "), true);
 });
 
-test("floating companion placeholder response is localized", () => {
-  assert.match(buildCompanionPlaceholderResponse("de"), /Danke/);
-  assert.match(buildCompanionPlaceholderResponse("en"), /Thanks/);
-});
-
 test("console shell mounts floating companion with locale wiring", () => {
   const source = readFileSync("web/src/App.tsx", "utf8");
 
   assert.match(source, /import \{ FloatingCompanion \} from "\.\/components\/FloatingCompanion\.js"/);
-  assert.match(source, /onSubmitQuestion=\{companionBackendSubmitEnabled \? handleCompanionQuestion : undefined\}/);
+  assert.match(source, /onSubmitQuestion=\{handleCompanionQuestion\}/);
   assert.doesNotMatch(source, /<FloatingCompanion[\s\S]*openRouterApiKeyInput=/);
   assert.match(source, /\{floatingCompanion\}/);
 });
@@ -45,7 +39,7 @@ test("floating companion closes on Escape and supports quick actions", () => {
   assert.match(source, /quickActions/);
   assert.match(source, /onQuickAction/);
   assert.match(source, /onSubmitQuestion\?: \(question: string\) => Promise<string>/);
-  assert.match(source, /assistantModeEnabled \? companionCopy\.assistantModeLabel : companionCopy\.localGuideModeLabel/);
+  assert.match(source, /modeLabel=\{companionCopy\.assistantModeLabel\}/);
   assert.match(source, /data-testid="floating-companion-mode"/);
 });
 
@@ -75,9 +69,10 @@ test("companion backend mode routes questions through /chat with default-free al
   assert.match(source, /content:\s*question/);
 });
 
-test("companion falls back to local guide mode when no backend submit callback exists", () => {
+test("companion surfaces backend unavailable copy instead of placeholder mode", () => {
   const source = readFileSync("web/src/components/FloatingCompanion.tsx", "utf8");
 
   assert.match(source, /if \(!assistantModeEnabled \|\| !onSubmitQuestion\)/);
-  assert.match(source, /buildCompanionPlaceholderResponse\(locale\)/);
+  assert.match(source, /Companion backend unavailable|Companion-Backend nicht verfügbar/);
+  assert.doesNotMatch(source, /buildCompanionPlaceholderResponse/);
 });

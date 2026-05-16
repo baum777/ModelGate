@@ -29,7 +29,7 @@ export function BottomNav({ ariaLabel, items }: BottomNavProps) {
           data-testid={item.testId}
         >
           {item.icon}
-          <span>{item.label}</span>
+          <span aria-hidden={!item.active}>{item.active ? item.label : ""}</span>
           {item.badge ? <span className="mobile-bottom-nav-badge">{item.badge}</span> : null}
         </button>
       ))}

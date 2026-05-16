@@ -1,13 +1,16 @@
-import { useLayoutEffect, type FormEvent, type KeyboardEvent, type MutableRefObject } from "react";
+import { useLayoutEffect, type FormEvent, type KeyboardEvent, type MutableRefObject, type ReactNode } from "react";
 
 export function ComposeZone({
   value,
   placeholder,
   disabled,
   submitDisabled,
+  submitTooltip,
   submitLabel,
   ariaLabel,
   textareaRef,
+  preInputSlot,
+  postInputSlot,
   onChange,
   onKeyDown,
   onSubmit,
@@ -16,9 +19,12 @@ export function ComposeZone({
   placeholder: string;
   disabled: boolean;
   submitDisabled: boolean;
+  submitTooltip?: string | null;
   submitLabel: string;
   ariaLabel: string;
   textareaRef: MutableRefObject<HTMLTextAreaElement | null>;
+  preInputSlot?: ReactNode;
+  postInputSlot?: ReactNode;
   onChange: (value: string) => void;
   onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -36,6 +42,7 @@ export function ComposeZone({
   return (
     <form className="composer governed-composer mobile-compose-zone" onSubmit={onSubmit}>
       <div className="mobile-compose-field">
+        {preInputSlot}
         <textarea
           className="mobile-compose-input"
           data-testid="chat-composer"
@@ -55,9 +62,12 @@ export function ComposeZone({
           className="secondary-button mobile-compose-submit"
           data-testid="chat-send"
           disabled={submitDisabled}
+          title={submitDisabled && submitTooltip ? submitTooltip : undefined}
+          aria-disabled={submitDisabled}
         >
           {submitLabel}
         </button>
+        {postInputSlot}
       </div>
     </form>
   );

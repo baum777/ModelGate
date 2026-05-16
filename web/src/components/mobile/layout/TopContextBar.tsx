@@ -7,11 +7,9 @@ export function TopContextBar({
   title,
   modelAlias,
   healthTone,
-  theme,
   locale,
   brandAriaLabel,
   modelAriaLabel,
-  themeAriaLabel,
   languageAriaLabel,
   languageOptionEnglish,
   languageOptionGerman,
@@ -21,18 +19,15 @@ export function TopContextBar({
   onBrandPointerLeave,
   onBrandPointerUp,
   onModelPress,
-  onThemeToggle,
   onLocaleChange,
 }: {
   brandIcon: ReactNode;
   title: string;
   modelAlias: string;
   healthTone: MobileHealthTone;
-  theme: "dark" | "light";
   locale: "en" | "de";
   brandAriaLabel: string;
   modelAriaLabel: string;
-  themeAriaLabel: string;
   languageAriaLabel: string;
   languageOptionEnglish: string;
   languageOptionGerman: string;
@@ -42,7 +37,6 @@ export function TopContextBar({
   onBrandPointerLeave: PointerEventHandler<HTMLButtonElement>;
   onBrandPointerUp: PointerEventHandler<HTMLButtonElement>;
   onModelPress: () => void;
-  onThemeToggle: () => void;
   onLocaleChange: (locale: "en" | "de") => void;
 }) {
   return (
@@ -71,14 +65,6 @@ export function TopContextBar({
           aria-label={modelAriaLabel}
         >
           {modelAlias}
-        </button>
-        <button
-          type="button"
-          className="theme-toggle-button"
-          onClick={onThemeToggle}
-          aria-label={themeAriaLabel}
-        >
-          {theme === "dark" ? "☀" : "☾"}
         </button>
         <div className="shell-language-toggle" role="group" aria-label={languageAriaLabel}>
           <button

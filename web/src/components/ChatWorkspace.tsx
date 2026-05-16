@@ -663,6 +663,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
         }))),
     [props.availableModels, props.modelRegistry],
   );
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [messageCopyState, setMessageCopyState] = useState<Record<string, "idle" | "copied" | "failed">>({});
   const [matrixComposeOpen, setMatrixComposeOpen] = useState(false);
   const [matrixComposeSourceMessageId, setMatrixComposeSourceMessageId] = useState<string | null>(null);
@@ -686,6 +687,28 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   } | null>(null);
   const [openRouterSetupState, setOpenRouterSetupState] = useState(() => readGuideSetupState(GUIDE_KEY_SETUP_OPENROUTER));
   const [emptyStatePromptIndex, setEmptyStatePromptIndex] = useState(0);
+
+  useEffect(() => {
+    if (!modelPickerOpen) {
+      return;
+    }
+
+    const closePicker = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+
+      if (target.closest(".chat-compose-inline-meta")) {
+        return;
+      }
+
+      setModelPickerOpen(false);
+    };
+
+    window.addEventListener("pointerdown", closePicker);
+    return () => window.removeEventListener("pointerdown", closePicker);
+  }, [modelPickerOpen]);
 
   const matrixRoomOptions = useMemo(() => {
     const order = [props.matrixDraftDefaultRoomId, ...props.matrixDraftRoomOptions];
@@ -724,6 +747,12 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     props.onActiveModelAliasChange,
     selectedModel,
   ]);
+  const handleModelSelect = useCallback((nextModel: string) => {
+    setSelectedModel(nextModel);
+    props.onActiveModelAliasChange(nextModel);
+    props.onTelemetry("info", "Model alias changed", `Selected public alias ${nextModel || "unresolved"}.`);
+    setModelPickerOpen(false);
+  }, [props]);
 
   useEffect(() => {
     if (matrixComposeOpen || matrixComposeRoomId.trim().length > 0 || matrixRoomOptions.length === 0) {
@@ -876,6 +905,25 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     flushBatchedTokens();
     abortRef.current?.abort();
   }
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const hasPrimaryModifier = event.metaKey || event.ctrlKey;
+      if (hasPrimaryModifier && event.key === ".") {
+        event.preventDefault();
+        stopExecution();
+        return;
+      }
+
+      if (event.key === "Escape" && modelPickerOpen) {
+        event.preventDefault();
+        setModelPickerOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [modelPickerOpen]);
 
   function openMatrixComposeFromMessage(message: ChatMessage) {
     if (message.role !== "assistant") {
@@ -1345,6 +1393,18 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     executionRunning,
     copy: ui.chat.composerLocked
   });
+  const modeChipLabel = executionMode === "direct" ? "⚡ direct" : "◎ governed";
+  const branchBadgeLabel = workbenchBranch
+    ? `branch: ${workbenchBranch} · ${directMainBranch ? (locale === "de" ? "read-only" : "read-only") : (locale === "de" ? "writable" : "writable")}`
+    : `branch: ${locale === "de" ? "none" : "none"} · read-only`;
+  const submitTooltip = composerBlockReason
+    ?? (
+      readWriteGuardrailBlocked
+        ? (locale === "de"
+          ? "Read & Write blockiert: Branch prüfen"
+          : "Read & Write blocked: check branch")
+        : null
+    );
   const routingStatusItems = buildChatRoutingStatusItems({
     selectedModel,
     backendHealthy: props.backendHealthy,
@@ -1522,10 +1582,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               id="model-select"
               value={selectedModel}
               onChange={(event) => {
-                const nextModel = event.target.value;
-                setSelectedModel(nextModel);
-                props.onActiveModelAliasChange(nextModel);
-                props.onTelemetry("info", "Model alias changed", `Selected public alias ${nextModel || "unresolved"}.`);
+                handleModelSelect(event.target.value);
               }}
               disabled={props.availableModels.length === 0 || (executionMode === "governed" && Boolean(pendingProposal))}
             >
@@ -1560,9 +1617,11 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
         {executionMode === "governed" && pendingProposal?.status === "pending" ? (
           <ProposalCard
             testId="chat-proposal-card"
-            title={ui.chat.proposalTitle}
+            title={locale === "de" ? "Proposal · requires approval" : "Proposal · requires approval"}
             summary={pendingProposal.prompt}
             consequence={pendingProposal.consequence}
+            statusLabel={locale === "de" ? "requires approval" : "requires approval"}
+            statusTone="partial"
             metadata={mergeMetadataRows(
               buildChatGovernanceRows({
                 modelAlias: pendingProposal.modelAlias ?? selectedModel ?? null,
@@ -1577,6 +1636,8 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
                 void executeProposal(pendingProposal);
               }}
               onReject={rejectProposal}
+              approveLabel={locale === "de" ? "Execute ↵" : "Execute ↵"}
+              rejectLabel={locale === "de" ? "Discard ⌫" : "Discard ⌫"}
               helperText={ui.chat.proposalHelper}
             />
           </ProposalCard>
@@ -2064,21 +2125,91 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
                 value={chatState.input}
                 placeholder={composerPlaceholder}
                 disabled={Boolean(composerBlockReason) || readWriteGuardrailBlocked}
-            submitDisabled={Boolean(composerBlockReason) || readWriteGuardrailBlocked || chatState.input.trim().length === 0}
-            submitLabel={executionMode === "direct" ? ui.chat.sendDirect : ui.chat.prepareProposal}
-            ariaLabel={ui.chat.title}
-            textareaRef={composerRef}
-            onChange={(input) => dispatch({ type: "set_input", input })}
-            onKeyDown={(event) => {
-              if (!shouldSubmitChatComposerOnKey(event)) {
-                return;
-              }
+                submitDisabled={Boolean(composerBlockReason) || readWriteGuardrailBlocked || chatState.input.trim().length === 0}
+                submitTooltip={submitTooltip}
+                submitLabel={executionMode === "direct" ? ui.chat.sendDirect : ui.chat.prepareProposal}
+                ariaLabel={ui.chat.title}
+                textareaRef={composerRef}
+                preInputSlot={(
+                  <button
+                    type="button"
+                    className={executionMode === "direct" ? "secondary-button chat-input-mode-indicator" : "secondary-button chat-input-mode-indicator chat-input-mode-indicator-governed"}
+                    onClick={() => {
+                      if (executionRunning) {
+                        return;
+                      }
 
-              event.preventDefault();
-              event.currentTarget.form?.requestSubmit();
-            }}
-            onSubmit={handleSubmit}
-          />
+                      if (executionMode === "direct") {
+                        if (!workbenchBranch) {
+                          setBranchSelectorOpen(true);
+                          return;
+                        }
+                        setExecutionMode("governed");
+                        return;
+                      }
+
+                      setExecutionMode("direct");
+                      dispatch({ type: "clear_pending_proposal" });
+                    }}
+                    title={locale === "de" ? "Modus wechseln" : "Toggle mode"}
+                  >
+                    {modeChipLabel}
+                  </button>
+                )}
+                postInputSlot={(
+                  <div className="chat-compose-inline-meta">
+                    <span className={readWriteGuardrailBlocked ? "chat-branch-badge chat-branch-badge-readonly" : "chat-branch-badge chat-branch-badge-writable"}>
+                      {branchBadgeLabel}
+                    </span>
+                    <button
+                      type="button"
+                      className="secondary-button chat-model-chip"
+                      onClick={() => setModelPickerOpen((current) => !current)}
+                      title={locale === "de" ? "Modell wählen" : "Pick model"}
+                    >
+                      {selectedModel || ui.common.na}
+                    </button>
+                    {modelPickerOpen ? (
+                      <div className="chat-model-picker" role="listbox">
+                        {modelOptions.map((model) => (
+                          <button
+                            key={model.alias}
+                            type="button"
+                            className={selectedModel === model.alias ? "chat-model-picker-item chat-model-picker-item-active" : "chat-model-picker-item"}
+                            onClick={() => handleModelSelect(model.alias)}
+                          >
+                            {model.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+                onChange={(input) => dispatch({ type: "set_input", input })}
+                onKeyDown={(event) => {
+                  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                    event.preventDefault();
+                    if (executionMode === "governed") {
+                      const forcedPrompt = buildPinnedChatContextPrompt(chatState.input.trim(), props.pinnedContext, locale).trim();
+                      if (forcedPrompt.length === 0) {
+                        return;
+                      }
+                      void executeDirectPrompt(forcedPrompt);
+                      return;
+                    }
+                    event.currentTarget.form?.requestSubmit();
+                    return;
+                  }
+
+                  if (!shouldSubmitChatComposerOnKey(event)) {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
+                }}
+                onSubmit={handleSubmit}
+              />
 
           <MobileChatTipRail locale={locale} />
         </div>

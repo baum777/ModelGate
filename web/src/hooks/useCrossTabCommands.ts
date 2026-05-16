@@ -6,6 +6,7 @@ import {
 import type { PinnedChatContext } from "../lib/pinned-chat-context.js";
 import {
   applyOpenWorkbenchWithDraftCommand,
+  applyQueueChatDraftCommand,
   applyQueueMatrixDraftCommand,
   type CrossTabCommand,
 } from "../lib/cross-tab-commands.js";
@@ -63,6 +64,22 @@ export function createCrossTabCommandHandler(options: {
         "info",
         options.locale === "de" ? "Matrix-Entwurf vorbereitet" : "Matrix draft prepared",
         `${command.payload.sourceMessageId} -> ${command.payload.roomId}`,
+      );
+      return;
+    }
+
+    if (command.type === "QueueChatDraft") {
+      options.setMode("chat");
+      options.setWorkspaceState((current) => applyQueueChatDraftCommand({
+        state: current,
+        payload: command.payload,
+        locale: options.locale,
+      }));
+      options.selectActiveWorkspaceSession("chat");
+      options.recordTelemetry(
+        "info",
+        options.locale === "de" ? "Chat-Entwurf übernommen" : "Chat draft queued",
+        options.locale === "de" ? "Entwurf aus Matrix in den Chat-Composer übernommen." : "Draft from Matrix copied into chat composer.",
       );
       return;
     }

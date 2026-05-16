@@ -8,7 +8,6 @@ type FloatingCompanionCopy = {
   panelTitle: string;
   panelDescription: string;
   assistantModeLabel: string;
-  localGuideModeLabel: string;
   inputLabel: string;
   inputPlaceholder: string;
   submitLabel: string;
@@ -26,7 +25,6 @@ const FLOATING_COMPANION_COPY: Record<Locale, FloatingCompanionCopy> = {
     panelTitle: "Helpdesk Companion",
     panelDescription: "Frag mich etwas zur App, zu Funktionen oder nächsten Schritten.",
     assistantModeLabel: "Assistant mode",
-    localGuideModeLabel: "Local guide mode",
     inputLabel: "Deine Frage",
     inputPlaceholder: "Frage zu Navigation, Funktion oder Problem …",
     submitLabel: "Senden",
@@ -46,7 +44,6 @@ const FLOATING_COMPANION_COPY: Record<Locale, FloatingCompanionCopy> = {
     panelTitle: "Helpdesk Companion",
     panelDescription: "Ask me about app features, navigation, or your next step.",
     assistantModeLabel: "Assistant mode",
-    localGuideModeLabel: "Local guide mode",
     inputLabel: "Your question",
     inputPlaceholder: "Ask about navigation, features, or an issue …",
     submitLabel: "Send",
@@ -61,21 +58,12 @@ const FLOATING_COMPANION_COPY: Record<Locale, FloatingCompanionCopy> = {
   },
 };
 
-const PLACEHOLDER_REPLY: Record<Locale, string> = {
-  de: "Danke, ich habe deine Frage erfasst. Die Helpdesk-Anbindung kann hier später ergänzt werden.",
-  en: "Thanks, I captured your question. A real helpdesk integration can be connected here later.",
-};
-
 export function normalizeCompanionInput(value: string) {
   return value.trim();
 }
 
 export function canSubmitCompanionInput(value: string) {
   return normalizeCompanionInput(value).length > 0;
-}
-
-export function buildCompanionPlaceholderResponse(locale: Locale) {
-  return PLACEHOLDER_REPLY[locale];
 }
 
 type FloatingCompanionButtonProps = {
@@ -246,7 +234,9 @@ export function FloatingCompanion({ locale, onSubmitQuestion }: FloatingCompanio
     }
 
     if (!assistantModeEnabled || !onSubmitQuestion) {
-      setLastMessage(buildCompanionPlaceholderResponse(locale));
+      setLastMessage(locale === "de"
+        ? "Companion-Backend nicht verfügbar."
+        : "Companion backend unavailable.");
       setInputValue("");
       return;
     }
@@ -255,8 +245,12 @@ export function FloatingCompanion({ locale, onSubmitQuestion }: FloatingCompanio
     try {
       const backendResponse = await onSubmitQuestion(normalized);
       setLastMessage(backendResponse);
-    } catch {
-      setLastMessage(buildCompanionPlaceholderResponse(locale));
+    } catch (error) {
+      setLastMessage(error instanceof Error ? error.message : (
+        locale === "de"
+          ? "Companion-Backend nicht verfügbar."
+          : "Companion backend unavailable."
+      ));
     } finally {
       setIsSubmitting(false);
     }
@@ -286,7 +280,7 @@ export function FloatingCompanion({ locale, onSubmitQuestion }: FloatingCompanio
           panelId={panelId}
           inputId={inputId}
           copy={companionCopy}
-          modeLabel={assistantModeEnabled ? companionCopy.assistantModeLabel : companionCopy.localGuideModeLabel}
+          modeLabel={companionCopy.assistantModeLabel}
           inputValue={inputValue}
           lastMessage={lastMessage}
           isSubmitting={isSubmitting}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ExpertDetails } from "./ExpertDetails.js";
 import {
   executeGitHubPlan,
@@ -28,6 +28,7 @@ import {
 } from "../lib/governance-metadata.js";
 import { useLocalization, type Locale } from "../lib/localization.js";
 import { isExpertMode, type WorkMode } from "../lib/work-mode.js";
+import { toButtonGate } from "../lib/button-gate.js";
 import { ActivityRow } from "./mobile/github/ActivityRow.js";
 import { DiffSheet, type DiffSheetFile } from "./mobile/github/DiffSheet.js";
 
@@ -597,6 +598,45 @@ export function buildGitHubReviewItems(
   ];
 }
 
+function GateButton({
+  className,
+  disabled,
+  blockedReason,
+  onClick,
+  children,
+  testId,
+  effectType,
+  backendCapability,
+  executeBlockReason,
+}: {
+  className?: string;
+  disabled: boolean;
+  blockedReason?: string | null;
+  onClick: () => void;
+  children: ReactNode;
+  testId?: string;
+  effectType?: string;
+  backendCapability?: string;
+  executeBlockReason?: string;
+}) {
+  return (
+    <button
+      type="button"
+      className={className}
+      onClick={onClick}
+      disabled={disabled}
+      aria-disabled={disabled}
+      title={disabled && blockedReason ? blockedReason : undefined}
+      data-testid={testId}
+      data-effect-type={effectType}
+      data-backend-capability={backendCapability}
+      data-execute-block-reason={executeBlockReason}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function GitHubWorkspace(props: GitHubWorkspaceProps) {
   const { locale, copy: ui } = useLocalization();
   const localText = useMemo(() => getGitHubLocaleText(locale), [locale]);
@@ -924,6 +964,35 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     || proposalLoading
     || workbenchActionState !== "pr_prepared";
   const verifyDisabled = !executionResult || executing || verifying;
+  const markForStageBlockReason = !proposalPlan
+    ? (locale === "de" ? "Kein Proposal verfügbar" : "No proposal available")
+    : stalePlanBlocked
+      ? (locale === "de" ? "Proposal ist veraltet" : "Proposal is stale")
+      : executionConsumed
+        ? (locale === "de" ? "Bereits ausgeführt" : "Already executed")
+        : workbenchActionState === "marked" || workbenchActionState === "pr_prepared" || workbenchActionState === "pr_ready"
+          ? (locale === "de" ? "Bereits markiert" : "Already marked")
+          : (locale === "de" ? "Aktion nicht verfügbar" : "Action unavailable");
+  const removeFromReviewBlockReason = !proposalPlan
+    ? (locale === "de" ? "Kein Proposal verfügbar" : "No proposal available")
+    : workbenchActionState === "removed"
+      ? (locale === "de" ? "Bereits entfernt" : "Already removed")
+      : (locale === "de" ? "Aktion nicht verfügbar" : "Action unavailable");
+  const preparePrBlockReason = !proposalPlan
+    ? (locale === "de" ? "Proposal fehlt" : "Proposal missing")
+    : workbenchActionState !== "marked"
+      ? (locale === "de" ? "Erst \"Mark as reviewed\" ausführen" : "Run \"Mark as reviewed\" first")
+      : (locale === "de" ? "Prepare derzeit blockiert" : "Prepare currently blocked");
+  const executeBlockReasonTooltip = executeBlockReasonLabel
+    ?? (locale === "de" ? "Execute derzeit blockiert" : "Execute currently blocked");
+  const verifyBlockReason = !executionResult
+    ? (locale === "de" ? "Noch keine Ausführung vorhanden" : "No execution result yet")
+    : (locale === "de" ? "Verify derzeit blockiert" : "Verify currently blocked");
+  const markForStageGate = toButtonGate(markForStageDisabled ? markForStageBlockReason : null);
+  const removeFromReviewGate = toButtonGate(removeFromReviewDisabled ? removeFromReviewBlockReason : null);
+  const preparePrGate = toButtonGate(preparePrDisabled ? preparePrBlockReason : null);
+  const executePrGate = toButtonGate(executeDisabled ? executeBlockReasonTooltip : null);
+  const verifyGate = toButtonGate(verifyDisabled ? verifyBlockReason : null);
   const reviewDirty = isGitHubReviewDirty({
     proposalPlan,
     executionResult,
@@ -1288,6 +1357,8 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     .map((file) => `${file.changeType}:${file.path}`);
   const canCopySummary = Boolean(proposalPlan || analysisBundle);
   const canOpenRawDiff = Boolean(rawDiffForView);
+  const openDiffGate = toButtonGate(!canOpenRawDiff ? (locale === "de" ? "Noch kein Diff verfügbar" : "No diff available yet") : null);
+  const copySummaryGate = toButtonGate(!canCopySummary ? (locale === "de" ? "Noch keine Summary verfügbar" : "No summary available yet") : null);
   const workbenchActionEffects = {
     markForStage: "local_review_state" as WorkbenchActionEffectType,
     removeReview: "local_review_state" as WorkbenchActionEffectType,
@@ -1340,6 +1411,44 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       locale,
     }),
   };
+  const workflowSteps = [
+    {
+      key: "repo",
+      label: "Repo",
+      completed: Boolean(selectedRepo),
+      active: !selectedRepo,
+    },
+    {
+      key: "analysis",
+      label: locale === "de" ? "Analyse" : "Analyze",
+      completed: Boolean(analysisBundle),
+      active: Boolean(selectedRepo) && !analysisBundle,
+    },
+    {
+      key: "proposal",
+      label: "Proposal",
+      completed: Boolean(proposalPlan),
+      active: Boolean(analysisBundle) && !proposalPlan,
+    },
+    {
+      key: "review",
+      label: locale === "de" ? "Review" : "Review",
+      completed: workbenchActionState === "marked" || workbenchActionState === "pr_prepared" || workbenchActionState === "pr_ready",
+      active: Boolean(proposalPlan) && workbenchActionState === "unmarked",
+    },
+    {
+      key: "execute",
+      label: locale === "de" ? "Execute" : "Execute",
+      completed: Boolean(executionResult),
+      active: workbenchActionState === "pr_prepared" && !executionResult,
+    },
+    {
+      key: "verify",
+      label: locale === "de" ? "Verify" : "Verify",
+      completed: Boolean(verificationResult),
+      active: Boolean(executionResult) && !verificationResult,
+    },
+  ];
   const pinnableChatContext = useMemo(
     () => buildGitHubPinnedChatContext({
       selectedRepo,
@@ -1566,6 +1675,29 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
         />
       </section>
 
+      <article className="workspace-card github-workflow-stepper" data-testid="workbench-stepper">
+        <header className="card-header">
+          <div>
+            <span>{locale === "de" ? "Workflow" : "Workflow"}</span>
+            <strong>{locale === "de" ? "Repo → Analyse → Proposal → Review → Execute → Verify" : "Repo → Analyze → Proposal → Review → Execute → Verify"}</strong>
+          </div>
+        </header>
+        <div className="chip-list">
+          {workflowSteps.map((step) => (
+            <span
+              key={step.key}
+              className={step.completed
+                ? "workflow-chip workflow-chip-complete"
+                : step.active
+                  ? "workflow-chip workflow-chip-active"
+                  : "workflow-chip workflow-chip-idle"}
+            >
+              {step.completed ? "✓ " : ""}{step.label}
+            </span>
+          ))}
+        </div>
+      </article>
+
       <article className="workspace-card github-review-card">
         <header className="card-header">
           <div>
@@ -1760,70 +1892,70 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
           </div>
         </header>
         <div className="action-row">
-          <button
-            type="button"
+          <GateButton
             onClick={handleMarkForStage}
             disabled={markForStageDisabled}
-            data-testid="workbench-action-mark-for-stage"
-            data-effect-type={workbenchActionEffects.markForStage}
+            blockedReason={markForStageGate.tooltipText}
+            testId="workbench-action-mark-for-stage"
+            effectType={workbenchActionEffects.markForStage}
           >
             {workbenchActionLabels.markForStage}
-          </button>
-          <button
-            type="button"
+          </GateButton>
+          <GateButton
             className="secondary-button"
             onClick={handleRemoveFromReview}
             disabled={removeFromReviewDisabled}
-            data-testid="workbench-action-remove-review"
-            data-effect-type={workbenchActionEffects.removeReview}
+            blockedReason={removeFromReviewGate.tooltipText}
+            testId="workbench-action-remove-review"
+            effectType={workbenchActionEffects.removeReview}
           >
             {workbenchActionLabels.removeReview}
-          </button>
-          <button
-            type="button"
+          </GateButton>
+          <GateButton
             className="secondary-button"
             onClick={() => setRawDiffExpanded((current) => !current)}
             disabled={!canOpenRawDiff}
-            data-testid="workbench-action-open-diff"
-            data-effect-type={workbenchActionEffects.openDiff}
+            blockedReason={openDiffGate.tooltipText}
+            testId="workbench-action-open-diff"
+            effectType={workbenchActionEffects.openDiff}
           >
             {workbenchActionLabels.openDiff}
-          </button>
-          <button
-            type="button"
+          </GateButton>
+          <GateButton
             className="secondary-button"
             onClick={handlePreparePr}
             disabled={preparePrDisabled}
-            data-testid="workbench-action-prepare-pr"
-            data-effect-type={workbenchActionEffects.preparePr}
+            blockedReason={preparePrGate.tooltipText}
+            testId="workbench-action-prepare-pr"
+            effectType={workbenchActionEffects.preparePr}
           >
             {workbenchActionLabels.preparePr}
-          </button>
-          <button
-            type="button"
+          </GateButton>
+          <GateButton
             onClick={() => {
               void handleExecuteProposal();
             }}
             disabled={executeDisabled}
-            data-testid="workbench-action-create-pr"
-            data-effect-type={workbenchActionEffects.createPr}
-            data-backend-capability={String(serverCanExecute)}
-            data-execute-block-reason={executeBlockReason ?? "none"}
+            blockedReason={executePrGate.tooltipText}
+            testId="workbench-action-create-pr"
+            effectType={workbenchActionEffects.createPr}
+            backendCapability={String(serverCanExecute)}
+            executeBlockReason={executeBlockReason ?? "none"}
           >
             {workbenchActionLabels.createPr}
-          </button>
-          <button
-            type="button"
+          </GateButton>
+          <GateButton
             className="secondary-button"
             onClick={() => {
               void handleCopySummary();
             }}
             disabled={!canCopySummary}
-            data-testid="workbench-action-copy-summary"
-            data-effect-type={workbenchActionEffects.copySummary}
+            blockedReason={copySummaryGate.tooltipText}
+            testId="workbench-action-copy-summary"
+            effectType={workbenchActionEffects.copySummary}
           >
             {workbenchActionLabels.copySummary}
-          </button>
+          </GateButton>
         </div>
         <p className="muted-copy">
           {locale === "de"
@@ -1876,16 +2008,16 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
                 {ui.github.openInGitHub}
               </a>
             ) : null}
-            <button
-              type="button"
+            <GateButton
               className="secondary-button"
               onClick={() => {
                 void handleVerifyProposal();
               }}
               disabled={verifyDisabled}
+              blockedReason={verifyGate.tooltipText}
             >
               {verifying ? ui.github.verifyBusy : ui.github.verifyResult}
-            </button>
+            </GateButton>
           </div>
         </article>
       ) : null}
