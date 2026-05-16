@@ -117,6 +117,7 @@ type ChatRoutingStatusCopy = {
 };
 
 const CHAT_SESSION_SYNC_INTERVAL_MS = 220;
+const CHAT_STREAM_SESSION_SYNC_INTERVAL_MS = 1_000;
 const MESSAGE_ACTION_COPY_RESET_MS = 1600;
 const MATRIX_DRAFT_TAGS = ["release", "incident", "todo"] as const;
 const MESSAGE_ACTION_GUIDE_PULSE_MS = 1400;
@@ -331,6 +332,17 @@ export function shouldSubmitChatComposerOnKey(event: {
 
 export function resolveChatScrollBehavior(connectionState: ConnectionState): ScrollBehavior {
   return connectionState === "streaming" || connectionState === "submitting" ? "auto" : "smooth";
+}
+
+export function shouldFlushChatSessionSyncImmediately(connectionState: ConnectionState) {
+  return connectionState === "completed" || connectionState === "error";
+}
+
+export function resolveChatSessionSyncInterval(connectionState: ConnectionState) {
+  if (connectionState === "streaming" || connectionState === "submitting") {
+    return CHAT_STREAM_SESSION_SYNC_INTERVAL_MS;
+  }
+  return CHAT_SESSION_SYNC_INTERVAL_MS;
 }
 
 export function resolveChatStreamStatusLabel(options: {
@@ -725,9 +737,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     };
 
     latestSessionRef.current = nextSession;
-    const terminalState = chatState.connectionState === "completed" || chatState.connectionState === "error";
-
-    if (terminalState) {
+    if (shouldFlushChatSessionSyncImmediately(chatState.connectionState)) {
       flushSessionSync();
       return;
     }
@@ -741,7 +751,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       if (latestSessionRef.current) {
         props.onSessionChange(latestSessionRef.current);
       }
-    }, CHAT_SESSION_SYNC_INTERVAL_MS);
+    }, resolveChatSessionSyncInterval(chatState.connectionState));
   }, [chatState, executionMode, flushSessionSync, props.onSessionChange, props.session.id, selectedModel]);
 
   useEffect(() => () => {

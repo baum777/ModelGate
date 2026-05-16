@@ -6,12 +6,7 @@ import {
   type MatrixWorkspaceStatus,
 } from "./components/MatrixWorkspace.js";
 import {
-  type ReviewItem,
-} from "./components/ReviewWorkspace.js";
-import {
   type DiagnosticEntry,
-  type SettingsVerificationState,
-  type SettingsVerificationTarget,
 } from "./components/SettingsWorkspace.js";
 import { SessionList } from "./components/SessionList.js";
 import {
@@ -31,44 +26,10 @@ import {
   useLocalization,
 } from "./lib/localization.js";
 import {
-  buildIntegrationConnectStartUrl,
-  fetchDiagnostics,
-  fetchHealth,
-  fetchIntegrationsStatus,
-  fetchJournalRecent,
-  fetchModels,
-  postIntegrationControlAction,
-  fetchOpenRouterCredentialStatus,
-  saveOpenRouterCredentials,
-  testOpenRouterCredentials,
-  testSettingsConnection,
-  type DiagnosticsResponse,
-  type IntegrationsStatusResponse,
-  type JournalEntry,
-  type OpenRouterCredentialStatusResponse
-} from "./lib/api.js";
-import {
   deriveSettingsLoginAdapters,
 } from "./lib/settings-login-adapters.js";
 import {
-  areOpenRouterCredentialInputsValid,
-} from "./lib/openrouter-inputs.js";
-import {
-  appendSession,
-  createChatSessionMetadata,
-  createGitHubSessionMetadata,
-  createMatrixSessionMetadata,
-  createSession,
-  deleteSession,
-  loadWorkspaceState,
-  saveWorkspaceState,
-  selectSession,
-  updateSession,
   type WorkspaceKind,
-  type WorkspaceSession,
-  type ChatSession,
-  type GitHubSession,
-  type MatrixSession
 } from "./lib/workspace-state.js";
 import {
   summarizePendingApprovals,
@@ -79,10 +40,13 @@ import {
   resolvePersistedWorkMode,
   type WorkMode,
 } from "./lib/work-mode.js";
-import type { PinnedChatContext } from "./lib/pinned-chat-context.js";
 import { BottomNav } from "./components/navigation/BottomNav.js";
 import { ContextStrip, type MobileContextStatus } from "./components/mobile/layout/ContextStrip.js";
 import { TopContextBar } from "./components/mobile/layout/TopContextBar.js";
+import { useRuntimeStatus } from "./hooks/useRuntimeStatus.js";
+import { useWorkspaceSessions } from "./hooks/useWorkspaceSessions.js";
+import { useCrossTabCommands } from "./hooks/useCrossTabCommands.js";
+import { useReviewState } from "./hooks/useReviewState.js";
 
 const loadChatWorkspace = () => import("./components/ChatWorkspace.js");
 const loadGitHubWorkspace = () => import("./components/GitHubWorkspace.js");
@@ -93,29 +57,6 @@ const ChatWorkspace = lazy(() => loadChatWorkspace().then((module) => ({ default
 const GitHubWorkspace = lazy(() => loadGitHubWorkspace().then((module) => ({ default: module.GitHubWorkspace })));
 const MatrixWorkspace = lazy(() => loadMatrixWorkspace().then((module) => ({ default: module.MatrixWorkspace })));
 const SettingsWorkspace = lazy(() => loadSettingsWorkspace().then((module) => ({ default: module.SettingsWorkspace })));
-
-const SETTINGS_VERIFICATION_INITIAL: Record<SettingsVerificationTarget, SettingsVerificationState> = {
-  backend: {
-    status: "idle",
-    detail: "",
-    checkedAt: null,
-  },
-  github: {
-    status: "idle",
-    detail: "",
-    checkedAt: null,
-  },
-  matrix: {
-    status: "idle",
-    detail: "",
-    checkedAt: null,
-  },
-};
-
-const OPENROUTER_CREDENTIAL_STATUS_EMPTY: OpenRouterCredentialStatusResponse = {
-  configured: false,
-  models: [],
-};
 
 function scheduleWorkspacePreload(callback: () => void, timeoutMs = 15_000) {
   if (typeof window === "undefined") {
@@ -144,7 +85,6 @@ type PersistedShellState = {
 const SHELL_STORAGE_KEY = "mosaicstacked.console.shell.v2";
 const THEME_STORAGE_KEY = "ms-theme";
 const LEGACY_THEME_STORAGE_KEY = "mg-theme";
-const WORKSPACE_STATE_SAVE_INTERVAL_MS = 250;
 
 type ThemeMode = "dark" | "light";
 
@@ -327,13 +267,6 @@ function BeginnerExpertToggle({
   );
 }
 
-function mergeReviewItems(current: ReviewItem[], next: ReviewItem[]) {
-  const remaining = current.filter(
-    (item) => !next.some((candidate) => candidate.id === item.id && candidate.source === item.source),
-  );
-  return [...remaining, ...next];
-}
-
 function isSessionWorkspace(mode: WorkspaceMode): mode is "chat" | "workbench" | "matrix" {
   return mode === "chat" || mode === "workbench" || mode === "matrix";
 }
@@ -352,10 +285,6 @@ function toWorkspaceMode(workspace: WorkspaceKind): "chat" | "workbench" | "matr
   }
 
   return workspace;
-}
-
-function nowIso() {
-  return new Date().toISOString();
 }
 
 type AppSurface = "console" | "readme" | "preview";
@@ -1092,186 +1021,101 @@ function ConsoleShell() {
   const [workMode, setWorkMode] = useState<WorkMode>(() => resolvePersistedWorkMode(persisted));
   const expertMode = isExpertMode(workMode);
   const workModeCopy = getWorkModeCopy(locale, workMode);
-  const [workspaceState, setWorkspaceState] = useState(() => loadWorkspaceState());
-  const [backendHealthy, setBackendHealthy] = useState<boolean | null>(null);
-  const [activeModelAlias, setActiveModelAlias] = useState<string | null>(null);
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
-  const [modelRegistry, setModelRegistry] = useState<Array<{
-    alias: string;
-    label: string;
-    description: string;
-    capabilities: string[];
-    tier: "core" | "specialized" | "fallback";
-    streaming: boolean;
-    recommendedFor: string[];
-    default?: boolean;
-    available?: boolean;
-  }>>([]);
-  const [openRouterCredentialStatus, setOpenRouterCredentialStatus] = useState<OpenRouterCredentialStatusResponse>(OPENROUTER_CREDENTIAL_STATUS_EMPTY);
-  const [openRouterApiKeyInput, setOpenRouterApiKeyInput] = useState("");
-  const [openRouterModelInput, setOpenRouterModelInput] = useState("");
-  const [isSavingOpenRouterCredentials, setIsSavingOpenRouterCredentials] = useState(false);
-  const [isTestingOpenRouterCredentials, setIsTestingOpenRouterCredentials] = useState(false);
-  const [openRouterCredentialMessage, setOpenRouterCredentialMessage] = useState<string | null>(null);
-  const [runtimeDiagnostics, setRuntimeDiagnostics] = useState<DiagnosticsResponse | null>(null);
-  const [integrationsStatus, setIntegrationsStatus] = useState<IntegrationsStatusResponse | null>(null);
-  const [settingsVerificationResults, setSettingsVerificationResults] = useState(SETTINGS_VERIFICATION_INITIAL);
-  const [runtimeJournalEntries, setRuntimeJournalEntries] = useState<JournalEntry[]>([]);
-  const [restoredSession] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-
-    return window.localStorage.getItem("mosaicstacked.console.workspaces.v1") !== null;
-  });
   const [telemetry, setTelemetry] = useState<TelemetryEntry[]>([]);
   const [githubContext, setGitHubContext] = useState<GitHubWorkspaceStatus>(() => createDefaultGitHubContext());
   const [matrixContext, setMatrixContext] = useState<MatrixWorkspaceStatus>(() => createDefaultMatrixContext());
-  const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
-  const [pinnedChatContext, setPinnedChatContext] = useState<PinnedChatContext | null>(null);
-  const [githubReviewDirty, setGitHubReviewDirty] = useState(false);
+  const { reviewItems, githubReviewDirty, setGitHubReviewDirty, updateGitHubReviewItems, updateMatrixReviewItems } = useReviewState();
   const [mobileContextOpen, setMobileContextOpen] = useState(false);
-  const workspaceSaveHandleRef = useRef<number | null>(null);
-  const latestWorkspaceStateRef = useRef(workspaceState);
   const mobileSettingsLongPressRef = useRef<number | null>(null);
   const mobileSettingsLongPressTriggeredRef = useRef(false);
-  const flushWorkspaceState = useCallback(() => {
-    if (workspaceSaveHandleRef.current !== null) {
-      globalThis.clearTimeout(workspaceSaveHandleRef.current);
-      workspaceSaveHandleRef.current = null;
-    }
-
-    saveWorkspaceState(latestWorkspaceStateRef.current);
-  }, []);
-
-  useEffect(() => {
-    replaceConsoleUrl(mode);
-  }, [mode]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadConsoleState() {
-      const [healthResult, modelsResult, diagnosticsResult, journalResult, integrationsResult, openRouterStatusResult] = await Promise.allSettled([
-        fetchHealth(),
-        fetchModels(),
-        fetchDiagnostics(),
-        fetchJournalRecent(),
-        fetchIntegrationsStatus(),
-        fetchOpenRouterCredentialStatus(),
-      ]);
-
-      if (cancelled) {
-        return;
-      }
-
-      if (healthResult.status === "fulfilled") {
-        const health = healthResult.value;
-        setBackendHealthy(true);
-        setTelemetry((current) =>
-          appendTelemetry(current, {
-            id: createId(),
-            kind: "info",
-            label: appText.telemetryHealthLoaded,
-            detail: appText.telemetryHealthLoadedDetail(health.service, health.mode, health.allowedModelCount),
-          }),
-        );
-      } else {
-        setBackendHealthy(false);
-        setTelemetry((current) =>
-          appendTelemetry(current, {
-            id: createId(),
-            kind: "error",
-            label: appText.telemetryHealthFailed,
-            detail:
-              healthResult.reason instanceof Error
-                ? healthResult.reason.message
-                : appText.telemetryHealthFailedDetail,
-          }),
-        );
-      }
-
-      const userOpenRouterStatus = openRouterStatusResult.status === "fulfilled"
-        ? openRouterStatusResult.value
-        : OPENROUTER_CREDENTIAL_STATUS_EMPTY;
-      setOpenRouterCredentialStatus(userOpenRouterStatus);
-
-      if (modelsResult.status === "fulfilled") {
-        const userModelRegistry = userOpenRouterStatus.models.map((model) => ({
-          alias: model.alias,
-          label: model.label,
-          description: "User-configured OpenRouter model stored in backend profile settings.",
-          capabilities: ["chat", "streaming"],
-          tier: "specialized" as const,
-          streaming: true,
-          recommendedFor: ["user_configured_openrouter"],
-          available: true,
-        }));
-        const registry = [...(modelsResult.value.registry ?? []), ...userModelRegistry];
-        const models = [...modelsResult.value.models, ...userOpenRouterStatus.models.map((model) => model.alias)];
-        const defaultAlias = userOpenRouterStatus.configured ? "user_openrouter_default" : modelsResult.value.defaultModel;
-
-        setAvailableModels(models);
-        setActiveModelAlias(defaultAlias);
-        setModelRegistry(registry);
-        setTelemetry((current) =>
-          appendTelemetry(current, {
-            id: createId(),
-            kind: "info",
-            label: appText.telemetryModelAliasLoaded,
-            detail: appText.telemetryModelAliasLoadedDetail(defaultAlias),
-          }),
-        );
-      } else {
-        setTelemetry((current) =>
-          appendTelemetry(current, {
-            id: createId(),
-            kind: "error",
-            label: appText.telemetryModelListFailed,
-            detail:
-              modelsResult.reason instanceof Error
-                ? modelsResult.reason.message
-                : appText.telemetryModelListFailedDetail,
-          }),
-        );
-      }
-
-      if (diagnosticsResult.status === "fulfilled") {
-        setRuntimeDiagnostics(diagnosticsResult.value);
-      } else {
-        setRuntimeDiagnostics(null);
-        setTelemetry((current) =>
-          appendTelemetry(current, {
-            id: createId(),
-            kind: "warning",
-            label: appText.telemetryDiagnosticsFailed,
-            detail:
-              diagnosticsResult.reason instanceof Error
-                ? diagnosticsResult.reason.message
-                : appText.telemetryDiagnosticsFailedDetail,
-          }),
-        );
-      }
-
-      if (journalResult.status === "fulfilled") {
-        setRuntimeJournalEntries(journalResult.value.entries);
-      } else {
-        setRuntimeJournalEntries([]);
-      }
-
-      if (integrationsResult.status === "fulfilled") {
-        setIntegrationsStatus(integrationsResult.value);
-      } else {
-        setIntegrationsStatus(null);
-      }
-    }
-
-    void loadConsoleState();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [appText]);
+  const recordTelemetry = useCallback(
+    (kind: TelemetryEntry["kind"], label: string, detail?: string) => {
+      setTelemetry((current) =>
+        appendTelemetry(current, {
+          id: createId(),
+          kind,
+          label,
+          detail,
+        }),
+      );
+    },
+    [],
+  );
+  const {
+    backendHealthy,
+    activeModelAlias,
+    setActiveModelAlias,
+    availableModels,
+    modelRegistry,
+    runtimeDiagnostics,
+    integrationsStatus,
+    runtimeJournalEntries,
+    openRouterCredentialStatus,
+    openRouterApiKeyInput,
+    setOpenRouterApiKeyInput,
+    openRouterModelInput,
+    setOpenRouterModelInput,
+    isSavingOpenRouterCredentials,
+    isTestingOpenRouterCredentials,
+    openRouterCredentialMessage,
+    settingsVerificationResults,
+    routingStatus,
+    handleSaveOpenRouterCredentials,
+    handleTestOpenRouterCredentials,
+    handleSettingsVerifyConnection,
+    handleIntegrationAction,
+    buildSettingsIntegrationStartUrl,
+  } = useRuntimeStatus({
+    mode,
+    locale,
+    appText: {
+      telemetryHealthLoaded: appText.telemetryHealthLoaded,
+      telemetryHealthLoadedDetail: appText.telemetryHealthLoadedDetail,
+      telemetryHealthFailed: appText.telemetryHealthFailed,
+      telemetryHealthFailedDetail: appText.telemetryHealthFailedDetail,
+      telemetryModelAliasLoaded: appText.telemetryModelAliasLoaded,
+      telemetryModelAliasLoadedDetail: appText.telemetryModelAliasLoadedDetail,
+      telemetryModelListFailed: appText.telemetryModelListFailed,
+      telemetryModelListFailedDetail: appText.telemetryModelListFailedDetail,
+      telemetryDiagnosticsFailed: appText.telemetryDiagnosticsFailed,
+      telemetryDiagnosticsFailedDetail: appText.telemetryDiagnosticsFailedDetail,
+    },
+    onTelemetry: recordTelemetry,
+  });
+  const {
+    workspaceState,
+    setWorkspaceState,
+    restoredSession,
+    chatSession,
+    githubSession,
+    matrixSession,
+    getWorkspaceSessions,
+    handleWorkspaceSessionCreate: createWorkspaceSession,
+    handleWorkspaceSessionSelect: selectWorkspaceSession,
+    selectActiveWorkspaceSession,
+    handleWorkspaceSessionArchive,
+    handleWorkspaceSessionDelete,
+    handleChatSessionChange,
+    handleGitHubSessionChange,
+    handleMatrixSessionChange,
+  } = useWorkspaceSessions(activeModelAlias);
+  const {
+    pinnedChatContext,
+    handleWorkspaceTabSelect,
+    handlePinChatContext,
+    handleClearPinnedChatContext,
+    handleQueueMatrixDraftFromChat,
+    handleOpenGitHubFromChatAction,
+  } = useCrossTabCommands({
+    locale,
+    mode,
+    setMode,
+    githubReviewDirty,
+    githubReviewConfirmNavigation: ui.github.reviewDirtyConfirmNavigation,
+    setWorkspaceState,
+    selectActiveWorkspaceSession,
+    recordTelemetry,
+  });
 
   useEffect(() => {
     persistShellState({
@@ -1282,43 +1126,8 @@ function ConsoleShell() {
   }, [expertMode, mode, workMode]);
 
   useEffect(() => {
-    latestWorkspaceStateRef.current = workspaceState;
-
-    if (workspaceSaveHandleRef.current !== null) {
-      return;
-    }
-
-    workspaceSaveHandleRef.current = globalThis.setTimeout(() => {
-      flushWorkspaceState();
-    }, WORKSPACE_STATE_SAVE_INTERVAL_MS);
-  }, [flushWorkspaceState, workspaceState]);
-
-  useEffect(() => () => {
-    flushWorkspaceState();
-  }, [flushWorkspaceState]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof document === "undefined") {
-      return;
-    }
-
-    const handlePageHide = () => {
-      flushWorkspaceState();
-    };
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        flushWorkspaceState();
-      }
-    };
-
-    window.addEventListener("pagehide", handlePageHide);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener("pagehide", handlePageHide);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [flushWorkspaceState]);
+    replaceConsoleUrl(mode);
+  }, [mode]);
 
   useEffect(() => {
     setMobileContextOpen(false);
@@ -1340,53 +1149,15 @@ function ConsoleShell() {
   }), []);
 
 
-  const recordTelemetry = useCallback(
-    (kind: TelemetryEntry["kind"], label: string, detail?: string) => {
-      setTelemetry((current) =>
-        appendTelemetry(current, {
-          id: createId(),
-          kind,
-          label,
-          detail,
-        }),
-      );
-    },
-    [],
-  );
+  const handleWorkspaceSessionCreate = useCallback((workspace: WorkspaceKind) => {
+    setMode(toWorkspaceMode(workspace));
+    createWorkspaceSession(workspace);
+  }, [createWorkspaceSession]);
 
-  const updateGitHubReviewItems = useCallback((items: ReviewItem[]) => {
-    setReviewItems((current) => mergeReviewItems(current.filter((item) => item.source !== "github"), items));
-  }, []);
-
-  const updateMatrixReviewItems = useCallback((items: ReviewItem[]) => {
-    setReviewItems((current) => mergeReviewItems(current.filter((item) => item.source !== "matrix"), items));
-  }, []);
-
-  const handleWorkspaceTabSelect = useCallback((nextMode: WorkspaceMode) => {
-    if (shouldConfirmGitHubReviewNavigation({
-      currentMode: mode,
-      nextMode,
-      githubReviewDirty,
-    })) {
-      const allowLeave = typeof window === "undefined"
-        ? true
-        : window.confirm(ui.github.reviewDirtyConfirmNavigation);
-
-      if (!allowLeave) {
-        return;
-      }
-    }
-
-    setMode(nextMode);
-
-    if (isSessionWorkspace(nextMode)) {
-      const workspace = toWorkspaceKind(nextMode);
-      setWorkspaceState((current) => {
-        const activeSessionId = current.activeSessionIdByWorkspace[workspace];
-        return selectSession(current, workspace, activeSessionId);
-      });
-    }
-  }, [githubReviewDirty, mode, ui.github.reviewDirtyConfirmNavigation]);
+  const handleWorkspaceSessionSelect = useCallback((workspace: WorkspaceKind, sessionId: string) => {
+    setMode(toWorkspaceMode(workspace));
+    selectWorkspaceSession(workspace, sessionId);
+  }, [selectWorkspaceSession]);
 
   const handleMobileNavSelect = useCallback((nextMode: WorkspaceMode) => {
     setMobileContextOpen(false);
@@ -1430,363 +1201,10 @@ function ConsoleShell() {
     clearMobileBrandLongPress();
   }, [clearMobileBrandLongPress]);
 
-  const handlePinChatContext = useCallback((context: PinnedChatContext) => {
-    setPinnedChatContext(context);
-    setMode("chat");
-    setWorkspaceState((current) => {
-      const activeSessionId = current.activeSessionIdByWorkspace.chat;
-      return selectSession(current, "chat", activeSessionId);
-    });
-  }, []);
-
-  const handleClearPinnedChatContext = useCallback(() => {
-    setPinnedChatContext(null);
-  }, []);
-
-  const handleQueueMatrixDraftFromChat = useCallback((payload: {
-    sourceMessageId: string;
-    roomId: string;
-    content: string;
-    tags: string[];
-  }) => {
-    const roomId = payload.roomId.trim();
-    const content = payload.content.trim();
-    if (!roomId || !content) {
-      return;
-    }
-
-    const tagsLine = payload.tags.length > 0
-      ? `\n\n${payload.tags.map((tag) => `#${tag}`).join(" ")}`
-      : "";
-    const draftContent = `${content}${tagsLine}`;
-    const now = nowIso();
-
-    setMode("matrix");
-    setWorkspaceState((current) => {
-      const sessionId = current.activeSessionIdByWorkspace.matrix;
-      const withDraft = updateSession<MatrixSession["metadata"]>(
-        current,
-        "matrix",
-        sessionId,
-        (session) => ({
-          ...session,
-          updatedAt: now,
-          lastOpenedAt: now,
-          metadata: {
-            ...session.metadata,
-            roomId,
-            composerMode: "post",
-            composerTarget: {
-              kind: "post",
-              roomId,
-              postId: null,
-              threadRootId: null,
-              previewLabel: `${locale === "de" ? "Beitrag" : "Post"}: ${roomId}`,
-            },
-            selectedEventId: null,
-            selectedThreadRootId: null,
-            draftContent,
-            lastActionResult: locale === "de"
-              ? "Entwurf aus Chat übernommen."
-              : "Draft adopted from chat.",
-          },
-        }),
-      );
-
-      return selectSession(withDraft, "matrix", sessionId);
-    });
-
-    recordTelemetry(
-      "info",
-      locale === "de" ? "Matrix-Entwurf vorbereitet" : "Matrix draft prepared",
-      `${payload.sourceMessageId} -> ${roomId}`,
-    );
-  }, [locale, recordTelemetry]);
-
-  const handleOpenGitHubFromChatAction = useCallback((payload: {
-    sourceMessageId: string;
-    content: string;
-  }) => {
-    setMode("workbench");
-    setWorkspaceState((current) => {
-      const sessionId = current.activeSessionIdByWorkspace.github;
-      return selectSession(current, "github", sessionId);
-    });
-    recordTelemetry(
-      "info",
-      locale === "de" ? "GitHub-Dispatch geöffnet" : "GitHub dispatch opened",
-      `${payload.sourceMessageId} (${payload.content.length} chars)`,
-    );
-  }, [locale, recordTelemetry]);
-
-  const handleWorkspaceSessionCreate = useCallback((workspace: WorkspaceKind) => {
-    const now = nowIso();
-
-    setMode(toWorkspaceMode(workspace));
-    setWorkspaceState((current) => {
-      switch (workspace) {
-        case "github":
-          return appendSession(
-            current,
-            "github",
-            createSession("github", createGitHubSessionMetadata(), {
-              createdAt: now,
-              updatedAt: now,
-              lastOpenedAt: now,
-            }),
-          );
-        case "matrix":
-          return appendSession(
-            current,
-            "matrix",
-            createSession("matrix", createMatrixSessionMetadata(), {
-              createdAt: now,
-              updatedAt: now,
-              lastOpenedAt: now,
-            }),
-          );
-        case "chat":
-        default:
-          return appendSession(
-            current,
-            "chat",
-            createSession(
-              "chat",
-              {
-                ...createChatSessionMetadata(),
-                selectedModelAlias: activeModelAlias,
-              },
-              {
-                createdAt: now,
-                updatedAt: now,
-                lastOpenedAt: now,
-              },
-            ),
-          );
-      }
-    });
-  }, [activeModelAlias]);
-
-  const handleWorkspaceSessionSelect = useCallback((workspace: WorkspaceKind, sessionId: string) => {
-    setMode(toWorkspaceMode(workspace));
-    setWorkspaceState((current) => selectSession(current, workspace, sessionId));
-  }, []);
-
-  const refreshIntegrationsStatus = useCallback(async () => {
-    try {
-      const nextStatus = await fetchIntegrationsStatus();
-      setIntegrationsStatus(nextStatus);
-    } catch {
-      setIntegrationsStatus(null);
-    }
-  }, []);
-
-  const refreshOpenRouterCredentialStatus = useCallback(async () => {
-    const status = await fetchOpenRouterCredentialStatus();
-    setOpenRouterCredentialStatus(status);
-
-    if (status.configured) {
-      const userModels: string[] = status.models.map((model) => model.alias);
-      setAvailableModels((current) => [...new Set([...current, ...userModels])]);
-      setModelRegistry((current) => {
-        const withoutUser = current.filter((model) => !userModels.includes(model.alias));
-        const nextUserModels = status.models.map((model) => ({
-          alias: model.alias,
-          label: model.label,
-          description: "User-configured OpenRouter model stored in backend profile settings.",
-          capabilities: ["chat", "streaming"],
-          tier: "specialized" as const,
-          streaming: true,
-          recommendedFor: ["user_configured_openrouter"],
-          available: true,
-        }));
-        return [...withoutUser, ...nextUserModels];
-      });
-      setActiveModelAlias(status.models[0]?.alias ?? "user_openrouter_default");
-    }
-
-    return status;
-  }, []);
-
-  const handleSaveOpenRouterCredentials = useCallback(async () => {
-    const modelId = openRouterModelInput.trim();
-    const apiKey = openRouterApiKeyInput.trim();
-
-    if (!areOpenRouterCredentialInputsValid(apiKey, modelId)) {
-      setOpenRouterCredentialMessage("OpenRouter credential input does not match the backend contract.");
-      return;
-    }
-
-    setIsSavingOpenRouterCredentials(true);
-    setOpenRouterCredentialMessage(null);
-
-    try {
-      const result = await saveOpenRouterCredentials({ apiKey, modelId });
-      setOpenRouterApiKeyInput("");
-      setOpenRouterCredentialMessage(result.status);
-      await refreshOpenRouterCredentialStatus();
-      recordTelemetry("info", "OpenRouter credentials saved", `Backend public alias ${result.model.alias} is selectable.`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to save OpenRouter credentials.";
-      setOpenRouterCredentialMessage(message);
-      recordTelemetry(
-        "error",
-        "OpenRouter credential save failed",
-        message,
-      );
-    } finally {
-      setIsSavingOpenRouterCredentials(false);
-    }
-  }, [openRouterApiKeyInput, openRouterModelInput, recordTelemetry, refreshOpenRouterCredentialStatus]);
-
-  const handleTestOpenRouterCredentials = useCallback(async () => {
-    const modelId = openRouterModelInput.trim();
-    const apiKey = openRouterApiKeyInput.trim();
-
-    if (!areOpenRouterCredentialInputsValid(apiKey, modelId)) {
-      setOpenRouterCredentialMessage("OpenRouter credential input does not match the backend contract.");
-      return;
-    }
-
-    setIsTestingOpenRouterCredentials(true);
-    setOpenRouterCredentialMessage(null);
-
-    try {
-      const result = await testOpenRouterCredentials({ apiKey, modelId });
-      setOpenRouterCredentialMessage(`Test passed for ${result.model.alias}`);
-      recordTelemetry("info", "OpenRouter credential test passed", `Backend tested alias ${result.model.alias} without saving credentials.`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to test OpenRouter credentials.";
-      setOpenRouterCredentialMessage(message);
-      recordTelemetry(
-        "error",
-        "OpenRouter credential test failed",
-        message,
-      );
-    } finally {
-      setIsTestingOpenRouterCredentials(false);
-    }
-  }, [openRouterApiKeyInput, openRouterModelInput, recordTelemetry]);
-
-  const handleSettingsVerifyConnection = useCallback(async (target: SettingsVerificationTarget) => {
-    setSettingsVerificationResults((current) => ({
-      ...current,
-      [target]: {
-        ...current[target],
-        status: "checking",
-        detail: "",
-      }
-    }));
-
-    try {
-      const result = await testSettingsConnection(target);
-      const checkedAt = new Date().toISOString();
-
-      if (target === "backend") {
-        setBackendHealthy(true);
-      } else {
-        await refreshIntegrationsStatus();
-      }
-
-      setSettingsVerificationResults((current) => ({
-        ...current,
-        [target]: {
-          status: "passed",
-          detail: result.detail,
-          checkedAt,
-        }
-      }));
-      recordTelemetry(
-        "info",
-        locale === "de" ? "Verbindung geprüft" : "Connection verified",
-        `${target}: ${result.detail}`
-      );
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : "Connection check failed";
-
-      if (target === "backend") {
-        setBackendHealthy(false);
-      } else {
-        await refreshIntegrationsStatus();
-      }
-
-      setSettingsVerificationResults((current) => ({
-        ...current,
-        [target]: {
-          status: "failed",
-          detail,
-          checkedAt: new Date().toISOString(),
-        }
-      }));
-      recordTelemetry(
-        "warning",
-        locale === "de" ? "Verbindungsprüfung fehlgeschlagen" : "Connection verification failed",
-        `${target}: ${detail}`
-      );
-    }
-  }, [locale, recordTelemetry, refreshIntegrationsStatus]);
-
-  const handleIntegrationAction = useCallback(async (
-    provider: "github" | "matrix",
-    action: "connect" | "reconnect" | "disconnect" | "reverify"
-  ) => {
-    if (action === "connect" || action === "reconnect") {
-      window.location.assign(buildIntegrationConnectStartUrl(provider, "/console?mode=settings"));
-      return;
-    }
-
-    try {
-      await postIntegrationControlAction(provider, action);
-    } catch (error) {
-      recordTelemetry(
-        "warning",
-        locale === "de" ? "Integrationsaktion fehlgeschlagen" : "Integration action failed",
-        error instanceof Error ? error.message : undefined
-      );
-    } finally {
-      await refreshIntegrationsStatus();
-    }
-  }, [locale, recordTelemetry, refreshIntegrationsStatus]);
-
-  const buildSettingsIntegrationStartUrl = useCallback((provider: "github" | "matrix") => (
-    buildIntegrationConnectStartUrl(provider, "/console?mode=settings")
-  ), []);
-
-  const handleWorkspaceSessionArchive = useCallback((workspace: WorkspaceKind, sessionId: string) => {
-    setWorkspaceState((current) =>
-      updateSession(current, workspace, sessionId, (session) => ({
-        ...session,
-        archived: true,
-        resumable: false,
-        updatedAt: nowIso(),
-        lastOpenedAt: nowIso(),
-      })),
-    );
-  }, []);
-
-  const handleWorkspaceSessionDelete = useCallback((workspace: WorkspaceKind, sessionId: string) => {
-    setWorkspaceState((current) => deleteSession(current, workspace, sessionId));
-  }, []);
-
-  const handleChatSessionChange = useCallback((session: ChatSession) => {
-    setWorkspaceState((current) => updateSession(current, "chat", session.id, () => session));
-  }, []);
-
-  const handleGitHubSessionChange = useCallback((session: GitHubSession) => {
-    setWorkspaceState((current) => updateSession(current, "github", session.id, () => session));
-  }, []);
-
-  const handleMatrixSessionChange = useCallback((session: MatrixSession) => {
-    setWorkspaceState((current) => updateSession(current, "matrix", session.id, () => session));
-  }, []);
-
   const sessionWorkspace: WorkspaceKind = isSessionWorkspace(mode) ? toWorkspaceKind(mode) : workspaceState.activeWorkspace;
-  const sessionWorkspaceSessions = workspaceState.sessionsByWorkspace[sessionWorkspace] as WorkspaceSession<unknown>[];
+  const sessionWorkspaceSessions = getWorkspaceSessions(sessionWorkspace);
   const sessionWorkspaceActiveId = workspaceState.activeSessionIdByWorkspace[sessionWorkspace];
   const activeSession = sessionWorkspaceSessions.find((session) => session.id === sessionWorkspaceActiveId) ?? sessionWorkspaceSessions[0] ?? null;
-  const chatSession = (workspaceState.sessionsByWorkspace.chat.find((session) => session.id === workspaceState.activeSessionIdByWorkspace.chat) ?? workspaceState.sessionsByWorkspace.chat[0]) as ChatSession;
-  const githubSession = (workspaceState.sessionsByWorkspace.github.find((session) => session.id === workspaceState.activeSessionIdByWorkspace.github) ?? workspaceState.sessionsByWorkspace.github[0]) as GitHubSession;
-  const matrixSession = (workspaceState.sessionsByWorkspace.matrix.find((session) => session.id === workspaceState.activeSessionIdByWorkspace.matrix) ?? workspaceState.sessionsByWorkspace.matrix[0]) as MatrixSession;
   const matrixDraftDefaultRoomId = matrixSession?.metadata.roomId?.trim()
     || matrixSession?.metadata.topicRoomId?.trim()
     || matrixSession?.metadata.selectedRoomIds[0]?.trim()
@@ -2303,83 +1721,167 @@ function ConsoleShell() {
     mode,
   ]);
 
+  const clearTelemetry = useCallback(() => {
+    setTelemetry([]);
+  }, []);
+  const workbenchBinding = useMemo(
+    () => ({
+      repo: workbenchRepoBinding,
+      branch: workbenchBranchBinding,
+      scope: workbenchScopeBinding,
+    }),
+    [workbenchBranchBinding, workbenchRepoBinding, workbenchScopeBinding],
+  );
+  const chatWorkspaceProps = useMemo(
+    () => ({
+      session: chatSession,
+      workMode,
+      backendHealthy,
+      routingStatus,
+      activeModelAlias,
+      availableModels,
+      modelRegistry,
+      onActiveModelAliasChange: setActiveModelAlias,
+      onTelemetry: recordTelemetry,
+      onSessionChange: handleChatSessionChange,
+      pinnedContext: pinnedChatContext,
+      onClearPinnedContext: handleClearPinnedChatContext,
+      matrixDraftDefaultRoomId,
+      matrixDraftRoomOptions,
+      workbenchBinding,
+      onQueueMatrixDraft: handleQueueMatrixDraftFromChat,
+      onOpenGitHubFromChatAction: handleOpenGitHubFromChatAction,
+    }),
+    [
+      activeModelAlias,
+      availableModels,
+      backendHealthy,
+      chatSession,
+      handleChatSessionChange,
+      handleClearPinnedChatContext,
+      handleOpenGitHubFromChatAction,
+      handleQueueMatrixDraftFromChat,
+      matrixDraftDefaultRoomId,
+      matrixDraftRoomOptions,
+      modelRegistry,
+      pinnedChatContext,
+      recordTelemetry,
+      routingStatus,
+      setActiveModelAlias,
+      workMode,
+      workbenchBinding,
+    ],
+  );
+  const githubWorkspaceProps = useMemo(
+    () => ({
+      session: githubSession,
+      backendHealthy,
+      workMode,
+      onTelemetry: recordTelemetry,
+      onContextChange: setGitHubContext,
+      onReviewItemsChange: updateGitHubReviewItems,
+      onReviewDirtyChange: setGitHubReviewDirty,
+      onPinChatContext: handlePinChatContext,
+      onSessionChange: handleGitHubSessionChange,
+      githubIntegration: integrationsStatus?.github ?? null,
+      onIntegrationAction: handleIntegrationAction,
+    }),
+    [
+      backendHealthy,
+      githubSession,
+      handleGitHubSessionChange,
+      handleIntegrationAction,
+      handlePinChatContext,
+      integrationsStatus?.github,
+      recordTelemetry,
+      setGitHubReviewDirty,
+      updateGitHubReviewItems,
+      workMode,
+    ],
+  );
+  const matrixWorkspaceProps = useMemo(
+    () => ({
+      session: matrixSession,
+      restoredSession,
+      workMode,
+      expertMode,
+      onTelemetry: recordTelemetry,
+      onContextChange: setMatrixContext,
+      onReviewItemsChange: updateMatrixReviewItems,
+      onSessionChange: handleMatrixSessionChange,
+    }),
+    [
+      expertMode,
+      handleMatrixSessionChange,
+      matrixSession,
+      recordTelemetry,
+      restoredSession,
+      updateMatrixReviewItems,
+      workMode,
+    ],
+  );
+  const settingsWorkspaceProps = useMemo(
+    () => ({
+      workMode,
+      onWorkModeChange: setWorkMode,
+      diagnostics: telemetry as DiagnosticEntry[],
+      onClearDiagnostics: clearTelemetry,
+      truthSnapshot: settingsTruthSnapshot,
+      loginAdapters: settingsLoginAdapters,
+      openRouterCredentialStatus,
+      openRouterApiKeyInput,
+      openRouterModelInput,
+      onOpenRouterApiKeyInputChange: setOpenRouterApiKeyInput,
+      onOpenRouterModelInputChange: setOpenRouterModelInput,
+      onSaveOpenRouterCredentials: handleSaveOpenRouterCredentials,
+      onTestOpenRouterCredentials: handleTestOpenRouterCredentials,
+      isSavingOpenRouterCredentials,
+      isTestingOpenRouterCredentials,
+      openRouterCredentialMessage,
+      buildIntegrationStartUrl: buildSettingsIntegrationStartUrl,
+      onIntegrationAction: handleIntegrationAction,
+      verificationResults: settingsVerificationResults,
+      onVerifyConnection: handleSettingsVerifyConnection,
+    }),
+    [
+      buildSettingsIntegrationStartUrl,
+      clearTelemetry,
+      handleIntegrationAction,
+      handleSaveOpenRouterCredentials,
+      handleSettingsVerifyConnection,
+      handleTestOpenRouterCredentials,
+      isSavingOpenRouterCredentials,
+      isTestingOpenRouterCredentials,
+      openRouterApiKeyInput,
+      openRouterCredentialMessage,
+      openRouterCredentialStatus,
+      openRouterModelInput,
+      setOpenRouterApiKeyInput,
+      setOpenRouterModelInput,
+      settingsLoginAdapters,
+      settingsTruthSnapshot,
+      settingsVerificationResults,
+      telemetry,
+      workMode,
+    ],
+  );
   const workspaceSurface = mode === "chat" ? (
     <ChatWorkspace
       key={chatSession?.id ?? "chat-session"}
-      session={chatSession}
-      workMode={workMode}
-      backendHealthy={backendHealthy}
-      routingStatus={{
-        fallbackAllowed: runtimeDiagnostics?.routing.allowFallback ?? null,
-      }}
-      activeModelAlias={activeModelAlias}
-      availableModels={availableModels}
-      modelRegistry={modelRegistry}
-      onActiveModelAliasChange={setActiveModelAlias}
-      onTelemetry={recordTelemetry}
-      onSessionChange={handleChatSessionChange}
-      pinnedContext={pinnedChatContext}
-      onClearPinnedContext={handleClearPinnedChatContext}
-      matrixDraftDefaultRoomId={matrixDraftDefaultRoomId}
-      matrixDraftRoomOptions={matrixDraftRoomOptions}
-      workbenchBinding={{
-        repo: workbenchRepoBinding,
-        branch: workbenchBranchBinding,
-        scope: workbenchScopeBinding,
-      }}
-      onQueueMatrixDraft={handleQueueMatrixDraftFromChat}
-      onOpenGitHubFromChatAction={handleOpenGitHubFromChatAction}
+      {...chatWorkspaceProps}
     />
   ) : mode === "workbench" ? (
     <GitHubWorkspace
       key={githubSession?.id ?? "github-session"}
-      session={githubSession}
-      backendHealthy={backendHealthy}
-      workMode={workMode}
-      onTelemetry={recordTelemetry}
-      onContextChange={setGitHubContext}
-      onReviewItemsChange={updateGitHubReviewItems}
-      onReviewDirtyChange={setGitHubReviewDirty}
-      onPinChatContext={handlePinChatContext}
-      onSessionChange={handleGitHubSessionChange}
-      githubIntegration={integrationsStatus?.github ?? null}
-      onIntegrationAction={handleIntegrationAction}
+      {...githubWorkspaceProps}
     />
   ) : mode === "matrix" ? (
     <MatrixWorkspace
       key={matrixSession?.id ?? "matrix-session"}
-      session={matrixSession}
-      restoredSession={restoredSession}
-      workMode={workMode}
-      expertMode={expertMode}
-      onTelemetry={recordTelemetry}
-      onContextChange={setMatrixContext}
-      onReviewItemsChange={updateMatrixReviewItems}
-      onSessionChange={handleMatrixSessionChange}
+      {...matrixWorkspaceProps}
     />
   ) : (
-    <SettingsWorkspace
-      workMode={workMode}
-      onWorkModeChange={setWorkMode}
-      diagnostics={telemetry as DiagnosticEntry[]}
-      onClearDiagnostics={() => setTelemetry([])}
-      truthSnapshot={settingsTruthSnapshot}
-      loginAdapters={settingsLoginAdapters}
-      openRouterCredentialStatus={openRouterCredentialStatus}
-      openRouterApiKeyInput={openRouterApiKeyInput}
-      openRouterModelInput={openRouterModelInput}
-      onOpenRouterApiKeyInputChange={setOpenRouterApiKeyInput}
-      onOpenRouterModelInputChange={setOpenRouterModelInput}
-      onSaveOpenRouterCredentials={handleSaveOpenRouterCredentials}
-      onTestOpenRouterCredentials={handleTestOpenRouterCredentials}
-      isSavingOpenRouterCredentials={isSavingOpenRouterCredentials}
-      isTestingOpenRouterCredentials={isTestingOpenRouterCredentials}
-      openRouterCredentialMessage={openRouterCredentialMessage}
-      buildIntegrationStartUrl={buildSettingsIntegrationStartUrl}
-      onIntegrationAction={handleIntegrationAction}
-      verificationResults={settingsVerificationResults}
-      onVerifyConnection={handleSettingsVerifyConnection}
-    />
+    <SettingsWorkspace {...settingsWorkspaceProps} />
   );
   const statusToneForBadge = currentStatusTone === "error" ? "error" : currentStatusTone === "ready" ? "ready" : "partial";
   const activeMobileNav = mode;

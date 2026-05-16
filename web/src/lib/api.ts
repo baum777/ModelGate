@@ -388,9 +388,10 @@ export async function* readSseEvents(stream: ReadableStream<Uint8Array>): AsyncG
   }
 }
 
-export async function fetchHealth(): Promise<HealthResponse> {
+export async function fetchHealth(options?: { signal?: AbortSignal }): Promise<HealthResponse> {
   const response = await fetch(resolveApiUrl("/health"), {
-    credentials: "include"
+    credentials: "include",
+    signal: options?.signal,
   });
 
   if (!response.ok) {
@@ -400,9 +401,10 @@ export async function fetchHealth(): Promise<HealthResponse> {
   return response.json() as Promise<HealthResponse>;
 }
 
-export async function fetchModels(): Promise<ModelResponse> {
+export async function fetchModels(options?: { signal?: AbortSignal }): Promise<ModelResponse> {
   const response = await fetch(resolveApiUrl("/models"), {
-    credentials: "include"
+    credentials: "include",
+    signal: options?.signal,
   });
 
   if (!response.ok) {
@@ -481,9 +483,10 @@ export async function testOpenRouterCredentials(input: {
   return response.json() as Promise<TestOpenRouterCredentialsResponse>;
 }
 
-export async function fetchDiagnostics(): Promise<DiagnosticsResponse> {
+export async function fetchDiagnostics(options?: { signal?: AbortSignal }): Promise<DiagnosticsResponse> {
   const response = await fetch(resolveApiUrl("/diagnostics"), {
-    credentials: "include"
+    credentials: "include",
+    signal: options?.signal,
   });
 
   if (!response.ok) {
@@ -493,7 +496,11 @@ export async function fetchDiagnostics(): Promise<DiagnosticsResponse> {
   return response.json() as Promise<DiagnosticsResponse>;
 }
 
-export async function fetchJournalRecent(options?: { limit?: number; source?: JournalEntry["source"] }): Promise<JournalRecentResponse> {
+export async function fetchJournalRecent(options?: {
+  limit?: number;
+  source?: JournalEntry["source"];
+  signal?: AbortSignal;
+}): Promise<JournalRecentResponse> {
   const params = new URLSearchParams();
 
   if (typeof options?.limit === "number" && Number.isFinite(options.limit) && options.limit > 0) {
@@ -506,7 +513,8 @@ export async function fetchJournalRecent(options?: { limit?: number; source?: Jo
 
   const query = params.toString();
   const response = await fetch(resolveApiUrl(`/journal/recent${query.length > 0 ? `?${query}` : ""}`), {
-    credentials: "include"
+    credentials: "include",
+    signal: options?.signal,
   });
 
   if (!response.ok) {
@@ -516,9 +524,10 @@ export async function fetchJournalRecent(options?: { limit?: number; source?: Jo
   return response.json() as Promise<JournalRecentResponse>;
 }
 
-export async function fetchIntegrationsStatus(): Promise<IntegrationsStatusResponse> {
+export async function fetchIntegrationsStatus(options?: { signal?: AbortSignal }): Promise<IntegrationsStatusResponse> {
   const response = await fetch(resolveApiUrl("/api/integrations/status"), {
-    credentials: "include"
+    credentials: "include",
+    signal: options?.signal,
   });
 
   if (!response.ok) {
