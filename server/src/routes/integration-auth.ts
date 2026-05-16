@@ -334,20 +334,6 @@ function readSignedOAuthStateIntent(
   };
 }
 
-function resolveRequestOrigin(request: FastifyRequest) {
-  const forwardedProto = request.headers["x-forwarded-proto"];
-  const forwardedHost = request.headers["x-forwarded-host"];
-  const hostHeader = request.headers.host;
-
-  const protoRaw = Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto;
-  const hostRaw = Array.isArray(forwardedHost) ? forwardedHost[0] : forwardedHost;
-  const hostFallback = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
-  const protocol = protoRaw?.split(",")[0]?.trim() || "http";
-  const host = hostRaw?.split(",")[0]?.trim() || hostFallback || "localhost";
-
-  return `${protocol}://${host}`;
-}
-
 function normalizeAllowedReturnTo(input: string | undefined) {
   if (!input || input.length === 0) {
     return DEFAULT_RETURN_TO;
@@ -665,7 +651,7 @@ async function exchangeGitHubOAuthCode(
   }
 
   const scope = typeof tokenPayload.scope === "string"
-    ? tokenPayload.scope.split(",").map((entry) => entry.trim()).filter(Boolean)
+    ? tokenPayload.scope.split(/[,\s]+/).map((entry) => entry.trim()).filter(Boolean)
     : [];
 
   return {
@@ -1230,7 +1216,7 @@ function registerProviderStartRoute(
         url.searchParams.set("client_id", oauthConfig.clientId);
         url.searchParams.set("redirect_uri", oauthConfig.callbackUrl);
         url.searchParams.set("state", intent.state);
-        url.searchParams.set("scope", oauthConfig.scopes.join(","));
+        url.searchParams.set("scope", oauthConfig.scopes.join(" "));
         return reply.redirect(url.toString(), 302);
       }
 
@@ -1247,7 +1233,10 @@ function registerProviderStartRoute(
       return sendIntegrationAuthError(reply, "missing_server_config", statusForErrorCode("missing_server_config"));
     }
 
-    const origin = resolveRequestOrigin(request);
+    if (!deps.matrixConfig.callbackUrl) {
+      return sendIntegrationAuthError(reply, "missing_server_config", statusForErrorCode("missing_server_config"));
+    }
+
     try {
       const flowTypes = await fetchMatrixLoginFlows(deps);
 
@@ -1271,7 +1260,7 @@ function registerProviderStartRoute(
         expiresAtMs: new Date(intent.expiresAt).getTime()
       });
 
-      const callbackUrl = new URL(`${origin}/api/auth/matrix/callback`);
+      const callbackUrl = new URL(deps.matrixConfig.callbackUrl);
       callbackUrl.searchParams.set("state", intent.state);
       const ssoUrl = new URL(`${normalizeBaseUrl(deps.matrixConfig.baseUrl)}${deps.env.MATRIX_SSO_REDIRECT_PATH}`);
       ssoUrl.searchParams.set("redirectUrl", callbackUrl.toString());
@@ -1344,6 +1333,16 @@ function registerProviderCallbackRoute(
           deps.authStore.setErrorCode(intent.sessionId, provider, "invalid_request");
           return sendIntegrationAuthError(reply, "invalid_request", statusForErrorCode("invalid_request"));
         }
+
+        console.info("GitHub auth callback", {
+          hasCode: Boolean(query.code?.trim()),
+          hasInstallationId: Boolean(query.installation_id?.trim()),
+          setupAction: query.setup_action ?? null,
+          appEnabled: appConfig.enabled,
+          oauthEnabled: oauthConfig.enabled,
+          oauthClientIdSuffix: oauthConfig.clientId.slice(-6),
+          callbackUrl: oauthConfig.callbackUrl
+        });
 
         const exchange = appConfig.enabled && query.code && query.code.trim().length > 0
           ? await exchangeGitHubAppUserInstallationCode(deps, query.code, query.installation_id)

@@ -95,3 +95,9 @@
 ## [2026-05-16] readme-repo-istzustand-refresh | aktualisierte README-Frontdoor mit aktuellem Console-Ist-Zustand, Mermaid-Architektur-/Approval-/Deployment-Diagrammen, Backend-Routen, Env-Flächen und Grenzen [[../README.md]]
 
 ## [2026-05-16] openrouter-default-key-repo-blocked | blocked live OpenRouter key persistence into repo material and routed secret exposure risk to MSPR without storing the key [[../03-mspr/packets/2026-05-16-openrouter-default-key-repo-blocked.yml]]
+
+## [2026-05-16] github-auth-callback-structured-log | added structured GitHub callback console.info with request-shape and config-flag logging plus server coverage [[../server/src/routes/integration-auth.ts]] [[../server/test/integration-auth-routes.test.ts]]
+
+## [2026-05-16] github-oauth-scope-delimiter-fix | fixed GitHub OAuth authorize scope formatting to use GitHub's space-delimited syntax and made token scope parsing accept comma or space delimiters [[../server/src/routes/integration-auth.ts]] [[../server/test/integration-auth-routes.test.ts]]
+
+## [2026-05-16] matrix-callback-url-config-hardening | replaced Matrix callback origin derivation from forwarded request headers with explicit backend callback URL configuration, updated env/docs, and added regression coverage [[../server/src/lib/matrix-env.ts]] [[../server/src/routes/integration-auth.ts]] [[../server/test/matrix-env.test.ts]] [[../server/test/integration-auth-routes.test.ts]] [[../server/test-support/helpers.ts]] [[../README.md]] [[../.env.example]] [[../docs/test-matrix.md]] [[../docs/integration-auth-rotation-live-smoke.md]]

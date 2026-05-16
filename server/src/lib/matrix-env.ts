@@ -5,6 +5,7 @@ const MatrixEnvSchema = z.object({
   MATRIX_REQUIRED: z.string().trim().default("false"),
   MATRIX_BASE_URL: z.string().trim().default(""),
   MATRIX_HOMESERVER_URL: z.string().trim().default(""),
+  MATRIX_SSO_CALLBACK_URL: z.string().trim().default(""),
   MATRIX_ACCESS_TOKEN: z.string().trim().default(""),
   MATRIX_REFRESH_TOKEN: z.string().trim().default(""),
   MATRIX_CLIENT_ID: z.string().trim().default(""),
@@ -26,6 +27,7 @@ export type MatrixConfig = {
   ready: boolean;
   baseUrl: string | null;
   homeserverUrl: string | null;
+  callbackUrl: string | null;
   accessToken: string | null;
   refreshToken: string | null;
   clientId: string | null;
@@ -79,6 +81,30 @@ function normalizeHomeserverUrl(primary: string, fallback: string) {
   return normalizeBaseUrl(primary) ?? normalizeBaseUrl(fallback);
 }
 
+function normalizeCallbackUrl(input: string) {
+  const trimmed = input.trim().replace(/\/+$/, "");
+
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const url = new URL(trimmed);
+
+    if (!url.protocol || !url.host) {
+      return null;
+    }
+
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return null;
+    }
+
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return null;
+  }
+}
+
 function normalizeUserId(input: string) {
   const trimmed = input.trim();
 
@@ -124,6 +150,7 @@ export function createMatrixConfig(source: NodeJS.ProcessEnv = process.env): Mat
   const enabledParse = parseBoolean(parsed.MATRIX_ENABLED);
   const requiredParse = parseBoolean(parsed.MATRIX_REQUIRED);
   const baseUrl = normalizeHomeserverUrl(parsed.MATRIX_BASE_URL, parsed.MATRIX_HOMESERVER_URL);
+  const callbackUrl = normalizeCallbackUrl(parsed.MATRIX_SSO_CALLBACK_URL);
   const accessToken = parsed.MATRIX_ACCESS_TOKEN.trim() ? parsed.MATRIX_ACCESS_TOKEN.trim() : null;
   const refreshToken = parsed.MATRIX_REFRESH_TOKEN.trim() ? parsed.MATRIX_REFRESH_TOKEN.trim() : null;
   const clientId = parsed.MATRIX_CLIENT_ID.trim() ? parsed.MATRIX_CLIENT_ID.trim() : null;
@@ -153,6 +180,10 @@ export function createMatrixConfig(source: NodeJS.ProcessEnv = process.env): Mat
 
   if (enabledParse.value && !baseUrl) {
     issues.push("MATRIX_BASE_URL is required when MATRIX_ENABLED=true");
+  }
+
+  if (enabledParse.value && !callbackUrl) {
+    issues.push("MATRIX_SSO_CALLBACK_URL is required when MATRIX_ENABLED=true");
   }
 
   if (enabledParse.value && !accessToken && !refreshToken) {
@@ -189,6 +220,7 @@ export function createMatrixConfig(source: NodeJS.ProcessEnv = process.env): Mat
     ready,
     baseUrl: ready ? baseUrl : null,
     homeserverUrl: ready ? baseUrl : null,
+    callbackUrl: ready ? callbackUrl : null,
     accessToken: ready ? accessToken : null,
     refreshToken: ready ? refreshToken : null,
     clientId: ready ? clientId : null,
@@ -214,6 +246,7 @@ export function createDisabledMatrixConfig(): MatrixConfig {
     ready: false,
     baseUrl: null,
     homeserverUrl: null,
+    callbackUrl: null,
     accessToken: null,
     refreshToken: null,
     clientId: null,

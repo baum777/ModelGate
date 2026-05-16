@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { mock } from "node:test";
 import { createApp } from "../src/app.js";
 import { createMockOpenRouterClient, createTestEnv, createTestMatrixConfig } from "../test-support/helpers.js";
 
@@ -181,7 +181,7 @@ function createGitHubOAuthIntegrationFetch(options: {
       return new Response(JSON.stringify(options.tokenPayload ?? {
         access_token: accessToken,
         token_type: "bearer",
-        scope: "read:user,user:email"
+        scope: "read:user user:email"
       }), {
         status: options.tokenStatus ?? 200,
         headers: { "Content-Type": "application/json" }
@@ -920,7 +920,7 @@ test("GitHub OAuth app start uses configured OAuth authorize flow when GitHub Ap
   assert.equal(location.origin + location.pathname, "https://github.com/login/oauth/authorize");
   assert.equal(location.searchParams.get("client_id"), TEST_GITHUB_OAUTH_ENV.GITHUB_OAUTH_CLIENT_ID);
   assert.equal(location.searchParams.get("redirect_uri"), TEST_GITHUB_OAUTH_ENV.GITHUB_OAUTH_CALLBACK_URL);
-  assert.equal(location.searchParams.get("scope"), TEST_GITHUB_OAUTH_ENV.GITHUB_OAUTH_SCOPES.join(","));
+  assert.equal(location.searchParams.get("scope"), TEST_GITHUB_OAUTH_ENV.GITHUB_OAUTH_SCOPES.join(" "));
   assert.ok(location.searchParams.get("state"));
 });
 
@@ -984,6 +984,65 @@ test("GitHub OAuth app callback exchanges code and stores a user-connected crede
 
   assert.equal(payload.github.credentialSource, "user_connected");
   assert.equal(payload.github.labels.identity, "mona");
+});
+
+test("GitHub callback logs request shape and config flags", async (t) => {
+  const env = createTestEnv({
+    ...TEST_GITHUB_APP_ENV,
+    ...TEST_GITHUB_OAUTH_ENV,
+    GITHUB_OAUTH_CLIENT_ID: "github-oauth-client-123456",
+    GITHUB_OAUTH_CALLBACK_URL: "https://app.example.test/api/auth/github/callback",
+    MOSAIC_STACK_SESSION_SECRET: "github-callback-log-secret",
+    ...TEST_ENCRYPTION_KEY
+  });
+
+  const consoleInfoMock = mock.method(console, "info", () => undefined);
+  const app = createApp({
+    env,
+    openRouter: createMockOpenRouterClient(),
+    integrationFetch: createGitHubAppIntegrationFetch(),
+    logger: false
+  });
+
+  t.after(async () => {
+    consoleInfoMock.mock.restore();
+    await app.close();
+  });
+
+  const start = await app.inject({
+    method: "GET",
+    url: "/api/auth/github/start"
+  });
+
+  assert.equal(start.statusCode, 302);
+  const location = new URL(String(start.headers.location ?? ""));
+  const sessionCookie = joinCookiesForRequest(readSetCookies(start));
+  const state = location.searchParams.get("state");
+  assert.ok(state);
+  assert.ok(sessionCookie);
+
+  const callback = await app.inject({
+    method: "GET",
+    url: `/api/auth/github/callback?state=${encodeURIComponent(state ?? "")}&code=github-app-user-code&installation_id=${TEST_GITHUB_INSTALLATION_ID}&setup_action=update`,
+    headers: {
+      cookie: sessionCookie
+    }
+  });
+
+  assert.equal(callback.statusCode, 302);
+  assert.equal(consoleInfoMock.mock.calls.length, 1);
+  assert.deepEqual(consoleInfoMock.mock.calls[0]?.arguments, [
+    "GitHub auth callback",
+    {
+      hasCode: true,
+      hasInstallationId: true,
+      setupAction: "update",
+      appEnabled: true,
+      oauthEnabled: true,
+      oauthClientIdSuffix: "123456",
+      callbackUrl: "https://app.example.test/api/auth/github/callback"
+    }
+  ]);
 });
 
 test("real GitHub App callback survives a fresh serverless auth store", async (t) => {
@@ -1246,6 +1305,60 @@ test("matrix callback fails closed when homeserver is configured but login token
   assert.equal(payload.matrix.status, "error");
   assert.equal(payload.matrix.credentialSource, "instance_configured");
   assert.equal(payload.matrix.lastErrorCode, "login_token_invalid");
+});
+
+test("matrix start uses configured callback url instead of forwarded host headers", async (t) => {
+  const env = createTestEnv({
+    MATRIX_LOGIN_TOKEN_TYPE: "m.login.token",
+    MOSAIC_STACK_SESSION_SECRET: "matrix-origin-header-secret"
+  });
+
+  const app = createApp({
+    env,
+    matrixConfig: createTestMatrixConfig({
+      enabled: true,
+      ready: true,
+      baseUrl: "https://matrix.example",
+      homeserverUrl: "https://matrix.example",
+      callbackUrl: "https://app.example.test/api/auth/matrix/callback"
+    }),
+    openRouter: createMockOpenRouterClient(),
+    integrationFetch: async (input, init) => {
+      const url = String(input);
+
+      if (url === "https://matrix.example/_matrix/client/v3/login" && (!init || init.method === "GET")) {
+        return new Response(JSON.stringify({
+          flows: [{ type: "m.login.sso" }]
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      return new Response(null, { status: 404 });
+    },
+    logger: false
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/auth/matrix/start",
+    headers: {
+      host: "victim.example",
+      "x-forwarded-host": "attacker.example",
+      "x-forwarded-proto": "https"
+    }
+  });
+
+  assert.equal(response.statusCode, 302);
+  const location = String(response.headers.location ?? "");
+  const redirectUrl = new URL(String(new URL(location).searchParams.get("redirectUrl")));
+  assert.equal(redirectUrl.origin, "https://app.example.test");
+  assert.equal(redirectUrl.pathname, "/api/auth/matrix/callback");
 });
 
 test("real github reverify maps upstream 401 to auth_expired status", async (t) => {
@@ -1827,8 +1940,12 @@ test("matrix start fails closed when Matrix auth config is enabled but incomplet
       ready: false,
       baseUrl: null,
       homeserverUrl: null,
+      callbackUrl: null,
       accessToken: null,
-      issues: ["MATRIX_BASE_URL is required when MATRIX_ENABLED=true"]
+      issues: [
+        "MATRIX_BASE_URL is required when MATRIX_ENABLED=true",
+        "MATRIX_SSO_CALLBACK_URL is required when MATRIX_ENABLED=true"
+      ]
     }),
     openRouter: createMockOpenRouterClient(),
     logger: false

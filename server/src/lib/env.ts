@@ -74,6 +74,7 @@ export const EnvSchema = z.object({
   GITHUB_OAUTH_AUTHORIZE_URL: z.string().trim().default("https://github.com/login/oauth/authorize"),
   GITHUB_OAUTH_TOKEN_URL: z.string().trim().default("https://github.com/login/oauth/access_token"),
   GITHUB_OAUTH_SCOPES: z.string().trim().default("read:user,user:email"),
+  MATRIX_SSO_CALLBACK_URL: z.string().trim().default(""),
   MATRIX_SSO_REDIRECT_PATH: z.string().trim().default("/_matrix/client/v3/login/sso/redirect"),
   MATRIX_LOGIN_TOKEN_TYPE: z.string().trim().default("m.login.token"),
   INTEGRATION_AUTH_STORE_MODE: z.string().trim().default("file"),
@@ -162,6 +163,7 @@ export type AppEnv = {
   GITHUB_OAUTH_AUTHORIZE_URL: string;
   GITHUB_OAUTH_TOKEN_URL: string;
   GITHUB_OAUTH_SCOPES: string[];
+  MATRIX_SSO_CALLBACK_URL: string;
   MATRIX_SSO_REDIRECT_PATH: string;
   MATRIX_LOGIN_TOKEN_TYPE: string;
   INTEGRATION_AUTH_STORE_MODE: string;
@@ -291,6 +293,7 @@ export function createEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     GITHUB_OAUTH_AUTHORIZE_URL: parsed.GITHUB_OAUTH_AUTHORIZE_URL.trim() || "https://github.com/login/oauth/authorize",
     GITHUB_OAUTH_TOKEN_URL: parsed.GITHUB_OAUTH_TOKEN_URL.trim() || "https://github.com/login/oauth/access_token",
     GITHUB_OAUTH_SCOPES: parseCsvList(parsed.GITHUB_OAUTH_SCOPES),
+    MATRIX_SSO_CALLBACK_URL: parsed.MATRIX_SSO_CALLBACK_URL.trim(),
     MATRIX_SSO_REDIRECT_PATH: parsed.MATRIX_SSO_REDIRECT_PATH.trim() || "/_matrix/client/v3/login/sso/redirect",
     MATRIX_LOGIN_TOKEN_TYPE: parsed.MATRIX_LOGIN_TOKEN_TYPE.trim() || "m.login.token",
     INTEGRATION_AUTH_STORE_MODE: parsed.INTEGRATION_AUTH_STORE_MODE.trim() || "file",

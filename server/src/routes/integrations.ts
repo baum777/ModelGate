@@ -350,7 +350,7 @@ function buildMatrixStatus(config: MatrixConfig, connection: IntegrationConnecti
     lastVerifiedAt: connection?.lastVerifiedAt ?? null,
     lastErrorCode,
     requirements: status === "missing_server_config"
-      ? ["MATRIX_ENABLED", "MATRIX_BASE_URL", "MATRIX_ACCESS_TOKEN"]
+      ? ["MATRIX_ENABLED", "MATRIX_BASE_URL", "MATRIX_SSO_CALLBACK_URL", "MATRIX_ACCESS_TOKEN"]
       : []
   };
 }

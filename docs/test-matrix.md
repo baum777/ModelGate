@@ -23,7 +23,7 @@ Security note:
 | P1 | `.env` is gitignored | implemented-but-manual | Check [.gitignore](../.gitignore) and verify `git check-ignore` against local env files | Repo hygiene; owner: backend + ops |
 | P2 | `OPENROUTER_API_KEY` is set | manual | Set in local env before running chat checks; Matrix-only startup can omit it | Chat-only precondition; owner: operator |
 | P3 | `MATRIX_ENABLED=true` is set | manual | Set in local env before Matrix read-only smoke tests | Matrix read-only backend precondition; owner: operator |
-| P4 | `MATRIX_BASE_URL` is set | manual | Set in local env and confirm the backend resolves a Matrix origin | Matrix backend config; owner: operator |
+| P4 | `MATRIX_BASE_URL` and `MATRIX_SSO_CALLBACK_URL` are set | manual | Set in local env and confirm the backend resolves Matrix backend config and a fixed callback URL | Matrix backend config; owner: operator |
 | P5 | `MATRIX_ACCESS_TOKEN` is set | manual | Set in local env and keep server-side only | Secret handling; owner: operator |
 | P6 | Optional `MATRIX_EXPECTED_USER_ID` matches `whoami` | manual | Run backend Matrix smoke and compare returned identity | Fail-closed identity guard; owner: backend |
 | P7 | `npm install` succeeds | manual | Run `npm install` from repo root | Workspace bootstrap; owner: developer |
