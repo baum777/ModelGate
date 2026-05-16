@@ -254,6 +254,9 @@ test("Workbench action semantics keep local review state separate from backend e
   assert.match(source, /data-effect-type=\{workbenchActionEffects\.markForStage\}/);
   assert.match(source, /data-effect-type=\{workbenchActionEffects\.preparePr\}/);
   assert.match(source, /data-effect-type=\{workbenchActionEffects\.createPr\}/);
+  assert.match(source, /const serverCanExecute = props\.githubCapabilities\?\.canExecute === true/);
+  assert.match(source, /data-backend-capability=\{String\(serverCanExecute\)\}/);
+  assert.match(source, /data-execute-block-reason=\{executeBlockReason \?\? "none"\}/);
   assert.match(source, /workbenchActionState !== "pr_prepared"/);
   assert.match(source, /function handleMarkForStage\(\)[\s\S]*setWorkbenchActionState\("marked"\)/);
   assert.match(source, /function handleRemoveFromReview\(\)[\s\S]*setWorkbenchActionState\("removed"\)/);
@@ -313,5 +316,7 @@ test("Workbench Create PR is guarded by explicit backend execute capability", ()
 
   assert.match(source, /backendCapabilities[\s\S]*executePr/);
   assert.match(source, /const executeDisabled =[\s\S]*!backendCapabilities\.executePr/);
-  assert.match(source, /data-backend-capability=\{String\(backendCapabilities\.executePr\)\}/);
+  assert.match(source, /const serverCanExecute = props\.githubCapabilities\?\.canExecute === true/);
+  assert.match(source, /data-backend-capability=\{String\(serverCanExecute\)\}/);
+  assert.match(source, /data-execute-block-reason=\{executeBlockReason \?\? "none"\}/);
 });

@@ -18,6 +18,7 @@ import {
   deriveSessionTitle,
   type ChatSession
 } from "../lib/workspace-state.js";
+import type { CrossTabCommand } from "../lib/cross-tab-commands.js";
 import { useLocalization } from "../lib/localization.js";
 import {
   ApprovalTransitionCard,
@@ -86,16 +87,7 @@ type ChatWorkspaceProps = {
     branch: string | null;
     scope: string | null;
   };
-  onQueueMatrixDraft: (payload: {
-    sourceMessageId: string;
-    roomId: string;
-    content: string;
-    tags: string[];
-  }) => void;
-  onOpenGitHubFromChatAction: (payload: {
-    sourceMessageId: string;
-    content: string;
-  }) => void;
+  onCrossTabCommand: (command: CrossTabCommand) => void;
 };
 
 type RoutingStatusTone = "ready" | "partial" | "error" | "muted";
@@ -938,11 +930,14 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       return;
     }
 
-    props.onQueueMatrixDraft({
-      sourceMessageId: matrixComposeSourceMessageId,
-      roomId,
-      content,
-      tags: matrixComposeTags,
+    props.onCrossTabCommand({
+      type: "QueueMatrixDraft",
+      payload: {
+        sourceMessageId: matrixComposeSourceMessageId,
+        roomId,
+        content,
+        tags: matrixComposeTags,
+      },
     });
     setMatrixComposeOpen(false);
     setMatrixComposeSourceMessageId(null);
@@ -960,9 +955,15 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       return;
     }
 
-    props.onOpenGitHubFromChatAction({
-      sourceMessageId: githubDispatchSourceMessageId,
-      content,
+    props.onCrossTabCommand({
+      type: "OpenWorkbenchWithDraft",
+      payload: {
+        sourceMessageId: githubDispatchSourceMessageId,
+        content,
+        repo: props.workbenchBinding.repo ?? "",
+        branch: props.workbenchBinding.branch ?? undefined,
+        intent: "analysis",
+      },
     });
     setGithubDispatchOpen(false);
     setGithubDispatchSourceMessageId(null);
@@ -1618,9 +1619,15 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               }}
               secondaryLabel="⊟ Repo verbinden"
               secondaryAction={() => {
-                props.onOpenGitHubFromChatAction({
-                  sourceMessageId: "chat-empty-state",
-                  content: activeStarterPrompt,
+                props.onCrossTabCommand({
+                  type: "OpenWorkbenchWithDraft",
+                  payload: {
+                    sourceMessageId: "chat-empty-state",
+                    content: activeStarterPrompt,
+                    repo: props.workbenchBinding.repo ?? "",
+                    branch: props.workbenchBinding.branch ?? undefined,
+                    intent: "analysis",
+                  },
                 });
               }}
               footnote="Eingabe unten im Composer."
@@ -1641,9 +1648,15 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
                 }
                 markContextGuideSeen();
                 setContextTipPending(null);
-                props.onOpenGitHubFromChatAction({
-                  sourceMessageId: `context-${pending.fileName}`,
-                  content: pending.prompt,
+                props.onCrossTabCommand({
+                  type: "OpenWorkbenchWithDraft",
+                  payload: {
+                    sourceMessageId: `context-${pending.fileName}`,
+                    content: pending.prompt,
+                    repo: props.workbenchBinding.repo ?? "",
+                    branch: props.workbenchBinding.branch ?? undefined,
+                    intent: "context",
+                  },
                 });
               }}
               secondaryLabel="Trotzdem senden"
@@ -1854,9 +1867,15 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
                     className="secondary-button"
                     onClick={() => {
                       setBranchSelectorOpen(false);
-                      props.onOpenGitHubFromChatAction({
-                        sourceMessageId: "chat-rw-branch-selector",
-                        content: chatState.input,
+                      props.onCrossTabCommand({
+                        type: "OpenWorkbenchWithDraft",
+                        payload: {
+                          sourceMessageId: "chat-rw-branch-selector",
+                          content: chatState.input,
+                          repo: props.workbenchBinding.repo ?? "",
+                          branch: props.workbenchBinding.branch ?? undefined,
+                          intent: "proposal",
+                        },
                       });
                     }}
                   >

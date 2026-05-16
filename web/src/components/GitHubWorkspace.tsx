@@ -7,6 +7,7 @@ import {
   proposeGitHubAction,
   verifyGitHubPlan,
   type GitHubChangePlan,
+  type GitHubCapabilitiesResponse,
   type GitHubContextBundle,
   type GitHubExecuteResult,
   type GitHubRepoSummary,
@@ -65,6 +66,7 @@ type GitHubWorkspaceProps = {
   onPinChatContext?: (context: PinnedChatContext) => void;
   onSessionChange: (session: GitHubSession) => void;
   githubIntegration: IntegrationStatus | null;
+  githubCapabilities: GitHubCapabilitiesResponse | null;
   onIntegrationAction: (
     provider: "github" | "matrix",
     action: "connect" | "reconnect" | "disconnect" | "reverify"
@@ -97,6 +99,8 @@ const ANALYSIS_QUESTION =
   "Beschreibe die Projektstruktur und nenne die sichere nächste Aktion.";
 const PROPOSAL_OBJECTIVE =
   "Erstelle einen sicheren Änderungsvorschlag für das gewählte Repo.";
+const DEFAULT_ANALYSIS_QUESTION = ANALYSIS_QUESTION;
+const DEFAULT_PROPOSAL_OBJECTIVE = PROPOSAL_OBJECTIVE;
 const GITHUB_SESSION_SYNC_INTERVAL_MS = 220;
 
 type GitHubLocaleText = {
@@ -361,6 +365,49 @@ function buildRawDiffPreview(plan: GitHubChangePlan | null) {
     .slice(0, 1600);
 }
 
+function getExecuteBlockReasonLabel(
+  reason: GitHubCapabilitiesResponse["executeBlockReason"] | "backend_unavailable" | "no_repo_write_permission" | "stale_plan" | null,
+  locale: Locale,
+) {
+  if (!reason) {
+    return null;
+  }
+
+  if (reason === "missing_admin_key") {
+    return locale === "de"
+      ? "Ausführung gesperrt: Admin-Key fehlt."
+      : "Execution blocked: admin key missing.";
+  }
+
+  if (reason === "invalid_admin_key") {
+    return locale === "de"
+      ? "Ausführung gesperrt: Admin-Key ungültig."
+      : "Execution blocked: admin key invalid.";
+  }
+
+  if (reason === "backend_unavailable") {
+    return locale === "de"
+      ? "Ausführung gesperrt: Backend nicht verfügbar."
+      : "Execution blocked: backend unavailable.";
+  }
+
+  if (reason === "no_repo_write_permission") {
+    return locale === "de"
+      ? "Ausführung gesperrt: Kein Schreibzugriff auf das Repo."
+      : "Execution blocked: repository write access missing.";
+  }
+
+  if (reason === "stale_plan") {
+    return locale === "de"
+      ? "Ausführung gesperrt: Proposal ist stale."
+      : "Execution blocked: proposal is stale.";
+  }
+
+  return locale === "de"
+    ? "Ausführung gesperrt: GitHub-Backend nicht konfiguriert."
+    : "Execution blocked: GitHub backend not configured.";
+}
+
 export function buildGitHubPinnedChatContext(options: {
   selectedRepo: GitHubRepoSummary | null;
   analysisBundle: GitHubContextBundle | null;
@@ -560,6 +607,9 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
   const [selectedRepoFullName, setSelectedRepoFullName] = useState(
     props.session.metadata.selectedRepoFullName,
   );
+  const [pendingDraft, setPendingDraft] = useState(props.session.metadata.pendingDraft);
+  const [analysisQuestion, setAnalysisQuestion] = useState(DEFAULT_ANALYSIS_QUESTION);
+  const [proposalObjective, setProposalObjective] = useState(DEFAULT_PROPOSAL_OBJECTIVE);
   const [analysisBundle, setAnalysisBundle] = useState<GitHubContextBundle | null>(
     props.session.metadata.analysisBundle,
   );
@@ -615,6 +665,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     const snapshotMetadata = {
       ...props.session.metadata,
       selectedRepoFullName,
+      pendingDraft,
       analysisBundle,
       proposalPlan,
       requestId,
@@ -662,6 +713,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
     proposalPlan,
     props.onSessionChange,
     props.session.id,
+    pendingDraft,
     requestId,
     selectedRepoFullName,
     verificationError,
@@ -671,6 +723,16 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
   useEffect(() => () => {
     flushSessionSync();
   }, [flushSessionSync]);
+
+  useEffect(() => {
+    const incomingDraft = props.session.metadata.pendingDraft;
+
+    if (!incomingDraft) {
+      return;
+    }
+
+    setPendingDraft((current) => (current?.id === incomingDraft.id ? current : incomingDraft));
+  }, [props.session.metadata.pendingDraft?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -709,6 +771,38 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       cancelled = true;
     };
   }, [localText.repoLoadFailed]);
+
+  useEffect(() => {
+    if (!pendingDraft) {
+      return;
+    }
+
+    if (pendingDraft.repo.trim().length > 0) {
+      setSelectedRepoFullName(pendingDraft.repo.trim());
+    }
+
+    const draftText = pendingDraft.content.trim();
+
+    if (pendingDraft.intent === "proposal") {
+      setProposalObjective(draftText || DEFAULT_PROPOSAL_OBJECTIVE);
+    } else {
+      setAnalysisQuestion(draftText || DEFAULT_ANALYSIS_QUESTION);
+    }
+
+    setEventTrail((current) => [
+      ...current,
+      locale === "de"
+        ? `Chat-Draft übernommen · ${pendingDraft.intent}`
+        : `Chat draft adopted · ${pendingDraft.intent}`,
+    ].slice(-4));
+
+    props.onTelemetry(
+      "info",
+      locale === "de" ? "Chat-Draft übernommen" : "Chat draft adopted",
+      pendingDraft.sourceMessageId ?? pendingDraft.intent,
+    );
+    setPendingDraft(null);
+  }, [locale, pendingDraft, props.onTelemetry]);
 
   const selectedRepo = useMemo(
     () => repos.find((repo) => repo.fullName === selectedRepoFullName) ?? null,
@@ -774,6 +868,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       || verificationError?.toLowerCase().includes("stale"),
   );
   const executionConsumed = Boolean(executionResult);
+  const serverCanExecute = props.githubCapabilities?.canExecute === true;
   const backendCapabilities = {
     preparePr: Boolean(proposalPlan && selectedRepo && props.backendHealthy !== false),
     executePr: Boolean(
@@ -781,8 +876,21 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
       && selectedRepo?.permissions.canWrite
       && props.backendHealthy === true
       && !proposalPlan.stale
+      && serverCanExecute
     ),
   };
+  const executeBlockReason = backendCapabilities.executePr
+    ? null
+    : !proposalPlan
+      ? null
+      : props.backendHealthy !== true
+        ? "backend_unavailable"
+        : !selectedRepo?.permissions.canWrite
+          ? "no_repo_write_permission"
+          : proposalPlan.stale
+            ? "stale_plan"
+            : props.githubCapabilities?.executeBlockReason ?? "github_not_configured";
+  const executeBlockReasonLabel = getExecuteBlockReasonLabel(executeBlockReason, locale);
   const markForStageDisabled =
     !proposalPlan
     || executing
@@ -928,7 +1036,7 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
           owner: selectedRepo.owner,
           repo: selectedRepo.repo,
         },
-        question: ANALYSIS_QUESTION,
+        question: analysisQuestion,
         ref: selectedRepo.defaultBranch,
         maxFiles: 4,
         maxBytes: 12_000,
@@ -978,8 +1086,8 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
           owner: selectedRepo.owner,
           repo: selectedRepo.repo,
         },
-        objective: PROPOSAL_OBJECTIVE,
-        question: ANALYSIS_QUESTION,
+        objective: proposalObjective,
+        question: analysisQuestion,
         ref: selectedRepo.defaultBranch,
         selectedPaths: analysisBundle.files.slice(0, 4).map((file) => file.path),
         constraints: [localText.proposalConstraintReadOnly, localText.proposalConstraintNoDirectExecution],
@@ -1699,7 +1807,8 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             disabled={executeDisabled}
             data-testid="workbench-action-create-pr"
             data-effect-type={workbenchActionEffects.createPr}
-            data-backend-capability={String(backendCapabilities.executePr)}
+            data-backend-capability={String(serverCanExecute)}
+            data-execute-block-reason={executeBlockReason ?? "none"}
           >
             {workbenchActionLabels.createPr}
           </button>
@@ -1721,6 +1830,9 @@ export function GitHubWorkspace(props: GitHubWorkspaceProps) {
             ? "Mark for stage und Aus Review entfernen ändern nur lokalen Workbench-Review-State."
             : "Mark for stage and Remove from review only change local workbench review state."}
         </p>
+        {executeBlockReasonLabel ? (
+          <p className="muted-copy">{executeBlockReasonLabel}</p>
+        ) : null}
       </article>
 
       <article className="workspace-card github-review-card">

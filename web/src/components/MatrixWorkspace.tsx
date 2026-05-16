@@ -46,6 +46,7 @@ import { useLocalization, type Locale } from "../lib/localization.js";
 import { GuideOverlay, getWorkspaceGuide } from "./GuideOverlay.js";
 import { EmptyStateCTA } from "./EmptyStateCTA.js";
 import { getWorkModeCopy, type WorkMode } from "../lib/work-mode.js";
+import { computeMatrixGates } from "../lib/matrix-gates.js";
 
 type WorkflowStatus = "loading" | "partial" | "ready" | "error";
 type LoadStatus = "idle" | "loading" | "ready" | "error";
@@ -388,6 +389,49 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
     }
   }, [props.onSessionChange]);
   const summaryLoading = scopeSummaryStatus === "loading";
+  const matrixGates = useMemo(
+    () => computeMatrixGates(
+      {
+        topicPlan,
+        topicApprovalPending,
+        topicPrepareLoading,
+        topicPrepareError,
+        topicExecuteLoading,
+        topicExecuteError,
+        topicVerifyLoading,
+        topicVerifyError,
+        topicVerificationStatus: topicVerification?.status ?? null,
+        topicPlanRefreshLoading,
+        topicPlanRefreshError,
+        stalePlanDetected: false,
+        hasScope: Boolean(currentScope),
+      },
+      {
+        canExecuteTopic: status === "ready" || status === "partial",
+      },
+      {
+        backendHealthy: status === "ready" || status === "partial",
+      },
+      {
+        failClosed: true,
+      },
+    ),
+    [
+      currentScope,
+      status,
+      topicApprovalPending,
+      topicExecuteError,
+      topicExecuteLoading,
+      topicPlan,
+      topicPlanRefreshError,
+      topicPlanRefreshLoading,
+      topicPrepareError,
+      topicPrepareLoading,
+      topicVerification?.status,
+      topicVerifyError,
+      topicVerifyLoading,
+    ],
+  );
   const selectedSpaces = useMemo(
     () => selectedSpaceIds.filter((value) => value.trim().length > 0),
     [selectedSpaceIds],
@@ -1008,6 +1052,11 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       return;
     }
 
+    if (!matrixGates.canPrepareTopic) {
+      setTopicPrepareError(ui.matrix.topicStatusLoading);
+      return;
+    }
+
     resetTopicWorkflowState();
     setTopicPrepareLoading(true);
     setTopicPrepareError(null);
@@ -1037,6 +1086,11 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       setTopicPlanRefreshError(
         ui.matrix.topicStatusLoading,
       );
+      return;
+    }
+
+    if (!matrixGates.canRefreshTopicPlan) {
+      setTopicPlanRefreshError(ui.matrix.topicStatusLoading);
       return;
     }
 
@@ -1073,17 +1127,15 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
       return;
     }
 
-    if (topicPlanRefreshLoading) {
-      setTopicExecuteError(
-        ui.matrix.topicStatusLoading,
-      );
-      return;
-    }
-
     if (!approvalIntent) {
       setTopicExecuteError(
         ui.matrix.topicStatusApproval,
       );
+      return;
+    }
+
+    if (!matrixGates.canApproveTopic) {
+      setTopicExecuteError(ui.matrix.topicStatusLoading);
       return;
     }
 
@@ -1297,7 +1349,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                           void prepareTopicUpdate();
                           setMobileActionSheet(null);
                         }}
-                        disabled={topicPrepareLoading}
+                        disabled={!matrixGates.canPrepareTopic}
                       >
                         {topicPrepareLoading ? ui.matrix.topicStatusLoading : ui.matrix.topicStatusPending}
                       </button>
@@ -1320,7 +1372,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                         onClick={() => {
                           void refreshTopicUpdatePlan();
                         }}
-                        disabled={!topicPlan || topicPlanRefreshLoading}
+                        disabled={!matrixGates.canRefreshTopicPlan}
                       >
                         {topicPlanRefreshLoading ? ui.matrix.topicStatusLoading : ui.matrix.topicStatusPending}
                       </button>
@@ -1330,7 +1382,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                           void executeTopicUpdate(true);
                           setMobileActionSheet(null);
                         }}
-                        disabled={!topicPlan || topicPlan.status !== "pending_review" || topicExecuteLoading}
+                        disabled={!matrixGates.canApproveTopic}
                       >
                         {topicExecuteLoading ? ui.approval.running : ui.approval.approve}
                       </button>
@@ -1344,7 +1396,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                           void verifyTopicUpdate(topicPlan.planId);
                           setMobileActionSheet(null);
                         }}
-                        disabled={!topicPlan || topicVerifyLoading}
+                        disabled={!matrixGates.canVerifyTopic}
                       >
                         {topicVerifyLoading ? ui.matrix.topicStatusLoading : ui.github.verifyResult}
                       </button>
@@ -1522,7 +1574,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
               onClick={() => {
                 void prepareTopicUpdate();
               }}
-              disabled={topicPrepareLoading}
+              disabled={!matrixGates.canPrepareTopic}
             >
               {topicPrepareLoading ? ui.matrix.topicStatusLoading : ui.matrix.topicTitle}
             </button>
@@ -1645,18 +1697,8 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                       setLastActionResult(ui.github.rejectLabel);
                       props.onTelemetry("warning", localText.telemetryProposalRejected, localText.telemetryProposalRejectedDetail);
                     }}
-                    approveDisabled={
-                      topicExecuteLoading ||
-                      topicVerifyLoading ||
-                      topicPlanRefreshLoading ||
-                      topicPlan.status !== "pending_review"
-                    }
-                    rejectDisabled={
-                      topicExecuteLoading ||
-                      topicVerifyLoading ||
-                      topicPlanRefreshLoading ||
-                      topicPlan.status !== "pending_review"
-                    }
+                    approveDisabled={!matrixGates.canApproveTopic}
+                    rejectDisabled={!matrixGates.canRejectTopic}
                     busy={topicExecuteLoading || topicVerifyLoading}
                     helperText={ui.github.approveHelper}
                   />
@@ -1670,7 +1712,7 @@ export function MatrixWorkspace(props: MatrixWorkspaceProps) {
                   onClick={() => {
                     void refreshTopicUpdatePlan();
                   }}
-                  disabled={topicPlanRefreshLoading}
+                  disabled={!matrixGates.canRefreshTopicPlan}
                   data-testid="matrix-topic-refresh"
                 >
                   {topicPlanRefreshLoading ? ui.matrix.topicStatusLoading : ui.matrix.topicStatusPending}

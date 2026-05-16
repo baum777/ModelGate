@@ -398,6 +398,45 @@ test("in-progress chat streams normalize to interrupted state after reload with 
   assert.equal(restored?.notices.at(-1)?.level, "system");
 });
 
+test("workbench pendingDraft persists across reload and remains tagged as chat draft metadata", () => {
+  const storage = new Map<string, string>();
+  const fakeWindow = {
+    localStorage: {
+      getItem(key: string) {
+        return storage.get(key) ?? null;
+      },
+      setItem(key: string, value: string) {
+        storage.set(key, value);
+      },
+      removeItem(key: string) {
+        storage.delete(key);
+      }
+    }
+  } as Partial<Window>;
+
+  const state = createDefaultWorkspaceState();
+  const githubSession = state.sessionsByWorkspace.github[0];
+  assert.ok(githubSession);
+  githubSession.metadata.selectedRepoFullName = "acme/widget";
+  githubSession.metadata.pendingDraft = {
+    id: "workbench-draft-1",
+    content: "Bitte analysiere server/src/routes/github.ts",
+    intent: "context",
+    repo: "acme/widget",
+    branch: "main",
+    sourceMessageId: "msg-42",
+    createdAt: "2026-05-16T08:00:00.000Z",
+  };
+
+  withWindow(fakeWindow, () => saveWorkspaceState(state));
+  const loaded = withWindow(fakeWindow, () => loadWorkspaceState());
+  const restored = loaded.sessionsByWorkspace.github[0]?.metadata.pendingDraft;
+  assert.ok(restored);
+  assert.equal(restored?.id, "workbench-draft-1");
+  assert.equal(restored?.intent, "context");
+  assert.equal(restored?.sourceMessageId, "msg-42");
+});
+
 test("workspace localStorage payload never stores OpenRouter API keys", () => {
   const storage = new Map<string, string>();
   const fakeWindow = {

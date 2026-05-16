@@ -48,6 +48,7 @@ import { TopContextBar } from "./components/mobile/layout/TopContextBar.js";
 import { useRuntimeStatus } from "./hooks/useRuntimeStatus.js";
 import { useWorkspaceSessions } from "./hooks/useWorkspaceSessions.js";
 import { useCrossTabCommands } from "./hooks/useCrossTabCommands.js";
+import type { CrossTabCommand } from "./lib/cross-tab-commands.js";
 import { useReviewState } from "./hooks/useReviewState.js";
 
 const loadChatWorkspace = () => import("./components/ChatWorkspace.js");
@@ -1052,6 +1053,7 @@ function ConsoleShell() {
     modelRegistry,
     runtimeDiagnostics,
     integrationsStatus,
+    githubCapabilities,
     runtimeJournalEntries,
     openRouterCredentialStatus,
     openRouterApiKeyInput,
@@ -1107,8 +1109,7 @@ function ConsoleShell() {
     handleWorkspaceTabSelect,
     handlePinChatContext,
     handleClearPinnedChatContext,
-    handleQueueMatrixDraftFromChat,
-    handleOpenGitHubFromChatAction,
+    handleCrossTabCommand,
   } = useCrossTabCommands({
     locale,
     mode,
@@ -1757,8 +1758,9 @@ function ConsoleShell() {
       matrixDraftDefaultRoomId,
       matrixDraftRoomOptions,
       workbenchBinding,
-      onQueueMatrixDraft: handleQueueMatrixDraftFromChat,
-      onOpenGitHubFromChatAction: handleOpenGitHubFromChatAction,
+      onCrossTabCommand: (command: CrossTabCommand) => {
+        handleCrossTabCommand(command);
+      },
     }),
     [
       activeModelAlias,
@@ -1767,8 +1769,7 @@ function ConsoleShell() {
       chatSession,
       handleChatSessionChange,
       handleClearPinnedChatContext,
-      handleOpenGitHubFromChatAction,
-      handleQueueMatrixDraftFromChat,
+      handleCrossTabCommand,
       matrixDraftDefaultRoomId,
       matrixDraftRoomOptions,
       modelRegistry,
@@ -1792,6 +1793,7 @@ function ConsoleShell() {
       onPinChatContext: handlePinChatContext,
       onSessionChange: handleGitHubSessionChange,
       githubIntegration: integrationsStatus?.github ?? null,
+      githubCapabilities,
       onIntegrationAction: handleIntegrationAction,
     }),
     [
@@ -1800,6 +1802,7 @@ function ConsoleShell() {
       handleGitHubSessionChange,
       handleIntegrationAction,
       handlePinChatContext,
+      githubCapabilities,
       integrationsStatus?.github,
       recordTelemetry,
       setGitHubReviewDirty,

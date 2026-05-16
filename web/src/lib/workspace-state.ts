@@ -55,8 +55,21 @@ export type ChatSessionMetadata = {
   executionMode: ChatExecutionMode;
 };
 
+export type WorkbenchDraftIntent = "analysis" | "proposal" | "context";
+
+export type WorkbenchDraft = {
+  id: string;
+  content: string;
+  intent: WorkbenchDraftIntent;
+  repo: string;
+  branch?: string;
+  sourceMessageId?: string;
+  createdAt: string;
+};
+
 export type GitHubSessionMetadata = {
   selectedRepoFullName: string;
+  pendingDraft: WorkbenchDraft | null;
   analysisBundle: GitHubContextBundle | null;
   proposalPlan: GitHubChangePlan | null;
   requestId: string | null;
@@ -499,6 +512,23 @@ function normalizeGitHubSessionMetadata(value: unknown): GitHubSessionMetadata |
 
   return {
     selectedRepoFullName,
+    pendingDraft: isRecord(value.pendingDraft)
+      && typeof value.pendingDraft.id === "string"
+      && typeof value.pendingDraft.content === "string"
+      && typeof value.pendingDraft.intent === "string"
+      && (value.pendingDraft.intent === "analysis" || value.pendingDraft.intent === "proposal" || value.pendingDraft.intent === "context")
+      && typeof value.pendingDraft.repo === "string"
+      && typeof value.pendingDraft.createdAt === "string"
+      ? {
+          id: value.pendingDraft.id,
+          content: value.pendingDraft.content,
+          intent: value.pendingDraft.intent,
+          repo: value.pendingDraft.repo,
+          branch: typeof value.pendingDraft.branch === "string" ? value.pendingDraft.branch : undefined,
+          sourceMessageId: typeof value.pendingDraft.sourceMessageId === "string" ? value.pendingDraft.sourceMessageId : undefined,
+          createdAt: value.pendingDraft.createdAt,
+        }
+      : null,
     analysisBundle: value.analysisBundle === null || isRecord(value.analysisBundle) ? value.analysisBundle as GitHubContextBundle | null : null,
     proposalPlan: value.proposalPlan === null || isRecord(value.proposalPlan) ? value.proposalPlan as GitHubChangePlan | null : null,
     requestId: value.requestId === null || typeof value.requestId === "string" ? value.requestId : null,
@@ -779,6 +809,7 @@ export function createChatSessionMetadata(): ChatSessionMetadata {
 export function createGitHubSessionMetadata(): GitHubSessionMetadata {
   return {
     selectedRepoFullName: "",
+    pendingDraft: null,
     analysisBundle: null,
     proposalPlan: null,
     requestId: null,

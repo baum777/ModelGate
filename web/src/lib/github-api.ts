@@ -290,6 +290,13 @@ export type GitHubVerifyResponse = {
   verification: GitHubVerifyResult;
 };
 
+export type GitHubCapabilitiesResponse = {
+  ok: true;
+  canExecute: boolean;
+  executeBlockReason: "github_not_configured" | "missing_admin_key" | "invalid_admin_key" | null;
+  generatedAt: string;
+};
+
 export async function fetchGitHubRepos() {
   return requestJson<GitHubRepoListResponse>("/api/github/repos");
 }
@@ -321,4 +328,8 @@ export async function executeGitHubPlan(planId: string, body: GitHubExecuteReque
 
 export async function verifyGitHubPlan(planId: string) {
   return requestJson<GitHubVerifyResponse>(`/api/github/actions/${encodeURIComponent(planId)}/verify`);
+}
+
+export async function fetchGitHubCapabilities() {
+  return requestJson<GitHubCapabilitiesResponse>("/api/github/capabilities");
 }

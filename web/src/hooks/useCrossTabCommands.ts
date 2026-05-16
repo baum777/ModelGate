@@ -1,20 +1,18 @@
 import { useCallback, useState, type Dispatch, type SetStateAction } from "react";
 import {
-  selectSession,
-  updateSession,
-  type MatrixSession,
   type WorkspaceKind,
   type WorkspaceState,
 } from "../lib/workspace-state.js";
 import type { PinnedChatContext } from "../lib/pinned-chat-context.js";
+import {
+  applyOpenWorkbenchWithDraftCommand,
+  applyQueueMatrixDraftCommand,
+  type CrossTabCommand,
+} from "../lib/cross-tab-commands.js";
 
 export type WorkspaceMode = "chat" | "workbench" | "matrix" | "settings";
 
 type RecordTelemetry = (kind: "info" | "warning" | "error", label: string, detail?: string) => void;
-
-function nowIso() {
-  return new Date().toISOString();
-}
 
 function isSessionWorkspace(mode: WorkspaceMode): mode is "chat" | "workbench" | "matrix" {
   return mode === "chat" || mode === "workbench" || mode === "matrix";
@@ -38,6 +36,51 @@ function shouldConfirmGitHubReviewNavigation(options: {
     && options.githubReviewDirty;
 }
 
+export function createCrossTabCommandHandler(options: {
+  locale: "de" | "en";
+  setMode: (mode: WorkspaceMode) => void;
+  setWorkspaceState: Dispatch<SetStateAction<WorkspaceState>>;
+  selectActiveWorkspaceSession: (workspace: WorkspaceKind) => void;
+  setPinnedChatContext: Dispatch<SetStateAction<PinnedChatContext | null>>;
+  recordTelemetry: RecordTelemetry;
+}) {
+  return (command: CrossTabCommand) => {
+    if (command.type === "PinChatContext") {
+      options.setPinnedChatContext(command.payload);
+      options.setMode("chat");
+      options.selectActiveWorkspaceSession("chat");
+      return;
+    }
+
+    if (command.type === "QueueMatrixDraft") {
+      options.setMode("matrix");
+      options.setWorkspaceState((current) => applyQueueMatrixDraftCommand({
+        state: current,
+        payload: command.payload,
+        locale: options.locale,
+      }));
+      options.recordTelemetry(
+        "info",
+        options.locale === "de" ? "Matrix-Entwurf vorbereitet" : "Matrix draft prepared",
+        `${command.payload.sourceMessageId} -> ${command.payload.roomId}`,
+      );
+      return;
+    }
+
+    options.setWorkspaceState((current) => applyOpenWorkbenchWithDraftCommand({
+      state: current,
+      payload: command.payload,
+    }));
+    options.setMode("workbench");
+    options.selectActiveWorkspaceSession("github");
+    options.recordTelemetry(
+      "info",
+      options.locale === "de" ? "GitHub-Dispatch geöffnet" : "GitHub dispatch opened",
+      `${command.payload.sourceMessageId ?? "chat"} (${command.payload.content.length} chars)`,
+    );
+  };
+}
+
 export function useCrossTabCommands(options: {
   locale: "de" | "en";
   mode: WorkspaceMode;
@@ -59,6 +102,14 @@ export function useCrossTabCommands(options: {
     recordTelemetry,
   } = options;
   const [pinnedChatContext, setPinnedChatContext] = useState<PinnedChatContext | null>(null);
+  const handleCrossTabCommand = useCallback(createCrossTabCommandHandler({
+    locale,
+    setMode,
+    setWorkspaceState,
+    selectActiveWorkspaceSession,
+    setPinnedChatContext,
+    recordTelemetry,
+  }), [locale, recordTelemetry, selectActiveWorkspaceSession, setMode, setWorkspaceState]);
 
   const handleWorkspaceTabSelect = useCallback((nextMode: WorkspaceMode) => {
     if (shouldConfirmGitHubReviewNavigation({
@@ -83,94 +134,21 @@ export function useCrossTabCommands(options: {
   }, [githubReviewConfirmNavigation, githubReviewDirty, mode, selectActiveWorkspaceSession, setMode]);
 
   const handlePinChatContext = useCallback((context: PinnedChatContext) => {
-    setPinnedChatContext(context);
-    setMode("chat");
-    selectActiveWorkspaceSession("chat");
-  }, [selectActiveWorkspaceSession, setMode]);
+    handleCrossTabCommand({
+      type: "PinChatContext",
+      payload: context,
+    });
+  }, [handleCrossTabCommand]);
 
   const handleClearPinnedChatContext = useCallback(() => {
     setPinnedChatContext(null);
   }, []);
-
-  const handleQueueMatrixDraftFromChat = useCallback((payload: {
-    sourceMessageId: string;
-    roomId: string;
-    content: string;
-    tags: string[];
-  }) => {
-    const roomId = payload.roomId.trim();
-    const content = payload.content.trim();
-    if (!roomId || !content) {
-      return;
-    }
-
-    const tagsLine = payload.tags.length > 0
-      ? `\n\n${payload.tags.map((tag) => `#${tag}`).join(" ")}`
-      : "";
-    const draftContent = `${content}${tagsLine}`;
-    const now = nowIso();
-
-    setMode("matrix");
-    setWorkspaceState((current) => {
-      const sessionId = current.activeSessionIdByWorkspace.matrix;
-      const withDraft = updateSession<MatrixSession["metadata"]>(
-        current,
-        "matrix",
-        sessionId,
-        (session) => ({
-          ...session,
-          updatedAt: now,
-          lastOpenedAt: now,
-          metadata: {
-            ...session.metadata,
-            roomId,
-            composerMode: "post",
-            composerTarget: {
-              kind: "post",
-              roomId,
-              postId: null,
-              threadRootId: null,
-              previewLabel: `${locale === "de" ? "Beitrag" : "Post"}: ${roomId}`,
-            },
-            selectedEventId: null,
-            selectedThreadRootId: null,
-            draftContent,
-            lastActionResult: locale === "de"
-              ? "Entwurf aus Chat übernommen."
-              : "Draft adopted from chat.",
-          },
-        }),
-      );
-
-      return selectSession(withDraft, "matrix", sessionId);
-    });
-
-    recordTelemetry(
-      "info",
-      locale === "de" ? "Matrix-Entwurf vorbereitet" : "Matrix draft prepared",
-      `${payload.sourceMessageId} -> ${roomId}`,
-    );
-  }, [locale, recordTelemetry, setMode, setWorkspaceState]);
-
-  const handleOpenGitHubFromChatAction = useCallback((payload: {
-    sourceMessageId: string;
-    content: string;
-  }) => {
-    setMode("workbench");
-    selectActiveWorkspaceSession("github");
-    recordTelemetry(
-      "info",
-      locale === "de" ? "GitHub-Dispatch geöffnet" : "GitHub dispatch opened",
-      `${payload.sourceMessageId} (${payload.content.length} chars)`,
-    );
-  }, [locale, recordTelemetry, selectActiveWorkspaceSession, setMode]);
 
   return {
     pinnedChatContext,
     handleWorkspaceTabSelect,
     handlePinChatContext,
     handleClearPinnedChatContext,
-    handleQueueMatrixDraftFromChat,
-    handleOpenGitHubFromChatAction,
+    handleCrossTabCommand,
   };
 }

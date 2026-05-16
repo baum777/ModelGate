@@ -178,6 +178,19 @@ async function installBaseMocks(page: Page) {
     });
   });
 
+  await page.route("**/api/github/capabilities", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        canExecute: false,
+        executeBlockReason: "missing_admin_key",
+        generatedAt: "2026-04-27T12:00:00.000Z",
+      }),
+    });
+  });
+
   await page.route("**/api/matrix/whoami", async (route) => {
     await route.fulfill({
       status: 200,

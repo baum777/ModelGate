@@ -1,4 +1,4 @@
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppEnv } from "../lib/env.js";
 import {
@@ -36,6 +36,7 @@ import type { ModelRegistry } from "../lib/model-policy.js";
 import type { AppRateLimiter } from "../lib/rate-limit.js";
 import type { RuntimeJournal } from "../lib/runtime-journal.js";
 import type { ModelCapabilitiesConfig } from "../lib/workflow-model-router.js";
+import { deriveGitHubClientCapabilities } from "../lib/github-capabilities.js";
 
 type GitHubRouteDependencies = {
   env: AppEnv;
@@ -722,41 +723,21 @@ function requiresGitHubAdminKey(config: GitHubConfig) {
   return Boolean(config.agentApiKey && config.agentApiKey.trim().length > 0);
 }
 
-function hasMatchingAdminKey(request: FastifyRequest, config: GitHubConfig) {
-  const configuredKey = config.agentApiKey?.trim();
-
-  if (!configuredKey) {
-    return false;
-  }
-
-  const providedKey = readGitHubAdminKeyHeader(request)?.trim();
-
-  if (!providedKey) {
-    return false;
-  }
-
-  const configuredKeyBuffer = Buffer.from(configuredKey);
-  const providedKeyBuffer = Buffer.from(providedKey);
-
-  if (configuredKeyBuffer.length !== providedKeyBuffer.length) {
-    return false;
-  }
-
-  return timingSafeEqual(configuredKeyBuffer, providedKeyBuffer);
-}
-
 function requireGitHubAdminKey(request: FastifyRequest, reply: FastifyReply, config: GitHubConfig) {
   if (!requiresGitHubAdminKey(config)) {
     return sendGitHubError(reply, "github_not_configured");
   }
 
-  const providedKey = readGitHubAdminKeyHeader(request)?.trim();
+  const capabilities = deriveGitHubClientCapabilities({
+    config,
+    providedAdminKey: readGitHubAdminKeyHeader(request),
+  });
 
-  if (!providedKey) {
+  if (capabilities.executeBlockReason === "missing_admin_key") {
     return sendGitHubAdminKeyError(reply, "github_unauthorized");
   }
 
-  if (!hasMatchingAdminKey(request, config)) {
+  if (capabilities.executeBlockReason === "invalid_admin_key") {
     return sendGitHubAdminKeyError(reply, "github_forbidden");
   }
 
@@ -768,6 +749,20 @@ export function githubRoutes(app: FastifyInstance, deps: GitHubRouteDependencies
   const appAuth = createGitHubAppAuthClient({
     config: deps.config,
     fetchImpl: deps.appAuthFetch
+  });
+
+  app.get("/api/github/capabilities", async (request, reply) => {
+    const capabilities = deriveGitHubClientCapabilities({
+      config: deps.config,
+      providedAdminKey: readGitHubAdminKeyHeader(request),
+    });
+
+    return reply.send({
+      ok: true,
+      canExecute: capabilities.canExecute,
+      executeBlockReason: capabilities.executeBlockReason,
+      generatedAt: capabilities.generatedAt,
+    });
   });
 
   app.get("/api/github/repos", async (_request, reply) => {

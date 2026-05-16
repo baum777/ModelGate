@@ -16,6 +16,10 @@ import {
   type JournalEntry,
   type OpenRouterCredentialStatusResponse,
 } from "../lib/api.js";
+import {
+  fetchGitHubCapabilities,
+  type GitHubCapabilitiesResponse,
+} from "../lib/github-api.js";
 import { areOpenRouterCredentialInputsValid } from "../lib/openrouter-inputs.js";
 import { createRequestDedupCache, type RequestDedupCache } from "../lib/request-dedup-cache.js";
 import type { SettingsVerificationState, SettingsVerificationTarget } from "../components/SettingsWorkspace.js";
@@ -151,6 +155,7 @@ export function useRuntimeStatus(options: {
   const [openRouterCredentialMessage, setOpenRouterCredentialMessage] = useState<string | null>(null);
   const [runtimeDiagnostics, setRuntimeDiagnostics] = useState<DiagnosticsResponse | null>(null);
   const [integrationsStatus, setIntegrationsStatus] = useState<IntegrationsStatusResponse | null>(null);
+  const [githubCapabilities, setGitHubCapabilities] = useState<GitHubCapabilitiesResponse | null>(null);
   const [settingsVerificationResults, setSettingsVerificationResults] = useState(SETTINGS_VERIFICATION_INITIAL);
   const [runtimeJournalEntries, setRuntimeJournalEntries] = useState<JournalEntry[]>([]);
 
@@ -201,6 +206,25 @@ export function useRuntimeStatus(options: {
     }
   }, [fetchCachedStatus]);
 
+  const refreshGitHubCapabilities = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const capabilities = await fetchCachedStatus({
+        key: "github-capabilities",
+        signal,
+        fetcher: () => fetchGitHubCapabilities(),
+      });
+      setGitHubCapabilities(capabilities);
+      return capabilities;
+    } catch (error) {
+      if (isAbortError(error)) {
+        return null;
+      }
+
+      setGitHubCapabilities(null);
+      return null;
+    }
+  }, [fetchCachedStatus]);
+
   const refreshOpenRouterCredentialStatus = useCallback(async () => {
     const fetchedStatus = await fetchOpenRouterCredentialStatus();
     const status = normalizeOpenRouterCredentialStatus(fetchedStatus);
@@ -222,7 +246,15 @@ export function useRuntimeStatus(options: {
   const loadConsoleState = useCallback(async (emitTelemetry = true) => {
     const signal = createStatusRequestSignal();
 
-    const [healthResult, modelsResult, diagnosticsResult, journalResult, integrationsResult, openRouterStatusResult] = await Promise.allSettled([
+    const [
+      healthResult,
+      modelsResult,
+      diagnosticsResult,
+      journalResult,
+      integrationsResult,
+      openRouterStatusResult,
+      githubCapabilitiesResult,
+    ] = await Promise.allSettled([
       fetchCachedStatus({
         key: "health",
         signal,
@@ -249,6 +281,11 @@ export function useRuntimeStatus(options: {
         fetcher: (requestSignal) => fetchIntegrationsStatus({ signal: requestSignal }),
       }),
       fetchOpenRouterCredentialStatus(),
+      fetchCachedStatus({
+        key: "github-capabilities",
+        signal,
+        fetcher: () => fetchGitHubCapabilities(),
+      }),
     ]);
 
     if (signal.aborted) {
@@ -317,6 +354,12 @@ export function useRuntimeStatus(options: {
       setIntegrationsStatus(integrationsResult.value);
     } else {
       setIntegrationsStatus(null);
+    }
+
+    if (githubCapabilitiesResult.status === "fulfilled") {
+      setGitHubCapabilities(githubCapabilitiesResult.value);
+    } else {
+      setGitHubCapabilities(null);
     }
   }, [
     appText.telemetryDiagnosticsFailed,
@@ -422,6 +465,7 @@ export function useRuntimeStatus(options: {
         setBackendHealthy(true);
       } else {
         await refreshIntegrationsStatus();
+        await refreshGitHubCapabilities();
       }
 
       setSettingsVerificationResults((current) => ({
@@ -444,6 +488,7 @@ export function useRuntimeStatus(options: {
         setBackendHealthy(false);
       } else {
         await refreshIntegrationsStatus();
+        await refreshGitHubCapabilities();
       }
 
       setSettingsVerificationResults((current) => ({
@@ -460,7 +505,7 @@ export function useRuntimeStatus(options: {
         `${target}: ${detail}`,
       );
     }
-  }, [locale, onTelemetry, refreshIntegrationsStatus]);
+  }, [locale, onTelemetry, refreshGitHubCapabilities, refreshIntegrationsStatus]);
 
   const handleIntegrationAction = useCallback(async (
     provider: "github" | "matrix",
@@ -482,8 +527,9 @@ export function useRuntimeStatus(options: {
       );
     } finally {
       await refreshIntegrationsStatus();
+      await refreshGitHubCapabilities();
     }
-  }, [locale, onTelemetry, refreshIntegrationsStatus]);
+  }, [locale, onTelemetry, refreshGitHubCapabilities, refreshIntegrationsStatus]);
 
   const buildSettingsIntegrationStartUrl = useCallback((provider: "github" | "matrix") => (
     buildIntegrationConnectStartUrl(provider, "/console?mode=settings")
@@ -504,6 +550,7 @@ export function useRuntimeStatus(options: {
     modelRegistry,
     runtimeDiagnostics,
     integrationsStatus,
+    githubCapabilities,
     runtimeJournalEntries,
     openRouterCredentialStatus,
     openRouterApiKeyInput,

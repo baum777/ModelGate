@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canApproveTopicUpdateExecution } from "../src/lib/matrix-gates.js";
+import { canApproveTopicUpdateExecution, computeMatrixGates } from "../src/lib/matrix-gates.js";
 
 const pendingReviewTopicPlan = {
   planId: "plan-topic-1",
@@ -79,4 +79,72 @@ test("matrix topic-update gate stays closed unless approval, freshness, and a pe
     }),
     false
   );
+});
+
+test("computeMatrixGates centralizes topic phase and gate decisions", () => {
+  const baseState = {
+    topicPlan: pendingReviewTopicPlan,
+    topicApprovalPending: false,
+    topicPrepareLoading: false,
+    topicPrepareError: null,
+    topicExecuteLoading: false,
+    topicExecuteError: null,
+    topicVerifyLoading: false,
+    topicVerifyError: null,
+    topicVerificationStatus: null,
+    topicPlanRefreshLoading: false,
+    topicPlanRefreshError: null,
+    stalePlanDetected: false,
+    hasScope: true,
+  } as const;
+
+  const prepared = computeMatrixGates(
+    baseState,
+    { canExecuteTopic: true },
+    { backendHealthy: true },
+    { failClosed: true },
+  );
+  assert.equal(prepared.topicPhase, "prepared");
+  assert.equal(prepared.canApproveTopic, true);
+  assert.equal(prepared.canRefreshTopicPlan, true);
+  assert.equal(prepared.canVerifyTopic, true);
+
+  const blocked = computeMatrixGates(
+    {
+      ...baseState,
+      topicPlanRefreshError: "refresh failed",
+    },
+    { canExecuteTopic: true },
+    { backendHealthy: true },
+    { failClosed: true },
+  );
+  assert.equal(blocked.topicPhase, "blocked");
+  assert.equal(blocked.canApproveTopic, false);
+
+  const executing = computeMatrixGates(
+    {
+      ...baseState,
+      topicExecuteLoading: true,
+    },
+    { canExecuteTopic: true },
+    { backendHealthy: true },
+    { failClosed: true },
+  );
+  assert.equal(executing.topicPhase, "executing");
+  assert.equal(executing.canApproveTopic, false);
+
+  const verified = computeMatrixGates(
+    {
+      ...baseState,
+      topicPlan: {
+        ...pendingReviewTopicPlan,
+        status: "executed",
+      },
+      topicVerificationStatus: "verified",
+    },
+    { canExecuteTopic: true },
+    { backendHealthy: true },
+    { failClosed: true },
+  );
+  assert.equal(verified.topicPhase, "verified");
 });

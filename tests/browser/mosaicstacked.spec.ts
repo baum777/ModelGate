@@ -145,6 +145,13 @@ const INTEGRATIONS_STATUS_OK = {
   },
 };
 
+const GITHUB_CAPABILITIES_BLOCKED = {
+  ok: true,
+  canExecute: false,
+  executeBlockReason: "missing_admin_key",
+  generatedAt: "2026-04-27T12:00:00.000Z",
+};
+
 const CHAT_STREAM = [
   "event: start",
   'data: {"ok":true,"model":"default"}',
@@ -213,6 +220,14 @@ async function installBaseMocks(
     });
   });
 
+  await page.route("**/api/github/capabilities", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(GITHUB_CAPABILITIES_BLOCKED),
+    });
+  });
+
   if (options?.matrixStatus === "ok") {
     await page.route("**/api/matrix/whoami", async (route) => {
       await route.fulfill({
@@ -277,6 +292,8 @@ async function installBaseMocks(
 }
 
 type GitHubWorkspaceMockOptions = {
+  canExecute?: boolean;
+  executeBlockReason?: "github_not_configured" | "missing_admin_key" | "invalid_admin_key";
   executeResponse?: {
     status: number;
     body: unknown;
@@ -292,6 +309,26 @@ async function installGitHubWorkspaceMocks(page: Page, options: GitHubWorkspaceM
     execute: 0,
     verify: 0,
   };
+
+  await page.route("**/api/github/capabilities", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        canExecute: options.canExecute ?? true,
+        executeBlockReason: options.canExecute === false
+          ? (options.executeBlockReason ?? "missing_admin_key")
+          : null,
+        generatedAt: "2026-04-27T12:00:00.000Z",
+      }),
+    });
+  });
 
   await page.route("**/api/github/repos", async (route) => {
     if (route.request().method() !== "GET") {
@@ -1075,6 +1112,27 @@ test("GitHub stale-plan execute failure is surfaced and no receipt is fabricated
   await expect(page.getByTestId("github-pr-result")).toHaveCount(0);
   expect(counters.execute).toBe(1);
   expect(counters.verify).toBe(0);
+});
+
+test("GitHub execute stays disabled when server capabilities deny execution", async ({ page }) => {
+  await installBaseMocks(page, { matrixStatus: "ok" });
+  await installGitHubWorkspaceMocks(page, {
+    canExecute: false,
+    executeBlockReason: "missing_admin_key",
+  });
+
+  await loadConsole(page);
+  await page.getByTestId("tab-workbench").click();
+  await page.locator("#github-repo-select").selectOption("octo/demo");
+  await page.getByRole("button", { name: "Start analysis" }).click();
+  await page.getByRole("button", { name: "Review proposal" }).click();
+  await page.getByTestId("workbench-action-mark-for-stage").click();
+  await page.getByTestId("workbench-action-prepare-pr").click();
+
+  const createPrButton = page.getByTestId("workbench-action-create-pr");
+  await expect(createPrButton).toBeDisabled();
+  await expect(createPrButton).toHaveAttribute("data-backend-capability", "false");
+  await expect(page.getByTestId("workbench-review-actions")).toContainText("Admin-Key");
 });
 
 test("Matrix composer remains fail-closed without write contract", async ({ page }) => {
